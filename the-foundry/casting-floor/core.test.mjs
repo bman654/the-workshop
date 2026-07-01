@@ -9,14 +9,17 @@
 //    CRUX-1  mean-value EVERYWHERE: residual ‖∇²T‖∞ < tol at every interior cell.
 //    CRUX-2  linear ramp T=ax+by reproduced to a TIGHT tol vs a closed-form oracle
 //            (a linear field is exactly harmonic — no sweep in the oracle).
-//    CRUX-3  one-hot-edge matches the analytic Fourier-sine Σ (a genuinely
-//            different math object than the ramp) to a looser, Gibbs-safe tol.
+//    CRUX-3  the SMOOTH sine plate matches the single-term analytic harmonic field
+//            u = sin(πx)·sinh(πy)/sinh(π) over the WHOLE interior to a tight tol —
+//            a genuinely different math object than the ramp, and corner-safe (no
+//            Gibbs jump; clean O(h²) edge-to-edge, unlike the fragile step plate).
 //  Plus the touchable neg-controls:
 //    NEG-A   a Poisson source ρ breaks the mean-value property by EXACTLY ¼ρ at
 //            that cell while the rest stays harmonic.
 //    NEG-B   an early-stopped bead beaches at the WRONG rim cell / path diverges.
-//  Plus: optimal ω beats Gauss–Seidel, and a bead always terminates on a
-//  Dirichlet gate (the maximum principle).
+//  Plus: optimal ω beats Gauss–Seidel; a bead always terminates on a Dirichlet gate
+//  (the maximum principle); and the WALL — an interior stone bar keeps the mean-
+//  value identity on wall-adjacent cells and makes a bead curve AROUND it to a gate.
 //
 //  And the INTEGRATION crux: byte-twin parity — the slab inlined into index.html
 //  between the CASTING-FLOOR CORE sentinels is char-identical (indentation-
@@ -163,14 +166,19 @@ console.log('\n— BYTE-TWIN PARITY: the page core === the module core —');
       : 'index.html not built yet (run forge)');
 }
 
-// ── 8. SINGLE-SOURCE grep: the load-bearing solver line (the SOR 4-neighbour
-//      average) appears ONLY in core.mjs and the ONE inlined index.html — nowhere
-//      else in the tree is the math forked ─────────────────────────────────────
+// ── 8. SINGLE-SOURCE grep: the load-bearing solver line (the SOR over-relaxation
+//      update) appears ONLY in core.mjs and the pages that INLINE this ONE core —
+//      nowhere else in the tree is the math forked. The Casting Floor inlines it;
+//      so does the Foundry's Still Pond, which imports THIS core unforked (the
+//      deepen mandate). The count-nonzero neighbour gather now serves the wall, but
+//      the SOR update line is the unforgeable signature of the relaxer, so it is the
+//      needle. Its presence in exactly {core.mjs, casting-floor, still-pond} proves
+//      single-source; ANY other hit is a rogue fourth Laplace solver. ─────────────
 console.log('\n— SINGLE SOURCE: the relaxation math lives in exactly one place —');
 {
   const root = join(here, '..', '..');
   // build the needle from fragments so this literal does not itself match the grep
-  const NEEDLE = ['avg = 0.25 * (f[i - 1]', 'f[i + 1]', 'f[i - N]', 'f[i + N]', 'src[i])'].join(' + ');
+  const NEEDLE = ['f[i] += omega * (avg', 'f[i]);'].join(' - ');   // the SOR update line
   const SELF = fileURLToPath(import.meta.url);   // this test file is the harness, not a fork
   const hits = [];
   const SKIP = new Set(['.git', 'node_modules']);
@@ -187,12 +195,96 @@ console.log('\n— SINGLE SOURCE: the relaxation math lives in exactly one place
     }
   };
   walk(root);
-  // expected: core.mjs (the source) + casting-floor/index.html (the one inline)
-  const expected = ['the-foundry/casting-floor/core.mjs', 'the-foundry/casting-floor/index.html'].sort();
+  // the SOLE home of the math: core.mjs (the source) + the pages that inline it.
+  //   still-pond/index.html appears once the pond is built + forged; before that it
+  //   is simply absent (allowed). Any hit OUTSIDE this set is a forbidden fork.
+  const allowed = new Set([
+    'the-foundry/casting-floor/core.mjs',
+    'the-foundry/casting-floor/index.html',
+    'the-foundry/still-pond/index.html',
+  ]);
   const got = hits.sort();
-  const onlyExpected = got.every(h => expected.includes(h));
-  check('the SOR sweep line appears ONLY in core.mjs + its one inlined index.html (no fork)',
-    onlyExpected && got.length <= 2, 'found in: ' + (got.length ? got.join(', ') : '(only core.mjs until forge runs)'));
+  const rogue = got.filter(h => !allowed.has(h));
+  const hasSource = got.includes('the-foundry/casting-floor/core.mjs');
+  check('the SOR update line appears ONLY in core.mjs + the pages that inline it (no forked solver)',
+    hasSource && rogue.length === 0,
+    'found in: ' + (got.length ? got.join(', ') : '(none — run forge)') +
+    (rogue.length ? '  ROGUE: ' + rogue.join(', ') : ''));
+}
+
+// ── 9. WALL is a STRICT SUPERSET: with no wall cells the deepened count-nonzero
+//      relaxer produces a field BIT-IDENTICAL to the classic ¼·Σ4 case (the two
+//      shipped Foundry benches, which never seat a wall, are numerically unchanged).
+console.log('\n— WALL is a strict superset: no-wall relax is unchanged (the old benches are safe) —');
+{
+  const N = 32;
+  const bc = (x, y) => Math.sin(2.7 * x) * Math.cos(1.6 * y) + 0.5 * x;
+  const g = Core.makeGrid(N);
+  Core.clampRim(g, bc);
+  for (const i of g.field.keys()) if (g.mask[i] === Core.FREE) g.field[i] = 4.0;
+  Core.relax(g, { tol: 1e-11 });
+  // reference: the classic pure ¼·(Σ4 + src) relaxer, hand-rolled here (no wall path)
+  const gr = Core.makeGrid(N);
+  Core.clampRim(gr, bc);
+  for (const i of gr.field.keys()) if (gr.mask[i] === Core.FREE) gr.field[i] = 4.0;
+  Core.applyFixed(gr);
+  const w = Core.optimalOmega(N);
+  const classicResidual = () => {
+    let worst = 0;
+    for (let y = 1; y < N - 1; y++) for (let x = 1; x < N - 1; x++) {
+      const i = y * N + x; if (gr.mask[i] !== Core.FREE) continue;
+      const avg = 0.25 * (gr.field[i - 1] + gr.field[i + 1] + gr.field[i - N] + gr.field[i + N] + gr.source[i]);
+      worst = Math.max(worst, Math.abs(gr.field[i] - avg));
+    }
+    return worst;
+  };
+  let r = classicResidual(), s = 0;
+  while (r >= 1e-11 && s < 20000) {
+    for (const color of [0, 1]) for (let y = 1; y < N - 1; y++) for (let x = 1; x < N - 1; x++) {
+      if (((x + y) & 1) !== color) continue;
+      const i = y * N + x; if (gr.mask[i] !== Core.FREE) continue;
+      const avg = 0.25 * (gr.field[i - 1] + gr.field[i + 1] + gr.field[i - N] + gr.field[i + N] + gr.source[i]);
+      gr.field[i] += w * (avg - gr.field[i]);
+    }
+    s++; r = classicResidual();
+  }
+  let worst = 0;
+  for (let i = 0; i < N * N; i++) worst = Math.max(worst, Math.abs(g.field[i] - gr.field[i]));
+  check('no-wall count-nonzero relaxer === classic ¼·Σ4 relaxer bit-for-bit (strict superset)',
+    worst === 0, 'max field diff deepened vs classic = ' + worst.toExponential(2));
+}
+
+// ── 10. WALL insulation: a stone bar bisects the plate; a bead can NEVER cross the
+//      solid part of the bar (the two sides are separate rooms), yet the mean-value
+//      identity holds cell-by-cell right against the stone on BOTH sides. ─────────
+console.log('\n— WALL insulation: the stone is a true barrier, and the field stays harmonic beside it —');
+{
+  for (const N of [33, 49]) {
+    const g = Core.makeGrid(N);
+    Core.clampRim(g, (x, y) => 1 - 2 * y);         // warm top, cold bottom
+    const my = (N - 1) >> 1;
+    const gapX = N - 6;
+    for (let x = 1; x < gapX; x++) Core.setWall(g, x, my);   // bar with a right-hand gap
+    Core.relax(g, { tol: 1e-12 });
+    // (a) harmonic beside the stone on both sides
+    let worstAdj = 0;
+    for (let x = 1; x < gapX; x++) {
+      for (const ay of [my - 1, my + 1]) {
+        if (g.mask[ay * N + x] !== Core.FREE) continue;
+        worstAdj = Math.max(worstAdj, Math.abs(Core.meanValueDefectAt(g, x, ay)));
+      }
+    }
+    // (b) a bead dropped above the SOLID part of the bar never tunnels through it
+    const bead = Core.descendGradient(g, 4, my - 3, { maxSteps: 20000 });
+    let tunneled = false;
+    for (const [px, py] of bead.path) {
+      if (g.mask[Math.round(py) * N + Math.round(px)] === Core.WALL) { tunneled = true; break; }
+    }
+    check('WALL@' + N + ' harmonic on both faces of the stone (mean-value defect < 1e-9)',
+      worstAdj < 1e-9, 'worst wall-adjacent defect ' + worstAdj.toExponential(2));
+    check('WALL@' + N + ' a bead never steps onto / through the stone',
+      !tunneled, 'tunneled=' + tunneled);
+  }
 }
 
 console.log('\nThe Foundry · The Casting Floor — core.test.mjs');

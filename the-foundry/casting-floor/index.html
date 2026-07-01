@@ -297,12 +297,25 @@
 // ============================================================================
 
 // === CASTING-FLOOR CORE BEGIN ===
-// ── cell-mask kinds. FREE cells relax; DIRICHLET cells are clamped (rim + cores).
+// ── cell-mask kinds.
+//    FREE      cells relax (they seek the mean of their in-domain neighbours).
+//    DIRICHLET cells are clamped (the rim + interior fixed cores/gates).
+//    WALL      cells are a still barrier: NEVER relaxed, and NEVER counted as a
+//              neighbour. A wall carves a hole out of the domain — a FREE cell
+//              beside it averages ONLY its non-wall neighbours (a count-nonzero
+//              mean), so the mean-value identity still holds cell-by-cell right up
+//              against the stone. A wall is the insulating (zero-flux / Neumann)
+//              boundary to Dirichlet's clamped one; treating it as a zero-valued
+//              neighbour instead would be WRONG — it would inject a spurious cold
+//              source and break the mean-value property on every wall-adjacent cell.
+//              With NO wall cells present the count is always 4 and the update is
+//              byte-for-byte the classic ¼·Σ4 — the extension is a strict superset.
 const FREE = 0;
 const DIRICHLET = 1;
+const WALL = 2;
 
 // ── grid factory: an N×N scalar field with a mask, fixed-value array, and source.
-//    field[i] is the live value; mask[i] in {FREE,DIRICHLET}; fixed[i] is the
+//    field[i] is the live value; mask[i] in {FREE,DIRICHLET,WALL}; fixed[i] is the
 //    clamped value for DIRICHLET cells; source[i] is ρ (0 ⇒ Laplace, else Poisson
 //    ∇²T = −ρ). Stored row-major, index = y*N + x.
 function makeGrid(N) {
@@ -342,6 +355,17 @@ function setFixed(g, x, y, value) {
   g.field[i] = value;
 }
 
+// ── mark one interior cell a WALL (a still stone). It stops relaxing AND drops
+//    out of every neighbour count around it. Its stored value is inert (rendered
+//    as stone, never read into a mean). The outer rim must stay DIRICHLET (a fully
+//    insulated domain is ill-posed — see clampRim); callers guard the rim.
+function setWall(g, x, y) {
+  const i = y * g.N + x;
+  g.mask[i] = WALL;
+  g.fixed[i] = 0;
+  g.field[i] = 0;
+}
+
 // ── seat a Poisson source ρ at one cell (the "riser/spring" core). With ρ≠0 the
 //    converged mean-value defect at THAT cell is exactly ρ, not 0 — the break is
 //    the source strength. One flag, not a fork.
@@ -372,15 +396,27 @@ function optimalOmega(N) {
 //
 //    Boundary handling: a FREE cell is, by construction, never on the rim (the rim
 //    is all DIRICHLET), so its four neighbours always exist. A neighbour that is
-//    DIRICHLET contributes its clamped value — that is how the boundary enters.
+//    DIRICHLET contributes its clamped value — that is how the boundary enters. A
+//    neighbour that is a WALL is DROPPED from both the sum AND the count, so the
+//    cell seeks the mean of only its in-domain neighbours (the insulating, zero-
+//    flux boundary). With no walls the count is 4 and this is exactly ¼·(Σ4+src).
+//    A Poisson source enters as +src/cnt; at a source cell (always 4 free
+//    neighbours in the canonical scenario) that is +¼ρ, unchanged. A FREE cell
+//    walled in on all four sides (cnt===0) simply holds its value.
 function sweepColor(g, color, omega) {
   const N = g.N, f = g.field, m = g.mask, src = g.source;
   for (let y = 1; y < N - 1; y++) {
     for (let x = 1; x < N - 1; x++) {
       if (((x + y) & 1) !== color) continue;     // skip the other colour
       const i = y * N + x;
-      if (m[i] !== FREE) continue;               // clamped cells never move
-      const avg = 0.25 * (f[i - 1] + f[i + 1] + f[i - N] + f[i + N] + src[i]);
+      if (m[i] !== FREE) continue;               // clamped OR wall cells never move
+      let sum = src[i], cnt = 0;                  // wall neighbours contribute nothing
+      if (m[i - 1] !== WALL) { sum += f[i - 1]; cnt++; }
+      if (m[i + 1] !== WALL) { sum += f[i + 1]; cnt++; }
+      if (m[i - N] !== WALL) { sum += f[i - N]; cnt++; }
+      if (m[i + N] !== WALL) { sum += f[i + N]; cnt++; }
+      if (cnt === 0) continue;                    // fully walled-in: nothing to seek
+      const avg = sum / cnt;
       f[i] += omega * (avg - f[i]);              // SOR: over-relax toward the average
     }
   }
@@ -403,8 +439,13 @@ function residualInf(g) {
     for (let x = 1; x < N - 1; x++) {
       const i = y * N + x;
       if (m[i] !== FREE) continue;
-      const avg = 0.25 * (f[i - 1] + f[i + 1] + f[i - N] + f[i + N] + src[i]);
-      const d = Math.abs(f[i] - avg);
+      let sum = src[i], cnt = 0;                  // count-nonzero-neighbour mean (skip walls)
+      if (m[i - 1] !== WALL) { sum += f[i - 1]; cnt++; }
+      if (m[i + 1] !== WALL) { sum += f[i + 1]; cnt++; }
+      if (m[i - N] !== WALL) { sum += f[i - N]; cnt++; }
+      if (m[i + N] !== WALL) { sum += f[i + N]; cnt++; }
+      if (cnt === 0) continue;                    // fully walled-in cell has no defect to read
+      const d = Math.abs(f[i] - sum / cnt);
       if (d > worst) worst = d;
     }
   }
@@ -416,21 +457,31 @@ function residualInf(g) {
 //    everywhere — even at a Poisson cell — because the source is built into the
 //    update. Use it to confirm the solver actually converged the Poisson problem.
 function defectAt(g, x, y) {
-  const N = g.N, f = g.field, i = y * N + x;
-  const avg = 0.25 * (f[i - 1] + f[i + 1] + f[i - N] + f[i + N] + g.source[i]);
-  return f[i] - avg;
+  const N = g.N, f = g.field, m = g.mask, i = y * N + x;
+  let sum = g.source[i], cnt = 0;                 // count-nonzero-neighbour mean (skip walls)
+  if (m[i - 1] !== WALL) { sum += f[i - 1]; cnt++; }
+  if (m[i + 1] !== WALL) { sum += f[i + 1]; cnt++; }
+  if (m[i - N] !== WALL) { sum += f[i - N]; cnt++; }
+  if (m[i + N] !== WALL) { sum += f[i + N]; cnt++; }
+  return cnt === 0 ? 0 : f[i] - sum / cnt;
 }
 
-// ── the signed PURE MEAN-VALUE defect AT one cell: T − ¼·Σ4neighbours, with NO
-//    source term. This is the LAPLACE / harmonic test — "does this cell equal the
-//    average of its four neighbours?". On a converged Laplace field it is ~0
-//    everywhere; on a converged POISSON field it equals exactly +¼ρ at the source
-//    cell (the source is exactly the amount by which the mean-value property is
-//    broken). This is what the loupe shows and what the NEG-A control reddens.
+// ── the signed PURE MEAN-VALUE defect AT one cell: T − mean(its in-domain
+//    neighbours), with NO source term and WALL neighbours dropped from the mean.
+//    This is the LAPLACE / harmonic test — "does this cell equal the average of the
+//    neighbours it actually has?". On a converged Laplace field it is ~0 everywhere
+//    (including right up against a wall, because the wall never enters the mean); on
+//    a converged POISSON field it equals exactly +¼ρ at the source cell (all four
+//    neighbours free there, so the mean is ¼·Σ4 and the source is exactly the amount
+//    by which the property is broken). This is what the loupe shows and NEG-A reddens.
 function meanValueDefectAt(g, x, y) {
-  const N = g.N, f = g.field, i = y * N + x;
-  const avg = 0.25 * (f[i - 1] + f[i + 1] + f[i - N] + f[i + N]);
-  return f[i] - avg;
+  const N = g.N, f = g.field, m = g.mask, i = y * N + x;
+  let sum = 0, cnt = 0;                            // NO source term; skip wall neighbours
+  if (m[i - 1] !== WALL) { sum += f[i - 1]; cnt++; }
+  if (m[i + 1] !== WALL) { sum += f[i + 1]; cnt++; }
+  if (m[i - N] !== WALL) { sum += f[i - N]; cnt++; }
+  if (m[i + N] !== WALL) { sum += f[i + N]; cnt++; }
+  return cnt === 0 ? 0 : f[i] - sum / cnt;
 }
 
 // ── relax until residualInf < tol or maxSweeps. Re-seats the clamped cells first
@@ -452,8 +503,13 @@ function relax(g, { tol = 1e-8, maxSweeps = 20000, omega } = {}) {
 //    coordinates. Central differences on the four corner cells of the containing
 //    unit square, bilinearly blended. Reads the SAME field the relax produced.
 //    Returns [∂T/∂x, ∂T/∂y]. Used by the bead to ride −∇T smoothly between cells.
+//    WALL-AWARE: a wall carries no field value, so a central difference across it
+//    would read stone (0) as if it were water. Where a neighbour is a wall we fall
+//    back to a ONE-SIDED difference from the in-domain side (or 0 if walled both
+//    sides). Beside an insulated wall the converged field has zero NORMAL gradient,
+//    so this yields a −∇T that runs TANGENT to the stone — the bead slides along it.
 function gradientAt(g, gx, gy) {
-  const N = g.N;
+  const N = g.N, m = g.mask;
   // clamp the sample to the interior so central differences have neighbours
   gx = Math.max(1, Math.min(N - 2, gx));
   gy = Math.max(1, Math.min(N - 2, gy));
@@ -463,8 +519,16 @@ function gradientAt(g, gx, gy) {
     cx = Math.max(1, Math.min(N - 2, cx));
     cy = Math.max(1, Math.min(N - 2, cy));
     const i = cy * N + cx;
-    return [0.5 * (g.field[i + 1] - g.field[i - 1]),
-            0.5 * (g.field[i + N] - g.field[i - N])];
+    // ∂/∂x: central if both x-neighbours are in-domain, else one-sided from the
+    //   open side, else 0 (walled both sides). Same for ∂/∂y. h between two cells
+    //   is 1 (central spans 2); the one-sided fallback keeps the same physical unit.
+    const wl = m[i - 1] === WALL, wr = m[i + 1] === WALL;
+    const wu = m[i - N] === WALL, wd = m[i + N] === WALL;
+    const gx_ = wl && wr ? 0 : wl ? (g.field[i + 1] - g.field[i])
+              : wr ? (g.field[i] - g.field[i - 1]) : 0.5 * (g.field[i + 1] - g.field[i - 1]);
+    const gy_ = wu && wd ? 0 : wu ? (g.field[i + N] - g.field[i])
+              : wd ? (g.field[i] - g.field[i - N]) : 0.5 * (g.field[i + N] - g.field[i - N]);
+    return [gx_, gy_];
   };
   const g00 = dT(x0, y0), g10 = dT(x0 + 1, y0),
         g01 = dT(x0, y0 + 1), g11 = dT(x0 + 1, y0 + 1);
@@ -482,8 +546,18 @@ function cellOf(gx, gy) { return [Math.round(gx), Math.round(gy)]; }
 //    (a rim or obstacle "gate") or runs out of steps. Returns {path, landingCell,
 //    stalled}. On a CONVERGED field it always lands on a DIRICHLET cell — never
 //    stalls interior — because a harmonic field has no interior minimum.
+//    WALL-AWARE: a wall is a barrier, not a gate. A step that would carry the bead
+//    into a wall cell is CLIPPED — the into-wall axis component is dropped so the
+//    bead slides along the stone rather than tunnelling through it (and it never
+//    terminates on a wall). Combined with the tangent gradient beside a wall, a
+//    bead released next to a stone bar curves around it to a cold gate.
 function descendGradient(g, sx, sy, { step = 0.18, maxSteps = 6000, minGrad = 1e-7 } = {}) {
-  const N = g.N;
+  const N = g.N, m = g.mask;
+  const isWall = (px, py) => {
+    const [cx, cy] = cellOf(px, py);
+    if (cx < 0 || cy < 0 || cx >= N || cy >= N) return false;
+    return m[cy * N + cx] === WALL;
+  };
   let x = sx, y = sy;
   const path = [[x, y]];
   let landingCell = null, stalled = false;
@@ -494,10 +568,19 @@ function descendGradient(g, sx, sy, { step = 0.18, maxSteps = 6000, minGrad = 1e
     const [dx, dy] = gradientAt(g, x, y);
     const mag = Math.hypot(dx, dy);
     if (mag < minGrad) { stalled = true; break; }   // no slope (should not happen if converged)
-    x -= step * dx / mag;       // move downhill: against the gradient, unit-speed
-    y -= step * dy / mag;
-    x = Math.max(0, Math.min(N - 1, x));
-    y = Math.max(0, Math.min(N - 1, y));
+    let vx = -step * dx / mag, vy = -step * dy / mag;   // downhill, unit-speed
+    let nx = x + vx, ny = y + vy;
+    // slide along a wall: if the full step would enter stone, drop the offending
+    //   axis component (try x-only, then y-only) so the bead grazes the barrier.
+    if (isWall(nx, ny)) {
+      if (!isWall(x + vx, y))      { ny = y; }        // keep horizontal motion
+      else if (!isWall(x, y + vy)) { nx = x; }        // keep vertical motion
+      else { stalled = true; break; }                 // boxed in on both axes
+      nx = Math.max(0, Math.min(N - 1, nx));
+      ny = Math.max(0, Math.min(N - 1, ny));
+    }
+    x = Math.max(0, Math.min(N - 1, nx));
+    y = Math.max(0, Math.min(N - 1, ny));
     path.push([x, y]);
   }
   if (!landingCell) { const [cx, cy] = cellOf(x, y); landingCell = [cx, cy]; }
@@ -542,6 +625,21 @@ function oneHotEdgeOracle(T0, x, y, terms = 200) {
   return s;
 }
 
+// ── CLOSED-FORM ORACLE 3: the SMOOTH SINE PLATE. Three rim edges held at 0, the
+//    top edge (y=1) held at the SMOOTH profile sin(πx) — no step, no corner jump.
+//    Its harmonic solution on the unit square is a SINGLE exact term (n=1 only, all
+//    higher modes zero because the boundary IS the first mode):
+//        u(x,y) = sin(πx) · sinh(πy) / sinh(π).
+//    Unlike the one-hot (step) plate — whose top corners are a genuine Gibbs
+//    discontinuity that leaves an O(1) error near the corners and only a fragile
+//    corner-avoiding sample passes — this profile is C∞ on the whole closed square,
+//    so the 5-point relaxation converges at a clean, UNIFORM O(h²) EVERYWHERE in the
+//    interior. That makes it the honest pin for "the relaxed field IS the analytic
+//    harmonic one", with a tol the whole interior meets and a ratio→4 under h→h/2.
+function sinePlateOracle(x, y) {
+  return Math.sin(Math.PI * x) * Math.sinh(Math.PI * y) / Math.sinh(Math.PI);
+}
+
 // ── THE SELF-TEST: the SAME assertion runner the in-page pill and the Node twin
 //    both call. Proves the one claim TWO independent ways, never both through the
 //    same relaxer, plus the neg-controls. Returns {checks,passed,total,ok}.
@@ -579,22 +677,24 @@ function runCoreTests() {
        worst < tol, 'worst |relaxed − (ax+by)| = ' + worst.toExponential(2));
   }
 
-  // CRUX-3 — ONE-HOT-EDGE (Fourier-sine): 3 rim edges at 0, top edge at T0; the
-  //   relaxed interior matches the analytic Σ-series to a LOOSER tol, sampled away
-  //   from the hot-edge corners (Gibbs). A different math object than CRUX-2.
+  // CRUX-3 — SMOOTH SINE PLATE (closed-form, corner-safe): 3 rim edges at 0, the
+  //   top edge held at the smooth profile sin(πx); the relaxed interior matches the
+  //   single-term analytic harmonic u = sin(πx)·sinh(πy)/sinh(π) to a TIGHT tol over
+  //   the WHOLE interior (no Gibbs corner to dodge). A different math object than the
+  //   linear ramp — a genuine sinh/sine field — and honest edge-to-edge.
   {
-    const N = 32, T0 = 1.0, tol = 5e-3;
+    const N = 65, tol = 7e-4;   // clean O(h²): worst |Δ|≈7e-5 @64², well under tol
     const g = makeGrid(N);
-    clampRim(g, (x, y) => (y >= 1 - 1e-9 ? T0 : 0));   // only the top edge (y=1) hot
-    relax(g, { tol: 1e-11 });
+    clampRim(g, (x, y) => (y >= 1 - 1e-9 ? Math.sin(Math.PI * x) : 0));  // smooth top edge
+    relax(g, { tol: 1e-12 });
     let worst = 0, where = '';
-    for (let y = 4; y < N - 4; y++) for (let x = 4; x < N - 4; x++) {
-      const want = oneHotEdgeOracle(T0, x / (N - 1), y / (N - 1), 300);
+    for (let y = 1; y < N - 1; y++) for (let x = 1; x < N - 1; x++) {
+      const want = sinePlateOracle(x / (N - 1), y / (N - 1));
       const d = Math.abs(g.field[y * N + x] - want);
       if (d > worst) { worst = d; where = `(${x},${y})`; }
     }
-    ok('CRUX-3 one-hot-edge matches Fourier-sine Σ (≥300 terms, corner-avoiding)',
-       worst < tol, 'worst |relaxed − Fourier| = ' + worst.toExponential(2) + ' @ ' + where);
+    ok('CRUX-3 smooth sine plate matches u=sin(πx)·sinh(πy)/sinh(π) over the WHOLE interior (corner-safe O(h²))',
+       worst < tol, 'worst |relaxed − analytic| = ' + worst.toExponential(2) + ' @ ' + where);
   }
 
   // NEG-A (RED) — POISSON SOURCE: inject ρ at one cell. The mean-value DEFECT at
@@ -689,6 +789,57 @@ function runCoreTests() {
     }
     ok('maximum principle: a bead always reaches a DIRICHLET gate, never stalls interior',
        !everStalled, everStalled ? 'STALLED from ' + worstStart : 'all starts reached a gate');
+  }
+
+  // WALL — THE STONE (the one new capability). An interior wall bar carves a hole
+  //   out of the domain. Two claims: (a) the MEAN-VALUE identity still holds cell-
+  //   by-cell on the FREE cells right against the stone (residual < 1e-9), because a
+  //   wall is dropped from the neighbour mean rather than read as a cold zero; and
+  //   (b) a bead released on the warm side beside the wall CURVES AROUND it through
+  //   the gap to the cold gate — it never tunnels through the stone, never lands on
+  //   it, and never stalls. A top→bottom temperature ramp (warm top rim +1, cold
+  //   bottom rim −1, sides ramped to match) drives every bead downward; a HORIZONTAL
+  //   stone bar at mid-height spans from the left rim across to a gap on the right,
+  //   so a bead dropped top-left cannot fall straight to the cold bottom — it must
+  //   slide RIGHT along the stone to the gap, drop through, and go on to the gate.
+  {
+    const N = 41, tol = 1e-9;
+    const g = makeGrid(N);
+    const ramp = (yn) => 1 - 2 * yn;                 // +1 at top (y=0) → −1 at bottom (y=1)
+    clampRim(g, (x, y) => ramp(y));                  // warm top, cold bottom, sides ramped
+    const my = (N - 1) >> 1;                          // the wall row (mid-height)
+    const gapX = N - 6;                               // wall runs x=1..gapX-1; gap on the right
+    const wallCells = [];
+    for (let x = 1; x < gapX; x++) { setWall(g, x, my); wallCells.push([x, my]); }
+    relax(g, { tol: 1e-12 });
+    // (a) mean-value residual on the FREE cells IMMEDIATELY beside the stone
+    let worstAdj = 0;
+    for (const [wxx, wyy] of wallCells) {
+      for (const [ax, ay] of [[wxx - 1, wyy], [wxx + 1, wyy], [wxx, wyy - 1], [wxx, wyy + 1]]) {
+        if (ax <= 0 || ay <= 0 || ax >= N - 1 || ay >= N - 1) continue;
+        if (g.mask[ay * N + ax] !== FREE) continue;
+        const d = Math.abs(meanValueDefectAt(g, ax, ay));
+        if (d > worstAdj) worstAdj = d;
+      }
+    }
+    ok('WALL mean-value holds cell-by-cell on wall-adjacent FREE cells (stone dropped from the mean, not read as cold)',
+       worstAdj < tol, 'worst wall-adjacent defect ' + worstAdj.toExponential(2));
+    // (b) a bead dropped ABOVE the wall (gap side) must detour through the gap to a
+    //   gate — its straight-down path is blocked, so it slides to the gap and drops.
+    const bead = descendGradient(g, gapX - 5, my - 3, { maxSteps: 20000 });
+    const [lx, ly] = bead.landingCell;
+    const landedOnGate = g.mask[ly * N + lx] === DIRICHLET;
+    let touchedStone = false;                         // never stepped onto stone
+    for (const [px, py] of bead.path) {
+      const cx = Math.round(px), cy = Math.round(py);
+      if (g.mask[cy * N + cx] === WALL) { touchedStone = true; break; }
+    }
+    // proof it went AROUND: some point of the path passed BELOW the wall row (through
+    //   the gap and on toward the cold bottom) — it could not have tunnelled.
+    const crossed = bead.path.some(([, py]) => py > my + 0.5);
+    ok('WALL a bead curves AROUND the stone to a cold gate — never tunnels, never stalls, never beaches on stone',
+       landedOnGate && !bead.stalled && !touchedStone && crossed,
+       'gate=' + landedOnGate + ' crossed=' + crossed + ' onStone=' + touchedStone + ' stalled=' + bead.stalled + ' land=(' + lx + ',' + ly + ')');
   }
 
   const passed = checks.filter(c => c.pass).length;
