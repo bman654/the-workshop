@@ -1077,7 +1077,8 @@
     'lodestone-hall-rep': function (g, baseX, baseY, pick) { drawRepLodestoneHall(g, baseX, baseY, pick); },
     'strange-garden-rep': function (g, baseX, baseY, pick) { drawRepStrangeGarden(g, baseX, baseY, pick); },
     'cartographer-rep': function (g, baseX, baseY, pick) { drawRepCartographer(g, baseX, baseY, pick); },
-    'arcade-rep': function (g, baseX, baseY, pick) { drawRepArcade(g, baseX, baseY, pick); }
+    'arcade-rep': function (g, baseX, baseY, pick) { drawRepArcade(g, baseX, baseY, pick); },
+    'verse-rep': function (g, baseX, baseY, pick) { drawRepVerse(g, baseX, baseY, pick); }
   };
 
   function drawRoomRep(parent) {
@@ -3716,6 +3717,327 @@
     }
 
     S.refs.arcadeRep = g;
+  }
+
+  function drawRepVerse(parent, cx, baseY, pick) {
+    // The Study (room id 'verse') — a squat, front-elevation SCRIPTORIUM LECTERN: a
+    // sloped reading-desk sitting on a heavy column-and-splayed-foot pedestal, canted
+    // toward the viewer at a gentle reading angle. Lying open across the slanted top is
+    // an ILLUMINATED MANUSCRIPT — two facing pale-parchment pages, a soft central
+    // gutter crease, a few quiet ruled writing-lines. At the desk's NEAR lower edge a
+    // small INKPOT holds a QUILL standing upright (the one vertical accent that lifts
+    // the low silhouette). THE EMISSIVE PAYOFF: the manuscript's TOPMOST verse-line
+    // glows warm GOLD as if just-written and still wet — one luminous horizontal stroke
+    // high on the right-hand page — with a faint gilt DROP-CAP lozenge anchoring its
+    // left margin. rep.glow1 is in colormap's dayRecede list, so the gold BLAZES at
+    // night and recedes to a quiet gleam by day for free.
+    //
+    // TAKE 1 — "the pedestal lectern, front-on": a dignified, STABLE front elevation —
+    // a stout turned column on a splayed base slab, a canted desk we look slightly down
+    // onto, the open book resting on a small book-ledge. Idiom mirrors drawRepCavern /
+    // drawRepStrangeGarden: dark oak body + brass stroke + brass-bright TOP-lit edges,
+    // lit from above, a contact shadow, a PRIVATE #verse-ink-glow bloom filter, and the
+    // rep.* CSS-var roles (recolor per band). A barely-perceptible, reduced-motion-safe
+    // BREATHING of the wet-gold line's glow (the ink still drying) is the only motion.
+    var g = group('verse-rep', parent);
+    var WOOD = 'var(--rep-swatch1-ref, #8a6a44)';        // swappable warm-oak lectern body
+    var PAGE = 'var(--rep-swatch2-ref, #e6dcc0)';        // swappable pale parchment page
+    var DARK = 'rgba(11,14,22,.85)';                     // estate brass dark body
+    var BRASS = 'var(--brass-stroke-ref, #9c8350)';      // brass edge stroke
+    var BRI = 'var(--brass-bright-ref, #cdb375)';        // brass-bright TOP sheen
+    var GOLD = 'var(--rep-glow1-ref, #ffe0a0)';          // EMISSIVE wet-gold verse-line + drop-cap
+    var INK = 'rgba(52,38,20,.62)';                      // quiet ruled-line ink (survives night)
+    var fx = function (n) { return (Math.round(n * 10) / 10); };
+
+    // ── footprint: LOW + WIDE mound, bottom-aligned at baseY, centred on cx ──
+    var W = 150, halfW = W / 2;               // x155 .. x305 outer reach (splayed foot)
+    var footH = 12;                           // splayed base slab height
+    var pedH = 26;                            // column shaft height
+    var capH = 8;                             // pedestal cap block height
+    var footTopY = baseY - footH;             // y708
+    var capBaseY = footTopY - pedH;           // y682 — top of the shaft / bottom of cap
+    var capTopY = capBaseY - capH;            // y674 — top of the pedestal cap (desk sits here)
+    // the canted desk: a front face + a top surface we look slightly DOWN onto. Front
+    // elevation, so the desk top is a shallow trapezoid tilting toward the viewer.
+    var deskW = 140, deskHalf = deskW / 2;    // desk board full width (near/front edge)
+    var deskFaceH = 12;                        // the desk's visible front (skirt) face
+    var deskFrontY = capTopY - deskFaceH;      // y662 — top of the desk's front face (book NEAR edge)
+    var deskTilt = 30;                          // how far the FAR (back) edge lifts above the near edge
+    var deskBackY = deskFrontY - deskTilt;      // y632 — the desk's back/top edge (book FAR edge)
+    var dfL = cx - deskHalf, dfR = cx + deskHalf;      // near (front) desk corners
+    var backInset = 12;                          // perspective inset of the far edge
+    var dbL = cx - deskHalf + backInset, dbR = cx + deskHalf - backInset; // far desk corners
+
+    // ── private soft-feather bloom for the wet-gold verse-line (UNIQUE id) ──
+    var defs = parent.ownerSVGElement && parent.ownerSVGElement.querySelector('defs');
+    if (defs && !defs.querySelector('#verse-ink-glow')) {
+      var fG = el('filter', { id: 'verse-ink-glow', x: '-120%', y: '-120%', width: '340%', height: '340%' }, defs);
+      el('feGaussianBlur', { 'in': 'SourceGraphic', stdDeviation: '2.4' }, fG);
+    }
+
+    // ── soft contact shadow so the lectern sits ON the grass (light from above) ──
+    el('ellipse', { cx: cx + 3, cy: baseY + 2, rx: halfW * 0.9, ry: 7,
+      fill: '#000', opacity: '0.30', filter: 'url(#glow-soft)' }, g);
+
+    // ════════════ SPLAYED FOOT — a heavy grounded base slab ══════════════════════
+    // A wide splayed foot (trapezoid: wide at the ground, narrower where the column
+    // rises) so the lectern reads heavy + grounded, not spindly.
+    var footHalfBot = 52, footHalfTop = 34;
+    el('path', { d: 'M ' + fx(cx - footHalfBot) + ' ' + fx(baseY) +
+      ' L ' + fx(cx + footHalfBot) + ' ' + fx(baseY) +
+      ' L ' + fx(cx + footHalfTop) + ' ' + fx(footTopY) +
+      ' L ' + fx(cx - footHalfTop) + ' ' + fx(footTopY) + ' Z',
+      fill: WOOD, stroke: BRASS, 'stroke-width': '1.4', filter: 'url(#glow-soft)' }, g);
+    // brass-bright TOP-lit edge along the foot's up-facing top (lit from above)
+    el('line', { x1: fx(cx - footHalfTop + 2), y1: fx(footTopY + 0.6), x2: fx(cx + footHalfTop - 2), y2: fx(footTopY + 0.6),
+      stroke: BRI, 'stroke-width': '1.2', opacity: '0.7' }, g);
+    // a shadow along the foot's near bottom edge (grounds it)
+    el('line', { x1: fx(cx - footHalfBot + 3), y1: fx(baseY - 1), x2: fx(cx + footHalfBot - 3), y2: fx(baseY - 1),
+      stroke: 'rgba(0,0,0,.28)', 'stroke-width': '1.4' }, g);
+
+    // ════════════ COLUMN SHAFT — a stout turned pedestal ═════════════════════════
+    // A squat column with a gentle entasis (slight barrel), narrower than the foot +
+    // cap. A shadow flute down the right (turning away) + a bright catch up the left.
+    var shHalf = 20, shBulge = 4;             // shaft half-width + entasis bulge
+    var midY = (footTopY + capBaseY) / 2;
+    el('path', { d: 'M ' + fx(cx - shHalf) + ' ' + fx(footTopY) +
+      ' Q ' + fx(cx - shHalf - shBulge) + ' ' + fx(midY) + ' ' + fx(cx - shHalf) + ' ' + fx(capBaseY) +
+      ' L ' + fx(cx + shHalf) + ' ' + fx(capBaseY) +
+      ' Q ' + fx(cx + shHalf + shBulge) + ' ' + fx(midY) + ' ' + fx(cx + shHalf) + ' ' + fx(footTopY) + ' Z',
+      fill: WOOD, stroke: BRASS, 'stroke-width': '1.4', filter: 'url(#glow-soft)' }, g);
+    // vertical shadow flute down the shaft's right (down/away face)
+    el('path', { d: 'M ' + fx(cx + shHalf - 5) + ' ' + fx(footTopY - 1) +
+      ' Q ' + fx(cx + shHalf + shBulge - 5) + ' ' + fx(midY) + ' ' + fx(cx + shHalf - 5) + ' ' + fx(capBaseY + 1),
+      fill: 'none', stroke: 'rgba(0,0,0,.22)', 'stroke-width': '3', 'stroke-linecap': 'round' }, g);
+    // bright catch up the shaft's left (up-lit) edge
+    el('path', { d: 'M ' + fx(cx - shHalf + 2) + ' ' + fx(footTopY - 1) +
+      ' Q ' + fx(cx - shHalf - shBulge + 2) + ' ' + fx(midY) + ' ' + fx(cx - shHalf + 2) + ' ' + fx(capBaseY + 1),
+      fill: 'none', stroke: BRI, 'stroke-width': '1', opacity: '0.5' }, g);
+    // a low BASE MOULDING where the shaft meets the splayed foot (architectural weight)
+    el('rect', { x: fx(cx - shHalf - 5), y: fx(footTopY - 4.5), width: fx((shHalf + 5) * 2), height: 4.5, rx: 1,
+      fill: WOOD, stroke: BRASS, 'stroke-width': '1.2' }, g);
+    el('line', { x1: fx(cx - shHalf - 3), y1: fx(footTopY - 4), x2: fx(cx + shHalf + 3), y2: fx(footTopY - 4),
+      stroke: BRI, 'stroke-width': '0.9', opacity: '0.6' }, g);   // top-lit moulding sheen
+
+    // ════════════ PEDESTAL CAP — a brass-edged block the desk seats on ═══════════
+    var capHalf = 30;
+    el('rect', { x: fx(cx - capHalf), y: fx(capTopY), width: fx(capHalf * 2), height: fx(capH), rx: 1.5,
+      fill: WOOD, stroke: BRASS, 'stroke-width': '1.4', filter: 'url(#glow-soft)' }, g);
+    // brass-bright top-lit sheen on the cap's up-facing top
+    el('line', { x1: fx(cx - capHalf + 2), y1: fx(capTopY + 0.8), x2: fx(cx + capHalf - 2), y2: fx(capTopY + 0.8),
+      stroke: BRI, 'stroke-width': '1.2', opacity: '0.72' }, g);
+    el('line', { x1: fx(cx - capHalf + 3), y1: fx(capTopY + capH - 0.6), x2: fx(cx + capHalf - 3), y2: fx(capTopY + capH - 0.6),
+      stroke: 'rgba(0,0,0,.24)', 'stroke-width': '1' }, g);
+
+    // ════════════ DESK FRONT FACE — the canted board's front (skirt) ═════════════
+    el('path', { d: 'M ' + fx(dfL) + ' ' + fx(deskFrontY + deskFaceH) +
+      ' L ' + fx(dfR) + ' ' + fx(deskFrontY + deskFaceH) +
+      ' L ' + fx(dfR - 2) + ' ' + fx(deskFrontY) +
+      ' L ' + fx(dfL + 2) + ' ' + fx(deskFrontY) + ' Z',
+      fill: DARK, stroke: BRASS, 'stroke-width': '1.4' }, g);
+    // brass-bright top-lit rim along the desk's near lip (the brightest structural line)
+    el('line', { x1: fx(dfL + 2), y1: fx(deskFrontY + 0.7), x2: fx(dfR - 2), y2: fx(deskFrontY + 0.7),
+      stroke: BRI, 'stroke-width': '1.4', opacity: '0.82' }, g);
+    el('line', { x1: fx(dfL + 6), y1: fx(deskFrontY + 1.2), x2: fx(dfR - 6), y2: fx(deskFrontY + 1.2),
+      stroke: BRI, 'stroke-width': '2', opacity: '0.24', filter: 'url(#glow-soft)' }, g);
+
+    // ════════════ DESK TOP SURFACE — the slanted board we look down onto ═════════
+    // A shallow trapezoid (near edge wider than far), tilting up+away — the surface the
+    // manuscript lies on. Dark oak with a top-lit sheen.
+    el('path', { d: 'M ' + fx(dfL + 2) + ' ' + fx(deskFrontY) +
+      ' L ' + fx(dfR - 2) + ' ' + fx(deskFrontY) +
+      ' L ' + fx(dbR) + ' ' + fx(deskBackY) +
+      ' L ' + fx(dbL) + ' ' + fx(deskBackY) + ' Z',
+      fill: DARK, stroke: BRASS, 'stroke-width': '1.4' }, g);
+    // brass-bright catch along the desk's far (top) edge (lit from above)
+    el('line', { x1: fx(dbL + 2), y1: fx(deskBackY + 0.7), x2: fx(dbR - 2), y2: fx(deskBackY + 0.7),
+      stroke: BRI, 'stroke-width': '1.1', opacity: '0.6' }, g);
+    // a small brass BOOK-LEDGE / stop bar along the desk's near edge (holds the folio)
+    el('rect', { x: fx(cx - 40), y: fx(deskFrontY - 1), width: 80, height: 3.2, rx: 1.2,
+      fill: DARK, stroke: BRASS, 'stroke-width': '1' }, g);
+    el('line', { x1: fx(cx - 37), y1: fx(deskFrontY - 0.4), x2: fx(cx + 37), y2: fx(deskFrontY - 0.4),
+      stroke: BRI, 'stroke-width': '0.8', opacity: '0.55' }, g);
+
+    // ════════════ THE OPEN MANUSCRIPT — two facing parchment pages ═══════════════
+    // The book lies open on the slanted top: a spread that follows the desk's tilt
+    // (near edge lower+wider, far edge higher+inset), split by a soft central GUTTER
+    // valley. Each page is its own quad so the gutter crease reads as an open book.
+    var mHalf = deskHalf - 12;                // page spread half-width (inset from desk)
+    var mNearY = deskFrontY - 4;              // near page edge (just above the ledge)
+    var mFarY = deskBackY + 6;               // far page edge (near the desk's back)
+    var mNearL = cx - mHalf, mNearR = cx + mHalf;
+    var mFarL = cx - mHalf + backInset - 2, mFarR = cx + mHalf - backInset + 2;
+    var gutNearY = mNearY + 3, gutFarY = mFarY + 2;   // gutter dips below the outer edges
+    // LEFT page
+    el('path', { d: 'M ' + fx(mNearL) + ' ' + fx(mNearY) +
+      ' L ' + fx(cx) + ' ' + fx(gutNearY) +
+      ' L ' + fx(cx) + ' ' + fx(gutFarY) +
+      ' L ' + fx(mFarL) + ' ' + fx(mFarY) + ' Z',
+      fill: PAGE, stroke: 'rgba(120,96,58,.55)', 'stroke-width': '0.8' }, g);
+    // RIGHT page (catches a touch more overhead light → slightly brighter overlay)
+    el('path', { d: 'M ' + fx(cx) + ' ' + fx(gutNearY) +
+      ' L ' + fx(mNearR) + ' ' + fx(mNearY) +
+      ' L ' + fx(mFarR) + ' ' + fx(mFarY) +
+      ' L ' + fx(cx) + ' ' + fx(gutFarY) + ' Z',
+      fill: PAGE, stroke: 'rgba(120,96,58,.55)', 'stroke-width': '0.8' }, g);
+    // right page light-catch wash (up-facing bow catches overhead light)
+    el('path', { d: 'M ' + fx(cx + 3) + ' ' + fx(gutNearY - 0.5) +
+      ' L ' + fx(mNearR - 3) + ' ' + fx(mNearY + 0.5) +
+      ' L ' + fx(mFarR - 3) + ' ' + fx(mFarY + 0.5) +
+      ' L ' + fx(cx + 3) + ' ' + fx(gutFarY - 0.5) + ' Z',
+      fill: '#ffffff', opacity: '0.10' }, g);
+    // soft central GUTTER crease shadow (the spine valley) + a brass-bright spine line
+    el('line', { x1: fx(cx), y1: fx(gutNearY), x2: fx(cx), y2: fx(gutFarY),
+      stroke: 'rgba(60,44,22,.42)', 'stroke-width': '2.4', 'stroke-linecap': 'round' }, g);
+    el('line', { x1: fx(cx), y1: fx(gutNearY - 1), x2: fx(cx), y2: fx(gutFarY + 1),
+      stroke: BRI, 'stroke-width': '0.7', opacity: '0.3' }, g);
+    // brass-bright top-lit catch along each page's far (up-facing) edge
+    el('line', { x1: fx(mFarL + 1), y1: fx(mFarY - 0.2), x2: fx(cx - 1), y2: fx(gutFarY - 0.2),
+      stroke: BRI, 'stroke-width': '0.7', opacity: '0.4' }, g);
+    el('line', { x1: fx(cx + 1), y1: fx(gutFarY - 0.2), x2: fx(mFarR - 1), y2: fx(mFarY - 0.2),
+      stroke: BRI, 'stroke-width': '0.7', opacity: '0.42' }, g);
+
+    // ── a few QUIET ruled writing-lines per page (suggest text, do NOT letter glyphs) ──
+    // Lines run parallel to the gutter, foreshortened with the page tilt (near→far).
+    // Left page: 3 plain ruled strokes. Right page: the TOP line is the glowing verse
+    // (drawn later, emissive); below it a couple of quiet ruled strokes.
+    var rules = 4;
+    for (var ri = 0; ri < rules; ri++) {
+      var t = (ri + 1) / (rules + 1);         // fraction near→far up the page
+      var yN = mNearY + (mFarY - mNearY) * t;
+      var yF = yN;                             // (near-parallel; slight tilt below)
+      // left page ruled stroke (inset from gutter + outer edge)
+      var lx0 = cx - 6 - (cx - 6 - (mNearL + 5)) * (0.55 + 0.30 * (1 - t));
+      var lx1 = cx - 6;
+      el('line', { x1: fx(lx0), y1: fx(yN + t * 1.5), x2: fx(lx1), y2: fx(yN),
+        stroke: INK, 'stroke-width': '0.9', opacity: (0.5 - ri * 0.05).toFixed(2) }, g);
+      // right page ruled stroke — SKIP the topmost (ri===0): that is the gold verse-line
+      if (ri > 0) {
+        var rx0 = cx + 6;
+        var rx1 = cx + 6 + ((mNearR - 5) - (cx + 6)) * (0.55 + 0.30 * (1 - t));
+        el('line', { x1: fx(rx0), y1: fx(yN), x2: fx(rx1), y2: fx(yN + t * 1.5),
+          stroke: INK, 'stroke-width': '0.9', opacity: (0.5 - ri * 0.05).toFixed(2) }, g);
+      }
+    }
+
+    // ════════════ THE EMISSIVE PAYOFF — the wet-gold TOP verse-line + drop-cap ═════
+    // The topmost line of the RIGHT page, high on the spread, glows warm gold as if the
+    // ink is still wet. A gilt DROP-CAP lozenge anchors its left (gutter-side) margin.
+    // rep.glow1 blazes at night + recedes by day automatically (dayRecede on the role).
+    var vT = 1 / (rules + 1);                  // fraction of the topmost line
+    var vY = mNearY + (mFarY - mNearY) * vT;   // its y on the right page
+    var capX = cx + 8, capY = vY - 1;          // gilt drop-cap sits at the left margin
+    var lineX0 = capX + 11, lineX1 = cx + 6 + ((mNearR - 5) - (cx + 6)) * 0.86; // the verse stroke span
+    // a faint warm WASH bleeding from the wet gold onto the adjacent parchment (the ink
+    // still drying, warmth spilling into the page). Very low-opacity, wide + soft through
+    // the bloom, and it BREATHES with the halo. rep.glow1 → recedes by day for free.
+    var glowSpill = el('line', { x1: fx(lineX0 - 3), y1: fx(vY), x2: fx(lineX1 + 2), y2: fx(vY + vT * 1.5),
+      stroke: GOLD, 'stroke-width': '7', 'stroke-linecap': 'round',
+      opacity: '0.16', filter: 'url(#verse-ink-glow)' }, g);
+    // soft feathered bloom UNDER the line (the wet-ink halo) — pooled + reduced-motion breathes
+    var glowHalo = el('line', { x1: fx(lineX0), y1: fx(vY), x2: fx(lineX1), y2: fx(vY + vT * 1.5),
+      stroke: GOLD, 'stroke-width': '3.2', 'stroke-linecap': 'round',
+      opacity: '0.55', filter: 'url(#verse-ink-glow)' }, g);
+    // the crisp gold verse stroke itself (the just-written line)
+    el('line', { x1: fx(lineX0), y1: fx(vY), x2: fx(lineX1), y2: fx(vY + vT * 1.5),
+      stroke: GOLD, 'stroke-width': '1.3', 'stroke-linecap': 'round', opacity: '0.95' }, g);
+    // a hot near-white kernel at the pen's leading tip (the wettest, freshest point)
+    el('circle', { cx: fx(lineX1), cy: fx(vY + vT * 1.5), r: 1.5, fill: '#fff6de',
+      opacity: '0.55', filter: 'url(#verse-ink-glow)' }, g);
+    // the gilt DROP-CAP — a small illuminated lozenge/square in the left margin
+    var capW = 8, capHt = 8;
+    el('rect', { x: fx(capX - capW / 2), y: fx(capY - capHt / 2), width: fx(capW), height: fx(capHt), rx: 1.4,
+      fill: GOLD, opacity: '0.32', filter: 'url(#verse-ink-glow)' }, g);   // gilt bloom
+    var capBox = el('rect', { x: fx(capX - capW / 2), y: fx(capY - capHt / 2), width: fx(capW), height: fx(capHt), rx: 1.4,
+      fill: 'none', stroke: GOLD, 'stroke-width': '1.2', opacity: '0.92' }, g);
+    // a tiny gilt kernel inside the drop-cap (an illuminated initial's flourish)
+    el('circle', { cx: fx(capX), cy: fx(capY), r: 1.6, fill: GOLD, opacity: '0.9' }, g);
+
+    // ════════════ INKPOT + UPRIGHT QUILL — the one vertical accent ═══════════════
+    // A small squat inkpot at the desk's near-left edge; a slender quill rises upright
+    // out of it (leaning slightly), a barb-feathered nib at top. Drawn LAST so it sits
+    // in front of the page's near edge.
+    var potX = cx - 40, potBaseY = deskFrontY + 3, potW = 15, potH = 12;
+    // the inkpot body (dark glass/ceramic, brass-rimmed) — squat, wider at base
+    el('path', { d: 'M ' + fx(potX - potW / 2) + ' ' + fx(potBaseY) +
+      ' L ' + fx(potX + potW / 2) + ' ' + fx(potBaseY) +
+      ' L ' + fx(potX + potW / 2 - 1.5) + ' ' + fx(potBaseY - potH) +
+      ' L ' + fx(potX - potW / 2 + 1.5) + ' ' + fx(potBaseY - potH) + ' Z',
+      fill: DARK, stroke: BRASS, 'stroke-width': '1.3', filter: 'url(#glow-soft)' }, g);
+    // brass rim / mouth of the pot (top-lit)
+    el('ellipse', { cx: fx(potX), cy: fx(potBaseY - potH), rx: fx(potW / 2 - 1.5), ry: 2.2,
+      fill: DARK, stroke: BRASS, 'stroke-width': '1.2' }, g);
+    el('path', { d: 'M ' + fx(potX - potW / 2 + 2.5) + ' ' + fx(potBaseY - potH - 0.4) +
+      ' A ' + fx(potW / 2 - 2) + ' 2 0 0 1 ' + fx(potX + potW / 2 - 2.5) + ' ' + fx(potBaseY - potH - 0.4),
+      fill: 'none', stroke: BRI, 'stroke-width': '1', opacity: '0.7' }, g);
+    // the QUILL — a slender shaft leaning slightly, rising well above the low silhouette
+    var qBaseX = potX + 1, qBaseY = potBaseY - potH - 1;
+    var qTopX = qBaseX + 7, qTopY = qBaseY - 44;   // short + near-upright (Take-3 restraint) — the lone accent, doesn't verticalize the mound
+    // the shaft (a smooth quill spine, top-lit) — a gentle bow, near-upright
+    el('path', { d: 'M ' + fx(qBaseX) + ' ' + fx(qBaseY) +
+      ' Q ' + fx(qBaseX + 1.5) + ' ' + fx((qBaseY + qTopY) / 2) + ' ' + fx(qTopX) + ' ' + fx(qTopY),
+      fill: 'none', stroke: WOOD, 'stroke-width': '2.4', 'stroke-linecap': 'round', filter: 'url(#glow-soft)' }, g);
+    el('path', { d: 'M ' + fx(qBaseX) + ' ' + fx(qBaseY) +
+      ' Q ' + fx(qBaseX + 1.5) + ' ' + fx((qBaseY + qTopY) / 2) + ' ' + fx(qTopX) + ' ' + fx(qTopY),
+      fill: 'none', stroke: BRASS, 'stroke-width': '1.2', 'stroke-linecap': 'round' }, g);
+    // a bright catch up the shaft's up-lit side
+    el('path', { d: 'M ' + fx(qBaseX - 0.8) + ' ' + fx(qBaseY - 1) +
+      ' Q ' + fx(qBaseX + 0.7) + ' ' + fx((qBaseY + qTopY) / 2) + ' ' + fx(qTopX - 0.8) + ' ' + fx(qTopY + 1),
+      fill: 'none', stroke: BRI, 'stroke-width': '0.7', opacity: '0.5' }, g);
+    // the FEATHER PLUME — a soft barb vane clothing the UPPER HALF of the shaft so the
+    // quill unmistakably reads as a feather, not a rod. A pale parchment-toned vane
+    // envelope (the feather body) plus a run of short barb strokes combed off both
+    // sides. The lower half of the shaft stays bare (the stripped calamus into the pot).
+    var qAt = function (t) {                    // point on the shaft at fraction t (0=base)
+      return { x: qBaseX + (qTopX - qBaseX) * t + 1.5 * (t - t * t),
+               y: qBaseY + (qTopY - qBaseY) * t };
+    };
+    var vLo = 0.40, vHi = 0.98;                 // vane runs from mid-shaft up to the tip
+    var loP = qAt(vLo), hiP = qAt(vHi), tipP = qAt(1);
+    // soft vane envelope — a leaf-shaped plume hugging the upper shaft (widest mid-vane)
+    var midP = qAt((vLo + vHi) / 2);
+    el('path', { d: 'M ' + fx(loP.x) + ' ' + fx(loP.y) +
+      ' Q ' + fx(midP.x + 8) + ' ' + fx(midP.y - 1) + ' ' + fx(hiP.x) + ' ' + fx(hiP.y) +
+      ' Q ' + fx(midP.x - 7) + ' ' + fx(midP.y + 3) + ' ' + fx(loP.x) + ' ' + fx(loP.y) + ' Z',
+      fill: PAGE, opacity: '0.62', filter: 'url(#glow-soft)' }, g);
+    // a brass-bright rachis (the feather's central quill line) up the vane
+    el('path', { d: 'M ' + fx(loP.x) + ' ' + fx(loP.y) + ' Q ' + fx(midP.x + 1) + ' ' + fx(midP.y) + ' ' + fx(hiP.x) + ' ' + fx(hiP.y),
+      fill: 'none', stroke: BRI, 'stroke-width': '0.8', opacity: '0.55', 'stroke-linecap': 'round' }, g);
+    // barb strokes combed off BOTH sides of the rachis, angling up toward the tip
+    for (var qi = 0; qi < 7; qi++) {
+      var qt = vLo + (vHi - vLo) * (qi / 6);
+      var bp = qAt(qt);
+      var grow = 1 - Math.abs(qt - 0.62) * 1.3;    // barbs fullest mid-vane, taper at ends
+      var bl = 3 + 5 * Math.max(0.15, grow);
+      // right-side barbs (near, up-lit) — brighter, thickened so the plume holds at night
+      el('line', { x1: fx(bp.x), y1: fx(bp.y), x2: fx(bp.x + bl), y2: fx(bp.y - bl * 0.7),
+        stroke: PAGE, 'stroke-width': '1.1', 'stroke-linecap': 'round', opacity: '0.82' }, g);
+      // left-side barbs (far) — dimmer + a touch shorter
+      el('line', { x1: fx(bp.x), y1: fx(bp.y), x2: fx(bp.x - bl * 0.8), y2: fx(bp.y - bl * 0.6),
+        stroke: PAGE, 'stroke-width': '0.95', 'stroke-linecap': 'round', opacity: '0.56' }, g);
+    }
+    // the pared NIB tip at the very top (a small dark point on the shaft)
+    el('path', { d: 'M ' + fx(tipP.x) + ' ' + fx(tipP.y) +
+      ' L ' + fx(tipP.x - 1.6) + ' ' + fx(tipP.y + 4) + ' L ' + fx(tipP.x + 1.6) + ' ' + fx(tipP.y + 3.5) + ' Z',
+      fill: DARK, stroke: BRASS, 'stroke-width': '0.8' }, g);
+
+    // ════════════ QUIET BREATHING — the wet-gold line drying (reduced-motion-safe) ══
+    // A barely-perceptible, slow, seamless pulse of the gold halo only — the ink still
+    // wet. Self-contained SMIL on the rep's own node; gated behind prefers-reduced-
+    // motion; never strobes, never animates the structure or the quill.
+    var prefersReduced = (typeof window !== 'undefined' && window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if (!prefersReduced) {
+      el('animate', { attributeName: 'opacity', values: '0.5;0.68;0.5',
+        dur: '6.5s', repeatCount: 'indefinite', calcMode: 'spline',
+        keyTimes: '0;0.5;1', keySplines: '0.4 0 0.6 1;0.4 0 0.6 1' }, glowHalo);
+      // the warmth-spill wash breathes in step with the halo (the same drying ink)
+      el('animate', { attributeName: 'opacity', values: '0.16;0.24;0.16',
+        dur: '6.5s', repeatCount: 'indefinite', calcMode: 'spline',
+        keyTimes: '0;0.5;1', keySplines: '0.4 0 0.6 1;0.4 0 0.6 1' }, glowSpill);
+    }
+
+    S.refs.verseRep = g;
   }
 
   /* ── the GLYPH STAND — the fallback rep for every room WITHOUT a bespoke rep
