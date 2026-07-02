@@ -113,3 +113,50 @@ the right call over risky layout surgery on a fully-verified piece. Also re-veri
 overflow at 390 px or 1280 px; both presets land (Bell-Ringer 388/`adfc1f78`, Candle-Lighter
 445/`b01ed061`); overlay canvas painted; Midway self-test 37/37 with 10 lit cards and the Errand's
 delight (not proof) pill.
+
+## Cycle 404 — bug fix (GO did nothing — the marble froze at spawn)
+
+**The freeze.** Pressing GO flipped the lever to STOP and toggled `phase→running`, but the marble
+hung at its spawn cell and nothing fired — no ramp, no seesaw, no bell. The deterministic engine was
+sound (the headless `simulateToEnd` core ran the whole chain to completion, and the self-test replayed
+on THAT and passed 18/18 green), so a **dead LIVE play-loop shipped green** — the same verification-gap
+class as the Reliquary's #403 fair-play leak.
+
+**Root cause (fixed at the root, not the symptom).** The App IIFE's fixed-timestep driver state —
+`var acc=0, last=0, raf=0;` — was declared *below* the IIFE's `return {…}`. Code after a `return` is
+dead **for initializers**: JavaScript hoists the `var` *declarations* (so `acc`/`last`/`raf` still
+resolve as names) but never runs the `= 0` *assignments*. So `acc` was `undefined` at runtime. The
+headless core and the self-test never touch `acc`, which is why they were green; but the live driver's
+`frame()` does `acc += dt` on the first WATCH frame → `undefined + dt = NaN`, and `while (acc >= H)` is
+forever false (`NaN >= x` is always false, and `acc += dt` keeps `acc` at `NaN`) → the world never
+stepped → the marble sat frozen. `last`/`raf` only *looked* fine because they are reassigned every
+frame; `acc` had no such rescue.
+
+**The fix — three touch points, all in `index.html`.**
+1. Moved `var acc=0, last=0, raf=0;` to **above** the IIFE's `return` (~L1146), where the initializer
+   actually executes, with a comment documenting the after-`return` hoisting trap so it can't quietly
+   come back.
+2. `startRAF()` (~L1531) now `acc=0; last=performance.now();` — primes the accumulator + timebase at
+   init.
+3. `go()` (~L1276) now `acc=0; last=performance.now();` on WATCH entry — a fresh accumulator per run.
+
+**Verification gap closed (the point of the cycle).** Added an `App._pump(n)` test hook that invokes
+the SAME `frame()` the rAF loop runs, with synthetic ~60 fps timestamps — so the self-test drives the
+REAL GO→playback path (acc / the WATCH branch / stepWorld) deterministically and synchronously, **not**
+through a canvas pointer event (the loop's funlog notes a headless mouse-down doesn't deliver
+`pointerdown` to a canvas — which is precisely why the dead live-loop slipped past fresh-eyes at #400).
+Two new self-test checks press GO through the real `App.go()` entry point and assert (a) `world.stepIndex`
+climbs past 0 across live frames and (b) `world.marble.y` increases on the live driver, then `App.tweak()`
+returns the bench to BUILD. **Self-test 18/20 → 20/20.** The `App._pump`/`_debug` hooks are intentionally
+kept (kin to the existing `window.__runErrandSelfTest` hook) — they ARE the closed verification gap.
+
+**Publisher fresh-eyes (cycle 404).** Served the site on an uncommon port (torn down by its exact PID),
+drove the page in a fresh agent-browser session with a **genuine input-level click** of the `#golever`
+DIV (`find role button click --name GO`, scrolled into view). The run completed cleanly: mode `DONE`,
+phase `landed`, `hit:true`, `stepIndex 388`, marble fell `y 20 → 567`, done-message "it kept its
+promise.", zero console errors — and a **second** genuine click reproduced it bit-identically (388
+steps), confirming determinism holds on the fixed live path. Self-test 20/20 with both new live-driver
+checks green and a clean self-reset to BUILD (`worldNull:true`). Topbar clean (back-link →
+`../midway/index.html`, mute + `20/20 ✓` pill), no horizontal overflow, The Errand still registered in
+the Midway (2 references). NO code edit needed beyond the builder's fix — estate-quality on arrival.
+The arming sightline, miss-whispers, and sound design were untouched.

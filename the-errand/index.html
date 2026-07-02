@@ -1134,10 +1134,27 @@ var App = (function(){
      coords are grid cells; authored + watched by the builder (twice, identical). */
   var PRESETS = {}; // filled in after tuning — see PRESET DATA at the foot of this IIFE
 
+  // ── fixed-timestep DRIVER STATE ─────────────────────────────────────────────
+  //  These MUST be declared+initialized ABOVE the `return` below. Everything after
+  //  the return is dead code for *initializers*: JS hoists the function
+  //  declarations (init/frame/…) so they still resolve, but a `var x = 0`
+  //  written after `return` has its DECLARATION hoisted while its ASSIGNMENT
+  //  never runs — the var stays `undefined`. That is exactly what froze the
+  //  marble: `acc` was `undefined`, so on the first WATCH frame `acc += dt`
+  //  became NaN and `while(acc>=H)` never stepped the world (cycle #404 bug).
+  //  Initialize here, where the code actually executes.
+  var acc=0, last=0, raf=0;
+
   return {
     init:init, mode:function(){return mode;}, getPlaced:function(){return placed;},
     getMarble:function(){return marbleStart;}, setPreset:setPreset, go:go, tweak:tweak,
     _debug:function(){ return { placed:placed, marbleStart:marbleStart, PRESETS:PRESETS, world:world }; },
+    // TEST HOOK: pump the LIVE fixed-timestep driver by invoking the same frame()
+    // the rAF loop runs, with synthetic timestamps (~60fps). This exercises the
+    // REAL GO→playback path — acc/last/the WATCH branch/stepWorld — deterministically
+    // and synchronously, so the self-test can prove the marble actually advances on
+    // a live run (not just the headless simulateToEnd core). Returns the live world.
+    _pump:function(n){ var t=last||performance.now(); for(var i=0;i<(n|0);i++){ t+=16.7; frame(t); } return world; },
     _setPresets:function(o){ PRESETS=o; }
   };
 
@@ -1256,6 +1273,7 @@ var App = (function(){
     world.phase='running';
     mode='WATCH';
     selected=null;
+    acc=0; last=performance.now();   // fresh accumulator + timebase for THIS run
     setLever('stop');
     document.getElementById('bunting').style.opacity='1';
     render();
@@ -1506,8 +1524,11 @@ var App = (function(){
   }
 
   // ── the fixed-timestep loop + render ───────────────────────────────────────
-  var acc=0, last=0, raf=0;
-  function startRAF(){ last=performance.now(); raf=requestAnimationFrame(frame); }
+  //  acc/last/raf are declared+initialized ABOVE the IIFE's `return` (see note
+  //  there): a `var x=0` written HERE (after the return) hoists the declaration
+  //  but drops the assignment, leaving the accumulator `undefined` → NaN → frozen.
+  //  startRAF (re)primes them explicitly at init, and go() zeroes acc per run.
+  function startRAF(){ acc=0; last=performance.now(); raf=requestAnimationFrame(frame); }
   function frame(now){
     raf=requestAnimationFrame(frame);
     var dt=(now-last)/1000; last=now;
@@ -1737,6 +1758,21 @@ function runSelfTest(){
     // and a DETERMINISTIC re-run of the same layout gives the same steps + result
     var r1=simulateToEnd(br.placed, br.marble, true), r2=simulateToEnd(br.placed, br.marble, true);
     ck('deterministic: same layout → same steps + result on re-run', r1.steps===r2.steps && r1.result.hit===r2.result.hit);
+
+    // LIVE DRIVER: press GO through the real entry point + pump the SAME frame()
+    // the rAF loop runs, and prove the marble actually advances. This closes the
+    // gap that let a dead play-loop ship green: the checks above only exercise the
+    // headless simulateToEnd core — this one drives the LIVE acc/WATCH/stepWorld
+    // path (the class of bug where acc was undefined→NaN and the world never stepped).
+    App.setPreset('bell-ringer');
+    App.go();                                               // real GO entry point (no canvas event)
+    var wAfterGo=App._debug().world;
+    var y0 = wAfterGo ? wAfterGo.marble.y : 0;              // marble spawn height
+    var wLive=App._pump(30);                                // ~0.5s of live frames
+    var advanced = !!wLive && wLive.stepIndex>0 && isFinite(wLive.marble.y) && wLive.marble.y>y0;
+    ck('LIVE GO drives the world (stepIndex climbs past 0 across real frames)', !!wLive && wLive.stepIndex>0);
+    ck('LIVE GO makes the marble fall (marble.y increases on the live driver)', advanced);
+    App.tweak();                                            // return the bench to BUILD (don't leave it mid-run)
 
     // back-link to the Midway
     var back=document.querySelector('.topbar a.back[href="../midway/index.html"]');
