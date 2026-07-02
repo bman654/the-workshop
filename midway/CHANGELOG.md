@@ -1,5 +1,26 @@
 # The Midway — changelog
 
+## Cycle 400 — The Errand joins as the tenth ride (the strip's first DELIGHT-first ride)
+
+**The Errand** — a Rube-Goldberg workbench (`the-errand/`) — is added as the tenth lit ride, and
+the FIRST that owns no theorem. It gathers under the Midway roof; NO new front-door / map
+footprint.
+
+- A new `.ride.lit` card → `../the-errand/index.html` (glyph 🎯, kind line "build a little machine
+  that keeps its promise · Rube-Goldberg, by honest physics"), placed after The Banked Curve.
+- The card carries a **WARM GOLD `.delight` pill** ("no score · no proof · just the CLUNK-tink-DING")
+  — a new pill class added beside the green `.proof` pill. Its visible difference states, without
+  a word, that the Midway now holds **joy as well as instruments**: nine of the ten rides are
+  honest instruments with a load-bearing proof; the tenth just wants you to grin.
+- Hero copy updated "Nine rides are running" → "Ten", with a clause for building a little machine
+  and pulling GO to watch a chain *keep its promise*; the stamp reads "Nine instruments · one
+  delight". The footer gains an Errand paragraph (kin to the poster press and the verse oracle;
+  the warm-gold delight pill where the others wear a green proof).
+- Self-test bumped: `document.querySelectorAll('a.ride.lit').length === 9` → `=== 10`, plus the
+  exact-href structural checks for the new card matching the existing pattern (present by exact
+  href, a relative link containing index.html, carries a `.delight` pill and NOT a `.proof` pill,
+  and the delight pill reads its honest promise). Green **37/37 ✓**.
+
 ## Cycle 131 — sown (a new amusements-district wing landing)
 
 **The Midway** — a brass fairground at dusk where *every ride is a real instrument you
