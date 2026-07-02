@@ -434,61 +434,70 @@
   }
 
   /* =========================================================================
-     BIRD — a wingbeat with follow-through: down-stroke drives, up-stroke
-     recovers with the primaries lagging (bent tip). Body bobs on the beat,
-     tail fans on the down-stroke. Loops on ONE wingbeat.
+     BIRD — a full downstroke/upstroke wingbeat seen head-on, with feather
+     follow-through: each wing is a swept brush from shoulder to wingtip whose
+     tip LAGS the shoulder (the beat whips through), and a fan of primary
+     feathers splays off the tip on the downstroke. Body bobs on the beat and
+     the forked tail fans. Grafted in from a stronger take — its clean, wide
+     flying silhouette reads far better at slice scale than a profile bird whose
+     primaries tangle with the body. Loops on ONE wingbeat.
      =======================================================================*/
-  function bird(ctx, t){
+  function bird(ctx, t) {
     var a = t * TAU;
-    // wing angle: down-stroke sharper than up-stroke (asymmetric power)
+    // wing angle: strong downstroke (power) slower than the flick-up recovery
     var beat = Math.sin(a);
-    var lift = -Math.cos(a) * 8;                    // body rises on downbeat
-    var bx = CX, by = H * 0.46 + lift;
+    var rise = Math.cos(a);                 // body rises on downstroke
+    var bx = CX, by = H * 0.5 - beat * 10;  // body bobs with the beat
 
-    // follow-through: tips lag the wing root by a phase
-    var tipLag = Math.sin(a - 0.9);
+    // BODY — a teardrop trunk, head to tail
+    brush(ctx, [
+      { x: bx - 4, y: by - 16, w: 7 },      // head
+      { x: bx, y: by - 6, w: 12 },
+      { x: bx + 2, y: by + 8, w: 12 },
+      { x: bx + 2, y: by + 22, w: 6 },
+      { x: bx + 2, y: by + 30, w: 3 }       // tail tip
+    ], COOL);
+    // beak
+    brush(ctx, [{ x: bx - 6, y: by - 18, w: 3 }, { x: bx - 14, y: by - 19, w: 1.5 }], GOLD);
+    dot(ctx, bx - 2, by - 18, 1.4, '#20303a');
 
-    function wing(dir){                              // dir = +1 right, -1 left
-      var rootx = bx + dir*6, rooty = by - 4;
-      // mid & tip driven by beat, tip lags → the wing bends/whips
-      var midAng = beat * 0.9;
-      var tipAng = tipLag * 1.1;
-      var midx = rootx + dir*26, midy = rooty - beat*22;
-      var tipx = midx + dir*24, tipy = midy - tipLag*18 + 4;
-      // arm (root→mid): loaded leading edge
-      taperStroke(ctx, quadPts(rootx, rooty, rootx + dir*14, rooty - beat*16, midx, midy, 10),
-                  6, 4, COOL, {belly:0.3});
-      // hand/primaries (mid→tip): thins to a whip, splays a couple feathers
-      taperStroke(ctx, quadPts(midx, midy, midx + dir*14, midy - tipLag*10, tipx, tipy, 10),
-                  4, 0.5, COOL, {belly:0.2});
-      // two trailing primary feathers on the down/recovery
-      var spread = 0.4 + Math.max(0, -beat)*0.6;
-      for (var f = -1; f <= 1; f++){
-        taperStroke(ctx, linePts(midx, midy,
-                     tipx - dir*4 + f*6*spread, tipy + 6 + Math.abs(f)*4),
-                    2.4, 0.4, 'rgba(111,178,201,.75)');
+    // tail fan spreads on the downstroke
+    var fan = 6 + Math.max(0, beat) * 8;
+    brush(ctx, [{ x: bx + 2, y: by + 26, w: 5 }, { x: bx - fan, y: by + 40, w: 2 }], COOL);
+    brush(ctx, [{ x: bx + 2, y: by + 26, w: 5 }, { x: bx + fan, y: by + 40, w: 2 }], COOL);
+
+    // WINGS — each a swept brush from shoulder to wingtip. The tip trails the
+    // shoulder (follow-through): tip angle lags the beat by a small phase.
+    function wing(side) {
+      var sx = bx + side * 6, sy = by - 2;
+      var lagBeat = Math.sin(a - 0.5);              // tip lags the shoulder
+      var upY = -beat * 26;                         // shoulder joint rise/fall
+      var tipY = -lagBeat * 40;                     // wingtip travels farther, later
+      var midx = sx + side * 26;
+      var midy = sy + upY * 0.5;
+      var tipx = sx + side * 52;
+      var tipy = sy + tipY;
+      // wing membrane: shoulder → mid → tip, swelling then thinning
+      brush(ctx, [
+        { x: sx, y: sy, w: 7 },
+        { x: midx, y: midy, w: 9 },
+        { x: sx + side * 42, y: (midy + tipy) / 2, w: 6 },
+        { x: tipx, y: tipy, w: 2.5 }
+      ], COOL);
+      // a few primary feathers splaying from the tip on the downstroke
+      if (beat > -0.2) {
+        var spread = (beat + 0.2) * 10;
+        for (var f = 0; f < 3; f++) {
+          var fy = tipy + (f - 1) * (4 + spread * 0.4);
+          brush(ctx, [
+            { x: tipx, y: tipy, w: 2 },
+            { x: tipx + side * (8 + spread), y: fy + 6, w: 1 }
+          ], COOL);
+        }
       }
     }
-
-    // body — a tucked ovoid, drawn as a loaded stroke pair
-    taperStroke(ctx, quadPts(bx-14, by-2, bx, by-12, bx+16, by-2, 12), 5, 9, COOL, {belly:0.6}); // back
-    taperStroke(ctx, quadPts(bx-14, by-2, bx, by+10, bx+16, by-2, 12), 9, 5, COOL, {belly:0.5}); // breast
-
-    // wings behind/over body: far wing dimmer first
-    ctx.save(); ctx.globalAlpha = 0.55; wing(-1); ctx.restore();  // far wing
-    wing(1);                                                       // near wing
-
-    // head + beak reaching forward
-    taperStroke(ctx, quadPts(bx+14, by-4, bx+22, by-8, bx+26, by-6, 8), 6, 3, COOL);
-    taperStroke(ctx, linePts(bx+26, by-6, bx+34, by-5), 2.6, 0.4, GOLD);   // beak
-    // eye
-    ctx.beginPath(); ctx.arc(bx+22, by-7, 1.3, 0, TAU); ctx.fillStyle='#0a0b10'; ctx.fill();
-
-    // tail — fans on the downbeat
-    var fan = 0.5 + Math.max(0, -beat)*0.5;
-    for (var q = -1; q <= 1; q++){
-      taperStroke(ctx, linePts(bx-12, by-1, bx-30, by + 6 + q*8*fan), 3.5, 0.5, COOL);
-    }
+    wing(-1);
+    wing(1);
   }
 
   root.Loops = {

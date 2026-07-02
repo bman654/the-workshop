@@ -50,16 +50,32 @@ bar — a fidelity + tuning + polish pass, not a rewrite. The make-or-break was 
   smaller than the proto's joined-PNG-dataURL. Copy to clipboard; paste back, or import a `.txt` file.
   The legacy `DRUM1|` proto seed is still accepted. Round-trip verified (clear → decode restores ink).
 
-### In-house art (foundry — placeholders shipped, specs written)
-Greyboxed on purpose; the art foundry forges the rich versions (`art-specs/*.md` + `preview.sh`):
-- **`drum-brass.js`** — the brass MATERIAL pass (flat brushed gradient → specular sheen + cut-edge
-  glints + inner-wall bounce). API = `window.Brass.{frontWall,slitLip,topRim,baseRim,spindle}`.
-- **`starter-loops.js`** — the five stick-figure greybox loops → charming weighty 12-frame ink loops
-  (horse gallop, ball bounce w/ squash-stretch, blooming flower, walk cycle, flapping bird). API =
+### In-house art (foundry — FORGED + WIRED, cycle 398 wiring pass)
+The three assets were forged in-house by the art foundry (K takes → judges → synth) and are now WIRED
+into the live piece (placeholder comments removed; `index.html` re-forged so the built page embeds the
+real modules). Specs preserved at `art-specs/*.md` + `preview.sh`:
+- **`drum-brass.js`** — "the turned cylinder": the wall skin is baked once as an analytic upper-left-lit
+  cylinder gradient (diffuse cosine wrap + tight specular lobe + warm right-flank bounce + horizontal
+  spun-grain), blitted + clipped each frame; every slit lip, rim and the spindle inherit the one light
+  model. Reads as convincingly-spun warm brass; cheap for 60fps. API =
+  `window.Brass.{frontWall,slitLip,topRim,baseRim,spindle}`.
+- **`starter-loops.js`** — "the animator's hand": five charming, weighty, seamless 12-frame ink loops —
+  a squash/stretch/hang ball, a bud→bloom→bud breathing flower, a weight-shifted profile walk, a filled-
+  silhouette gallop horse (split near/far legs + streaming tail), a head-on wingbeat bird with feather
+  follow-through. Verified drawing real ink (horse ≈16% coverage). API =
   `window.Loops.{horse,ball,flower,walker,bird}(ctx,t)`.
-- **`drum-sound.js`** — the OPTIONAL wooden bearing whir (pitched to |omega|) + soft per-slit tick at
-  lock + a catch-chime. Silent-until-gesture (verified: `soundReady` false before Flick, true after),
-  honours the shared `ws:pref:muted`. API = `window.DrumSound.{unlock,bindOmega,tick,lock}`.
+- **`drum-sound.js`** — the felt-and-fibre wooden bearing whir (resonated-air formant bank, pitched to
+  |omega|, spin-up glide) + a paper-and-rib per-slit tock + a warm two-note F4→C5 catch-chime. Silent-
+  until-gesture (verified: exactly 1 AudioContext created on the Flick gesture, state `running`; 0
+  before), honours the shared `ws:pref:muted`. In-browser offline render of the ship graph: peak −28.6
+  dBFS, RMS −43.3 dBFS, no clipping, silent at rest. API = `window.DrumSound.{unlock,bindOmega,tick,lock}`.
+
+### Wiring pass self-test (cycle 398, served origin)
+Structural chip GREEN (12 bitmaps · brass wired · 5 loops wired · one-frame-per-slit-crossing). Clean
+console, 61 fps at rest. Physics arc live: Flick → 74 rpm **LOCKED**, dwells ~3.5 s falling to ~45 rpm,
+then coasts through **CAROUSEL** to rest; Reverse → **LOCKED (rev)** (backward gallop); a fast drag →
+291 rpm **SMEAR**; Brake → rest. Drawing-from-scratch deposits ink into an empty frame; the `DRUM2:`
+seed round-trips (clear → decode restores ink to 0.1%). `forge --check` all current, door.test 17/17.
 
 ### Estate fit
 - Palette `#07080c` ground, `#c9a24a` / `#f4d27a` gold; standard topbar back-link + footer with the
