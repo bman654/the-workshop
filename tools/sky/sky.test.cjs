@@ -65,17 +65,17 @@ const VIEWBOX = { x: 0, y: 0, w: 1440, h: 900 };
    declaration changes — keep it in sync or this test false-fails. Every generated
    box is verified star-clear (all 35 catalog stars lie outside the interior FIELD). */
 const FOOTPRINTS = [
-  { id: 'verse',            x: 696,   y: 345,  w: 22,   h: 16 },
-  { id: 'compositor',       x: 720,   y: 345,  w: 22,   h: 16 },
-  { id: 'cartographer',     x: 696,   y: 363,  w: 22,   h: 16 },
-  { id: 'sound-garden',     x: 696,   y: 435,  w: 22,   h: 16 },
-  { id: 'threshold',        x: 720,   y: 435,  w: 22,   h: 16 },
+  { id: 'verse',            x: 534,   y: 360,  w: 28,   h: 20 },
+  { id: 'compositor',       x: 574,   y: 360,  w: 28,   h: 20 },
+  { id: 'cartographer',     x: 534,   y: 393,  w: 28,   h: 20 },
+  { id: 'sound-garden',     x: 724,   y: 360,  w: 28,   h: 20 },
+  { id: 'threshold',        x: 764,   y: 360,  w: 28,   h: 20 },
   { id: 'strange-garden',   x: 341,   y: 638,  w: 28,   h: 19 },
   { id: 'firmament',        x: 320,   y: 268,  w: 19,   h: 19 },  // tower r→bbox
-  { id: 'daedalus',         x: 992,   y: 351,  w: 26,   h: 18 },
-  { id: 'arcade',           x: 992,   y: 269,  w: 26,   h: 18 },
+  { id: 'daedalus',         x: 994,   y: 337,  w: 23,   h: 16 },
+  { id: 'arcade',           x: 994,   y: 266,  w: 23,   h: 16 },
   { id: 'workbench',        x: 520,   y: 589,  w: 88,   h: 61 },
-  { id: 'undercroft',       x: 698,   y: 517,  w: 46,   h: 64 },
+  { id: 'undercroft',       x: 670,   y: 517,  w: 46,   h: 64 },
   { id: 'hall-of-mirrors',  x: 293,   y: 401,  w: 37,   h: 26 },  // the optics wing — the feat-stars cluster beside it
   { id: 'refraction-run',   x: 293,   y: 460,  w: 37,   h: 26 },  // The Photon's Errand — the optics fly-through, the new 'tank' footprint below the Hall
   { id: 'gnomon',           x: 1118,  y: 203,  w: 142,  h: 98 }  // The Hours — the horology wing's open east-park sundial

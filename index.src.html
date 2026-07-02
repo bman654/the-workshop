@@ -678,8 +678,9 @@
       <rect x="0" y="0" width="1440" height="900" fill="url(#draftgrid)"/>
       <rect x="0" y="0" width="1440" height="900" fill="url(#warmgrid)" mask="url(#coreMask)" opacity=".7"/>
       <rect x="0" y="0" width="1440" height="900" filter="url(#grain)" opacity=".05"/>
-      <!-- candlelit warmth pooled at the manor (centre of the plate) -->
-      <rect x="421" y="150" width="600" height="600" fill="url(#candle)"/>
+      <!-- candlelit warmth pooled at the manor (#410: recentred west with the widened
+           great house, whose union now centres near x663 rather than the old x721) -->
+      <rect x="363" y="150" width="600" height="600" fill="url(#candle)"/>
 
       <!-- the parkland / property boundary — one estate, with rounded park corners -->
       <rect x="78" y="80" width="1284" height="744" rx="46" class="estate-bound"/>
@@ -1563,6 +1564,11 @@ const PLACES = [
    (x/y/w/h or x/y/r) so the existing footprint drawers + label/leader geometry —
    which read r.x/r.y/r.w/r.h — run UNCHANGED against the derived slots. */
 const LAYOUT = Layout.solve(PLACES);
+/* the manor's solved centre-x (#410) — the great house is now a WIDER union of three
+   blocks, so the interior door-swings + furniture orient toward THIS derived centre
+   rather than the old hard-pinned x≈716/721. */
+const MANOR_CX = (()=>{ const m = LAYOUT.districtRects.find(d=>d.district==="manor");
+  return m ? m.x + m.w/2 : 716; })();
 PLACES.forEach(p=>{
   const f = LAYOUT.foot[p.id];
   if(f){
@@ -1599,11 +1605,14 @@ function drawHouseWing(g, r){ // an interior room cell within the manor: slab + 
   // a cross-wall subdivision so the room reads as two chambers
   g.appendChild(el("line",{x1:x+w*0.5,y1:y+8,x2:x+w*0.5,y2:y+h-8,class:"fp-fine"}));
   g.appendChild(el("line",{x1:x+8,y1:y+h*0.5,x2:x+w-8,y2:y+h*0.5,class:"fp-fine",opacity:".4"}));
-  // surveyed "furniture" pips — a hearth on the outer wall + a small table
-  const outerX = (x<716) ? x+5 : x+w-5;
-  g.appendChild(el("rect",{x:outerX-(x<716?0:7),y:y+h*0.5-7,width:7,height:14,class:"fp-fine",opacity:".45"}));
-  // a door swing into the central corridor (toward house centre, ~x=721)
-  const left = (x < 716);
+  // surveyed "furniture" pips — a hearth on the outer wall + a small table. "Outer" =
+  // the wall facing AWAY from the solved house centre (#410: the manor is now a wide
+  // union of blocks, so orient off MANOR_CX, not the old hard-pinned x≈716).
+  const westOfCentre = (x + w*0.5 < MANOR_CX);
+  const outerX = westOfCentre ? x+5 : x+w-5;
+  g.appendChild(el("rect",{x:outerX-(westOfCentre?0:7),y:y+h*0.5-7,width:7,height:14,class:"fp-fine",opacity:".45"}));
+  // a door swing into the central corridor (toward the house centre)
+  const left = westOfCentre;
   const doorX = left ? x+w : x, dir = left ? -1 : 1;
   g.appendChild(el("path",{d:`M${doorX} ${y+h*0.5} h${dir*12}`,class:"fp-line"}));
   g.appendChild(el("path",{d:`M${doorX+dir*12} ${y+h*0.5} a12 12 0 0 ${left?1:0} ${dir*-12} -12`,class:"fp-fine"}));
@@ -3422,23 +3431,36 @@ function drawPrecincts(){
   });
 }
 
-/* draw the MANOR shell interior: a candle pool deepening + a cross-passage hall +
-   the central stair-hall, all positioned from the solved manor district rect. */
+/* draw the MANOR shell interior as a GREAT HOUSE (#410): the three solved block hulls
+   (a taller CENTRAL main house + lower left/right wings) read as a manor silhouette, not
+   one box — a candle pool at the heart, each block a soft party-walled hull, and the
+   great central stair-hall + cross-passage seated in the CENTRAL block. All positioned
+   from the solved manorLots / district rect (so they follow the enlarged footprint). */
 function drawManorInterior(){
   const m = LAYOUT.districtRects.find(d=>d.district==="manor");
   if(!m) return;
-  const cx = m.x + m.w/2, cy = m.y + m.h/2;
-  // a candle pool deepening at the house heart
-  manorG.appendChild(el("ellipse",{ cx, cy, rx:m.w*0.5, ry:m.h*0.42, fill:"rgba(201,162,74,.035)" }));
-  // the central corridor cross (great hall + cross-passage)
-  manorG.appendChild(el("line",{ x1:cx, y1:m.y+8, x2:cx, y2:m.y+m.h-8,
-    stroke:"var(--line-warm)", "stroke-width":".9", opacity:".34" }));
-  manorG.appendChild(el("line",{ x1:m.x+8, y1:cy, x2:m.x+m.w-8, y2:cy,
+  const lots = LAYOUT.manorLots || [];
+  const central = lots.find(l=>l.key==="central") || m;
+  const ccx = central.x + central.w/2, ccy = central.y + central.h/2;
+  // a candle pool deepening at the house heart (over the central main house)
+  manorG.appendChild(el("ellipse",{ cx:ccx, cy:ccy, rx:m.w*0.5, ry:m.h*0.46, fill:"rgba(201,162,74,.03)" }));
+  // the great-house massing: each block a soft warm hull, the central one drawn heavier so
+  // the plate reads as a tall central block flanked by lower wings (not a rectangle).
+  lots.forEach(l=>{
+    const grand = l.key==="central";
+    manorG.appendChild(el("path",{ d:roundRectPath(l.x-4, l.y-4, l.w+8, l.h+8, 7),
+      fill:"none", stroke:"var(--line-warm)", "stroke-width":grand?1.1:0.8,
+      opacity:grand?".5":".32" }));
+  });
+  // the central great-hall spine (up the main house) + its cross-passage
+  manorG.appendChild(el("line",{ x1:ccx, y1:central.y+6, x2:ccx, y2:central.y+central.h-6,
+    stroke:"var(--line-warm)", "stroke-width":".9", opacity:".4" }));
+  manorG.appendChild(el("line",{ x1:central.x+6, y1:ccy, x2:central.x+central.w-6, y2:ccy,
     stroke:"var(--line-warm)", "stroke-width":".9", opacity:".34" }));
   // the great central stair-hall at the crossing
   const sg = el("g",{ opacity:".5" });
-  sg.appendChild(el("rect",{ x:cx-16, y:cy-16, width:32, height:32, class:"fp-fine" }));
-  for(let i=1;i<4;i++) sg.appendChild(el("line",{ x1:cx-16, y1:cy-16+i*8, x2:cx+16, y2:cy-16+i*8, class:"fp-fine" }));
+  sg.appendChild(el("rect",{ x:ccx-16, y:ccy-16, width:32, height:32, class:"fp-fine" }));
+  for(let i=1;i<4;i++) sg.appendChild(el("line",{ x1:ccx-16, y1:ccy-16+i*8, x2:ccx+16, y2:ccy-16+i*8, class:"fp-fine" }));
   manorG.appendChild(sg);
 }
 

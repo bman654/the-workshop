@@ -70,7 +70,17 @@ var Layout = (function () {
      envelope stay sky-valid. Other regions tile the interior, manor-central. */
   var DISTRICTS = {
     manor: {
-      region: { x: 586, y: 296, w: 270, h: 208 },
+      // #410 — the manor is no longer PINNED to the 270×208 shell that crushed its 20
+      // rooms into one 44px column of overlapping POI hitboxes. It is a WIDER + SHORTER
+      // GREAT HOUSE (see placeManor + MANOR_BLOCKS): a taller CENTRAL block flanked by
+      // lower left/right wings, the district rect emitted as the UNION of those blocks.
+      // This `region` no longer packs the rooms (the blocks do) — it only seats the
+      // FRONT DOOR + spine (buildGraph reads region south-centre) at the house's base.
+      // Enlarged WESTWARD into the open pocket west of the old shell (candle-pool
+      // decoration, no keep-out; waves footprints end x521, figures-you-construct begin
+      // x807 — the blocks stay clear of both) and shortened to relieve the vertical
+      // squeeze on Processions (north, footprint ends y287) and the beneath cellar (y514).
+      region: { x: 530, y: 300, w: 264, h: 176 },
       inside: true, anchor: true, style: 'party-wall', lotScale: 0.74,
       label: 'THE MANOR HOUSE', hue: '#c9a24a', tint: 0.045
     },
@@ -275,6 +285,26 @@ var Layout = (function () {
      and every other grounds wing. Its page-content kinship to The Foundry rides the cards,
      not the map. */
   GROUNDS_WINGS['the-deep-hearth'] = { x: 392, y: 550, w: 152, h: 88 };
+
+  /* ── MANOR_BLOCKS (#410) — the manor's own multi-lot partition, the manor-side echo
+     of GROUNDS_WINGS. The old single-grid pack shelf-stacked all 9 manor wings into the
+     one narrow pinned shell and fitInto crushed the tall result to 17×12 specks whose
+     POI hitboxes overlapped at fit-view (the #103/#410 crowd). Instead the 20 rooms are
+     partitioned across THREE sub-lots — a taller CENTRAL block (the main house, seated
+     HIGHER) flanked by LOWER left + right wings — each packed in its OWN region so the
+     footprints read at a legible size with real gaps and the plate reads as a great
+     house, not a rectangle. placeManor emits the district rect as the UNION of the three.
+     Each block lists its wings MULTI-room-first; every 1-room wing pairs into one shared
+     trailing band (so five single-room wings don't each hog a whole row). Regions
+     FINALIZED against the LIVE Layout.solve — every footprint clears waves (x≤521),
+     figures-you-construct (x≥807), processions (y≤287) and the beneath cellar (y≥514),
+     and stays inside FIELD. The wing→block balance keeps CENTRAL the tallest mass. */
+  var MANOR_BLOCKS = {
+    central: { region: { x: 620, y: 300, w: 86, h: 190 }, wings: ['reckoning', 'archive', 'arrow'] },
+    left:    { region: { x: 526, y: 348, w: 84, h: 142 }, wings: ['studies', 'sewing'] },
+    right:   { region: { x: 716, y: 348, w: 84, h: 142 }, wings: ['east', 'barrel-house', 'kinetics-sound', 'maker'] }
+  };
+  var MANOR_BLOCK_ORDER = ['left', 'central', 'right'];
 
   /* ── THE WING-ON-WING DISJOINTNESS GUARD (#283). Nothing used to assert that two
      grounds wings never shared the SAME DRAWN GROUND. Each wing was budgeted + checked
@@ -710,12 +740,109 @@ var Layout = (function () {
     return du;
   }
 
-  /* the MANOR: pinned region, three wings (studies/east/maker). */
+  /* ── THE MANOR — a GREAT HOUSE, not one crushed column (#410). Partition the 20 rooms
+     across three sub-lots (MANOR_BLOCKS): a taller CENTRAL block seated higher, flanked by
+     lower LEFT + RIGHT wings, each packed in its own region by placeManorBlock. The
+     district rect is the UNION of the three blocks (wider + shorter + irregular); the three
+     block hulls are stashed on solution.manorLots so drawManorInterior can draw the
+     central-block-plus-wings massing (a great-house silhouette) rather than one box. ── */
   function placeManor(rooms, solution) {
     if (!rooms.length) return;
     var conf = DISTRICTS.manor;
-    var du = packDistrictInto('manor', rooms, conf.region, solution);
-    emitDistrictRect('manor', du, solution);
+    var byWing = {};
+    for (var i = 0; i < rooms.length; i++) {
+      var w = rooms[i].wing || '';
+      (byWing[w] = byWing[w] || []).push(rooms[i]);
+    }
+    // effective per-block wing lists. TOTALITY: any manor wing NOT named in the block
+    // table (or the no-wing bucket '') is folded into the first block, so EVERY manor room
+    // is placed — the packer never silently drops a room (a future wing, or a fixture's
+    // wingless manor room, still gets a footprint rather than an undefined-foot crash).
+    var assigned = {};
+    for (var a = 0; a < MANOR_BLOCK_ORDER.length; a++)
+      MANOR_BLOCKS[MANOR_BLOCK_ORDER[a]].wings.forEach(function (w) { assigned[w] = true; });
+    var extra = Object.keys(byWing).filter(function (w) { return !assigned[w]; }).sort();
+    var effWings = {};
+    MANOR_BLOCK_ORDER.forEach(function (key) { effWings[key] = MANOR_BLOCKS[key].wings.slice(); });
+    if (extra.length) effWings[MANOR_BLOCK_ORDER[0]] = effWings[MANOR_BLOCK_ORDER[0]].concat(extra);
+
+    var lots = [], allDU = [];
+    for (var k = 0; k < MANOR_BLOCK_ORDER.length; k++) {
+      var key = MANOR_BLOCK_ORDER[k], blk = MANOR_BLOCKS[key];
+      var du = placeManorBlock(blk.region, effWings[key], byWing, solution, conf);
+      if (du) { lots.push({ key: key, x: du.x, y: du.y, w: du.w, h: du.h }); allDU.push(du); }
+    }
+    solution.manorLots = lots;   // the 3 massing blocks (central/left/right), for the interior drawer
+    emitDistrictRect('manor', rectUnion(allDU), solution);
+  }
+
+  /* pack ONE manor block: stack its wings as bands (each MULTI-room wing keeps its own
+     rows; all 1-room wings PAIR into one shared trailing band, so five single-room wings
+     don't each hog a full row), size a uniform lot to FILL the block region at the tier-2
+     building aspect (capped legible), centre each row, setFoot every room, emit a per-wing
+     tint rect (bands never share a row ⇒ tints never interleave), and return the block
+     hull. Pure + deterministic; mirrors the bespoke-placer contract (placeNumberPascal). */
+  function placeManorBlock(region, wingOrder, byWing, solution, conf) {
+    var GUT = 12, VGAP = 13, PAD = 8, COLS = 2, LOT_MAX = 42;
+    var aspect = SIZE_BAND[2].h / SIZE_BAND[2].w;           // rooms read as tier-2 buildings
+    // bands: each multi-room wing → its own 2-col band; all 1-room wings → one shared band.
+    var multi = [], singles = [];
+    for (var i = 0; i < wingOrder.length; i++) {
+      var wid = wingOrder[i], list = (byWing[wid] || []).slice().sort(byOrderId);
+      if (!list.length) continue;
+      (list.length === 1 ? singles : multi).push({ wid: wid, list: list });
+    }
+    var bands = multi.map(function (m) {
+      return { cells: m.list.map(function (r) { return { wid: m.wid, room: r }; }), cols: COLS };
+    });
+    if (singles.length) {
+      // ≥2 single-room wings STACK in ONE column so no two share a row — else their engraved
+      // wing labels (each ~a full name wide) print on top of each other (the #410 tour blemish
+      // where THE BARREL HOUSE overlapped KINETICS & SOUND). A lone single keeps 1 col too.
+      bands.push({ cells: singles.map(function (s) { return { wid: s.wid, room: s.list[0] }; }), cols: 1 });
+    }
+    if (!bands.length) return null;
+    // global row index across bands → uniform row spacing over the block.
+    var R = 0, maxCols = 1;
+    for (var bi = 0; bi < bands.length; bi++) {
+      bands[bi].startRow = R;
+      bands[bi].rows = Math.ceil(bands[bi].cells.length / bands[bi].cols);
+      R += bands[bi].rows;
+      if (bands[bi].cols > maxCols) maxCols = bands[bi].cols;
+    }
+    var availW = region.w - 2 * PAD, availH = region.h - 2 * PAD;
+    // fill: the largest lot (aspect-locked) that seats R rows in availH AND maxCols in availW.
+    var sh = Math.min(
+      (availH - (R - 1) * VGAP) / R,
+      ((availW - (maxCols - 1) * GUT) / maxCols) * aspect,
+      LOT_MAX * aspect
+    );
+    var sw = sh / aspect;
+    var stackH = R * sh + (R - 1) * VGAP;
+    var top = region.y + (region.h - stackH) / 2;
+    var cx = region.x + region.w / 2;
+    var slotRects = [];
+    for (var b = 0; b < bands.length; b++) {
+      var band = bands[b], n = band.cells.length, cols = band.cols, wingSlots = {};
+      for (var ci = 0; ci < n; ci++) {
+        var col = ci % cols, rr = Math.floor(ci / cols), gRow = band.startRow + rr;
+        var usedInRow = Math.min(cols, n - rr * cols);
+        var rowW = usedInRow * sw + (usedInRow - 1) * GUT;
+        var slot = { x: cx - rowW / 2 + col * (sw + GUT), y: top + gRow * (sh + VGAP), w: sw, h: sh };
+        setFoot(solution, band.cells[ci].room, slot);
+        slotRects.push(slot);
+        (wingSlots[band.cells[ci].wid] = wingSlots[band.cells[ci].wid] || []).push(slot);
+      }
+      for (var wk in wingSlots) {
+        if (wk === '') continue;                             // the no-wing bucket gets no engraved tint
+        var wu = rectUnion(wingSlots[wk]);
+        solution.wingRects.push({
+          district: 'manor', wing: wk, label: wingLabel(wk), accent: wingAccent(wk, conf.hue),
+          x: wu.x - 5, y: wu.y - 5, w: wu.w + 10, h: wu.h + 10
+        });
+      }
+    }
+    return rectUnion(slotRects);
   }
 
   /* ── THE PASCAL-TRIANGLE formation (#328) — the number wing's bespoke 2-D layout,

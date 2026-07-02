@@ -397,6 +397,103 @@ function numberPascalSelfTest() {
 numberPascalSelfTest();
 
 /* ════════════════════════════════════════════════════════════════════════════
+   THE MANOR — POI HITBOXES NON-COLLIDING at fit-view (the great house · #410) — HARD
+   PASS. The manor used to single-grid-pack its 20 rooms into the pinned 270×208 shell:
+   fitInto crushed the shelf-stacked wings to 17×12 SPECKS whose POI hitboxes (footprint
+   + the focus/tap margin) overlapped at fit-view — a POI was hard to pick and the seat of
+   the estate read as a smudge (the #103/#410 crowd, already ACKNOWLEDGED by the "full
+   plate STILL CROWDED" record). placeManor now partitions the rooms across three sub-lots
+   (a taller CENTRAL block flanked by lower wings). This is the PAYOFF-LIVENESS twin of the
+   fix — "the hitboxes no longer collide," asserted as CODE over the LIVE Layout.solve so a
+   future re-crowd fires red:
+   (A) NO SPECKS — every manor footprint ≥ MIN_W×MIN_H (the 17×12 crush is gone);
+   (B) FOOTPRINT BOXES mutually non-overlapping (no two building plans share ground);
+   (C) HITBOXES (footprint + HIT_PAD, the clickable focus/tap target) mutually non-
+       overlapping within HIT_TOL — the markers stop colliding;
+   (D) MARKER DOTS (a glyph/lamp disc r=min(minSide/2, DOT_CAP) at each centre) pairwise
+       DISJOINT, AND real spread — the min inter-footprint gap ≥ GAP_MIN;
+   + a NEG-CONTROL: the OLD crush geometry (20 rooms at 17×12 on a ~13px column pitch)
+   FAILS (C), so it is the PARTITION, not the check, that carries legibility. ── */
+function manorHitboxSelfTest() {
+  console.log('\n=== THE MANOR — POI HITBOXES NON-COLLIDING (the great house · #410) — HARD PASS ===');
+  const MIN_W = 24, MIN_H = 18, HIT_PAD = 6, HIT_TOL = 3, DOT_CAP = 10, GAP_MIN = 8;
+  const man = PLACES.filter(p => p.district === 'manor');
+  if (man.length < 2) { console.log('  (no manor rooms — skipping)'); fail++; return; }
+  const feet = man.map(p => { const f = sol.foot[p.id];
+    return { id: p.id, x: f.x, y: f.y, w: f.w, h: f.h, cx: f.x + f.w / 2, cy: f.y + f.h / 2 }; });
+
+  const inflate = (f, pad) => ({ x: f.x - pad, y: f.y - pad, w: f.w + 2 * pad, h: f.h + 2 * pad });
+  function overlapExtent(A, B) {           // min overlapping extent (>0 ⇒ the boxes intersect)
+    const ox = Math.min(A.x + A.w, B.x + B.w) - Math.max(A.x, B.x);
+    const oy = Math.min(A.y + A.h, B.y + B.h) - Math.max(A.y, B.y);
+    return (ox > 0 && oy > 0) ? Math.min(ox, oy) : 0;
+  }
+  function worstInflatedOverlap(list, pad) {
+    let worst = 0, pair = null;
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const o = overlapExtent(inflate(list[i], pad), inflate(list[j], pad));
+      if (o > worst) { worst = o; pair = list[i].id + '×' + list[j].id; }
+    }
+    return { worst, pair };
+  }
+
+  // (A) no specks
+  let minW = Infinity, minH = Infinity, speck = null;
+  for (const f of feet) {
+    if (f.w < minW) minW = f.w; if (f.h < minH) minH = f.h;
+    if (f.w < MIN_W - 0.5 || f.h < MIN_H - 0.5) speck = f.id;
+  }
+  const noSpecks = !speck;
+  if (!noSpecks) fail++;
+  console.log('  (A) no specks (≥ ' + MIN_W + '×' + MIN_H + '): smallest ' + minW.toFixed(1) + '×' +
+    minH.toFixed(1) + ' — ' + (noSpecks ? '✓ the 17×12 crush is gone' : '✗ SPECK ' + speck));
+
+  // (B) footprint boxes mutually disjoint
+  const fB = worstInflatedOverlap(feet, 0);
+  const footClean = fB.worst <= 0.5;
+  if (!footClean) fail++;
+  console.log('  (B) footprint boxes mutually non-overlapping: worst overlap ' + fB.worst.toFixed(2) +
+    'px — ' + (footClean ? '✓ disjoint' : '✗ ' + fB.pair));
+
+  // (C) hitboxes (foot + HIT_PAD) non-colliding within HIT_TOL
+  const hB = worstInflatedOverlap(feet, HIT_PAD);
+  const hitClean = hB.worst <= HIT_TOL;
+  if (!hitClean) fail++;
+  console.log('  (C) hitboxes (foot+' + HIT_PAD + ') non-colliding (≤ ' + HIT_TOL + 'px): worst ' +
+    hB.worst.toFixed(2) + 'px' + (hB.pair ? ' @ ' + hB.pair : '') + ' — ' +
+    (hitClean ? '✓ the clickable targets stop colliding' : '✗ still crowded'));
+
+  // (D) marker dots disjoint + real spread
+  let dotBad = 0, minGap = Infinity, gapPair = null;
+  for (let i = 0; i < feet.length; i++) for (let j = i + 1; j < feet.length; j++) {
+    const A = feet[i], B = feet[j];
+    const rA = Math.min(Math.min(A.w, A.h) / 2, DOT_CAP), rB = Math.min(Math.min(B.w, B.h) / 2, DOT_CAP);
+    if (Math.hypot(A.cx - B.cx, A.cy - B.cy) < rA + rB - 1e-6) dotBad++;
+    const gx = Math.max(A.x - (B.x + B.w), B.x - (A.x + A.w));
+    const gy = Math.max(A.y - (B.y + B.h), B.y - (A.y + A.h));
+    const gap = Math.max(gx, gy); if (gap < minGap) { minGap = gap; gapPair = A.id + '×' + B.id; }
+  }
+  const dotsClean = dotBad === 0, spread = minGap >= GAP_MIN - 1e-9;
+  if (!dotsClean || !spread) fail++;
+  console.log('  (D) marker dots disjoint + real spread: ' + dotBad + ' dot-overlaps, min gap ' +
+    minGap.toFixed(1) + 'px (≥ ' + GAP_MIN + ') @ ' + gapPair + ' — ' +
+    (dotsClean && spread ? '✓ markers genuinely spread' : '✗'));
+
+  // NEG-CONTROL — the OLD 17×12 column crush FAILS (C): the partition carries it, not the check.
+  const crush = [];
+  for (let i = 0; i < 20; i++) crush.push({ id: 'crush' + i, x: 699 + (i % 2) * 18, y: 305 + Math.floor(i / 2) * 13, w: 17, h: 12 });
+  const cB = worstInflatedOverlap(crush, HIT_PAD);
+  const ncFires = cB.worst > HIT_TOL;
+  if (!ncFires) fail++;
+  console.log('  NEG-CONTROL (old 17×12 column crush): worst hitbox overlap ' + cB.worst.toFixed(1) +
+    'px > ' + HIT_TOL + ' — ' + (ncFires ? '✓ the check FAILS the crush (load-bearing)' : '✗ NC void'));
+
+  console.log('  ── MANOR POI HITBOXES: ' +
+    (noSpecks && footClean && hitClean && dotsClean && spread && ncFires ? '✓ ALL CLAIMS PASS' : '✗ SEE FAILURES ABOVE') + ' ──');
+}
+manorHitboxSelfTest();
+
+/* ════════════════════════════════════════════════════════════════════════════
    #103 CROWDING-REGRESSION RATCHET (#283, second half of the forward ratchet).
    The FULL-plate label-crowding (every room's label drawn at once) is DELIBERATELY
    tolerated — the door draws ZERO room labels at rest and the visitor TRAVELS between
