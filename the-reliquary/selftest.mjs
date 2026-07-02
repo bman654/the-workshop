@@ -191,6 +191,141 @@ let stormCount, circumference;
     hitsSealed.length === 0, hitsSealed.map((r) => r.id).join(','));
 }
 
+/* ════════════ PART E — THE RENDER IS FAIR-PLAY (the give-away can't return) ══
+   Completability (Part A) proves the chain is SOLVABLE but says nothing about what the
+   board SHOWS — the #403 bug shipped green because sealed pages were fully legible and
+   every card handed you its destination. This part closes that render-gap by running the
+   PAGE'S OWN render() (extracted verbatim from the built index.html, not re-implemented)
+   against a tiny DOM shim, seeded from real ws: state, and asserting the fair-play
+   invariants ONLY the rendered board can prove:
+     • FRESH → only the ONE reachable "awaiting" page shows its riddle; every SEALED page's
+       title + riddle are ABSENT from the DOM (not merely CSS-blurred), and NO card carries a
+       destination host-link.
+     • after each solve the next page un-smudges (becomes readable) and the JUST-SOLVED card
+       — and ONLY solved cards — carries its retrospective host-link.
+   A regression that legibly leaks a sealed riddle, or emits a host-link on an unsolved card,
+   turns this red. (Not coupled to any pointer/canvas event — a pure logic render.) */
+{
+  // extract the real render unit (store → drawStrings) from the BUILT page — the exact bytes
+  const built = readFileSync(resolve(HERE, 'index.html'), 'utf8').split('\n');
+  const s = built.findIndex((l) => l.indexOf('function store(){') >= 0);
+  let e = -1;
+  for (let i = (s < 0 ? 0 : s); i < built.length; i++) { if (built[i].indexOf('function runColophon(){') >= 0) { e = i; break; } }
+  check('render unit extractable from the built page (store→drawStrings)', s >= 0 && e > s, s + '→' + e);
+
+  // a minimal DOM shim: elements record className + innerHTML; getElementById hands back the
+  // few nodes render() touches. Enough to run render() and read the board it builds.
+  function makeEl() {
+    const el = {
+      className: '', _html: '', children: [], _attrs: {}, _text: '',
+      style: {}, classList: { add() {}, remove() {}, contains() { return false; } },
+      setAttribute(k, v) { this._attrs[k] = v; }, getAttribute(k) { return this._attrs[k]; },
+      appendChild(c) { this.children.push(c); return c; },
+      querySelector() { return null; }, querySelectorAll() { return []; },
+      addEventListener() {}, removeAttribute() {}, cloneNode() { return makeEl(); },
+      getBoundingClientRect() { return { left: 0, top: 0, width: 0, height: 0 }; },
+      getContext() { return null; }
+    };
+    Object.defineProperty(el, 'innerHTML', { get() { return this._html; }, set(v) { this._html = v; if (v === '') this.children = []; } });
+    Object.defineProperty(el, 'textContent', { get() { return this._text; }, set(v) { this._text = v; } });
+    return el;
+  }
+  // run render() against a seeded ws:key-set; return the card <div>s the board built
+  function renderWith(keys) {
+    const have = {}; for (const k of keys) have[k] = '1';
+    const nodes = {};
+    const idFor = (id) => (nodes[id] || (nodes[id] = makeEl()));
+    ['cards', 'strip', 'ribbon', 'confession', 'confessBody', 'confessName', 'stateline', 'help', 'strings', 'board', 'pill'].forEach(idFor);
+    const doc = {
+      getElementById: (id) => idFor(id),
+      createElement: () => makeEl(),
+      createElementNS: () => makeEl(),
+      addEventListener() {}, hidden: false
+    };
+    const win = { matchMedia: () => ({ matches: false }), addEventListener() {}, devicePixelRatio: 1, innerWidth: 1024, innerHeight: 768 };
+    const WSshim = { store: () => ({ ok: true, has: (k) => k in have, get: (k) => have[k], all: have }), seen() {}, muted: () => true };
+    // the extracted unit references: document, window, WS, Chain(RELIQUARY_CHAIN), REDUCE,
+    // SEEDED_CIPHERTEXT, _prevSolved, requestAnimationFrame. Provide them in the eval scope.
+    const scope = {
+      document: doc, window: win, WS: WSshim, Chain, RELIQUARY_CHAIN: Chain,
+      REDUCE: true, SEEDED_CIPHERTEXT: 'X', _prevSolved: null,
+      requestAnimationFrame: () => 0, localStorage: { getItem: () => null, setItem() {} },
+      matchMedia: () => ({ matches: false })
+    };
+    const body = built.slice(s, e).join('\n');
+    // eval the unit + call render(); return the board's card children (skip the incite wrapper)
+    const fn = new Function(...Object.keys(scope), body + '\n; render(); return arguments;');
+    fn(...Object.values(scope));
+    // cards container: first child is the incite wrapper div; the rest are the 3 clue cards
+    const cardsEl = nodes.cards;
+    const clueCards = cardsEl.children.filter((c) => /\bcard\b/.test(c.className) && !/incite/.test(c.className));
+    return { clueCards, inciteHtml: (cardsEl.children[0] && cardsEl.children[0].innerHTML) || '' };
+  }
+
+  const W = {
+    c1: 'ws:flag:dossier:saw-the-storm',
+    c2: 'ws:flag:dossier:read-the-strip',
+    c3: 'ws:flag:dossier:found-the-phantom'
+  };
+  const titles = Chain.NODES.map((n) => n.title);
+  const riddles = Chain.NODES.map((n) => n.diary);
+  const hostNames = Chain.NODES.map((n) => n.hostName);
+
+  // helper: does the rendered board (all card HTML) contain a given substring anywhere?
+  const boardHas = (cards, sub) => cards.some((c) => c.innerHTML.indexOf(sub) >= 0);
+  // per-state: which card index is solved / awaiting / sealed by its class
+  const stateOf = (cards, i) => (/\bsolved\b/.test(cards[i].className) ? 'solved'
+    : /\bawaiting\b/.test(cards[i].className) ? 'awaiting'
+    : /\bsealed\b/.test(cards[i].className) ? 'sealed' : '?');
+
+  // ── FRESH (nothing solved) ──────────────────────────────────────────────────
+  {
+    const { clueCards } = renderWith([]);
+    check('FRESH: exactly ONE clue card is "awaiting" (the active page), the rest "sealed"',
+      clueCards.filter((_, i) => stateOf(clueCards, i) === 'awaiting').length === 1 &&
+      clueCards.filter((_, i) => stateOf(clueCards, i) === 'sealed').length === Chain.NODES.length - 1,
+      clueCards.map((_, i) => stateOf(clueCards, i)).join(','));
+    check('FRESH: the awaiting page (c1) shows its riddle text legibly in the DOM',
+      clueCards[0].innerHTML.indexOf(riddles[0]) >= 0 && clueCards[0].innerHTML.indexOf(titles[0]) >= 0, '');
+    check('FRESH: every SEALED page hides its title AND riddle from the DOM (absent, not blurred)',
+      !boardHas([clueCards[1], clueCards[2]], titles[1]) && !boardHas([clueCards[1], clueCards[2]], riddles[1]) &&
+      !boardHas([clueCards[1], clueCards[2]], titles[2]) && !boardHas([clueCards[1], clueCards[2]], riddles[2]), '');
+    check('FRESH: NO card carries a destination host-link (no prospective give-away)',
+      !clueCards.some((c) => c.innerHTML.indexOf('class="host"') >= 0), '');
+  }
+
+  // ── after C1 solved (awaiting = c2, sealed = c3) ─────────────────────────────
+  {
+    const { clueCards } = renderWith([W.c1]);
+    check('C1 solved: c1 is "solved", c2 is "awaiting", c3 stays "sealed"',
+      stateOf(clueCards, 0) === 'solved' && stateOf(clueCards, 1) === 'awaiting' && stateOf(clueCards, 2) === 'sealed',
+      clueCards.map((_, i) => stateOf(clueCards, i)).join(','));
+    check('C1 solved: the SOLVED card (c1) NOW shows its retrospective host-link',
+      clueCards[0].innerHTML.indexOf('class="host"') >= 0 && clueCards[0].innerHTML.indexOf(hostNames[0]) >= 0, '');
+    check('C1 solved: the newly-reachable c2 riddle is legible; c3 (sealed) riddle still absent',
+      clueCards[1].innerHTML.indexOf(riddles[1]) >= 0 && clueCards[2].innerHTML.indexOf(riddles[2]) < 0, '');
+    check('C1 solved: still NO host-link on either UNSOLVED card (c2 awaiting, c3 sealed)',
+      clueCards[1].innerHTML.indexOf('class="host"') < 0 && clueCards[2].innerHTML.indexOf('class="host"') < 0, '');
+  }
+
+  // ── after C1+C2 solved (awaiting = c3) ───────────────────────────────────────
+  {
+    const { clueCards } = renderWith([W.c1, W.c2]);
+    check('C1+C2 solved: c3 becomes "awaiting" and its riddle is now legible',
+      stateOf(clueCards, 2) === 'awaiting' && clueCards[2].innerHTML.indexOf(riddles[2]) >= 0, '');
+    check('C1+C2 solved: exactly the two solved cards (c1,c2) carry host-links; c3 (awaiting) does not',
+      clueCards[0].innerHTML.indexOf('class="host"') >= 0 && clueCards[1].innerHTML.indexOf('class="host"') >= 0 &&
+      clueCards[2].innerHTML.indexOf('class="host"') < 0, '');
+  }
+
+  // ── all solved: every card carries its retrospective host-link ───────────────
+  {
+    const { clueCards } = renderWith([W.c1, W.c2, W.c3]);
+    check('ALL solved: every card is "solved" and carries its host-link (a full found-here record)',
+      clueCards.every((c) => /\bsolved\b/.test(c.className) && c.innerHTML.indexOf('class="host"') >= 0), '');
+  }
+}
+
 /* ════════════════════════════ VERDICT ══════════════════════════════════════ */
 const passN = checks.filter((c) => c.pass).length;
 const all = passN === checks.length;
