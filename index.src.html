@@ -423,6 +423,20 @@
   .rune .lbl{ font-size:11px; letter-spacing:.18em; text-transform:uppercase;
     opacity:0; transition:opacity .4s; }
   .rune:hover .lbl{ opacity:.9; }
+  /* ── #399 THE DOSSIER RUNE — the Reliquary's margin mark, a SECOND rune sibling to
+     the Undercroft's. A warmer parchment/foxed tint sets it apart, but it pulses at the
+     SAME full legible opacity (heed the 0.28 lesson — a hidden mark must be seen). It
+     shares .rune's layout; only the colour + glow differ. ── */
+  .dossier-rune{ color:var(--brass); }
+  .dossier-rune.show{ animation:dossierpulse 2.6s ease-in-out infinite; }
+  @keyframes dossierpulse{
+    0%,100%{ opacity:.42; text-shadow:0 0 6px rgba(185,138,82,.28); }
+    50%{ opacity:1; text-shadow:0 0 16px rgba(200,150,90,.62), 0 0 30px rgba(185,138,82,.28); } }
+  .dossier-rune:hover{ opacity:1 !important; color:#e8c48c;
+    text-shadow:0 0 18px rgba(200,150,90,.72); }
+  .dossier-rune.found{ animation:none; opacity:.72; }
+  @media (prefers-reduced-motion:reduce){ .dossier-rune.show{ animation:none; opacity:.82;
+    text-shadow:0 0 10px rgba(185,138,82,.4); } }
 
   .hint{ position:fixed; right:calc(var(--gutter-x) + 20px); top:16px; z-index:30;
     font:600 9px/1 var(--mono); letter-spacing:.22em; text-transform:uppercase;
@@ -1521,8 +1535,19 @@ const PLACES = [
   { id:"undercroft", room:"The Undercroft · Beneath", piece:"The Undercroft", glyph:"🕯️",
     accent:"#c9a24a", href:"undercroft/index.html", tag:"the way down",
     companion:null, locked:true,
-    district:"beneath", tier:3, footprint:"stair", prefer:"right",
+    district:"beneath", tier:3, footprint:"stair", prefer:"left",
     blurb:"A path lies beneath the workshop — an old cellar stair, lost with time. Find the rune that restores the way down." },
+  // ── THE RELIQUARY (#399) — a SECOND gated way down, sibling to the Undercroft ──
+  // A sealed study walled up behind the Register, holding a water-stained diary. NOT
+  // drawn unconditionally: revealReliquary() decides whether to place it (and in which
+  // state) from the ws: breadcrumbs, seating it in the RIGHT half of the BENEATH region
+  // (Layout.sealedStudySlot()). Eligibility is a LATER discovery than the Undercroft's
+  // (distinct ≥ 8 ws:seen rooms) — a second secret, found deeper in.
+  { id:"reliquary", room:"The Reliquary · Beneath", piece:"The Reliquary", glyph:"📜",
+    accent:"#b98a52", href:"the-reliquary/index.html", tag:"the sealed study",
+    companion:null, locked:true,
+    district:"beneath", tier:3, footprint:"stair", prefer:"right",
+    blurb:"Behind the Register a room was walled up — a study sealed with a found diary, and in its last page the name the house was christened before it was ever a workshop: Hollowmere, the mill on the drowned mere. Whose diary was it, and what did this house forget it once was?" },
 ];
 
 /* ── solve the declarative layout ONCE: every footprint coordinate/size, every
@@ -1538,9 +1563,11 @@ PLACES.forEach(p=>{
     if(f.r != null){ p.x = f.x; p.y = f.y; p.r = f.r; }
     else { p.x = f.x; p.y = f.y; p.w = f.w; p.h = f.h; }
   } else if(p.locked){
-    // the gated cellar stair: a reserved slot at the manor south foundation,
-    // resolved here so revealUndercroft() can build its POI on demand.
-    const s = Layout.beneathSlot();
+    // the gated ways down: reserved slots at the manor south foundation, resolved
+    // here so revealUndercroft()/revealReliquary() can build their POIs on demand.
+    // TWO locked rows now share the BENEATH region — route each to its OWN half by
+    // id (the Undercroft cellar stair LEFT, the Reliquary's sealed study RIGHT).
+    const s = (p.id === "reliquary") ? Layout.sealedStudySlot() : Layout.beneathSlot();
     p.x = s.x; p.y = s.y; p.w = s.w; p.h = s.h;
   }
 });
@@ -4526,20 +4553,21 @@ window.addEventListener("resize", ()=> hideCard(true));
 
     // map each POI tile (in #pois, by data-id) to its plate, AND collect the POI ids +
     // districts per plate (for the loupe's whole-district lit set + caption hold). The
-    // undercroft (locked) rides the MANOR plate by declaration.
+    // gated ways down (locked) ride the MANOR plate by declaration — BOTH the Undercroft
+    // and the Reliquary, so match the full locked SET (never just the first locked row).
     const tilePlate = {};   // plateId → [poi element,...]
     const idsByPlate = {};  // plateId → [poi id,...]
     const distByPlate = {}; // plateId → Set(district)
-    const lockedId = (PLACES.find(p=>p.locked)||{}).id;
+    const lockedIds = new Set(PLACES.filter(p=>p.locked).map(p=>p.id));
     for(const tile of pois.querySelectorAll(".poi[data-id]")){
       const id = tile.dataset.id;
       let pid = P.roomPlate[id];
-      if(!pid && id === lockedId) pid = "manor"; // the Undercroft rides the manor plate
+      if(!pid && lockedIds.has(id)) pid = "manor"; // the gated ways down ride the manor plate
       if(!pid) continue;
       (tilePlate[pid]=tilePlate[pid]||[]).push(tile);
       (idsByPlate[pid]=idsByPlate[pid]||[]).push(id);
       const meta = PLACES.find(p=>p.id===id);
-      const dd = meta ? meta.district : (id===lockedId ? "manor" : null);
+      const dd = meta ? meta.district : (lockedIds.has(id) ? "manor" : null);
       if(dd){ (distByPlate[pid]=distByPlate[pid]||new Set()).add(dd); }
       tile.classList.add("plate-dim");
     }
@@ -5084,7 +5112,9 @@ window.addEventListener("resize", ()=> hideCard(true));
 (function revealUndercroft(){
   const UC = "undercroft/index.html";
   const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion:reduce)").matches;
-  const data = PLACES.find(p=>p.locked);
+  // select the Undercroft's locked row by EXPLICIT id — the BENEATH region now holds
+  // TWO locked rows (undercroft + reliquary), so `p=>p.locked` alone is ambiguous.
+  const data = PLACES.find(p=>p.id==="undercroft");
   if(!data) return;
 
   // ---- read storage (eligibility unchanged from the old rune) ----
@@ -5178,9 +5208,80 @@ window.addEventListener("resize", ()=> hideCard(true));
   }
 })();
 
+/* ════════════════════════════════════════════════════════════════════════════
+   revealReliquary() — the SECOND gated way down (#399), sibling to revealUndercroft
+   above. A sealed study walled up behind the Register, reached by a LATER discovery
+   (distinct ≥ 8 ws:seen rooms — deeper in than the Undercroft's 4). It seats in the
+   RIGHT half of the BENEATH region (Layout.sealedStudySlot()) and never overlaps the
+   Undercroft. Unlike the Undercroft's broken-then-repaired stair, this way down is
+   simply SEALED until you've wandered enough: once eligible it grows in whole and
+   navigable, its margin dossier-rune pulsing at full legible opacity.
+
+   Keys (its OWN — shares NOTHING with the Undercroft):
+     ws:seen:reliquary-opening  — the reveal was witnessed (set once, on grow-in)
+     ws:seen:reliquary          — the study was entered (set on the room's own load)
+   Wrapped in try/catch parity with revealUndercroft: storage-off shows nothing extra
+   (the room stays reachable by URL). ════════════════════════════════════════════ */
+(function revealReliquary(){
+  const RL = "the-reliquary/index.html";
+  const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion:reduce)").matches;
+  const data = PLACES.find(p=>p.id==="reliquary");
+  if(!data) return;
+
+  let distinct = 0, alreadyEarned = false, entered = false, openingSeen = false;
+  const store = WS.store();
+  if(!store.ok) return;                          // storage off → nothing extra (room still reachable by URL)
+  try{
+    const seen = new Set();
+    for(const k in store.all){ if(k.indexOf("ws:seen:")===0) seen.add(k); }
+    distinct = seen.size;
+    // a returning visitor who has already entered the Reliquary is always "found"
+    entered = store.has("ws:seen:reliquary");
+    alreadyEarned = entered || store.has("ws:seen:reliquary-opening");
+    openingSeen = store.has("ws:seen:reliquary-opening");
+  }catch(e){ return; }
+  if(distinct < 8 && !alreadyEarned) return;
+  const set = (k)=>{ try{ localStorage.setItem(k, String(Date.now())); }catch(e){} };
+
+  // place the Reliquary POI — always whole + navigable (a sealed study you may enter).
+  let tile = buildPoi(data, { asLink:true });
+  pois.appendChild(tile);
+  // a dashed survey path threads down to the sealed study from the manor door
+  const rlCentre = footCentre(data);
+  paths.appendChild(el("path",{ class:"survey-path",
+    d:`M${MANOR_DOOR.x} ${MANOR_DOOR.y} L${rlCentre.cx} ${rlCentre.cy}` }));
+
+  // first appearance → grow from nothing (once); reduced-motion / already-opened → static.
+  if(!openingSeen && !entered && !reduced){
+    tile.classList.add("grow");
+    tile.addEventListener("animationend", function once(ev){
+      if(ev.animationName !== "ucgrow") return;
+      tile.removeEventListener("animationend", once);
+      tile.classList.remove("grow");
+      set("ws:seen:reliquary-opening");
+    });
+  } else {
+    set("ws:seen:reliquary-opening");            // already opened before (or reduced motion) → static
+  }
+
+  // ---- the dossier rune (a SECOND margin mark, sibling to the Undercroft's) ----
+  const legend = document.querySelector(".legend");
+  if(!legend) return;
+  const rune = document.createElement("a");
+  rune.className = "rune dossier-rune";
+  rune.href = RL;
+  rune.title = entered ? "the sealed study is open" : "a page slips from behind the shelving";
+  rune.innerHTML = '<span class="gl">📜</span><span class="lbl"> the reliquary</span>';
+  legend.appendChild(rune);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    rune.classList.add("show");
+    if(entered) rune.classList.add("found");     // quiet steady mark once entered
+  }));
+})();
+
 /* ── all present POIs (manor wings, follies, the outbuilding, and — if revealed —
-   the cellar stair) are now in the DOM and registered; let the plan letter itself.
-   Solved ONCE: the viewBox scales uniformly, so the layout holds at every size. */
+   the cellar stair and the sealed study) are now in the DOM and registered; let the
+   plan letter itself. Solved ONCE: the viewBox scales uniformly, so it holds at every size. */
 placeLabels();
 
 /* ════════════════════════════════════════════════════════════════════════════

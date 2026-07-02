@@ -479,8 +479,8 @@
   "blurb": "A MAKER you play and a made thing you keep — pure Victorian-parlor craft, kin to the impossible atlases and the poster press next door. Doodle a twelve-frame loop around a strip (with colored onion-skin ghosts — the neighbour before tinted cool, the neighbour after warm, so a walk-cycle reads its own direction), or nudge a starter loop: a galloping horse, a bouncing ball with squash-and-stretch, a blooming flower, a walk cycle, a flapping bird. Drop it in the brass drum and DRAG to spin — the drum carries real angular momentum and coasts down on its own friction, dwelling a while in the lock band so you can sit in the moment. The illusion is honest, not faked: the strip lines the FAR inner wall, thin slits are cut in the NEAR rim, and through each open slit you see one vertical slice of the single frame directly opposite — the frame stepping exactly one per slit-crossing, which is what snaps the stills into smooth motion. A governor dial finds the lock: too slow is a carousel of stills, too fast a smear, and reverse gallops it backward; a small warm bloom flares the instant it catches. Export your strip as an engraved contact sheet, or copy a compact reloadable seed and paste it back later. Deliberately claim-free — persistence-of-vision stays a whisper at the foot, never a proof; the aliasing wing owns that theorem. The wheel of life the Victorians turned by candlelight.",
   "tag": "a wheel of life",
   "locked": false,
-  "entry": 1000000000,
-  "entryDate": ""
+  "entry": 912,
+  "entryDate": "2026-07-02"
  },
  {
   "id": "sound-garden",
@@ -1881,6 +1881,21 @@
   "locked": true,
   "entry": 103,
   "entryDate": "2026-06-11"
+ },
+ {
+  "id": "reliquary",
+  "room": "The Reliquary · Beneath",
+  "piece": "The Reliquary",
+  "glyph": "📜",
+  "accent": "#b98a52",
+  "district": "beneath",
+  "tier": 3,
+  "href": "the-reliquary/index.html",
+  "blurb": "Behind the Register a room was walled up — a study sealed with a found diary, and in its last page the name the house was christened before it was ever a workshop: Hollowmere, the mill on the drowned mere. Whose diary was it, and what did this house forget it once was?",
+  "tag": "the sealed study",
+  "locked": true,
+  "entry": 1000000000,
+  "entryDate": ""
  }
 ]
 <!-- CATALOG-DATA END -->
@@ -2056,6 +2071,12 @@
         for (var i = 0; i < f.length; i++) { if (!s.has('ws:flag:earned-' + f[i])) return false; }
         return true;
       } },
+
+    /* reliquary (#399): read the Sealed Room's Diary to its end — the estate's
+       found-diary mystery, solved across the Museum → Scytale → Card Catalog. An
+       honest cross-link trophy: the Reliquary and the Undercroft share this ws
+       engine. Predicate = the payoff key the Sealed Study sets on final solve. */
+    { id: 'reliquary',      unlocked: function (s) { return s.has('ws:seen:reliquary-solved'); } },
 
     /* ── The Constellation of Mastery (wave one) ────────────────────────────────
        A named group of secrets that reward what you CONQUERED, not merely what you
@@ -2402,15 +2423,18 @@ const FIELDS = [
 ];
 
 /* ── THE LOCK PREDICATE — PURE (ids/wsHas in, not localStorage reads) ──────────
-   The SAME predicate the front door's revealUndercroft() uses to decide whether
-   the locked way down is revealed: a locked room is shown ONLY if storage is on
-   AND one of the two undercroft breadcrumbs is present. `store` is the WS.store()
-   snapshot shape: { ok:boolean, has(key):boolean, ... }. Storage off ⇒ locked
-   rooms hidden (front-door parity). Pure: depends only on its two arguments, so
-   the twin can drive both sealed and unsealed branches with plain fixtures. */
+   The SAME predicate the front door's reveal-fns use to decide whether a gated way
+   down is revealed. Each locked room is gated by its OWN key family (front-door
+   parity): the Undercroft by its undercroft breadcrumbs, the Reliquary (#399) by
+   ws:seen:reliquary (the study entered). A locked room is shown ONLY if storage is
+   on AND its own reveal key is present. `store` is the WS.store() snapshot shape:
+   { ok:boolean, has(key):boolean, ... }. Storage off ⇒ locked rooms hidden. Pure:
+   depends only on its two arguments, so the twin can drive both sealed and unsealed
+   branches with plain fixtures. */
 function unlockedFor(record, store) {
   if (!record.locked) return true;
   if (!store || !store.ok) return false;
+  if (record.id === 'reliquary') return store.has('ws:seen:reliquary');
   return store.has('ws:seen:undercroft-rune') || store.has('ws:seen:undercroft');
 }
 
@@ -2770,13 +2794,21 @@ function runSelfTest(records, store) {
       gi < ci, 'sound-garden @' + gi + ' < card-catalog @' + ci);
   }
 
-  // (f) LOCK PARITY — locked card present in data, gated in visible
-  const lockedInData = records.some((r) => r.locked);
-  const lockedVisible = visible.some((r) => r.locked);
-  const earned = store && store.ok && (store.has('ws:seen:undercroft-rune') || store.has('ws:seen:undercroft'));
-  add('locked way down is in the data slab', lockedInData, lockedInData ? 'present' : 'MISSING');
-  add('locked card shown iff earned', lockedVisible === !!earned,
-    'visible=' + lockedVisible + ' earned=' + !!earned);
+  // (f) LOCK PARITY — every locked card is present in the data slab, and each is
+  // shown in `visible` iff its OWN reveal key is earned (per-room gating: the
+  // Undercroft by its undercroft breadcrumbs, the Reliquary by ws:seen:reliquary).
+  // Generalised for the TWO gated ways down (#399): the visible locked SET must
+  // equal exactly the locked cards unlockedFor lets through.
+  const lockedData = records.filter((r) => r.locked);
+  const lockedInData = lockedData.length > 0;
+  add('a locked way down is in the data slab', lockedInData,
+    lockedInData ? lockedData.length + ' gated room(s)' : 'MISSING');
+  const visibleLockedIds = visible.filter((r) => r.locked).map((r) => r.id).sort();
+  const shouldShowIds = lockedData.filter((r) => unlockedFor(r, store)).map((r) => r.id).sort();
+  const parity = visibleLockedIds.length === shouldShowIds.length &&
+    visibleLockedIds.every((id, i) => id === shouldShowIds[i]);
+  add('each locked card shown iff its own key is earned', parity,
+    'visible=[' + visibleLockedIds.join(',') + '] expected=[' + shouldShowIds.join(',') + ']');
 
   return { checks, visible };
 }
@@ -3175,6 +3207,27 @@ function runSearch(){
   } else {
     render();
   }
+  reliquaryPhantomWitness(v);
+}
+
+/* #399 THE FOUND-THE-PHANTOM WITNESS — a THIN, PULL-BASED breadcrumb. The Reliquary's
+   final clue sends the player here to "find the entry with no room" — the sealed study's
+   own card, catalogued under the house's forgotten first name. When a live search
+   RESOLVES that card (it is visible only once the study has been entered), this drops
+   ws:flag:dossier:found-the-phantom, which the Sealed Room's board reads to pin the last
+   page + confess. Reads the live store + the SAME search predicate the page renders;
+   writes ONLY its own ws: key; every touch wrapped. Fires once. */
+function reliquaryPhantomWitness(query){
+  try{
+    if(!query || !query.trim()) return;
+    const store = liveStore();
+    if(!store || !store.ok) return;
+    if(store.has('ws:flag:dossier:found-the-phantom')) return;
+    // the search must actually RESOLVE the (now-visible) reliquary card by the query
+    const hits = search(visibleCards(), query);
+    if(!hits.some(r => r.id === 'reliquary')) return;
+    localStorage.setItem('ws:flag:dossier:found-the-phantom', '1');
+  }catch(e){ /* storage off → the breadcrumb is a bonus, never a blocker */ }
 }
 
 // ── wire it up ──

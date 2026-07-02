@@ -113,7 +113,11 @@ var Layout = (function () {
       label: 'THE LOWER WORKS', hue: '#c9974c', tint: 0.045
     },
     beneath: {
-      region: { x: 686, y: 514, w: 70, h: 70 },
+      // widened to seat TWO gated ways down side by side — the Undercroft cellar
+      // stair (left) and the Reliquary's sealed study (right). Each locked POI gets
+      // its own half of the region (beneathSlot / sealedStudySlot); the manor plate
+      // is extended to enclose BOTH so neither is ever stranded (#399).
+      region: { x: 664, y: 514, w: 116, h: 70 },
       inside: true, gated: true, style: 'stipple',
       label: 'BENEATH', hue: '#c9a24a', tint: 0.05
     }
@@ -1135,10 +1139,11 @@ var Layout = (function () {
       }
       bbox[p] = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
     }
-    // EXTEND the manor plate to enclose the gated BENEATH slot (the Undercroft rides
-    // the manor plate, never stranded). beneath ∈ exactly the manor plate's bbox.
+    // EXTEND the manor plate to enclose the gated BENEATH slots (the Undercroft AND
+    // the Reliquary both ride the manor plate, never stranded). The UNION of the two
+    // gated slots ∈ exactly the manor plate's bbox.
     if (bbox.manor) {
-      var bs = beneathSlot();
+      var bs = beneathUnion();
       var mx0 = Math.min(bbox.manor.x, bs.x);
       var my0 = Math.min(bbox.manor.y, bs.y);
       var mx1 = Math.max(bbox.manor.x + bbox.manor.w, bs.x + bs.w);
@@ -1231,6 +1236,7 @@ var Layout = (function () {
       edges: edges,        // [[a,b],...] each undirected pair once (a<b), sorted
       meta: PLATE_META,
       beneath: beneathSlot(),
+      sealedStudy: sealedStudySlot(),
       solution: solution,
       // ── the fold (#369): empty/absent shapes when nothing detaches (byte-identical to pre-#369) ──
       detached: detached,        // {wingSlug:true,...}
@@ -1276,11 +1282,27 @@ var Layout = (function () {
 
   /* the gated BENEATH slot (a reserved cellar slot at the manor south foundation) —
      revealUndercroft asks for it by id. Returns {x,y,w,h} for the stair footprint. */
-  function beneathSlot() {
+  /* the BENEATH region now seats TWO gated ways down side by side. A locked POI is
+     centred in its OWN half — the Undercroft in the LEFT half (beneathSlot), the
+     Reliquary's sealed study in the RIGHT half (sealedStudySlot). Both are tier-3
+     footprints; the manor plate is extended to enclose the union of the two so
+     neither is ever stranded. locatedSlot(half) is the shared centring math. */
+  function locatedSlot(half /* 0 = left, 1 = right */) {
     var reg = DISTRICTS.beneath.region;
     var band = bandFor(3);
-    var w = Math.min(band.w * 0.5, reg.w), h = Math.min(band.h, reg.h);
-    return { x: reg.x + (reg.w - w) / 2, y: reg.y + (reg.h - h) / 2, w: w, h: h };
+    var halfW = reg.w / 2;
+    var w = Math.min(band.w * 0.5, halfW - 6), h = Math.min(band.h, reg.h);
+    var hx = reg.x + half * halfW;                    // this half's left edge
+    return { x: hx + (halfW - w) / 2, y: reg.y + (reg.h - h) / 2, w: w, h: h };
+  }
+  function beneathSlot() { return locatedSlot(0); }       // the Undercroft (left)
+  function sealedStudySlot() { return locatedSlot(1); }   // the Reliquary (right)
+  // the union bbox the manor plate must enclose to hold BOTH gated ways down.
+  function beneathUnion() {
+    var a = beneathSlot(), b = sealedStudySlot();
+    var x0 = Math.min(a.x, b.x), y0 = Math.min(a.y, b.y);
+    var x1 = Math.max(a.x + a.w, b.x + b.w), y1 = Math.max(a.y + a.h, b.y + b.h);
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
   }
 
   return {
@@ -1291,6 +1313,8 @@ var Layout = (function () {
     SIZE_BAND: SIZE_BAND,
     FIELD: FIELD,
     beneathSlot: beneathSlot,
+    sealedStudySlot: sealedStudySlot,
+    beneathUnion: beneathUnion,
     bandFor: bandFor,
     wingLabel: wingLabel,
     wingAccent: wingAccent,

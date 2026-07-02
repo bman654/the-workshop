@@ -69,6 +69,7 @@ const SEALED = storeOf([]);                                  // earned nothing
 const UNSEALED = storeOf(['ws:seen:undercroft-rune']);       // earned the way down
 const UNSEALED2 = storeOf(['ws:seen:undercroft']);           // returning visitor
 const STORAGE_OFF = storeOf([], false);                      // no localStorage
+const RELIQ_SEEN = storeOf(['ws:seen:reliquary']);           // #399 entered the sealed study (Reliquary key only)
 
 function sortedIds(list) { return [...new Set(list.map((r) => r.id))].sort(); }
 function eqArr(a, b) { return a.length === b.length && a.every((v, i) => v === b[i]); }
@@ -247,12 +248,26 @@ section('(g) LOCK PARITY — the way down hidden until earned (front-door predic
   const sealed = filterUnlocked(DATA, SEALED);
   const unsealed = filterUnlocked(DATA, UNSEALED);
   const unsealed2 = filterUnlocked(DATA, UNSEALED2);
+  const reliqSeen = filterUnlocked(DATA, RELIQ_SEEN);
   const off = filterUnlocked(DATA, STORAGE_OFF);
   check('sealed store hides the undercroft', !sealed.some((r) => r.id === 'undercroft'), sealed.length + ' visible');
   check('ws:seen:undercroft-rune reveals it', unsealed.some((r) => r.id === 'undercroft'), unsealed.length + ' visible');
   check('ws:seen:undercroft (returning) reveals it', unsealed2.some((r) => r.id === 'undercroft'), '');
   check('storage-off hides locked rooms (front-door parity)', !off.some((r) => r.id === 'undercroft'), '');
-  check('unsealed = sealed + the one locked room', unsealed.length === sealed.length + 1, '');
+  check('unsealed = sealed + the undercroft (undercroft key reveals ONLY it)', unsealed.length === sealed.length + 1, '');
+  // #399 — the Reliquary is a SECOND gated way down, gated by its OWN key
+  const hasReliq = DATA.some((r) => r.id === 'reliquary');
+  if (hasReliq) {
+    check('sealed store hides the reliquary', !sealed.some((r) => r.id === 'reliquary'), '');
+    check('undercroft key does NOT reveal the reliquary (per-room gating)', !unsealed.some((r) => r.id === 'reliquary'), '');
+    check('ws:seen:reliquary reveals the reliquary', reliqSeen.some((r) => r.id === 'reliquary'), '');
+    check('reliquary key does NOT reveal the undercroft (per-room gating)', !reliqSeen.some((r) => r.id === 'undercroft'), '');
+    check('reliqSeen = sealed + the reliquary only', reliqSeen.length === sealed.length + 1, '');
+    const rl = DATA.find((r) => r.id === 'reliquary');
+    check('unlockedFor(reliquary, SEALED) === false', unlockedFor(rl, SEALED) === false, '');
+    check('unlockedFor(reliquary, RELIQ_SEEN) === true', unlockedFor(rl, RELIQ_SEEN) === true, '');
+    check('unlockedFor(reliquary, UNSEALED) === false (own key only)', unlockedFor(rl, UNSEALED) === false, '');
+  }
   // the pure predicate, directly
   const uc = DATA.find((r) => r.id === 'undercroft');
   check('unlockedFor(undercroft, SEALED) === false', unlockedFor(uc, SEALED) === false, '');
@@ -269,8 +284,12 @@ section('(h) runSelfTest battery (the SAME pill the page runs) — both store br
   const unsealedRes = runSelfTest(DATA, UNSEALED);
   const uv = verdict(unsealedRes.checks);
   check('runSelfTest all-green under UNSEALED store', uv.allPass, uv.passN + '/' + uv.total);
+  const reliqRes = runSelfTest(DATA, RELIQ_SEEN);        // #399 — reliquary key reveals only the study card
+  const rv = verdict(reliqRes.checks);
+  check('runSelfTest all-green under RELIQ_SEEN store', rv.allPass, rv.passN + '/' + rv.total);
   if (!sv.allPass) for (const c of sealedRes.checks) if (!c.pass) console.log('      sealed FAIL: ' + c.label + ' (' + c.detail + ')');
   if (!uv.allPass) for (const c of unsealedRes.checks) if (!c.pass) console.log('      unsealed FAIL: ' + c.label + ' (' + c.detail + ')');
+  if (!rv.allPass) for (const c of reliqRes.checks) if (!c.pass) console.log('      reliqSeen FAIL: ' + c.label + ' (' + c.detail + ')');
 }
 
 // ═══════════════ NEGATIVE CONTROLS ═══════════════

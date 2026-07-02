@@ -34,15 +34,18 @@ export const FIELDS = [
 ];
 
 /* ── THE LOCK PREDICATE — PURE (ids/wsHas in, not localStorage reads) ──────────
-   The SAME predicate the front door's revealUndercroft() uses to decide whether
-   the locked way down is revealed: a locked room is shown ONLY if storage is on
-   AND one of the two undercroft breadcrumbs is present. `store` is the WS.store()
-   snapshot shape: { ok:boolean, has(key):boolean, ... }. Storage off ⇒ locked
-   rooms hidden (front-door parity). Pure: depends only on its two arguments, so
-   the twin can drive both sealed and unsealed branches with plain fixtures. */
+   The SAME predicate the front door's reveal-fns use to decide whether a gated way
+   down is revealed. Each locked room is gated by its OWN key family (front-door
+   parity): the Undercroft by its undercroft breadcrumbs, the Reliquary (#399) by
+   ws:seen:reliquary (the study entered). A locked room is shown ONLY if storage is
+   on AND its own reveal key is present. `store` is the WS.store() snapshot shape:
+   { ok:boolean, has(key):boolean, ... }. Storage off ⇒ locked rooms hidden. Pure:
+   depends only on its two arguments, so the twin can drive both sealed and unsealed
+   branches with plain fixtures. */
 export function unlockedFor(record, store) {
   if (!record.locked) return true;
   if (!store || !store.ok) return false;
+  if (record.id === 'reliquary') return store.has('ws:seen:reliquary');
   return store.has('ws:seen:undercroft-rune') || store.has('ws:seen:undercroft');
 }
 
@@ -402,13 +405,21 @@ export function runSelfTest(records, store) {
       gi < ci, 'sound-garden @' + gi + ' < card-catalog @' + ci);
   }
 
-  // (f) LOCK PARITY — locked card present in data, gated in visible
-  const lockedInData = records.some((r) => r.locked);
-  const lockedVisible = visible.some((r) => r.locked);
-  const earned = store && store.ok && (store.has('ws:seen:undercroft-rune') || store.has('ws:seen:undercroft'));
-  add('locked way down is in the data slab', lockedInData, lockedInData ? 'present' : 'MISSING');
-  add('locked card shown iff earned', lockedVisible === !!earned,
-    'visible=' + lockedVisible + ' earned=' + !!earned);
+  // (f) LOCK PARITY — every locked card is present in the data slab, and each is
+  // shown in `visible` iff its OWN reveal key is earned (per-room gating: the
+  // Undercroft by its undercroft breadcrumbs, the Reliquary by ws:seen:reliquary).
+  // Generalised for the TWO gated ways down (#399): the visible locked SET must
+  // equal exactly the locked cards unlockedFor lets through.
+  const lockedData = records.filter((r) => r.locked);
+  const lockedInData = lockedData.length > 0;
+  add('a locked way down is in the data slab', lockedInData,
+    lockedInData ? lockedData.length + ' gated room(s)' : 'MISSING');
+  const visibleLockedIds = visible.filter((r) => r.locked).map((r) => r.id).sort();
+  const shouldShowIds = lockedData.filter((r) => unlockedFor(r, store)).map((r) => r.id).sort();
+  const parity = visibleLockedIds.length === shouldShowIds.length &&
+    visibleLockedIds.every((id, i) => id === shouldShowIds[i]);
+  add('each locked card shown iff its own key is earned', parity,
+    'visible=[' + visibleLockedIds.join(',') + '] expected=[' + shouldShowIds.join(',') + ']');
 
   return { checks, visible };
 }

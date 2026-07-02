@@ -1,0 +1,29 @@
+# The Reliquary — CHANGELOG
+
+*The Sealed Room's Diary — a cross-estate found-diary MYSTERY LAYER, the estate's 2nd hidden world (sibling to the Undercroft), reached through a SECOND locked front-door POI. It proves no theorem; its only claim is that it is **solvable** start → confession.*
+
+---
+
+## #399 (2026-07-02) — Built. BUILD/grounds; grounds-worker + publisher "Watermark"; M 36→37.
+
+The bloom of the big-swing `[metagame]` seed **The Reliquary — the estate's own cold case** (sown #394, contest #36) — the long-promised "Workshop Mystery": the estate's FIRST layer you PLAY across everything, a fair-play found-diary whose clues live inside exhibits that already stand, each gaining a secret depth, never a new HUD.
+
+**The room** (`the-reliquary/`):
+- `chain.js` (120 L) — the 3-clue DAG as data, the SOLE authority: forge-inlined into the room (between the CHAIN sentinels) AND required by the headless selftest, so the board, the colophon, and the proof all read the identical clue nodes / C3 plaintext / forgotten name (`Hollowmere`) / digit-sum reduction. Nothing about the chain is typed twice.
+- `index.src.html → index.html` (524 L src) — the Sealed Study: a cork EVIDENCE BOARD on a brass easel that `render()`s PURELY from `ws:flag:dossier:*` on every load (reload rebuilds identically, no second store). A water-stained inciting card + 3 clue cards that un-smudge on solve; red-string SVG catenaries threading only SOLVED nodes; ~30 DPR-capped dust motes in a tilted light shaft (reduced-motion → a static scatter); an in-house page-settle WebAudio chirp on a fresh pin, gated on `WS.muted`; the estate's own confession on final solve; drops `ws:seen:reliquary` on entry and `ws:seen:reliquary-solved` on the payoff; a completability colophon pill ("✓ solvable · 5/5").
+- `selftest.mjs` (201 L) — the ONLY claim: a headless COMPLETABILITY solver (19/19). Proves the DAG is solvable from the empty start → confession (topological reachability, softlock-free, linear c1→c2→c3, the carry minted before it is needed) AND anti-drift: it RE-DERIVES the storm count from `museum/core.mjs` `busiestDay` (118), the circumference from the digit-sum reduction (10), the seeded ciphertext from the REAL scytale decipher, and the C3 search resolution from `card-catalog/core.mjs` — so no number can drift from the instruments.
+
+**The chain (each clue = one standing exhibit + one action, daisy-chained):**
+- **C1 · The Museum · River of Days** — set the counter to true time and dwell the playhead in the storm day-band. Mints a courier key = the digit-sum of the storm's commit count (118 → 1+1+8 = **10**). The raw 118 clamps to a WRONG rod, so the reduction is load-bearing.
+- **C2 · The Scytale · the Spartan rod** — wind the enciphered diary page on the rod of circumference **10**; only the right rod re-aligns it, and the plaintext names C3 (`…ITS NAME IS HOLLOWMERE`).
+- **C3 · The Card Catalog · the Register** — once the study is entered, search the prose for `hollowmere`. The entry "with no room" is the reliquary's OWN real (locked) catalog card, catalogued under Hollowmere — so the card-catalog's visible-set == real-PLACES self-test stays TRUE (no fidelity-breaking fake card). Finding it un-walls the confession: the house was a mill on a drowned mere, christened **Hollowmere**, before it chose to become a workshop.
+
+**Host wiring (thin, pull-based, byte-behaviorally honest):** one guarded witness each in the Museum (`dossierWitness`), the Scytale (`reliquaryStripWitness` + a gated dossier chip), and the Card Catalog (`reliquaryPhantomWitness`) — the hosts just leave `ws:flag:dossier:*` breadcrumbs the board aggregates. The 19th secret registered in `tools/ws/ws.js` (predicate `ws:seen:reliquary-solved`) with an Undercroft trophy row; the Gate grew a struck-metal casket draw-state (`reliquaryState()` → 'none'|'found'|'open') drawn left-forward, opposite the undercroft hatch; the front door grew a second locked beneath POI (`revealReliquary()`, eligibility = 8 distinct `ws:seen` rooms) with a legible `dossier-rune` (📜).
+
+**Publisher fresh-eyes ("Watermark", served :8791, agent-browser `reliq-pub-399`, torn down by PID/name):** re-ran the selftest **19/19** + card-catalog `core.test.mjs` **16/16** + museum `core.test.mjs` **450 stones** all green; drove the FULL chain live on a served origin — C1 un-smudges page 1 + pins the enciphered strip, C2+C3 clear the board, the red string closes the catenary circuit, the confession glows + `ws:seen:reliquary-solved` sets; C3 verified with a TRUE agent-browser `fill` (searching "hollowmere" fires `found-the-phantom` + surfaces the Reliquary card). Gate casket verified open-glowing at night / closed-chest in daylight, opposite the hatch, honesty chip 15/15 both. Undercroft reads "1 of 19 discoveries found". CSP-clean.
+
+**The one thing caught + resolved:** the builder's `ws.js` edit (the 19th secret) is `forge:include`-d into 60+ rooms, but only the 7 directly-touched files were re-forged — leaving 63 rooms' committed `.html` still inlining the 18-secret engine (the builder mistook this for pre-existing drift). The publisher ran `forge --all` to propagate the 19-secret engine + the reliquary's card-catalog slab entry estate-wide (the slab's reliquary `entryDate` is `''` until a future collate stamps the real first-add date — self-healing), so `forge --check --all` is clean and the seal's forge-gate passes.
+
+No functional bug found, no code edit needed — estate-quality on arrival. `bigSwingsBuilt` 36→37 (a metagame layer is a big swing).
+
+**To GROW it** (the Undercroft way — do NOT rebuild): clue 4 = append ONE DAG node to `chain.js` (`id`, `witness`, `needs:['c3']`, host + diary + page) + ONE thin host witness + let the board render it. The selftest re-proves completability automatically.

@@ -111,7 +111,8 @@
     var furniture = group('layer-furniture', svg);
     if (B) B.drawGreenhouse(furniture, S);          // RIGHT (forward, in front of grass)
     drawRoomRep(furniture);
-    drawUndercroftHatch(furniture);
+    drawReliquaryCasket(furniture);                 // LEFT-forward earned draw (#399)
+    drawUndercroftHatch(furniture);                 // RIGHT-forward earned draw
 
     // LAYER 7 — the gate (foreground frame)
     var gateLayer = group('layer-gate', svg);
@@ -4631,6 +4632,127 @@
     S.refs.undercroft = g;
   }
 
+  /* ── THE RELIQUARY CASKET (#399) — the SECOND earned draw, opposite the undercroft
+     hatch. A struck-metal reliquary casket resting low in the LEFT-forward grounds
+     (the hatch is right at cx1300; the cairn is far-left at x230; the casket sits
+     between-forward at cx470 so no earned draw overlaps another). THREE states:
+       'none'  → nothing drawn.
+       'found' → the casket CLOSED, a hairline of gold along the lid seam — discovered,
+                 the diary not yet read.
+       'open'  → the lid AJAR on its hinge, a warm inner gleam spilling out — the estate
+                 remembering its first name (ws:seen:reliquary-solved).
+     Shown only when the store earns it OR forced via ?reliquary=found|open. Drawn to
+     estate quality across idle-night / day / open-night (swappable palette refs). */
+  function drawReliquaryCasket(parent) {
+    var state = reliquaryState();
+    if (state === 'none') return;
+    var open = (state === 'open');
+    var g = group('reliquary-casket', parent);
+    var FR    = 'var(--brass-stroke-ref, #9c8350)';    // brass stroke
+    var BRI   = 'var(--brass-bright-ref, #cdb375)';    // brass-bright sheen
+    var BODY  = 'rgba(11,14,22,.9)';                   // estate brass DARK body
+    var STONE = 'var(--stone-ref, #6a7079)';           // the flagstone the casket rests on
+    var GLEAM = 'var(--window-lit-ref, #ffcf73)';      // warm inner gleam (reuses the lit-window role)
+    var fx = function (n) { return (Math.round(n * 10) / 10); };
+
+    var cx = 470, baseY = 772;      // near-centre-left, forward of the cairn, on the grass
+    var w = 116, h = 54;            // casket body footprint (near face)
+    var Lx = cx - w / 2, Rx = cx + w / 2;
+    var topY = baseY - h, botY = baseY;
+    var depth = 30, drise = 15;     // 3/4 recede up-and-right (perspective)
+
+    // ground shadow the casket casts — soft dark halo forward/below
+    el('ellipse', { cx: cx + 8, cy: baseY + 10, rx: w * 0.62, ry: 15,
+      fill: '#000', opacity: '0.30', filter: 'url(#glow-soft)' }, g);
+
+    // a low flagstone plinth it rests on (reads as a placed, real object)
+    el('path', { d: 'M ' + fx(Lx - 10) + ' ' + fx(botY + 4) +
+      ' L ' + fx(Rx + 10) + ' ' + fx(botY + 4) +
+      ' L ' + fx(Rx + 10 + depth) + ' ' + fx(botY + 4 - drise) +
+      ' L ' + fx(Lx - 10 + depth) + ' ' + fx(botY + 4 - drise) + ' Z',
+      fill: STONE, stroke: FR, 'stroke-width': '1', opacity: '0.85', filter: 'url(#glow-soft)' }, g);
+
+    // ── the casket BODY (front face + receding side, a coffered brass chest) ──
+    // side wall (right, receding)
+    el('path', { d: 'M ' + fx(Rx) + ' ' + fx(topY) +
+      ' L ' + fx(Rx + depth) + ' ' + fx(topY - drise) +
+      ' L ' + fx(Rx + depth) + ' ' + fx(botY - drise) +
+      ' L ' + fx(Rx) + ' ' + fx(botY) + ' Z',
+      fill: BODY, stroke: FR, 'stroke-width': '1.2', filter: 'url(#glow-soft)' }, g);
+    // front face
+    el('rect', { x: fx(Lx), y: fx(topY), width: fx(w), height: fx(h),
+      rx: 3, fill: BODY, stroke: FR, 'stroke-width': '1.4' }, g);
+    // two coffered panels on the front face (reeded brass frames)
+    el('rect', { x: fx(Lx + 10), y: fx(topY + 9), width: fx(w / 2 - 15), height: fx(h - 18),
+      rx: 2, fill: 'none', stroke: FR, 'stroke-width': '0.9', opacity: '0.8' }, g);
+    el('rect', { x: fx(cx + 5), y: fx(topY + 9), width: fx(w / 2 - 15), height: fx(h - 18),
+      rx: 2, fill: 'none', stroke: FR, 'stroke-width': '0.9', opacity: '0.8' }, g);
+    // brass foot-corners
+    el('rect', { x: fx(Lx - 1), y: fx(botY - 8), width: 6, height: 9, rx: 1, fill: FR }, g);
+    el('rect', { x: fx(Rx - 5), y: fx(botY - 8), width: 6, height: 9, rx: 1, fill: FR }, g);
+
+    // ── the barrel-vaulted LID ──
+    var lidH = 26;
+    if (!open) {
+      // CLOSED: a domed lid seated flush, with a hairline of gold along the seam.
+      el('path', { d: 'M ' + fx(Lx) + ' ' + fx(topY) +
+        ' Q ' + fx(cx) + ' ' + fx(topY - lidH) + ' ' + fx(Rx) + ' ' + fx(topY) +
+        ' L ' + fx(Rx + depth) + ' ' + fx(topY - drise) +
+        ' Q ' + fx(cx + depth) + ' ' + fx(topY - drise - lidH) + ' ' + fx(Lx + depth) + ' ' + fx(topY - drise) + ' Z',
+        fill: BODY, stroke: FR, 'stroke-width': '1.3', filter: 'url(#glow-soft)' }, g);
+      // the hairline gold seam where lid meets body
+      el('path', { d: 'M ' + fx(Lx + 2) + ' ' + fx(topY) + ' L ' + fx(Rx - 2) + ' ' + fx(topY),
+        stroke: BRI, 'stroke-width': '1', opacity: '0.85', filter: 'url(#glow-soft)' }, g);
+      // a small central clasp + keyhole (sealed)
+      el('rect', { x: fx(cx - 5), y: fx(topY - 4), width: 10, height: 12, rx: 2,
+        fill: BODY, stroke: BRI, 'stroke-width': '1' }, g);
+      el('circle', { cx: fx(cx), cy: fx(topY + 3), r: 1.4, fill: BRI, opacity: '0.7' }, g);
+      // a crowning brass boss on the dome
+      el('circle', { cx: fx(cx), cy: fx(topY - lidH + 5), r: 2.4, fill: BRI, opacity: '0.8', filter: 'url(#glow-soft)' }, g);
+    } else {
+      // OPEN: the lid tilted back on its rear hinge, a warm gleam spilling from within.
+      // inner gleam FIRST (behind the tilted lid + the open mouth), emissive.
+      el('path', { d: 'M ' + fx(Lx + 4) + ' ' + fx(topY) +
+        ' L ' + fx(Rx - 4) + ' ' + fx(topY) +
+        ' L ' + fx(Rx - 4 + depth) + ' ' + fx(topY - drise) +
+        ' L ' + fx(Lx + 4 + depth) + ' ' + fx(topY - drise) + ' Z',
+        fill: GLEAM, opacity: '0.9', filter: 'url(#glow-soft)' }, g);
+      // a soft halo of remembering, rising out of the mouth
+      el('ellipse', { cx: fx(cx + depth / 2), cy: fx(topY - drise / 2 - 6), rx: 46, ry: 26,
+        fill: GLEAM, opacity: '0.28', filter: 'url(#glow-soft)' }, g);
+      // the OPEN mouth rim (the dark inner lip of the body)
+      el('path', { d: 'M ' + fx(Lx) + ' ' + fx(topY) +
+        ' L ' + fx(Rx) + ' ' + fx(topY) +
+        ' L ' + fx(Rx + depth) + ' ' + fx(topY - drise) +
+        ' L ' + fx(Lx + depth) + ' ' + fx(topY - drise) + ' Z',
+        fill: 'none', stroke: FR, 'stroke-width': '1.2' }, g);
+      // the LID, flung back on the rear hinge (a domed panel lying up-and-back)
+      var hx = Lx + depth, hy = topY - drise;    // hinge along the rear top edge
+      el('path', { d: 'M ' + fx(hx) + ' ' + fx(hy) +
+        ' L ' + fx(hx + w) + ' ' + fx(hy) +
+        ' Q ' + fx(hx + w + 6) + ' ' + fx(hy - 30) + ' ' + fx(hx + w - 8) + ' ' + fx(hy - 40) +
+        ' L ' + fx(hx - 8) + ' ' + fx(hy - 40) +
+        ' Q ' + fx(hx - 6) + ' ' + fx(hy - 30) + ' ' + fx(hx) + ' ' + fx(hy) + ' Z',
+        fill: BODY, stroke: FR, 'stroke-width': '1.3', filter: 'url(#glow-soft)' }, g);
+      // the lid's inner face catches the gleam (a warm underside)
+      el('path', { d: 'M ' + fx(hx + 4) + ' ' + fx(hy - 3) +
+        ' L ' + fx(hx + w - 4) + ' ' + fx(hy - 3) +
+        ' L ' + fx(hx + w - 10) + ' ' + fx(hy - 36) +
+        ' L ' + fx(hx - 2) + ' ' + fx(hy - 36) + ' Z',
+        fill: GLEAM, opacity: '0.32' }, g);
+      // the crowning boss, now on the flung-back lid
+      el('circle', { cx: fx(hx + w / 2 - 2), cy: fx(hy - 38), r: 2.4, fill: BRI, opacity: '0.85', filter: 'url(#glow-soft)' }, g);
+      // a single page-edge peeking from the mouth (the diary, read)
+      el('path', { d: 'M ' + fx(cx - 12) + ' ' + fx(topY - 2) +
+        ' L ' + fx(cx + 8) + ' ' + fx(topY - 6) +
+        ' L ' + fx(cx + 10) + ' ' + fx(topY - 16) +
+        ' L ' + fx(cx - 10) + ' ' + fx(topY - 12) + ' Z',
+        fill: '#efe2c9', opacity: '0.9', stroke: '#cdbf9c', 'stroke-width': '0.6' }, g);
+    }
+
+    S.refs.reliquary = g;
+  }
+
   /* undercroftState() → 'none' | 'closed' | 'open' — the THREE-state model of the
      way down, read off the per-visitor WS store (mirrors index.src.html's reveal
      keys) with a dev override on top.
@@ -4684,6 +4806,44 @@
     if (state === 'closed') S._devUndercroft = 'closed';
     else if (state === 'open' || state === true) S._devUndercroft = 'open';
     else S._devUndercroft = null;
+  };
+
+  /* reliquaryState() → 'none' | 'found' | 'open' — the THREE-state model of the
+     SECOND way down (#399), the Reliquary's sealed study, read off the per-visitor
+     WS store (mirrors the front door's revealReliquary keys) with a dev override.
+
+     STORE-KEY MAPPING (mirrors revealReliquary in index.src.html):
+       ws:seen:reliquary          → the study was ENTERED (the casket is found)
+       ws:seen:reliquary-solved   → the diary was READ to its end (the confession)
+
+       • solved (reliquary-solved) → 'open'  — the casket lid ajar, a warm inner
+                                     gleam: the estate visibly REMEMBERING its first
+                                     name. Wins over 'found'.
+       • else ws:seen:reliquary    → 'found' — a hairline-lit CLOSED reliquary casket
+                                     resting in the grounds: discovered, not yet read.
+       • else                      → 'none'  — undiscovered: draw nothing.
+
+     The dev pin (?reliquary → S._devReliquary = 'found'|'open') FORCES a state for
+     review; production stays earned-only via the store keys. */
+  function reliquaryState() {
+    if (S._devReliquary === 'open' || S._devReliquary === 'found') return S._devReliquary;
+    var WS = root.WS;
+    if (!WS || !WS.store) return 'none';
+    var store = WS.store();
+    if (!store.ok) return 'none';                // file:// or storage off → nothing unlocked
+    if (store.has('ws:seen:reliquary-solved')) return 'open';   // read to the end → lid ajar
+    if (store.has('ws:seen:reliquary')) return 'found';         // entered → closed casket
+    return 'none';
+  }
+  S.reliquaryState = reliquaryState;
+
+  /* setDevReliquary(state): the ?reliquary dev override (boot calls this before
+     build). null/false/0/undefined → earned-only; 'open' → lid-ajar gleam;
+     'found' (or 2) → the found-but-sealed closed casket. */
+  S.setDevReliquary = function (state) {
+    if (state === 'found') S._devReliquary = 'found';
+    else if (state === 'open' || state === true) S._devReliquary = 'open';
+    else S._devReliquary = null;
   };
 
   /* setDevRoom(id): the ?room=<id> dev override (boot calls this before build).

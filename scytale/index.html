@@ -259,6 +259,8 @@
           <button class="chip" data-preset="zebras">Keyed &mdash; ZEBRAS</button>
           <button class="chip" data-preset="surprise">&#127922; Surprise me</button>
           <button class="chip" data-preset="clear">Clear</button>
+          <!-- #399 the Reliquary's dossier strip — shown ONLY on the trail (a slipped-under-the-door page). -->
+          <button class="chip" data-preset="dossier" id="dossierChip" style="display:none; border-color:rgba(201,162,74,.5); color:#c9a24a;">&#128220; a strip from the reliquary</button>
         </div>
       </div>
 
@@ -661,6 +663,13 @@ function settings() {
   return { mode: STATE.mode, C: STATE.C, keyword: STATE.keyword };
 }
 
+/* #399 THE RELIQUARY STRIP — the enciphered diary page the Sealed Room's Diary sends
+   here for its second clue. Baked ciphertext = the C3-pointing plaintext enciphered on
+   the rod of ten (the storm's stone-count folded). The dossier preset loads it in
+   DECIPHER mode; dialing C=10 closes it and fires ws:flag:dossier:read-the-strip. This
+   is the SAME bytes the-reliquary bakes + selftest.mjs re-derives from the plaintext. */
+var RELIQUARY_STRIP = 'TETTEOMMHIOENREEESTRTOIRLBHFROSEAOEIYMHSURNWIOTNEDITLPDGTTSLAIIHHNOGNSENAW';
+
 /* =====================================================================
    SKINS — COSMETIC ONLY (palette + material flags). No geometry, no
    cipher. Pure colour.
@@ -995,6 +1004,23 @@ function refreshAll() {
   updateKeyOrder();
   updateWrong();
   render();
+  reliquaryStripWitness();
+}
+
+/* #399 THE READ-THE-STRIP WITNESS — a THIN, PULL-BASED breadcrumb. Fires ONCE when
+   the player has the Reliquary's seeded strip loaded, is in DECIPHER mode, and has
+   dialed the CORRECT circumference (10) — i.e. has actually read the page plain. A
+   wrong rod reads gibberish and never fires, so the decode is earned. Reads STATE
+   only; writes ONLY its own ws: key; every storage touch wrapped. */
+function reliquaryStripWitness() {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    if (!STATE.decode) return;
+    if (C.cleanText(STATE.message) !== RELIQUARY_STRIP) return;
+    if (C.clampC(STATE.C) !== 10) return;                       // the storm's stone-count folded
+    if (localStorage.getItem('ws:flag:dossier:read-the-strip') != null) return;
+    localStorage.setItem('ws:flag:dossier:read-the-strip', '1');
+  } catch (e) { /* storage off → the breadcrumb is a bonus, never a blocker */ }
 }
 
 /* =====================================================================
@@ -1088,6 +1114,18 @@ document.getElementById('presets').addEventListener('click', function (e) {
     STATE.mode = 'keyed'; STATE.C = 6; STATE.keyword = 'ZEBRAS'; STATE.message = 'WEAREDISCOVEREDFLEEATONCE';
   } else if (p === 'surprise') {
     surpriseMe();
+  } else if (p === 'dossier') {
+    // #399 load the Reliquary's enciphered page into DECIPHER mode on a WRONG rod, so the
+    // player must find the right circumference (10 = the storm's stone-count folded). The
+    // strip reads gibberish until then; dialing C=10 in decipher closes it and fires the
+    // read-the-strip witness (see the dossier witness in refreshAll).
+    STATE.mode = 'scytale'; STATE.message = RELIQUARY_STRIP; STATE.C = 4; STATE.wrongC = 5;
+    STATE.decode = true;
+    var db = document.querySelectorAll('#dirSeg button'), z;
+    for (z = 0; z < db.length; z++) db[z].classList.toggle('active', db[z].dataset.dir === 'dec');
+    STATE.view = 'unwound';
+    msgInput.value = STATE.message; syncCControls(); syncModePanels(); refreshAll();
+    return;
   } else if (p === 'clear') {
     STATE.message = '';
   }
@@ -1472,6 +1510,12 @@ init();
         return true;
       } },
 
+    /* reliquary (#399): read the Sealed Room's Diary to its end — the estate's
+       found-diary mystery, solved across the Museum → Scytale → Card Catalog. An
+       honest cross-link trophy: the Reliquary and the Undercroft share this ws
+       engine. Predicate = the payoff key the Sealed Study sets on final solve. */
+    { id: 'reliquary',      unlocked: function (s) { return s.has('ws:seen:reliquary-solved'); } },
+
     /* ── The Constellation of Mastery (wave one) ────────────────────────────────
        A named group of secrets that reward what you CONQUERED, not merely what you
        wandered past. Each candle stands for a feat finished; the capstone lights
@@ -1769,6 +1813,17 @@ init();
   // dual-use module guard (forge strips exactly this braced single line)
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 WS.seen('scytale');
+
+/* #399 reveal the dossier strip chip ONLY for a player on the Reliquary trail — they
+   saw the storm but haven't yet read the strip (a legible on-ramp, not a hidden rune).
+   Also re-run the witness once WS exists, in case the player arrived already dialed. */
+try {
+  var st = WS.store();
+  var onTrail = st.ok && st.has('ws:flag:dossier:saw-the-storm') && !st.has('ws:flag:dossier:read-the-strip');
+  var chip = document.getElementById('dossierChip');
+  if (chip && onTrail) chip.style.display = '';
+  reliquaryStripWitness();
+} catch (e) {}
 </script>
 </body>
 </html>

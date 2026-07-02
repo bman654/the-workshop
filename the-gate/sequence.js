@@ -88,6 +88,16 @@
         if (v === 'closed' || v === '2') return 'closed';
         return 'open';                                   // '', '1', 'true', 'open', …
       })(),
+      // ?reliquary — TRI-STATE dev override (#399), sibling to ?undercroft (null =
+      // earned-only; 'found' = the found-but-sealed closed casket; 'open' = the
+      // lid-ajar gleam). Mirrors S.reliquaryState().
+      reliquary: (function () {
+        if (!('reliquary' in q)) return null;
+        var v = String(q.reliquary).toLowerCase();
+        if (v === '0' || v === 'false') return null;
+        if (v === 'found' || v === '2') return 'found';
+        return 'open';                                   // '', '1', 'true', 'open', …
+      })(),
       room: q.room || null,
       // ?smil=<seconds> — freeze the SVG animation clock at a fixed time, so an
       // animated rep can be rendered/judged at chosen phases of its loop (headless
