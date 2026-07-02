@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Melting Floor · The Deep Hearth</title>
+<style>
+  :root{
+    --bg:#08070a; --ink:#efe4d6; --ink-dim:#a3917b;
+    --ember:#e24a2a; --ember-soft:rgba(226,74,42,0.13); --ember-edge:rgba(226,74,42,0.40); --ember-hot:#ff8a4a;
+    --straw:#f0d9a8; --cool:#7fa0d8; --brass:#d8b072; --brass-hi:#f2d79a;
+    --panel:rgba(16,11,10,0.9);
+    --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --font-ser:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --font-mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{ margin:0; min-height:100%;
+    background:radial-gradient(1100px 700px at 50% 118%, rgba(226,74,42,0.10), transparent 60%), var(--bg);
+    color:var(--ink); font-family:var(--font-ui); -webkit-font-smoothing:antialiased; overflow-x:hidden; }
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:40; display:flex; align-items:center;
+    justify-content:space-between; padding:12px 20px; gap:12px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(8,7,10,0.95), rgba(8,7,10,0)); }
+  .topbar a,.topbar .selftest{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.85; transition:.2s; white-space:nowrap;
+    min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  .back:hover{ color:var(--ember); }
+  .selftest{ font:600 10.5px/1 var(--font-mono); padding:6px 11px; border-radius:20px; border:1px solid var(--ember-edge);
+    background:rgba(0,0,0,0.4); color:var(--ink-dim); cursor:pointer; user-select:none; white-space:nowrap; flex-shrink:0; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(28,52,36,0.45); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(64,28,24,0.45); }
+
+  .wrap{ max-width:980px; margin:0 auto; padding:58px 16px 40px; }
+  .stage{ position:relative; border:1px solid #2c211a; border-radius:12px 12px 0 0; overflow:hidden; background:#0a0807; }
+  canvas#stage{ display:block; width:100%; height:auto; touch-action:none; cursor:grab; }
+  canvas#stage.grabbing{ cursor:grabbing; }
+
+  /* the wellhead console docked beneath the cutaway */
+  .console{ display:grid; grid-template-columns:1fr auto 1fr; gap:14px; align-items:center;
+    border:1px solid #2c211a; border-top:none; border-radius:0 0 12px 12px; padding:14px 16px;
+    background:linear-gradient(180deg, #16100b, #100b08); }
+  .side{ display:flex; flex-direction:column; gap:12px; }
+  .side.right{ align-items:flex-end; }
+  .ctl{ display:flex; flex-direction:column; gap:5px; }
+  .ctl .lab{ font:600 9.5px/1 var(--font-mono); letter-spacing:.12em; color:var(--brass); text-transform:uppercase; }
+  .side.right .ctl{ align-items:flex-end; }
+  canvas.dial{ width:96px; height:96px; touch-action:none; cursor:grab; border-radius:50%; }
+  canvas.dial:active{ cursor:grabbing; }
+  .ctl .val{ font:600 10px/1 var(--font-mono); color:var(--ink-dim); }
+  .toggle{ display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none;
+    font:600 9.5px/1 var(--font-mono); letter-spacing:.1em; color:var(--brass); text-transform:uppercase; }
+  .toggle .sw{ width:34px; height:18px; border-radius:10px; border:1px solid #4a3826; background:#1a120b; position:relative; transition:.18s; }
+  .toggle .sw::after{ content:""; position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%;
+    background:#8a6f50; transition:.18s; }
+  .toggle.on .sw{ background:rgba(120,150,220,0.28); border-color:var(--cool); }
+  .toggle.on .sw::after{ left:18px; background:var(--cool); }
+  .toggle.on{ color:var(--cool); }
+
+  .center{ text-align:center; }
+  .verdict{ font:600 13px/1.4 var(--font-mono); letter-spacing:.04em; }
+  .verdict .word{ font:700 18px/1.1 var(--font-ser); letter-spacing:.06em; }
+  .verdict .word.solid{ color:var(--ink-dim); }
+  .verdict .word.melt{ color:var(--ember); }
+  .verdict .word.refr{ color:var(--cool); }
+  .verdict .nums{ display:block; margin-top:6px; font:600 10.5px/1.5 var(--font-mono); color:var(--ink-dim); }
+  .verdict .nums b{ color:var(--brass); }
+  .seat{ margin-top:10px; font:700 11px/1 var(--font-mono); letter-spacing:.14em; text-transform:uppercase;
+    color:#1a0f08; background:linear-gradient(180deg,#ffb060,#e2772a); border:none; border-radius:7px;
+    padding:9px 15px; cursor:pointer; box-shadow:0 4px 14px rgba(226,120,40,.4); transition:.15s; }
+  .seat:hover{ filter:brightness(1.08); transform:translateY(-1px); }
+  .seat:disabled{ opacity:.5; cursor:default; transform:none; }
+
+  .hint{ max-width:980px; margin:14px auto 0; padding:0 18px; color:var(--ink-dim);
+    font:13px/1.6 var(--font-ser); text-align:center; }
+  .hint b{ color:var(--ember-hot); }
+  .hint .cool{ color:var(--cool); }
+  .hint kbd{ font:600 10px/1 var(--font-mono); background:#1c140e; border:1px solid #382a1c; border-radius:4px;
+    padding:2px 5px; color:var(--brass); }
+  .foot{ max-width:980px; margin:22px auto 0; padding:14px 18px 30px; text-align:center;
+    color:#7a6448; font:12px/1.7 var(--font-ser); }
+  .foot a{ color:#bf9d72; text-decoration:none; border-bottom:1px dotted #4a3826; }
+  .foot a:hover{ color:var(--ember-hot); }
+  @media (max-width:560px){
+    .console{ grid-template-columns:1fr 1fr; }
+    .side.right{ align-items:flex-start; }
+    .side.right .ctl{ align-items:flex-start; }
+    .center{ grid-column:1 / -1; order:-1; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="../index.html">▴ Rise to the Standing Section</a>
+    <div class="selftest" id="selftest" title="Re-runs the Melting Floor's decompression-melting self-test in your browser.">checking…</div>
+  </div>
+
+  <div class="wrap">
+    <div class="stage">
+      <canvas id="stage" width="960" height="640" aria-label="A dollied-in cutaway of the magma chamber roof. Drag the engraved country-rock lid upward to decompress the rock; a pool of melt blooms up out of the chamber. A side gauge shows the solidus crossing the geotherm."></canvas>
+    </div>
+    <div class="console">
+      <div class="side">
+        <div class="ctl">
+          <span class="lab">Lid lift</span>
+          <span class="val" id="valL">0 m — seated</span>
+        </div>
+        <label class="toggle" id="refToggle" role="switch" aria-checked="false" tabindex="0">
+          <span class="sw"></span><span>Refractory floor</span>
+        </label>
+      </div>
+      <div class="center">
+        <div class="verdict" id="verdict">
+          <span class="word solid" id="word">SOLID</span>
+          <span class="nums" id="nums">—</span>
+        </div>
+        <button class="seat" id="seat">Seat the lid</button>
+      </div>
+      <div class="side right">
+        <div class="ctl">
+          <canvas class="dial" id="dialW" width="192" height="192" tabindex="0" role="slider"
+            aria-label="Water in the rock" aria-valuemin="0" aria-valuemax="100" aria-valuenow="30"></canvas>
+          <span class="lab">Water</span>
+          <span class="val" id="valW">dry</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="hint">Grab the brass handle on the <b>country-rock lid</b> and <b>drag it up</b> — you add no heat, you take
+      weight off. The confining pressure falls, the rock's <b>solidus</b> slides down through the fixed geotherm on the
+      side gauge, and a pool of <b>incandescent melt blooms upward</b> out of the chamber to meet the lid in your hand.
+      Turn <span class="cool">WATER</span> up and it blooms with far less lifting. Flip <span class="cool">REFRACTORY
+      FLOOR</span> and the lid goes taut against a hard stop — that rock will not melt no matter how you pull.
+      Focus the handle and use <kbd>↑</kbd><kbd>↓</kbd>; <kbd>Home</kbd> seats it.</p>
+
+    <div class="foot">
+      The Melting Floor — the live bench of <a href="../index.html">The Deep Hearth</a>, at the chamber roof the conduit
+      feeds from. The MELTING/SOLID verdict, the crossing depth, and the melt fraction painted onto the rock are read
+      DIRECTLY from the self-tested decompression core; the cutaway + depth ribbon are the wing's shared
+      <code>section.mjs</code>. Tap the pill (top-right) to re-run the proof. Kin to
+      <a href="../conduit/index.html">The Same Vent, Two Tempers</a> just up the column.
+    </div>
+  </div>
+
+<script type="module">
+/* ════════════════════════════════════════════════════════════════════════════
+   THE MELTING FLOOR — one gesture: LIFT THE LID and the rock melts. You add no
+   heat; you remove overburden, the pressure drops, the solidus slides down
+   through the fixed geotherm, and a pool of partial melt blooms upward out of the
+   chamber. The SOLE physics authority is melting-floor/core.mjs, FORGE-INLINED
+   byte-for-byte between the sentinels below; the page READS the crossing depth,
+   the per-depth melt fraction, and the lid-aware pressure straight from the core,
+   and the in-page pill reruns the SAME runCoreTests() the Node twin proves. The
+   cutaway + depth ribbon come from the wing's shared section.mjs. Everything
+   outside the slab is render + interaction — never a second copy of the melting
+   math.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+import { WORLD, STRATA, makeCamera, bakeSection, conduitScreenPath, drawDepthRibbon }
+  from '../section.mjs';
+
+<!-- forge:include core.mjs -->
+
+const $ = id => document.getElementById(id);
+
+/* ── STATE. L = lid lift in metres [0,L_MAX]; w = water dial [0,1]; refractory. ── */
+let L = 0, w = 0.0, refractory = false;
+let Ltarget = 0;                 // spring target (drag/keys set this; L eases toward it)
+let Lvel = 0;                    // spring velocity for the release overshoot/settle
+let dragging = false;
+
+/* the "just crossed" detent — the lift at which the pool first appears (dry). */
+let firstMeltL = null;
+
+const cvs = $('stage'), ctx = cvs.getContext('2d');
+let W = 960, H = 640, DPR = 1, cam = null, camTarget = null, baked = null;
+let camTween = null;
+
+function fit(){
+  const r = cvs.parentElement.getBoundingClientRect();
+  W = Math.max(360, Math.round(r.width));
+  H = Math.round(Math.min(700, Math.max(480, W * 0.70)));
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  cvs.width = W*DPR; cvs.height = H*DPR; cvs.style.height = H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  camTarget = makeCamera('melt', W, H);
+  if (!cam){
+    const params = new URLSearchParams(location.search);
+    if (params.get('from') === 'establish'){
+      cam = makeCamera('establish', W, H);
+      camTween = { t0: performance.now(), dur: 780,
+        cy0: cam.cy, cy1: camTarget.cy, s0: cam.scale, s1: camTarget.scale };
+    } else {
+      cam = { ...camTarget };
+    }
+  } else {
+    cam = { ...camTarget };
+  }
+  rebake();
+}
+function rebake(){ baked = bakeSection(W, H, cam); }
+
+const wy = d => H/2 + (d - cam.cy) * cam.scale;
+const X  = x => W/2 + (x - cam.cx) * cam.scale;
+const depthAtY = sy => cam.cy + (sy - H/2)/cam.scale;
+
+/* ── LID geometry. The lid is a thick slab whose UNDERSIDE seats on the chamber
+   roof (WORLD.conduitBottom = D_ROOF). Lifting by L raises the slab by L metres
+   in world depth (its underside rises to D_ROOF − L). The handle sits on top. ── */
+const LID_THICK = 210;           // slab thickness in metres (reads as a heavy cap)
+function lidUndersideDepth(){ return WORLD.conduitBottom - L; }   // world depth of the lid's bottom face
+
+/* ── melt colour ramp: deep incandescent orange (hot, near the chamber) → straw
+   (cooler, near the crossing). Painted into the ROCK band, additive. ─────────── */
+function meltRGB(f){
+  // f in [0,1]: 0 near the crossing (dim straw), 1 deep in the chamber (white-hot orange)
+  const lo=[210,86,26], hi=[255,208,150];
+  return [Math.round(lo[0]+(hi[0]-lo[0])*f), Math.round(lo[1]+(hi[1]-lo[1])*f), Math.round(lo[2]+(hi[2]-lo[2])*f)];
+}
+
+/* ── rising melt schlieren (wisps) so the pool feels alive, kin to the conduit's
+   parcels. They drift up inside the pool and recycle. ────────────────────────── */
+const NWISP = 46;
+const wisps = Array.from({length:NWISP}, () => ({
+  d: WORLD.conduitBottom + Math.random()*760,
+  x: (Math.random()*2-1),
+  sp: 0.4 + Math.random()*0.8,
+  ph: Math.random()*Math.PI*2,
+}));
+
+/* ── crystal-mush stipple: sparse dark flecks near the crossing that THIN to zero
+   as F→1. A fixed field of deterministic points we test against F each frame. ── */
+const NMUSH = 260;
+const mush = Array.from({length:NMUSH}, (_,i) => ({
+  u: (i*0.6180339887498949) % 1,           // golden-ratio jitter across width
+  d: WORLD.conduitBottom + ((i*97)%1000)/1000 * 900,
+  r: 0.6 + ((i*53)%100)/100 * 1.1,
+}));
+
+/* ── freeze-on-release: when the pool is shrinking we sweep a dark freeze front
+   down from the top so it FREEZES top-down (visual only; F is read from core). ── */
+let freezeFront = null;    // world depth above which melt is frozen dark during a settle
+
+/* ── audio scaffold (silent placeholder; a future foundry sound wires here). ──
+   Unlocked on the first pointer gesture per the house audio rule. */
+let actx = null;
+function unlockAudio(){ /* reserved for a forged lid-grind / bloom shimmer; ctx prepared on gesture */
+  if (actx) return;
+  try{ actx = new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==='suspended') actx.resume(); }catch(e){ actx=null; }
+}
+
+/* ── current physics prediction (read fresh each frame from the CORE) ────────── */
+let P = predict(L, w, refractory);
+
+function frame(ts){
+  P = predict(L, w, refractory);
+
+  // spring the lid toward its target (drag sets Ltarget directly; release lets it
+  // overshoot & settle). While dragging we track exactly; else we ease with a spring.
+  if (!dragging){
+    const k = 0.16, damp = 0.72;           // stiffness / damping → slight overshoot then settle
+    Lvel += (Ltarget - L) * k;
+    Lvel *= damp;
+    L += Lvel;
+    if (Math.abs(Ltarget - L) < 0.05 && Math.abs(Lvel) < 0.05){ L = Ltarget; Lvel = 0; }
+  }
+  L = Math.max(0, Math.min(L_MAX, L));
+
+  // camera tween in from the establishing frame
+  if (camTween){
+    const k = Math.min(1, (ts - camTween.t0)/camTween.dur);
+    const e = k<0.5 ? 2*k*k : 1-Math.pow(-2*k+2,2)/2;
+    cam.cy = camTween.cy0 + (camTween.cy1-camTween.cy0)*e;
+    cam.scale = camTween.s0 + (camTween.s1-camTween.s0)*e;
+    rebake();
+    if (k>=1) camTween = null;
+  }
+
+  ctx.clearRect(0,0,W,H);
+  if (baked) ctx.drawImage(baked, 0, 0, W, H);
+
+  const t = ts*0.001;
+
+  // ── LAYER 1: THE MELT POOL — painted into the ROCK band from the crossing down
+  //    to below the chamber. The pool never rises above the lid's underside. ──
+  drawMeltPool(t);
+
+  // ── LAYER 2: THE LID — the slab you lift, seated on the roof, brass handle on top ──
+  drawLid(t);
+
+  // ── LAYER 3: THE ENGRAVED SIDE-GAUGE — solidus vs geotherm, their crossing ──
+  drawSideGauge();
+
+  // ── the depth ribbon (shared component). Feed it the LID-AWARE pressure so its
+  //    MPa readout tracks the lift honestly. ──
+  drawDepthRibbon(ctx, { x:10, y:10, w:54, h:H-20 }, cam, W, H,
+    { pressureAt: d => pressureAt(d, L), accent:'#e24a2a' });
+
+  updateVerdict();
+  drawDial();
+  lastFrameAt = performance.now();
+}
+
+/* ── the animation driver. rAF is the primary clock; a low-rate setInterval
+   watchdog re-drives the frame if rAF has been starved (some backgrounded /
+   automation contexts suspend rAF) so the readout never freezes stale. ─────── */
+let lastFrameAt = 0;
+function loop(ts){ frame(ts); requestAnimationFrame(loop); }
+setInterval(() => { if (performance.now() - lastFrameAt > 400) frame(performance.now()); }, 250);
+
+/* ── PAGE-LOCAL: a full-width rock band from the pool top down to below the
+   chamber, in SCREEN space — the clip the melt is painted inside so it stays IN
+   THE ROCK (kept OUT of section.mjs to keep the shared file byte-parity clean). ── */
+function meltRegionPath(dTop){
+  const p = new Path2D();
+  const top = Math.max(WORLD.vent, dTop);
+  const bot = WORLD.conduitBottom + 900;                  // reach below the chamber centre
+  const yT = wy(top), yB = wy(bot);
+  p.rect(0, yT, W, yB - yT);
+  return p;
+}
+
+function drawMeltPool(t){
+  if (!P.melts){
+    // no crossing in the visible band — the rock is dead solid; draw nothing hot.
+    // (a bare hint of chamber warmth still comes from the baked plate.)
+    freezeFront = null;
+    return;
+  }
+  // the pool spans from the crossing (poolTop) down. Clamp the top to the lid's
+  // underside — molten rock cannot sit above the seal you are holding.
+  const poolTop = Math.max(P.poolTop, lidUndersideDepth());
+  const clip = meltRegionPath(poolTop - 6);
+  ctx.save();
+  ctx.clip(clip);
+
+  // band-by-band incandescent fill, opacity = local melt fraction F (the lever
+  // rule IS the readout). Additive 'lighter' so it self-lights like molten rock.
+  ctx.globalCompositeOperation = 'lighter';
+  const zTop = Math.max(poolTop, WORLD.vent);
+  const zBot = WORLD.conduitBottom + 760;
+  const step = 14;                                        // metres per painted band
+  for (let z = zTop; z <= zBot; z += step){
+    let f = meltFraction(z, L, w, refractory);
+    if (f <= 0.001) continue;
+    // a freeze front (release settle) darkens everything above it
+    if (freezeFront != null && z < freezeFront) f *= 0.15;
+    const c = meltRGB(f);
+    const y0 = wy(z), y1 = wy(z + step);
+    const a = 0.10 + 0.62 * f;                            // coverage/opacity tracks F
+    const g = ctx.createLinearGradient(0, y0, 0, y1);
+    g.addColorStop(0, `rgba(${c[0]},${c[1]},${c[2]},${a})`);
+    g.addColorStop(1, `rgba(${c[0]},${c[1]},${c[2]},${a})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, y0-0.5, W, (y1-y0)+1);
+  }
+
+  // rising melt schlieren wisps — brighter where F is higher
+  for (const wp of wisps){
+    wp.d -= 26 * 0.016 * wp.sp;
+    if (wp.d < poolTop - 40){ wp.d = zBot; wp.x = (Math.random()*2-1); }
+    let f = meltFraction(wp.d, L, w, refractory);
+    if (freezeFront != null && wp.d < freezeFront) f = 0;
+    if (f <= 0.02) continue;
+    const sx = X(WORLD.conduitX + wp.x * 220);
+    const sy = wy(wp.d) + Math.sin(t*1.4 + wp.ph)*3;
+    const r = Math.max(1.2, (2.0 + f*4) * cam.scale * 0.9);
+    const c = meltRGB(Math.min(1, f+0.15));
+    const bg = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
+    bg.addColorStop(0, `rgba(${c[0]},${c[1]},${Math.min(255,c[2]+30)},${0.32*f})`);
+    bg.addColorStop(1, `rgba(${c[0]},${c[1]},${c[2]},0)`);
+    ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+
+  // CRYSTAL-MUSH STIPPLE near the crossing: dark flecks that THIN to zero as F→1.
+  // You literally watch mush → melt as you lift.
+  for (const m of mush){
+    let f = meltFraction(m.d, L, w, refractory);
+    if (freezeFront != null && m.d < freezeFront) f = 0.0;
+    if (f <= 0.001 || f >= 0.98) continue;               // only in the partial-melt band
+    const crystal = 1 - f;                                // fleck density ∝ crystal fraction
+    if (Math.random() > crystal*0.5) continue;            // sparser as it melts
+    const sx = X(WORLD.conduitX + (m.u*2-1) * (W/cam.scale) * 0.45);
+    const sy = wy(m.d);
+    ctx.fillStyle = `rgba(24,14,10,${0.30*crystal})`;
+    ctx.beginPath(); ctx.arc(sx, sy, m.r, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = `rgba(60,40,28,${0.22*crystal})`;
+    ctx.beginPath(); ctx.arc(sx-0.6, sy-0.6, m.r*0.5, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+
+  // ── the pool's top edge — a bright incandescent MENISCUS where melt meets solid ──
+  {
+    const y = wy(poolTop);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const gg = ctx.createLinearGradient(0, y-10, 0, y+14);
+    gg.addColorStop(0, 'rgba(255,150,70,0)');
+    gg.addColorStop(0.5, 'rgba(255,180,100,0.35)');
+    gg.addColorStop(1, 'rgba(255,120,50,0)');
+    ctx.fillStyle = gg; ctx.fillRect(0, y-10, W, 24);
+    ctx.restore();
+    // engraved crossing label at the right
+    label(ctx, W-150, y-6, 'SOLIDUS CROSSING', 'rgba(255,190,120,0.7)', 8.5);
+    label(ctx, W-150, y+6, `melt begins · ${Math.round(Math.max(WORLD.vent,poolTop))} m`, 'rgba(216,176,114,0.7)', 8.5);
+  }
+}
+
+/* ── LAYER 2 · THE LID — a thick engraved country-rock slab with a beveled top and
+   a knurled brass drag-handle. Rest position seats on the roof; a dashed GHOST of
+   the rest position shows how far it's pulled; a spring line runs down to the roof.
+   A hairline decompression halo sweeps down the column as it lifts. ──────────── */
+function drawLid(t){
+  const under = lidUndersideDepth();                      // lid bottom face (world depth)
+  const topFace = under - LID_THICK;                      // lid top face
+  const yU = wy(under), yT = wy(topFace);
+  const half = 520;                                       // lid half-width in world metres (spans past the conduit mouth)
+  const xL = X(-half), xR = X(half);
+
+  // GHOST of the rest position (dashed) — where the lid sits seated.
+  if (L > 2){
+    const gyU = wy(WORLD.conduitBottom), gyT = wy(WORLD.conduitBottom - LID_THICK);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(150,120,90,0.28)'; ctx.setLineDash([5,5]); ctx.lineWidth = 1;
+    ctx.strokeRect(xL, gyT, xR-xL, gyU-gyT);
+    ctx.setLineDash([]);
+    label(ctx, xL+6, gyT-7, 'rest — lid seated', 'rgba(160,130,95,0.5)', 8, 'left');
+    ctx.restore();
+  }
+
+  // DECOMPRESSION HALO: a cool→warm hairline front sweeping down from the lid
+  // underside — the pressure-drop travelling into the column as you lift.
+  if (L > 1){
+    const frontDepth = under + Math.min(760, L*1.4);
+    const yF = wy(frontDepth);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const hg = ctx.createLinearGradient(0, yF-16, 0, yF+16);
+    hg.addColorStop(0, 'rgba(120,150,220,0)');
+    hg.addColorStop(0.5, `rgba(150,170,230,${0.10*Math.min(1,L/200)})`);
+    hg.addColorStop(1, 'rgba(255,150,80,0)');
+    ctx.fillStyle = hg; ctx.fillRect(0, yF-16, W, 32);
+    ctx.restore();
+  }
+
+  // THE SLAB — engraved country-rock, hatched, with a beveled lit top edge.
+  ctx.save();
+  const body = ctx.createLinearGradient(0, yT, 0, yU);
+  body.addColorStop(0, '#3a2e24');
+  body.addColorStop(0.12, '#463629');
+  body.addColorStop(1, '#241a12');
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.rect(xL, yT, xR-xL, yU-yT);
+  ctx.fill();
+  // clip to the slab for hatch + strata bands
+  ctx.save(); ctx.beginPath(); ctx.rect(xL, yT, xR-xL, yU-yT); ctx.clip();
+  // faint horizontal bedding of the country rock
+  ctx.strokeStyle = 'rgba(20,14,10,0.5)'; ctx.lineWidth = 1;
+  for (let yy = yT+8; yy < yU; yy += 11){
+    ctx.beginPath(); ctx.moveTo(xL, yy + Math.sin(yy*0.2)*1.2); ctx.lineTo(xR, yy - Math.sin(yy*0.15)*1.2); ctx.stroke();
+  }
+  // engraved diagonal hatch
+  ctx.globalAlpha = 0.06; ctx.strokeStyle = '#e7c79a'; ctx.lineWidth = 1;
+  for (let d = -H; d < W+H; d += 20){ ctx.beginPath(); ctx.moveTo(d, 0); ctx.lineTo(d+H, H); ctx.stroke(); }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+  // beveled TOP edge — a lit chamfer catches the light
+  const bev = ctx.createLinearGradient(0, yT, 0, yT+7);
+  bev.addColorStop(0, 'rgba(240,214,154,0.55)'); bev.addColorStop(1, 'rgba(240,214,154,0)');
+  ctx.fillStyle = bev; ctx.fillRect(xL, yT, xR-xL, 7);
+  // slab outline
+  ctx.strokeStyle = 'rgba(150,120,90,0.5)'; ctx.lineWidth = 1.4; ctx.strokeRect(xL, yT, xR-xL, yU-yT);
+  // engraved caption on the slab
+  label(ctx, (xL+xR)/2, (yT+yU)/2, 'COUNTRY-ROCK LID · the overburden', 'rgba(210,180,135,0.32)', 9.5, 'center');
+  ctx.restore();
+
+  // SPRING/TENSION line from the handle down through the slab to the roof anchor.
+  const hx = (xL+xR)/2;
+  {
+    const anchorY = wy(WORLD.conduitBottom) + 4;          // roof anchor
+    const topY = yT - 4;
+    ctx.save();
+    ctx.strokeStyle = refractory && draggingHardStop ? 'rgba(150,170,230,0.8)' : 'rgba(216,176,114,0.55)';
+    ctx.lineWidth = 1.5;
+    // a coil: zigzag between topY and anchorY
+    const coils = 7; ctx.beginPath(); ctx.moveTo(hx, topY);
+    for (let i=0;i<=coils;i++){ const yy = topY + (anchorY-topY)*(i/coils); const dx = (i%2? 7 : -7); ctx.lineTo(hx+dx, yy); }
+    ctx.lineTo(hx, anchorY); ctx.stroke();
+    ctx.restore();
+  }
+
+  // THE BRASS HANDLE-BAR on the top edge — knurled grip you grab.
+  const handleY = yT - 16;
+  const hHalf = 90;
+  drawHandle(hx, handleY, hHalf, dragging);
+  // remember the handle hit rect for pointer hit-testing
+  lidHandleRect = { x: hx-hHalf-14, y: handleY-16, w: (hHalf+14)*2, h: 34, slabTop: yT, slabBot: yU, slabL:xL, slabR:xR };
+
+  // hard-stop shudder marks when refractory + pulling hard
+  if (refractory && draggingHardStop){
+    ctx.save();
+    label(ctx, hx, handleY-24, 'NO — this rock will not melt', '#9fb6e6', 10, 'center');
+    ctx.restore();
+  }
+}
+
+let lidHandleRect = null;
+let draggingHardStop = false;
+
+function drawHandle(cx, cy, half, active){
+  ctx.save();
+  // bar
+  const bg = ctx.createLinearGradient(0, cy-9, 0, cy+9);
+  bg.addColorStop(0, active ? '#ffe6ad' : '#e9c485');
+  bg.addColorStop(0.5, active ? '#d8a95c' : '#b98f4e');
+  bg.addColorStop(1, '#6a4f28');
+  roundRectPath(cx-half, cy-9, half*2, 18, 6);
+  ctx.fillStyle = bg; ctx.fill();
+  ctx.strokeStyle = '#7a5c30'; ctx.lineWidth = 1.4; ctx.stroke();
+  // knurling
+  ctx.save(); roundRectPath(cx-half, cy-9, half*2, 18, 6); ctx.clip();
+  ctx.strokeStyle = 'rgba(90,66,32,0.6)'; ctx.lineWidth = 1;
+  for (let x = cx-half+4; x < cx+half; x += 5){ ctx.beginPath(); ctx.moveTo(x, cy-9); ctx.lineTo(x-4, cy+9); ctx.stroke(); }
+  ctx.restore();
+  // posts down to the slab
+  ctx.strokeStyle = '#8a6836'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(cx-half+10, cy+9); ctx.lineTo(cx-half+10, cy+18); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+half-10, cy+9); ctx.lineTo(cx+half-10, cy+18); ctx.stroke();
+  // a soft glow when grabbable/active
+  if (active){ ctx.shadowColor='rgba(255,200,120,0.7)'; ctx.shadowBlur=12; roundRectPath(cx-half, cy-9, half*2, 18, 6); ctx.strokeStyle='rgba(255,210,140,0.6)'; ctx.lineWidth=1.5; ctx.stroke(); }
+  ctx.restore();
+  // an up-arrow hint above the handle when seated & idle
+  if (L < 4 && !active){
+    ctx.save(); ctx.globalAlpha = 0.5 + 0.4*Math.abs(Math.sin(performance.now()*0.003));
+    ctx.strokeStyle = '#ffcaa0'; ctx.lineWidth = 2; ctx.lineCap='round';
+    const ay = cy-26; ctx.beginPath(); ctx.moveTo(cx, ay+8); ctx.lineTo(cx, ay-4);
+    ctx.moveTo(cx-5, ay+2); ctx.lineTo(cx, ay-4); ctx.lineTo(cx+5, ay+2); ctx.stroke();
+    ctx.globalAlpha=1; label(ctx, cx, ay-12, 'LIFT', '#ffcaa0', 8, 'center'); ctx.restore();
+  }
+}
+
+/* ── LAYER 3 · THE ENGRAVED SIDE-GAUGE — the quiet receipt. A slim brass panel in
+   the upper-left plotting SOLIDUS T_s(P,w) (slides as you lift, because P drops)
+   and the FIXED GEOTHERM T_g(z), their intersection ringed, with ticks reading
+   the crossing depth, melt %, and ΔP. The lid is the star; this is the proof. ── */
+function drawSideGauge(){
+  const gx = 74, gy = 74, gw = 150, gh = 176;
+  ctx.save();
+  // panel
+  roundRectPath(gx, gy, gw, gh, 8);
+  ctx.fillStyle = 'rgba(12,9,8,0.82)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(150,120,90,0.35)'; ctx.lineWidth = 1; ctx.stroke();
+  // title
+  label(ctx, gx+10, gy+13, 'SOLIDUS ⟂ GEOTHERM', 'rgba(200,170,130,0.7)', 8.5, 'left');
+
+  // plot area: x = temperature, y = depth (down). Depth axis roof→below-chamber.
+  const px = gx+12, py = gy+24, pw = gw-24, ph = gh-58;
+  const zTop = WORLD.conduitBottom - 500, zBot = WORLD.conduitBottom + 900;
+  // temperature range spanning both lines across the band
+  const Tmin = Math.min(geothermT(zTop), solidusT(pressureAt(zBot, L), w, refractory)) - 40;
+  const Tmax = Math.max(geothermT(zBot), solidusT(pressureAt(zTop, L), w, refractory)) + 40;
+  const TX = T => px + (T - Tmin)/(Tmax - Tmin) * pw;
+  const ZY = z => py + (z - zTop)/(zBot - zTop) * ph;
+  // frame
+  ctx.strokeStyle = 'rgba(120,100,72,0.4)'; ctx.lineWidth = 1;
+  ctx.strokeRect(px, py, pw, ph);
+  // roof + chamber depth guides
+  ctx.strokeStyle = 'rgba(150,120,90,0.25)'; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(px, ZY(WORLD.conduitBottom)); ctx.lineTo(px+pw, ZY(WORLD.conduitBottom)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(px, ZY(WORLD.chamberCY)); ctx.lineTo(px+pw, ZY(WORLD.chamberCY)); ctx.stroke();
+  ctx.setLineDash([]);
+  label(ctx, px+2, ZY(WORLD.conduitBottom)-5, 'roof', 'rgba(160,130,95,0.6)', 7, 'left');
+
+  // GEOTHERM (fixed) — cool line
+  ctx.strokeStyle = '#7fa0d8'; ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  for (let z=zTop; z<=zBot; z+=20){ const xx=TX(geothermT(z)), yy=ZY(z); (z===zTop?ctx.moveTo:ctx.lineTo).call(ctx,xx,yy); }
+  ctx.stroke();
+  // SOLIDUS (moves with lift/water) — ember line
+  ctx.strokeStyle = refractory ? '#6a86c8' : '#e2772a'; ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  for (let z=zTop; z<=zBot; z+=20){ const xx=TX(solidusT(pressureAt(z,L),w,refractory)), yy=ZY(z); (z===zTop?ctx.moveTo:ctx.lineTo).call(ctx,xx,yy); }
+  ctx.stroke();
+  // a GHOST of the seated solidus (dashed) so you see it slide left as you lift
+  if (L > 2 && !refractory){
+    ctx.strokeStyle = 'rgba(226,119,42,0.28)'; ctx.setLineDash([3,3]); ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let z=zTop; z<=zBot; z+=20){ const xx=TX(solidusT(pressureAt(z,0),0,refractory)), yy=ZY(z); (z===zTop?ctx.moveTo:ctx.lineTo).call(ctx,xx,yy); }
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+  // line labels
+  label(ctx, TX(geothermT(zBot))-2, ZY(zBot)-6, 'geotherm', '#9fb6e6', 7, 'right');
+  label(ctx, TX(solidusT(pressureAt(zBot,L),w,refractory))+3, ZY(zBot)-6, 'solidus', refractory?'#9fb6e6':'#f0a866', 7, 'left');
+
+  // the CROSSING ring (only if it falls inside the plotted band)
+  const zx = P.zx;
+  if (zx > zTop && zx < zBot){
+    const cxp = TX(geothermT(zx)), cyp = ZY(zx);
+    ctx.strokeStyle = '#ffd9a8'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(cxp, cyp, 4, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,217,168,0.9)'; ctx.beginPath(); ctx.arc(cxp, cyp, 1.4, 0, Math.PI*2); ctx.fill();
+  }
+
+  // ticks: crossing depth, melt %, ΔP
+  const meltPct = Math.round(P.Fchamber*100);
+  const crossTxt = P.melts ? (Math.round(Math.max(WORLD.vent,P.poolTop)) + ' m') : (zx > WORLD.conduitBottom+900 ? 'below chamber' : Math.round(zx)+' m');
+  label(ctx, gx+10, gy+gh-22, 'crossing: ' + crossTxt, 'rgba(216,176,114,0.85)', 8.5, 'left');
+  label(ctx, gx+10, gy+gh-11, 'melt ' + (P.melts?meltPct:0) + '%   ΔP ' + P.dP.toFixed(0) + ' MPa', 'rgba(216,176,114,0.85)', 8.5, 'left');
+  ctx.restore();
+}
+
+function label(ctx, x, y, text, color, size, align){
+  ctx.save(); ctx.font=`600 ${size||10}px "SF Mono", ui-monospace, Menlo, monospace`;
+  ctx.fillStyle=color; ctx.textBaseline='middle'; ctx.textAlign=align||'left';
+  ctx.fillText(text, x, y); ctx.restore();
+}
+function roundRectPath(x,y,w,h,r){
+  ctx.beginPath(); ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
+/* ════════════ THE VERDICT strip ════════════ */
+function updateVerdict(){
+  const word = $('word'), nums = $('nums');
+  if (refractory){ word.textContent='REFRACTORY'; word.className='word refr'; }
+  else if (P.melts){ word.textContent='MELTING'; word.className='word melt'; }
+  else { word.textContent='SOLID'; word.className='word solid'; }
+  const cross = P.melts ? `crossing at <b>${Math.round(Math.max(WORLD.vent,P.poolTop))} m</b>` :
+    (refractory ? 'no crossing — refractory' : 'no crossing in frame');
+  const meltPct = P.melts ? Math.round(P.Fchamber*100) : 0;
+  nums.innerHTML = `${cross} · melt <b>${meltPct}%</b> · ΔP <b>${P.dP.toFixed(0)} MPa</b>`;
+  $('valL').textContent = Math.round(L) + ' m' + (L<4 ? ' — seated' : '');
+  $('valW').textContent = w<0.02 ? 'dry' : (Math.round(w*100) + '% sat');
+  $('dialW').setAttribute('aria-valuenow', Math.round(w*100));
+}
+
+/* ════════════ LID DRAG — real pointer events with setPointerCapture ════════════ */
+function pxToDepth(clientY){
+  const r = cvs.getBoundingClientRect();
+  const sy = (clientY - r.top) / r.height * H;
+  return depthAtY(sy);
+}
+let dragOffset = 0;   // metres between grab point and lid underside, so it doesn't jump
+
+cvs.addEventListener('pointerdown', e => {
+  unlockAudio();
+  const r = cvs.getBoundingClientRect();
+  const px = (e.clientX - r.left)/r.width*W, py = (e.clientY - r.top)/r.height*H;
+  // grab if on the handle OR anywhere on the slab body
+  if (!lidHandleRect) return;
+  const onHandle = px>=lidHandleRect.x && px<=lidHandleRect.x+lidHandleRect.w && py>=lidHandleRect.y && py<=lidHandleRect.y+lidHandleRect.h;
+  const onSlab = px>=lidHandleRect.slabL && px<=lidHandleRect.slabR && py>=lidHandleRect.slabTop-20 && py<=lidHandleRect.slabBot;
+  if (!onHandle && !onSlab) return;
+  dragging = true; Lvel = 0;
+  cvs.classList.add('grabbing');
+  cvs.setPointerCapture(e.pointerId);
+  // offset so the lid doesn't jump: current grabbed depth vs lid underside
+  dragOffset = pxToDepth(e.clientY) - lidUndersideDepth();
+  e.preventDefault();
+});
+cvs.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  // as the pointer rises (smaller depth), the lid underside rises (smaller depth),
+  // so lift L = D_ROOF − underside grows. underside = grabbedDepth − dragOffset.
+  const grabbedDepth = pxToDepth(e.clientY);
+  const underside = grabbedDepth - dragOffset;
+  let newL = WORLD.conduitBottom - underside;             // = D_ROOF − underside
+  // REFRACTORY hard stop: the lid still lifts (it is just rock), but nothing melts.
+  // We keep the pull real but flag the hard-stop feel when pulled far with no melt.
+  newL = Math.max(0, Math.min(L_MAX, newL));
+  draggingHardStop = refractory && newL > L_MAX*0.5;
+  L = newL; Ltarget = newL;
+  applyDetents();
+  e.preventDefault();
+});
+function endDrag(e){
+  if (!dragging) return;
+  dragging = false; draggingHardStop = false;
+  cvs.classList.remove('grabbing');
+  try{ cvs.releasePointerCapture(e.pointerId); }catch(_){}
+  // release: spring toward the same L with a little overshoot handled in frame()
+  Ltarget = L;
+}
+cvs.addEventListener('pointerup', endDrag);
+cvs.addEventListener('pointercancel', endDrag);
+
+/* snap detents: seated (0) and "just crossed" (dry first-melt lift) so you FEEL it. */
+function applyDetents(){
+  const detents = [0];
+  if (firstMeltL != null && firstMeltL > 6) detents.push(firstMeltL);
+  for (const b of detents){ if (Math.abs(L - b) < 9){ L = b; Ltarget = b; break; } }
+}
+
+/* keyboard: focus the canvas or handle, ↑/↓ nudge, Home seats. */
+cvs.setAttribute('tabindex','0');
+cvs.addEventListener('keydown', e => {
+  let handled = true;
+  if (e.key==='ArrowUp'){ Ltarget = Math.min(L_MAX, Ltarget + 28); }
+  else if (e.key==='ArrowDown'){ Ltarget = Math.max(0, Ltarget - 28); }
+  else if (e.key==='Home'){ Ltarget = 0; }
+  else handled = false;
+  if (handled){ e.preventDefault(); if(!dragging){ /* spring eases in frame() */ } }
+});
+
+/* ════════════ SEAT button ════════════ */
+$('seat').addEventListener('click', ()=>{ unlockAudio(); Ltarget = 0; if(dragging){ dragging=false; cvs.classList.remove('grabbing'); } });
+
+/* ════════════ REFRACTORY toggle ════════════ */
+const refBtn = $('refToggle');
+function setRefractory(v){
+  refractory = v;
+  refBtn.classList.toggle('on', v);
+  refBtn.setAttribute('aria-checked', String(v));
+  recomputeFirstMelt();
+}
+refBtn.addEventListener('click', ()=>{ unlockAudio(); setRefractory(!refractory); });
+refBtn.addEventListener('keydown', e => { if(e.key==='Enter'||e.key===' '){ e.preventDefault(); setRefractory(!refractory); } });
+
+function recomputeFirstMelt(){ firstMeltL = liftToFirstMelt(w, refractory); }
+
+/* ════════════ THE WATER DIAL (pointer-rotate · wheel · arrow keys) ════════════ */
+const dW = $('dialW'); const dWctx = dW.getContext('2d');
+const SWEEP = Math.PI*1.5;
+(function makeDial(canvas, get, set){
+  let drag=false, lastAng=0;
+  const center=()=>({cx:canvas.width/2, cy:canvas.height/2});
+  const ang=ev=>{ const r=canvas.getBoundingClientRect();
+    const px=(ev.clientX-r.left)/r.width*canvas.width, py=(ev.clientY-r.top)/r.height*canvas.height;
+    const {cx,cy}=center(); return Math.atan2(py-cy,px-cx); };
+  const diff=(a,b)=>{ let d=a-b; while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI; return d; };
+  canvas.addEventListener('pointerdown', e=>{ unlockAudio(); drag=true; lastAng=ang(e); canvas.setPointerCapture(e.pointerId); e.preventDefault(); });
+  canvas.addEventListener('pointermove', e=>{ if(!drag)return; const a=ang(e); set(clamp01(get()+diff(a,lastAng)/SWEEP)); lastAng=a; });
+  const stop=e=>{ if(drag){ drag=false; try{canvas.releasePointerCapture(e.pointerId);}catch(_){} } };
+  canvas.addEventListener('pointerup', stop); canvas.addEventListener('pointercancel', stop);
+  canvas.addEventListener('wheel', e=>{ e.preventDefault(); set(clamp01(get()+(e.deltaY<0?0.04:-0.04))); }, {passive:false});
+  canvas.addEventListener('keydown', e=>{
+    if(e.key==='ArrowUp'||e.key==='ArrowRight'){ set(clamp01(get()+0.03)); e.preventDefault(); }
+    if(e.key==='ArrowDown'||e.key==='ArrowLeft'){ set(clamp01(get()-0.03)); e.preventDefault(); }
+  });
+})(dW, ()=>w, v=>{ w=v; recomputeFirstMelt(); });
+
+function drawDial(){
+  const c=dWctx, canvas=dW, W2=canvas.width, H2=canvas.height, cx=W2/2, cy=H2/2, R=W2*0.40;
+  c.clearRect(0,0,W2,H2);
+  const bg=c.createRadialGradient(cx,cy-R*0.3,4,cx,cy,R*1.15);
+  bg.addColorStop(0,'#26303f'); bg.addColorStop(1,'#0e1119');
+  c.fillStyle=bg; c.beginPath(); c.arc(cx,cy,R*1.12,0,Math.PI*2); c.fill();
+  c.strokeStyle='#3a4a63'; c.lineWidth=4; c.stroke();
+  const a0=Math.PI*0.75;
+  c.beginPath(); c.arc(cx,cy,R*0.86,a0,a0+SWEEP); c.strokeStyle='#4a6088'; c.globalAlpha=0.5; c.lineWidth=4; c.stroke(); c.globalAlpha=1;
+  c.beginPath(); c.arc(cx,cy,R*0.86,a0,a0+w*SWEEP); c.strokeStyle='#9fc0ff'; c.lineWidth=6; c.stroke();
+  c.strokeStyle='rgba(200,220,255,0.55)'; c.lineWidth=1;
+  for(let i=0;i<=6;i++){ const ang=a0+(i/6)*SWEEP;
+    c.beginPath(); c.moveTo(cx+Math.cos(ang)*R*0.7,cy+Math.sin(ang)*R*0.7);
+    c.lineTo(cx+Math.cos(ang)*R*0.78,cy+Math.sin(ang)*R*0.78); c.stroke(); }
+  const na=a0+w*SWEEP;
+  c.save(); c.strokeStyle='#cfe0ff'; c.lineWidth=4; c.lineCap='round';
+  c.shadowColor='rgba(150,190,255,0.8)'; c.shadowBlur=8;
+  c.beginPath(); c.moveTo(cx,cy); c.lineTo(cx+Math.cos(na)*R*0.82,cy+Math.sin(na)*R*0.82); c.stroke(); c.restore();
+  c.fillStyle='#141a26'; c.beginPath(); c.arc(cx,cy,R*0.16,0,Math.PI*2); c.fill();
+  c.strokeStyle='#3a4a63'; c.lineWidth=2; c.stroke();
+}
+
+/* ── init ── */
+recomputeFirstMelt();
+window.addEventListener('resize', fit);
+fit();
+requestAnimationFrame(loop);
+
+/* ════════════ THE IN-PAGE SELF-TEST PILL — reruns runCoreTests() ════════════ */
+function runPill(){
+  const r = runCoreTests();
+  const node = $('selftest');
+  if(r.ok){ node.textContent = '✓ '+r.passed+'/'+r.total+' decompression proof'; node.className='selftest ok'; }
+  else { const f=r.checks.find(c=>!c.pass); node.textContent='✗ '+r.passed+'/'+r.total+' — '+(f?f.name.slice(0,28):''); node.className='selftest bad'; }
+  return r;
+}
+$('selftest').addEventListener('click', runPill);
+/* verification + resilience hook: drive one deterministic render at a chosen lift/
+   water/refractory, and read state. Used by the self-check; harmless in normal use. */
+window.__meltingFloor = {
+  runCoreTests, predict, meltFraction, crossingDepth, runPill,
+  renderOnce(opts){ if(opts){ if('L' in opts){ L=opts.L; Ltarget=opts.L; } if('w' in opts) w=opts.w; if('refractory' in opts){ refractory=opts.refractory; refBtn.classList.toggle('on',refractory);} recomputeFirstMelt(); }
+    dragging=true; frame(performance.now()); dragging=false; return { L, w, refractory, melts:P.melts, verdict:document.getElementById('word').textContent, nums:document.getElementById('nums').textContent }; },
+  state(){ return { L, w, refractory, handle:lidHandleRect }; },
+};
+runPill();
+</script>
+</body>
+</html>

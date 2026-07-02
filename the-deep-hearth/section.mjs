@@ -67,6 +67,13 @@ export function makeCamera(mode, W, H) {
     const scale = H / 1500;            // ~1500 m tall window
     return { cx: WORLD.conduitX, cy: 650, scale, mode };
   }
+  if (mode === 'melt') {
+    // dollied DOWN to the chamber roof — deep crust above, the roof band centre-
+    // frame, the chamber bulb below. This is where solid rock first becomes melt
+    // when the lid comes off; the depth ribbon keeps the whole-column context.
+    const scale = H / 1200;            // ~1200 m tall window (frames ~1630–2830 m)
+    return { cx: WORLD.conduitX, cy: 2230, scale, mode };
+  }
   // establishing: the whole column from sky to ember core in frame.
   const span = WORLD.worldBottom - WORLD.skyTop;
   const scale = Math.min(H / span, (W * 0.62) / (2 * (WORLD.chamberRX + 120)));
