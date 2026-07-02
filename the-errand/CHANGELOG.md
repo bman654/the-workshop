@@ -160,3 +160,77 @@ checks green and a clean self-reset to BUILD (`worldNull:true`). Topbar clean (b
 `../midway/index.html`, mute + `20/20 ✓` pill), no horizontal overflow, The Errand still registered in
 the Midway (2 references). NO code edit needed beyond the builder's fix — estate-quality on arrival.
 The arming sightline, miss-whispers, and sound design were untouched.
+
+## Cycle 408 — bug fix (the Bucket never dumped, and the payoff never reacted)
+
+Two live-play LIVENESS bugs, fixed together at root. Both shipped green for the same reason: **no
+shipped preset used a Bucket, and nothing drove the payoff REVEAL on the live path** — so the sim's
+core (`simulateToEnd`) and the self-test never exercised either seam. This cycle closes that gap with a
+new bucket preset that lands AND live-driver self-test assertions that watch the payoff actually fire.
+
+### BUG A — the Bucket tilted ~5° and FROZE, trapping the marble (the run failed)
+
+Three compounding faults, each fixed at root:
+
+1. **A timing race the swing always lost (the freeze).** The dump torque was withheld until
+   `fillSteps>132` (~0.55 s detent). But a caught marble sits motionless on the dead felt floor, so the
+   GLOBAL rest-detector's `restCount` climbs in lock-step with `fillSteps`. By the time torque turned on
+   (~step 133), `restCount` was already ~132; crossing the `dumped` latch (`theta>0.10`) takes ~60 more
+   torque steps, but `restCount` hit `REST_STEPS` (140) first → `phase='rested'` → `stepWorld`
+   early-returns → the bucket froze one hair short of the latch, at ~5°. **Fix:** DECOUPLE the swing from
+   rest-detection. A new `bucketWorking(w)` helper reports any bucket that still holds a caught marble (or
+   is mid-dump before the marble has cleared the mouth), and the rested transition is gated
+   `if(w.restCount>=REST_STEPS && !bucketWorking(w))`. The `MAX_STEPS` cap stays as the safety net so a
+   genuinely stuck bucket can't loop forever.
+2. **A symmetric deep cup CRADLES a solid ball — it never pours.** Even decoupled, raising the old ~60°
+   hinge bound just let the marble ride the rotating cup up to the pivot and balance there for ~1400
+   steps (a "held coma"). A deep cup with two tall walls only reorients as it rotates; the downhill lip
+   never drops below the ball's rest point. **Fix:** the bucket is now an **asymmetric SCOOP** — a tall
+   back wall that holds the marble during the fill, and a SHORT 16 px front lip on the DUMP side (right
+   for non-flip, left for flip) — and the hinge bound is raised to ~1.6 rad (~92°). Past ~90° the marble
+   rolls out cleanly over the low front lip in ~250 steps, a crisp spill instead of a coma.
+3. **The catch was too narrow to register a real feed.** The fill gate required the marble moving
+   `<180 px/s` to count as "inside", but a marble off a ramp is doing 300–600 px/s, so it bounced
+   straight through and the bucket stayed empty (`fillSteps` never left 0). **Fix:** the gate is widened
+   to `<620 px/s` and, on the FIRST catch, the marble is damped hard (`×0.34` — the "thunk" into the
+   scoop) so it settles onto the felt floor instead of ricocheting off a tin wall and back out the mouth.
+
+### BUG B — the payoff (Flag/Candle) never visually reacted (though `hit=true`)
+
+`p.anim` (0→1, the unroll/flame reveal) is advanced only in `payoff.advance()`, which runs BELOW
+`stepWorld`'s `phase==='landed'` early-return. But `payoff.fired` and `phase='landed'` are set TOGETHER
+on the arming step, AFTER that step's advance loop already ran (while `fired` was still false). Every
+LATER step early-returns before the advance loop → `advance()` never runs with `fired===true` → `anim`
+stayed 0 → the `if(a>0)` reveal blocks (`drawFlag`/`drawCandle`) never drew. Compounding: once
+`phase='landed'`, `frame()` flips `mode` to `DONE` and stops stepping the world entirely, so nothing
+would tick `anim` even if the guard let it. **Fix (two parts):** (1) tick a fired payoff's `anim` ABOVE
+`stepWorld`'s early-return (physics still freezes below it); (2) in `frame()`, add a `DONE` branch that
+keeps advancing `pay.anim` (`dt/0.4` → ~0.4 s) and repainting after landing, so the flag unrolls / the
+flame catches on the live path. Reduced-motion snaps `anim` to 1 for an instant, still-charming pop.
+
+### The missing coverage, now shipped
+
+- **A new preset — "The Tipping Bucket"** (`🪣`, mirrored as a card): `marble → ramp → bucket (fills,
+  holds ~0.55 s, tips past 90°, spills) → catch-ramp → flag`. Authored against the fixed sim and verified
+  to land (headless `hit ✓`, steps 867, key `f597df70`, deterministic across re-runs). This is the
+  exemplar the bug wanted — the first shipped chain that uses a bucket.
+- **The self-test grew 20 → 26**, ALL-PASS. New headless checks: the bucket preset is non-empty & uses a
+  bucket, and reaches the payoff. New **LIVE-DRIVER** checks (via `App.setPreset`/`App.go`/`App._pump` —
+  never a canvas pointer event, which doesn't fire headless): after driving the bucket preset live, the
+  scoop tips past ~90° (`|theta|>1.5`, not frozen), the marble CLEARS the mouth after the dump, the LIVE
+  world registers `hit`, AND the payoff's `anim` reaches ~1 (the flag actually raised) — asserted on
+  `_debug().world`, not the headless core. This is the headless-drivable check that the PAYOFF ACTUALLY
+  FIRES, the gap that let both bugs ship.
+
+### Verification
+
+Node twin of Layer A (fixes injected as the same string edits): all three presets land, bell-ringer
+(`adfc1f78`) and candle-lighter (`b01ed061`) keys UNCHANGED (the sim edits are inert for non-bucket
+layouts). Real-browser (served on an uncommon port, torn down by exact PID; fresh uniquely-named
+agent-browser session; a genuine input-level GO click): the live rAF run drove the full chain —
+`stepIndex` climbed on its own, the scoop dumped at step ~373 and tipped to `theta 1.6` (~92°),
+`hit=true` at step 867, and the flag reveal animated `0 → 0.67 → 1.0`. Screenshots confirm the scoop
+mid-spill and the coral flag unrolled with "it kept its promise." Self-test `26/26 ✓`, zero JS console
+errors (only the auto-requested favicon 404), no horizontal overflow at 1280 px or 390 px. `forge
+--check --all` clean (136 files current). This is a payoff-LIVENESS repair, not added rigor — the ride
+stays claim-free; the self-test proves the delight OCCURS, it asserts no theorem.

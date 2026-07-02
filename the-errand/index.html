@@ -441,8 +441,13 @@ function makeSeesaw(p){
   return p;
 }
 
-/* BUCKET ⊔ — a 3-seg open box on a hinge; fills, overcomes a detent, then swings
-   down ~0.6s later dumping the marble (the held-breath beat of the chain). 2×2. */
+/* BUCKET ⊔ — an asymmetric SCOOP on a hinge: a tall back wall + a SHORT front lip.
+   It catches a fast feed (damped hard on entry so the marble SETTLES onto the dead
+   felt floor instead of ricocheting off a tin wall and back out the mouth), fills,
+   overcomes a detent (~0.55s held breath), then TIPS past ~90° so the marble rolls
+   out over the low front lip — the dump beat of the chain. 2×2. A symmetric deep cup
+   only CRADLES a solid ball as it rotates (it never pours); the short dump-side lip
+   is what lets it genuinely spill. See the #408 fix in CHANGELOG. */
 function makeBucket(p){
   p.type='bucket'; p.w=2; p.h=2;
   p.theta=0; p.omega=0;
@@ -451,12 +456,16 @@ function makeBucket(p){
   p.hasMarble=false; p.fillSteps=0; p.dumped=false;
   p.footprint=function(){ return foot2x2(p); };
   p.segs=function(){
-    // an open box: floor + two walls, rotated about the pivot by theta
+    // an asymmetric scoop: a felt floor, a TALL back wall (holds the marble during
+    // the fill), and a SHORT front lip on the DUMP side (so a tilt past ~90° spills
+    // the marble out over it). Non-flip dumps RIGHT → the right wall is the short lip;
+    // flip dumps LEFT → the left wall is short. All rotated about the pivot by theta.
     var c=Math.cos(p.theta), s=Math.sin(p.theta);
     function R(lx,ly){ return { x:p.pivotX + lx*c - ly*s, y:p.pivotY + lx*s + ly*c }; }
-    var halfW=GRID*0.62, depth=GRID*1.05;
+    var halfW=GRID*0.6, depth=GRID*0.9;
     var fl=R(-halfW, depth), fr=R(halfW, depth);        // floor corners
-    var wl=R(-halfW, 6),     wr=R(halfW, 6);            // wall tops
+    var wlTopY=p.flip?(depth-16):6, wrTopY=p.flip?6:(depth-16); // dump-side wall is a short 16px lip
+    var wl=R(-halfW, wlTopY),     wr=R(halfW, wrTopY);            // wall tops
     return [
       { ax:fl.x, ay:fl.y, bx:fr.x, by:fr.y, mat:'felt' },   // floor (dead)
       { ax:wl.x, ay:wl.y, bx:fl.x, by:fl.y, mat:'tin' },    // left wall
@@ -467,9 +476,15 @@ function makeBucket(p){
     var m=w.marble;
     // is the marble sitting inside the bucket mouth?
     var dx=m.x-p.pivotX, dy=m.y-p.pivotY;
-    var inside = Math.abs(dx)<GRID*0.8 && dy>0 && dy<GRID*1.3 && Math.hypot(m.vx,m.vy)<180;
+    // WIDER CATCH: a real feed arrives FAST (a marble off a ramp is doing 300-600 px/s),
+    // so the old <180 gate never registered it and the marble bounced straight through —
+    // the bucket stayed empty (fillSteps 0) and the chain died. Gate generously, and on
+    // the FIRST catch damp the marble hard (the "thunk" into the scoop) so it settles onto
+    // the felt floor instead of ricocheting off a tin wall and back out the mouth (#408).
+    var inside = Math.abs(dx)<GRID*0.9 && dy>0 && dy<GRID*1.4 && Math.hypot(m.vx,m.vy)<620;
     if(inside && !p.dumped){
-      if(!p.hasMarble){ p.hasMarble=true; w.events.push({type:'fill', pieceType:'bucket', vel:0, x:p.pivotX, y:p.pivotY, step:w.stepIndex}); }
+      if(!p.hasMarble){ p.hasMarble=true; m.vx*=0.34; m.vy*=0.34;
+        w.events.push({type:'fill', pieceType:'bucket', vel:0, x:p.pivotX, y:p.pivotY, step:w.stepIndex}); }
       p.fillSteps++;
     }
     // once filled past the detent, swing down and dump
@@ -481,7 +496,10 @@ function makeBucket(p){
         if(!p.dumped && p.theta*(p.flip?-1:1) > 0.10){ p.dumped=true; }
       }
     }
-    var lo=p.flip?-1.05:-0.02, hi=p.flip?0.02:1.05;
+    // TIP PAST 90°: the old bound (~60°) never let the scoop spill — even with the
+    // decouple fix the marble just cradled. Let it flop to ~92° so the marble rolls
+    // out over the short front lip. (#408)
+    var lo=p.flip?-1.6:-0.02, hi=p.flip?0.02:1.6;
     stepHinge(p, torque, 1400, 1.7, lo, hi);
     if(p.hitStop){ w.events.push({type:'clunk', pieceType:'bucket', vel:Math.abs(p.omega)*GRID, x:p.pivotX, y:p.pivotY, step:w.stepIndex}); }
   };
@@ -603,10 +621,35 @@ function makeWorld(placed, marbleStart, reduced){
 /* find the payoff piece (there is at most one meaningful one) */
 function findPayoff(w){ for(var i=0;i<w.pieces.length;i++) if(w.pieces[i].type==='payoff') return w.pieces[i]; return null; }
 
+/* is a bucket still doing its job — holding a caught marble, or mid-dump before the
+   marble has cleared the mouth? While one is, the GLOBAL rest-detector must NOT call
+   the run over: a caught marble sits MOTIONLESS on the dead felt floor, which would
+   otherwise trip restCount (REST_STEPS) and freeze the swing one hair short of the
+   dump latch — the #408 timing race the swing always lost. (The MAX_STEPS cap still
+   guards against a genuinely stuck bucket looping forever.) */
+function bucketWorking(w){
+  for(var i=0;i<w.pieces.length;i++){
+    var p=w.pieces[i];
+    if(p.type!=='bucket' || !p.hasMarble) continue;
+    if(!p.dumped) return true;                        // filling / holding / mid-detent
+    var m=w.marble, dx=m.x-p.pivotX, dy=m.y-p.pivotY; // dumped: still working until the marble LEAVES the mouth
+    if(Math.abs(dx)<GRID*1.15 && dy>-GRID*0.6 && dy<GRID*1.7) return true;
+  }
+  return false;
+}
+
 /* ONE fixed physics step. Integrates every hinged piece, then sub-slices the
    marble translation through all collision segments in fixed order. Pushes events
    onto world.events. Advances the arming held-breath. Returns nothing; mutates w. */
 function stepWorld(w){
+  // The payoff REVEAL (flag unroll / candle flame) must keep ticking even after the
+  // physics has frozen. A payoff's anim is advanced only in its advance(), which runs
+  // BELOW the early-return — so once we land, a FIRED payoff would never animate and
+  // the flag/flame never appears (#408). Tick it here, ABOVE the guard; the PHYSICS
+  // still freezes below. (The live driver's DONE branch keeps ticking it after the
+  // world stops stepping — see frame().)
+  var _pay=findPayoff(w);
+  if(_pay && _pay.fired && _pay.anim<1){ _pay.anim=Math.min(1, _pay.anim+(w.reduced?1:0.045)); }
   if(w.phase==='landed' || w.phase==='rested') return;
   w.stepIndex++;
 
@@ -696,7 +739,7 @@ function stepWorld(w){
   if(w.phase==='running'){
     if(speed < STOP_EPS && m._touched){ m.vx=0; m.vy=0; w.restCount++; }
     else w.restCount=0;
-    if(w.restCount>=REST_STEPS){
+    if(w.restCount>=REST_STEPS && !bucketWorking(w)){
       w.phase='rested';
       w.result.hit=false; w.result.restX=m.x; w.result.restY=m.y;
       w.result.reason = diagnoseReason(w, payoff);
@@ -1543,6 +1586,16 @@ var App = (function(){
         world.events.length=0;
       }
       if(world.phase==='landed' || world.phase==='rested'){ mode='DONE'; toDone(); }
+    } else if(mode==='DONE' && world){
+      // the physics is frozen, but the PAYOFF REVEAL plays out HERE — after landing,
+      // the flag unrolls / the candle flame catches over ~0.4s. Without this the run
+      // registers hit:true but the payoff never visually reacts (#408): stepWorld
+      // stops being called once mode flips to DONE, so nothing would tick pay.anim.
+      // (reduced-motion snaps it to 1 for an instant, still-charming pop.)
+      var pay=findPayoff(world);
+      if(pay && pay.fired && pay.anim<1){
+        pay.anim = world.reduced ? 1 : Math.min(1, pay.anim + dt/0.4);
+      }
     }
     render();
   }
@@ -1689,6 +1742,23 @@ var ERRAND_PRESETS = {
       { type:'ramp',   gx:15, gy:9,  flip:true },
       { type:'payoff', gx:12, gy:11, payoffKind:'candle' }
     ]
+  },
+  // The Tipping Bucket: a ramp feeds the marble into the SCOOP, which fills, HOLDS its
+  // breath (~0.55s at the detent), then tips past ~90° and spills the marble onto a
+  // catch-ramp that carries it to the flag. This is the chain #408 was missing — no
+  // shipped preset used a bucket, which is exactly how the bucket-liveness bugs shipped.
+  // Verified to land against the fixed sim (headless hit ✓, steps 867, key f597df70) and
+  // driven LIVE by the self-test (the scoop tips past 90°, the marble clears the mouth,
+  // the flag actually raises). Deterministic across re-runs.
+  'tipping-bucket': {
+    glyph:'🪣', name:'The Tipping Bucket', desc:'a ramp fills the scoop → it holds its breath → tips → the flag',
+    marble:{ gx:7, gy:1 },
+    placed:[
+      { type:'ramp',   gx:7,  gy:3,  flip:false },
+      { type:'bucket', gx:9,  gy:6,  flip:false },
+      { type:'ramp',   gx:9,  gy:10, flip:false },
+      { type:'payoff', gx:12, gy:13, payoffKind:'flag' }
+    ]
   }
 };
 
@@ -1707,6 +1777,7 @@ var ERRAND_PRESETS = {
   }
   card('bell-ringer', ERRAND_PRESETS['bell-ringer']);
   card('candle-lighter', ERRAND_PRESETS['candle-lighter']);
+  card('tipping-bucket', ERRAND_PRESETS['tipping-bucket']);
   card('blank', { glyph:'✎', name:'Blank bench', desc:'build your own from scratch' }, true);
 
   App.init();
@@ -1746,6 +1817,13 @@ function runSelfTest(){
     var s2=simulateToEnd(cl.placed, cl.marble, true);
     ck('Candle-Lighter reaches the payoff (headless run hits)', s2.result.hit===true);
 
+    // the BUCKET chain — the #408 coverage that was missing (no shipped preset used a
+    // bucket, which is exactly how the bucket-liveness bugs shipped green).
+    var tb=ERRAND_PRESETS['tipping-bucket'];
+    ck('Tipping-Bucket preset non-empty AND uses a bucket', tb && tb.placed.length>0 && tb.placed.some(function(p){return p.type==='bucket';}));
+    var s3=simulateToEnd(tb.placed, tb.marble, true);
+    ck('Tipping-Bucket reaches the payoff (headless run hits)', s3.result.hit===true);
+
     // serialize → deserialize round-trips IDENTICALLY
     var ser=serializeLayout(br.placed, br.marble);
     var de=deserializeLayout(ser);
@@ -1773,6 +1851,25 @@ function runSelfTest(){
     ck('LIVE GO drives the world (stepIndex climbs past 0 across real frames)', !!wLive && wLive.stepIndex>0);
     ck('LIVE GO makes the marble fall (marble.y increases on the live driver)', advanced);
     App.tweak();                                            // return the bench to BUILD (don't leave it mid-run)
+
+    // LIVE DRIVER — the BUCKET chain. This is the concrete #408 gap: the two bucket
+    // bugs (the scoop froze at ~5° instead of dumping; the payoff registered hit but
+    // never visually reacted) BOTH shipped green because no shipped preset used a
+    // bucket AND nothing drove the payoff reveal on the LIVE path. Drive it live to the
+    // end + the reveal, then assert on the LIVE world (not the headless core): the scoop
+    // TIPS past ~90° (not frozen), the marble CLEARS the mouth after the dump, the live
+    // run registers hit, and the payoff's anim ACTUALLY reaches ~1 (the flag raised).
+    App.setPreset('tipping-bucket');
+    App.go();
+    var wBk=App._pump(480);                                 // full chain (~950 steps) + the ~0.4s reveal
+    var bk=null, py=null;
+    if(wBk){ for(var bi=0;bi<wBk.pieces.length;bi++){ var pp=wBk.pieces[bi]; if(pp.type==='bucket') bk=pp; if(pp.type==='payoff') py=pp; } }
+    ck('LIVE bucket tips past ~90° (theta clears the raised bound — not frozen at ~5°)', !!bk && Math.abs(bk.theta)>1.5);
+    var mClears = !!bk && !!wBk && (Math.abs(wBk.marble.x-bk.pivotX)>GRID*0.95 || (wBk.marble.y-bk.pivotY)>GRID*1.7);
+    ck('LIVE bucket dumps — the marble clears the scoop mouth', !!bk && bk.dumped===true && mClears);
+    ck('LIVE bucket chain lands (result.hit on the live world)', !!wBk && wBk.result.hit===true);
+    ck('LIVE payoff actually reveals (flag/flame anim reaches ~1)', !!py && py.fired===true && py.anim>=0.99);
+    App.tweak();                                            // back to BUILD
 
     // back-link to the Midway
     var back=document.querySelector('.topbar a.back[href="../midway/index.html"]');
