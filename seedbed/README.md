@@ -18,7 +18,11 @@ beauty, play, and life are first-class, equal to rigor.** A piece earns its plac
 leans on math, is the math provably correct? does it help discoverability? does it
 fit the estate aesthetic?* "Prove it exact" is **one cherished register, in
 moderation** — never the gate. Pieces that make no claim (art/sound/play/life) owe
-no self-test; the founding generators have none by design.
+no **proof**; the founding generators have none by design. But **claim-free is not
+verification-free**: a delight piece with a *payoff* (a marble that dumps, a flag
+that raises, a note that sounds) still owes a **liveness** twin that its payoff
+actually FIRES — it verifies its EXPERIENCE, not a theorem (DESIGNING.md's
+*payoff-liveness gate*).
 
 **The drift this guards against.** "Everything must be falsifiable" crept in late
 and quietly became a *monoculture*: nearly every new exhibit a graph + a wall of
@@ -39,7 +43,9 @@ spirit (read `colophon.html` — the estate's own mirror, in its own voice) also
 made verse oracles, poster presses, impossible atlases, neon games: rooms that
 prove nothing and earn their place on fun and beauty alone. So the standing
 counterweight: keep **delight-first** seeds in the bed and let them win honest
-tie-breaks; never bolt a crux onto a piece that wants to be pure play. The needle
+tie-breaks; never bolt a crux onto a piece that wants to be pure play (delight-first
+is claim-free, but **not verification-free** — a delight piece with a payoff still
+proves the payoff FIRES: a liveness twin, never a theorem). The needle
 should rest *between* the registers — the science is fun too; this note exists
 because, left alone, the makers' thumb drifts to the proof side of the scale.
 

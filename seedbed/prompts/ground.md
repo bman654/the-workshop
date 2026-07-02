@@ -17,7 +17,9 @@ current working directory is the repo root (wherever this clone lives — run ev
   **whimsy, story, and craft are themselves first-class material**, not a garnish waiting for a theorem.
 - A piece is judged by FIVE questions: (1) is it **FUN**? (2) is it **BEAUTIFUL**? (3) IF it leans on math,
   is the math **PROVABLY CORRECT**? — conditional, NOT a gate; art/sound/play/life carry no claim and owe no
-  proof — (4) does it help **DISCOVERABILITY**? (5) does it **FIT THE ESTATE AESTHETIC**?
+  proof (but **claim-free ≠ verification-free**: a delight piece with a *payoff* still owes a **liveness** twin
+  that its payoff FIRES — the experience, not a theorem; DESIGNING.md's *payoff-liveness gate*) — (4) does it
+  help **DISCOVERABILITY**? (5) does it **FIT THE ESTATE AESTHETIC**?
 - **FORM EXPRESSES CONTENT:** show the THING you can see and touch (Newton's Cradle; the double-slit firing
   particles), not just its plotted curve. Keep a VARIETY of forms (touchable depictions · generative art ·
   living sims · games & puzzles · **pure delight** · the occasional graph) — NEVER a monoculture. "Prove it

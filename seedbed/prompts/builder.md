@@ -13,11 +13,27 @@ any winning prototype path, and the definition of done are in YOUR CONTEXT. Retu
   fits the estate) and FORM EXPRESSES CONTENT: build the THING you can see and touch or play, not just a
   plotted curve. One self-contained HTML file (vanilla JS, no deps). IF it makes a math claim, add a self-test
   that proves it EXACT (+ a Node twin `core.test.mjs` if there is a logic core — inline the SAME core into the
-  page); a piece that makes NO claim (art / sound / play / a living thing) needs no self-test — do not invent
-  one. A claim-free DELIGHT piece is not an unfinished piece: its "self-test" is the FEEL — spend the effort a
-  proof would have taken on motion, sound, timing, and texture until it simply feels wonderful.
+  page); a piece that makes NO claim (art / sound / play / a living thing) owes no PROOF — do not retrofit a
+  theorem onto it. But **claim-free is NOT verification-free.** A claim-free DELIGHT piece is not an
+  unfinished piece: its "self-test" proves the FEEL actually HAPPENS — spend the effort a proof would have
+  taken on motion, sound, timing, and texture until it simply feels wonderful, AND, if the piece has a
+  **PAYOFF** (a marble that dumps, a flag that raises, a note that sounds, an interaction that responds), ship
+  a **liveness twin** that asserts the payoff FIRES. Register-appropriate: a proof piece verifies its THEOREM,
+  a delight piece verifies its PAYOFF — both verified, neither gets the other's test (DESIGNING.md: *the
+  payoff-liveness gate*). This is NOT rigor bolted onto whimsy — no theorem, no accuracy-pill, no HUD — only
+  the payoff's *liveness* is asserted.
+  - **The liveness twin MUST be HEADLESS-DRIVABLE — never a canvas pointer event.** The publisher reviews
+    HEADLESS, and headless CANNOT deliver a pointer/tap on a canvas — a liveness check that waits on a canvas
+    click never fires there, so the dead payoff sails through green. Drive the piece's OWN real entry function
+    directly and assert the observable payoff state changed on the LIVE path. WORKED EXAMPLE: don't
+    `canvas.dispatchEvent(new PointerEvent('pointerdown'))` — call `dropMarble()` (the real handler the click
+    would invoke) and assert `marble.y` increased after a few ticks; for sound, call the note's play fn and
+    assert `ctx.state==='running'` + a non-zero analyser reading.
 - Serve it (an UNCOMMON port you tear down) and browser-verify with agent-browser in a UNIQUELY-named session
-  (any self-test green, clean console, ~60fps); a new front-door page MUST drop its `ws:seen:<id>`.
+  (any self-test green, clean console, ~60fps) — and for a piece with a payoff, **OBSERVE THE PAYOFF ACTUALLY
+  FIRE** on the live path (run its liveness twin): a clean 60fps console alone does NOT prove the payoff
+  happened — a dead payoff is SILENT and error-free (a frozen marble renders at 60fps with a spotless
+  console). A new front-door page MUST drop its `ws:seen:<id>`.
 - **If GROUNDS-WORKER (a big swing):** first apply the **deepen-or-detach test** (DESIGNING.md) — is this
   swing *deepening* an existing wing or *detaching* a new one? A **DETACH** registers a NEW front-door
   footprint by appending one PLACES entry that DECLARES `{district, tier, wing}` with a **new** `wing` slug.

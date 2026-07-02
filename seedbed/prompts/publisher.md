@@ -157,7 +157,15 @@ worklog/NOTES entry **"writ · served before #N"** so the number stays free for 
    footprint for a grounds swing, sibling cross-links). Look hard for what the heads-down builder missed:
    layout breaks, text spilling OUT of its container, broken/NESTED markup (an `<a>` inside an `<a
    class="card">`), console errors, broken/wrong links, mis-sized cards, bad spacing, mobile/responsive
-   breakage. Re-run the piece's self-test to confirm it is green.
+   breakage. Re-run the piece's self-test to confirm it is green. **For a delight / interactive piece a clean
+   console is NOT enough — the PAYOFF can be silently dead (a frozen marble, an un-raised flag both render at
+   60fps with a spotless console). You review HEADLESS, and headless CANNOT deliver a canvas pointer event, so
+   you cannot verify the payoff by clicking the canvas. RUN the piece's headless-drivable liveness twin — drive
+   its OWN real entry function and confirm the observable payoff state changes (the marble's `y` falls, the
+   note's `ctx.state==='running'`), not merely that the page loaded clean.** If a piece has an interactive/
+   animated payoff but ships NO headless-drivable liveness check, that is itself a defect — `bed sow` a `[bug]`
+   (per step 2) so the payoff gets a liveness twin; the Patron must never be the one to discover a dead payoff.
+   (DESIGNING.md: *the payoff-liveness gate*.)
 2. **POLISH + FIX:** make it as BEAUTIFUL + consistent with its siblings as it can be; fix small polish and
    real bugs alike. If a bug is too big to fix safely now, fix what you can and `bed sow` a `[bug]` line so the
    next cycle clears it (the gauge routes a bug BUILD ahead of everything) — never silently ship something

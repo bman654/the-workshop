@@ -69,7 +69,9 @@ the loop gave you) — be concrete: a fresh explorer/builder will act only on wh
    how it is touched or played — reach PAST a plain graph) + IF it makes a math claim, the claim its self-test
    proves (a delight piece makes none — don't invent one). Choose `exploreMode`; set K (2–4) + briefs; state
    `definitionOfDone` (for a delight piece, "done" is the FEEL: motion, sound, timing, texture polished with
-   the care a proof would get). For a REWORK, name the
+   the care a proof would get — AND, if it has a payoff, that the payoff actually FIRES: a headless-drivable
+   **payoff-liveness** twin, never a theorem; claim-free ≠ verification-free, DESIGNING.md's *payoff-liveness
+   gate*). For a REWORK, name the
    existing piece, the soul it lacks, and how you re-grow it toward the soulful siblings (Newton's Cradle ·
    the double-slit firing particles · the Strange Garden) — keep the correct math a quiet layer, add the thing itself.
    **If BUILD/grounds — be the GROUNDS-WORKER:** pick a ripe grounds seed and open a BIG SWING — which goes

@@ -21,7 +21,9 @@ or puzzle, a sound, a piece of PURE DELIGHT — whimsy/story/craft that proves n
 oracle / the poster press / the impossible atlases — not reflexively another graph (an occasional
 graph-explainer is welcome in moderation). IF a seed makes a math claim, name its falsifiable crux — but a
 seed needn't make one, and you must NOT bolt a crux onto a delight piece to make it look serious: claim-free
-is a complete, first-class shape. Put them in `candidateSeeds`.
+is a complete, first-class shape. (Claim-free ≠ verification-free, though: a delight seed with a PAYOFF still
+owes a build-time **liveness** twin that its payoff FIRES — the payoff, not a theorem; DESIGNING.md's
+*payoff-liveness gate*.) Put them in `candidateSeeds`.
 
 **If `mode:PLAN` and `track:foundry` (the FOUNDRY-SURVEYOR is restocking the front-gate rep backlog):** your
 vein is `brief` — a DISTINCT lens (e.g. most iconic front-elevation silhouette · most thematically central ·

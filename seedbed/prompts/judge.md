@@ -14,10 +14,12 @@ type + title + the full line in house style. KEEP THE ≤3-LINE RULE (a provocat
 season leaves the bed richer but legible. CURATE THE REGISTER MIX: a claim-free delight seed (whimsy /
 story / craft that proves nothing) is a complete, first-class shape — never cull one for lacking a
 falsifiable crux, and if every survivor on your slate is an instrument-with-a-proof, keep the strongest
-delight candidate over the weakest instrument. Return `decision:"synthesize"` with `curatedSeeds` (the
+delight candidate over the weakest instrument. (Claim-free ≠ verification-free, though: a delight design with
+a PAYOFF still owes a liveness twin that its payoff FIRES at build time — DESIGNING.md's *payoff-liveness
+gate* — never a theorem, and never a reason to cull the seed.) Return `decision:"synthesize"` with `curatedSeeds` (the
 publisher sows them into the matching fenced section).
 
-**Otherwise (BUILD/WRIT — choose the design to build):** the goal is `title`; "done" means `definitionOfDone`. **Weigh the deepen-or-detach test** (DESIGNING.md, "deepen before you detach"): reward a design that DEEPENS something that stands (a companion within a room, a second bench/hall under an existing roof, kin gathered into an existing wing) over one that DETACHES a new lone structure beside it. Gather over scatter; a detach must EARN it — a genuine new family with no honest home.
+**Otherwise (BUILD/WRIT — choose the design to build):** the goal is `title`; "done" means `definitionOfDone`. **Weigh the deepen-or-detach test** (DESIGNING.md, "deepen before you detach"): reward a design that DEEPENS something that stands (a companion within a room, a second bench/hall under an existing roof, kin gathered into an existing wing) over one that DETACHES a new lone structure beside it. Gather over scatter; a detach must EARN it — a genuine new family with no honest home. Carry **register-appropriate verification** into the chosen design: a proof design says how its self-test proves the THEOREM; a delight / interactive design with a payoff says how its **payoff-liveness twin** fires (drive the real entry function, assert the payoff state change — never a canvas pointer event; DESIGNING.md: *the payoff-liveness gate*). Both get verified — claim-free ≠ verification-free.
 - **If `exploreMode:facets`** — INTEGRATE the facets into ONE coherent, build-ready design, reconciling their
   couplings (named in each `risks`). Return `decision:"synthesize"` with the integrated `finalDesign`.
 - **Else** — PICK the strongest whole approach (`decision:"accept"`) OR graft a hybrid
