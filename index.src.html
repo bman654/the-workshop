@@ -155,6 +155,57 @@
     text-transform:uppercase; opacity:0; transition:opacity .3s ease; }
 
   /* ════════════════════════════════════════════════════════════════════════
+     #411 THE ENGRAVED BROADSHEET FAIR — the descended fairground's per-POI child
+     scenes (window.GateArt.childScenes / drawChildScene). Each amusement tile draws
+     a brass-on-ink ENGRAVED VIGNETTE instead of a bare emoji glyph. Scoped under
+     .child-scene so it never touches the resting canonical map. The token hand
+     mirrors the gate face (var(--brass) strokes, var(--c) accent fills). Motion is
+     CALM AT REST: an .anim group is paused until its .poi is hovered / focused (or
+     given the .awake liveness hook); reduced motion holds the rich static frame. */
+  .child-scene .eng{ stroke:var(--brass); stroke-width:1; fill:none;
+    stroke-linejoin:round; stroke-linecap:round; transition:stroke .35s ease; }
+  .child-scene .eng-fine{ stroke:var(--brass); stroke-width:.6; fill:none; opacity:.55;
+    stroke-linecap:round; transition:stroke .35s ease, opacity .35s ease; }
+  .child-scene .eng-hatch{ stroke:var(--brass); fill:none;
+    transition:opacity .35s ease, stroke .35s ease; }
+  .child-scene .eng-accent{ stroke:var(--c); stroke-width:1; fill:none; stroke-linecap:round;
+    transition:stroke .35s ease; }
+  /* .fillp / .fillp-ink MUST follow .eng so `class="eng fillp"` takes the fill */
+  .child-scene .fillp{ fill:color-mix(in srgb, var(--c) 13%, var(--paper)); transition:fill .35s ease; }
+  .child-scene .fillp-ink{ fill:var(--paper); transition:fill .35s ease; }
+  .child-scene .child-kindle{ fill:var(--c); opacity:.05; transition:opacity .45s ease; }
+  .child-scene .child-glyph{ fill:var(--ink); opacity:.9; paint-order:stroke; }
+  /* brass hairlines stay crisp at any descended tile size (the proto-2 graft) */
+  .child-scene .eng, .child-scene .eng-fine, .child-scene .eng-hatch,
+  .child-scene .eng-accent{ vector-effect:non-scaling-stroke; }
+  /* the painted-transparent hit-rect so a thin-stroke engraving still catches a click */
+  .child-hit{ fill:rgba(0,0,0,0); stroke:none; }
+  /* KINDLE on attention (hover / focus / the .awake test hook) */
+  .poi:hover .child-scene .eng, .poi:focus-visible .child-scene .eng,
+  .poi.awake .child-scene .eng{ stroke:var(--brass-bright); }
+  .poi:hover .child-scene .eng-hatch, .poi:focus-visible .child-scene .eng-hatch,
+  .poi.awake .child-scene .eng-hatch{ stroke:var(--brass-bright); }
+  .poi:hover .child-scene .eng-fine, .poi:focus-visible .child-scene .eng-fine,
+  .poi.awake .child-scene .eng-fine{ opacity:.85; }
+  .poi:hover .child-scene .fillp, .poi:focus-visible .child-scene .fillp,
+  .poi.awake .child-scene .fillp{ fill:color-mix(in srgb, var(--c) 26%, var(--paper-lit)); }
+  .poi:hover .child-scene .child-kindle, .poi:focus-visible .child-scene .child-kindle,
+  .poi.awake .child-scene .child-kindle{ opacity:.17; }
+  /* MOTION — present but PAUSED at rest; RUNS only on attention (never rAF churn) */
+  .child-scene .anim{ animation-iteration-count:infinite; animation-timing-function:linear;
+    animation-play-state:paused; transform-box:fill-box; transform-origin:center; }
+  .poi:hover .child-scene .anim, .poi:focus-visible .child-scene .anim,
+  .poi.awake .child-scene .anim{ animation-play-state:running; }
+  /* reduced motion (OS pref OR the .fair-reduce page/test toggle) → static, no loop */
+  @media (prefers-reduced-motion:reduce){
+    .poi:hover .child-scene .anim, .poi:focus-visible .child-scene .anim,
+    .poi.awake .child-scene .anim{ animation-play-state:paused; }
+    .child-scene .eng,.child-scene .eng-fine,.child-scene .eng-hatch,.child-scene .eng-accent,
+    .child-scene .fillp,.child-scene .fillp-ink,.child-scene .child-kindle{ transition:none; }
+  }
+  .fair-reduce .child-scene .anim{ animation-play-state:paused !important; }
+
+  /* ════════════════════════════════════════════════════════════════════════
      DISTRICT PRECINCTS + WING SUB-PRECINCTS + ZONE LABELS — all renderer-drawn
      in the existing token language. A district hull is a faint double-ruled
      boundary with a very low-alpha tint wash; a wing hull is a lighter dashed
@@ -1564,6 +1615,11 @@ const PLACES = [
    (x/y/w/h or x/y/r) so the existing footprint drawers + label/leader geometry —
    which read r.x/r.y/r.w/r.h — run UNCHANGED against the derived slots. */
 const LAYOUT = Layout.solve(PLACES);
+/* #411 — which wings DETACH into their own child layer (a {slug:true} map; the fairground
+   is the sole one today). A POI whose wing is detached is a CHILD amusement tile — those
+   route their glyph through the engraved child-scene hook (buildPoi below); every other
+   tile keeps today's plan glyph untouched. Pure, derived once from PLACES (never pixels). */
+const DETACHED_WINGS = (Layout.detachedWings ? Layout.detachedWings(PLACES) : {});
 /* the manor's solved centre-x (#410) — the great house is now a WIDER union of three
    blocks, so the interior door-swings + furniture orient toward THIS derived centre
    rather than the old hard-pinned x≈716/721. */
@@ -1825,6 +1881,23 @@ function drawMidwayPlaceholder(g, bbox, accent){
   const py=y+pad;
   g.appendChild(el("path",{ d:`M${x+pad} ${py} Q${ax} ${py+10} ${x+w-pad} ${py}`, class:"fp-fine", opacity:.22 }));
   for(let i=0;i<7;i++){ const px=x+pad+i*(w-2*pad)/6; g.appendChild(el("path",{ d:`M${px} ${py+2} l4 7 l-8 0 z`, fill:accent, opacity:.16 })); }
+}
+/* ── #411 THE CHILD-SCENE PLACEHOLDER (= today's emoji-on-tile). buildPoi routes every
+   descended amusement tile through window.GateArt.drawChildScene (a themed engraved
+   vignette per amusement); if the rich module is absent OR a scene throws, THIS inline
+   fallback draws the plain lamp + faint slab + emoji glyph, so the page stays fully
+   testable + never blank without the forged art (the same drop-in guarantee gate-art.js
+   gives drawFace). Signature + {kind} return match GateArt.drawChildScene exactly. */
+function drawChildScenePlaceholder(g, poi, box, accent){
+  const cx=box.x+box.w/2, cy=box.y+box.h/2, r=Math.min(box.w,box.h);
+  g.appendChild(el("circle",{ cx, cy, r:r*0.30, class:"child-kindle", fill:accent, opacity:.14 }));
+  const s=r*0.44;
+  g.appendChild(el("rect",{ x:cx-s/2, y:cy-s/2, width:s, height:s, rx:3, class:"eng-fine", opacity:.4 }));
+  const t=el("text",{ x:cx, y:cy+box.h*0.11, "text-anchor":"middle", class:"child-glyph",
+    style:`font-size:${r*0.34}px` });
+  t.textContent=(poi&&poi.glyph)||"◇";
+  g.appendChild(t);
+  return { kind:"emoji", label:"emoji-tile fallback" };
 }
 function drawCoaster(g, r){ // side-view coaster: a hoist tower, a dip, a vertical LOOP, a run-out — the ride's own content
   const {x,y,w,h} = r; drawSlab(g,x,y,w,h,2);
@@ -3151,34 +3224,61 @@ function buildPoi(r, opts){
   else { a.setAttribute("role","img"); a.setAttribute("aria-label", r.room+" — sealed; the way is lost"); }
   a.dataset.id = r.id;
 
-  // keyboard focus ring around the footprint bbox
-  const bb = footBBox(r);
+  // #411 — is this a CHILD amusement tile (its wing detaches into the fairground layer)?
+  // Such a tile is FOLDED in free-explore and only shows when the gate is descended; there
+  // it draws a themed brass-on-ink ENGRAVED VIGNETTE via GateArt.drawChildScene instead of
+  // the plan slab + emoji glyph. Every OTHER tile keeps today's plan glyph untouched.
+  const isChildTile = !!(r.wing && DETACHED_WINGS[r.wing]);
+  const {cx,cy} = footCentre(r);
+
+  // A detached tile keeps a small, crushed canonical footprint (the folded column) and is
+  // RE-CENTRED in an airy fan slot on descent — so its engraved scene is drawn into a
+  // NORMALIZED box CENTRED ON THE TILE CENTRE (which the relay maps to the fan-column centre),
+  // not the crushed footBBox, else the smallest folded footprints render as ~18u specks. The
+  // fan affords ≈ a 66u row height per tile; 96×64 reads as its scene AND clears its neighbours.
+  const CHILD_SCENE_W = 96, CHILD_SCENE_H = 64;
+  const bb = isChildTile
+    ? { x: cx - CHILD_SCENE_W/2, y: cy - CHILD_SCENE_H/2, w: CHILD_SCENE_W, h: CHILD_SCENE_H }
+    : footBBox(r);
+
+  // keyboard focus ring around the tile (the scene box for a child; the footprint otherwise)
   a.appendChild(el("rect",{ x:bb.x-7, y:bb.y-7, width:bb.w+14, height:bb.h+14,
     rx:4, class:"focusring" }));
 
-  // footprint linework
+  // footprint linework (SUPPRESSED for a child tile — the engraving replaces the greybox slab)
   const fg = el("g",{});
-  DRAW[r.footprint](fg, r);
-  a.appendChild(fg);
-
-  // a soft warm lamp glow at the footprint's heart (candlelit from inside),
-  // behind the glyph — lifts to the wing's accent on hover. Skipped for the
-  // broken cellar stair (it is dark until the way is restored). SIZED to the
-  // footprint so it stays WITHIN the backing (capped at 13 for the big lots): a
-  // small ring footprint — e.g. the observatory's concentric-ring backings (#275)
-  // — gets a proportionally small glow rather than a fixed r=13 halo that would
-  // bleed past its own backing into a neighbour's.
-  const {cx,cy} = footCentre(r);
-  const footR = r.footprint==="tower" ? r.r : Math.min(r.w, r.h)/2;
-  const lampR = Math.max(4, Math.min(13, footR));
-  if(!(r.locked && opts.extraClass==="broken")){
-    a.appendChild(el("circle",{ cx, cy, r:lampR, class:"fp-lamp" }));
+  if(!isChildTile){
+    DRAW[r.footprint](fg, r);
+    a.appendChild(fg);
   }
 
-  // emoji glyph at the footprint's heart
-  const gly = el("text",{ x:cx, y:cy+5, "text-anchor":"middle", class:"glyph-emoji" });
-  gly.textContent = r.glyph;
-  a.appendChild(gly);
+  if(isChildTile){
+    // the painted-transparent HIT-RECT first (SVG hit-tests painted pixels only, and an
+    // engraving is thin strokes + negative space), so a real click anywhere on the tile
+    // catches + navigates — then the engraved child scene itself, keyed by POI id/footprint.
+    const sceneBox = bb;
+    a.appendChild(el("rect",{ x:sceneBox.x, y:sceneBox.y, width:sceneBox.w, height:sceneBox.h, class:"child-hit" }));
+    const sg = el("g",{ class:"child-scene" });
+    const draw = (window.GateArt && GateArt.drawChildScene) ? GateArt.drawChildScene : drawChildScenePlaceholder;
+    let res;
+    try{ res = draw(sg, r, sceneBox, r.accent); }
+    catch(_){ while(sg.firstChild) sg.removeChild(sg.firstChild); res = drawChildScenePlaceholder(sg, r, sceneBox, r.accent); }
+    a.appendChild(sg);
+    a.dataset.childScene = (res && res.kind) || "emoji";   // 'scene' | 'emoji' (the liveness handle)
+  } else {
+    // a soft warm lamp glow at the footprint's heart (candlelit from inside), behind the
+    // glyph — lifts to the wing's accent on hover. Skipped for the broken cellar stair (dark
+    // until the way is restored). SIZED to the footprint so it stays WITHIN the backing.
+    const footR = r.footprint==="tower" ? r.r : Math.min(r.w, r.h)/2;
+    const lampR = Math.max(4, Math.min(13, footR));
+    if(!(r.locked && opts.extraClass==="broken")){
+      a.appendChild(el("circle",{ cx, cy, r:lampR, class:"fp-lamp" }));
+    }
+    // emoji glyph at the footprint's heart
+    const gly = el("text",{ x:cx, y:cy+5, "text-anchor":"middle", class:"glyph-emoji" });
+    gly.textContent = r.glyph;
+    a.appendChild(gly);
+  }
 
   // ---- leader line + label group ----
   // The leader is drawn from the footprint edge to the label; the label sits in
@@ -3980,6 +4080,102 @@ function renderEstate(){
   }
 }
 renderEstate();
+
+/* ════════════════════════════════════════════════════════════════════════════
+   #411 THE ENGRAVED FAIR — the PAYOFF-LIVENESS twin (headless-drivable; claim-free is
+   NOT verification-free). This delight layer makes no theorem — but it has a PAYOFF (a
+   scene that KINDLES to life on attention), so it owes a check that the payoff FIRES on
+   the piece's OWN real entry (never a synthetic canvas pointer event). It drives the real
+   GateArt.drawChildScene + toggles the real .awake/hover class + the real reduced-motion
+   mirror, and asserts (a) every amusement id renders a registered scene; (b) waking a
+   sample tile flips its computed animation-play-state to running AND mutates the scene
+   (the coaster car advances along its rail); (c) reduced-motion holds the static frame,
+   no loop; (d) an un-registered id AND a throwing scene both fall back to the emoji tile,
+   never blank. Call window.__fairgroundLiveness() (returns {pass, results}); auto-runs
+   once, rAF-deferred, into window.__fairgroundLiveness.result + the console. ── */
+window.__fairgroundLiveness = function(){
+  const R = [], ok = (name, cond)=> R.push([name, !!cond]);
+  const G = window.GateArt;
+  ok("GateArt.drawChildScene is installed", G && typeof G.drawChildScene === "function");
+
+  // (a) every real amusement tile resolved to a registered engraved scene (its production
+  //     render, read straight off the built DOM — data-child-scene is the liveness handle).
+  const childIds = PLACES.filter(p=> p.wing && DETACHED_WINGS[p.wing]).map(p=> p.id);
+  let sceneCount = 0, missing = [];
+  childIds.forEach(id=>{
+    const tile = document.querySelector('.poi[data-id="'+CSS.escape(id)+'"]');
+    if(tile && tile.dataset.childScene === "scene") sceneCount++; else missing.push(id);
+  });
+  ok("all "+childIds.length+" amusement ids render a registered scene ("+sceneCount+"/"+childIds.length+
+     (missing.length?"; missing "+missing.join(","):"")+")", childIds.length>0 && missing.length===0);
+
+  // (b) the hover/focus PATH starts the loop AND the payoff FIRES (the scene mutates).
+  const sampleTile = document.querySelector('.poi[data-id="midway"]');
+  let playRunning = false, mutated = false;
+  if(sampleTile){
+    const prevD = sampleTile.style.display; sampleTile.style.display = "";     // un-fold the real tile
+    const anim = sampleTile.querySelector('.child-scene .anim');
+    if(anim){
+      getComputedStyle(anim).transform;                                        // force a style/anim flush
+      const restState = getComputedStyle(anim).animationPlayState;
+      sampleTile.classList.add("awake");                                        // the real hover/focus path
+      playRunning = getComputedStyle(anim).animationPlayState === "running";
+      const list = (anim.getAnimations && anim.getAnimations()) || [];
+      if(list.length){
+        const an = list[0]; try{ an.pause(); }catch(_){}
+        const dur = (an.effect && an.effect.getComputedTiming && an.effect.getComputedTiming().duration) || 3800;
+        an.currentTime = 0;            const t0 = getComputedStyle(anim).transform;
+        an.currentTime = dur * 0.3;    const t1 = getComputedStyle(anim).transform;
+        mutated = (t0 !== t1) && t0 !== "none" && t1 !== "none";
+        try{ an.play(); }catch(_){}
+      }
+      ok("rest state is calm (animation paused before wake)", restState === "paused");
+      sampleTile.classList.remove("awake");
+    }
+    sampleTile.style.display = prevD;                                           // re-fold
+  }
+  ok("waking the sample tile flips its animation-play-state to running", playRunning);
+  ok("the woken scene MUTATES along its real path (coaster car advances) — the payoff FIRES", mutated);
+
+  // (c) reduced-motion (the page/test mirror of prefers-reduced-motion) holds the static
+  //     frame — even under wake the loop never starts (computed play-state paused).
+  let reducedHeld = false;
+  if(sampleTile){
+    const prevD = sampleTile.style.display; sampleTile.style.display = "";
+    document.documentElement.classList.add("fair-reduce");
+    sampleTile.classList.add("awake");
+    const anim = sampleTile.querySelector('.child-scene .anim');
+    reducedHeld = anim ? getComputedStyle(anim).animationPlayState === "paused" : false;
+    sampleTile.classList.remove("awake");
+    document.documentElement.classList.remove("fair-reduce");
+    sampleTile.style.display = prevD;
+  }
+  ok("reduced-motion holds the static frame under wake (no animation loop)", reducedHeld);
+
+  // (d) an UN-REGISTERED id AND a THROWING scene both fall back to the emoji tile, never blank.
+  if(G && G.drawChildScene){
+    const SVGNS = "http://www.w3.org/2000/svg";
+    const g1 = document.createElementNS(SVGNS,"g");
+    const r1 = G.drawChildScene(g1, { id:"__unregistered__", glyph:"❓", footprint:"__none__", accent:"#fff" }, {x:0,y:0,w:44,h:44}, "#fff");
+    ok("un-registered id → emoji-tile fallback (never blank)", r1 && r1.kind==="emoji" && g1.childNodes.length>0);
+    G.childScenes.__boom__ = function(){ throw new Error("scene boom"); };
+    const g2 = document.createElementNS(SVGNS,"g");
+    const _warn = console.warn; console.warn = function(){};   // silence the INTENDED throw's diagnostic
+    const r2 = G.drawChildScene(g2, { id:"__boom__", glyph:"❓", accent:"#fff" }, {x:0,y:0,w:44,h:44}, "#fff");
+    console.warn = _warn;
+    delete G.childScenes.__boom__;
+    ok("a throwing scene → emoji-tile fallback (never blank)", r2 && r2.kind==="emoji" && g2.childNodes.length>0);
+  }
+
+  const pass = R.every(x=> x[1]);
+  const out = { pass, results: R };
+  window.__fairgroundLiveness.result = out;
+  return out;
+};
+try{ requestAnimationFrame(function(){ try{
+  const r = window.__fairgroundLiveness();
+  console.log("[fairground-liveness] "+(r.pass?"PASS":"FAIL")+"\n"+r.results.map(x=> (x[1]?"  ✓ ":"  ✗ ")+x[0]).join("\n"));
+}catch(e){ console.warn("[fairground-liveness] threw", e); } }); }catch(_){}
 
 /* ════════════════════════════════════════════════════════════════════════════
    THE HOURS — the front door's day/light LAYER (the grounds swing, cycle #71).
