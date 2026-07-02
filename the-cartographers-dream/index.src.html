@@ -1,0 +1,847 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Cartographer's Dream</title>
+<style>
+  :root{ --gold:#f0c766; --amber:#c98a3a; --ink:#e9dcc0; --fog:#8794a6; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; overflow:hidden;
+    background:#0a0c11;
+    font-family: ui-serif, Georgia, "Times New Roman", serif; color:var(--ink);
+    -webkit-user-select:none; user-select:none; }
+  #c{ display:block; width:100vw; height:100vh; cursor:none; touch-action:none; }
+
+  /* the ONE whisper of chrome, bottom-centre */
+  #whisper{ position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
+    font-size:15px; letter-spacing:.02em; color:rgba(233,220,192,.6);
+    text-align:center; pointer-events:none; transition:opacity 1s; line-height:1.5;
+    max-width:82vw; text-shadow:0 1px 10px #000; z-index:5; }
+  #whisper b{ color:var(--gold); font-weight:600; }
+  #whisper.dim{ opacity:0; }
+
+  /* the wax seal — "unroll a new sheet" — bottom-right */
+  #seal{ position:fixed; right:20px; bottom:18px; width:58px; height:58px;
+    z-index:8; cursor:pointer; opacity:.82; transition:opacity .25s, transform .25s;
+    filter:drop-shadow(0 3px 8px rgba(0,0,0,.5)); }
+  #seal:hover{ opacity:1; transform:scale(1.06) rotate(-3deg); }
+  #seal:active{ transform:scale(.96); }
+  #seal .lbl{ position:absolute; bottom:-16px; left:50%; transform:translateX(-50%);
+    font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:rgba(233,220,192,.4);
+    white-space:nowrap; pointer-events:none; }
+
+  /* the nib/era dial — bottom-left, spare */
+  #nib{ position:fixed; left:20px; bottom:20px; z-index:8; display:flex; gap:8px;
+    align-items:center; font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+    color:rgba(233,220,192,.42); }
+  #nib button{ background:rgba(20,24,32,.55); color:rgba(233,220,192,.6);
+    border:1px solid rgba(233,220,192,.18); border-radius:14px; padding:5px 11px;
+    font:inherit; font-size:10px; letter-spacing:.08em; cursor:pointer; transition:all .2s; }
+  #nib button.on{ color:var(--gold); border-color:rgba(240,199,102,.5); background:rgba(40,32,14,.5); }
+  #nib button:hover{ color:var(--ink); }
+
+  /* mute — top-right, tiny */
+  #mute{ position:fixed; right:20px; top:16px; z-index:8; font-family:ui-monospace,Menlo,monospace;
+    font-size:12px; color:rgba(233,220,192,.42); cursor:pointer; background:rgba(20,24,32,.5);
+    border:1px solid rgba(233,220,192,.16); border-radius:16px; padding:5px 12px; transition:all .2s; }
+  #mute:hover{ color:var(--ink); border-color:rgba(233,220,192,.4); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="whisper">A sheet of un-inked vellum. Bring the <b>lantern</b> close — where its light dwells, the land shows through.</div>
+
+<svg id="seal" viewBox="0 0 60 60" aria-label="unroll a new sheet">
+  <circle cx="30" cy="30" r="26" fill="#7c2a24"/>
+  <circle cx="30" cy="30" r="26" fill="none" stroke="#4d1712" stroke-width="2"/>
+  <circle cx="30" cy="30" r="20" fill="none" stroke="#a5453a" stroke-width="1.4" opacity=".7"/>
+  <path d="M30 15 l3.4 7.6 8.2.7 -6.2 5.4 1.9 8 -7.3-4.3 -7.3 4.3 1.9-8 -6.2-5.4 8.2-.7z" fill="#c9605420" stroke="#e08a7e" stroke-width="1" opacity=".55"/>
+  <text class="lbl">new sheet</text>
+</svg>
+
+<div id="nib">
+  <span>hand</span>
+  <button id="nibFine" class="on">fine survey</button>
+  <button id="nibBold">bold portolan</button>
+</div>
+
+<div id="mute">♪ sound</div>
+
+<!-- The hidden land + its renderer (forge-inlined; window handles set before boot). -->
+<script type="module">
+<!-- forge:include ./core.mjs -->
+<!-- forge:include ./land-render.mjs -->
+window.__DREAM_CORE = { generateLand };
+</script>
+
+<!-- Shared estate mute (WS.muted / WS.setMuted). -->
+<script>
+<!-- forge:include ../tools/ws/ws.js -->
+</script>
+
+<!-- Forged SFX — each sets Gate.sfx.<key> before boot. -->
+<script>
+<!-- forge:include ./sfx-nib.js -->
+</script>
+<script>
+<!-- forge:include ./sfx-fwump.js -->
+</script>
+<script>
+<!-- forge:include ./sfx-ting.js -->
+</script>
+
+<script type="module">
+"use strict";
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE CARTOGRAPHER'S DREAM — the page.
+   A whole antique chart PRE-EXISTS, deterministic from a seed, but is invisible
+   under a cool un-inked-vellum fog. A warm lantern follows the cursor; where it
+   dwells the fog erodes and the sepia chart shows through. Dwell = discovery.
+
+   Three layers, drawn every frame:
+     (1) DRAWN LAND — the pre-baked offscreen sepia chart (land-render.mjs),
+         revealed through a mask built from the per-cell EXPOSURE field.
+     (2) FOG — warm parchment under a cooler haze + grain, with a ghost "here be"
+         flourish and a coiled sea-serpent drifting ONLY in still-unmapped WATER;
+         they dissolve as you light them.
+     (3) LANTERN POOL — a warm radial glow following the cursor, with a candle
+         flicker; it is the MASK that reveals the land + erodes the fog.
+   Only the fog mask + frontier bloom + serpents are recomputed per frame; the
+   land is pre-rendered once, so exploring stays at 60fps.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const { generateLand } = window.__DREAM_CORE;
+const renderLand = window.DreamLandRender;
+const PAL = window.DreamPAL;
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const $ = id=>document.getElementById(id);
+const TAU = Math.PI*2;
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches
+  || /[?&]reduced=1\b/.test(location.search);   // test/override hook
+const clamp = (v,a,b)=> v<a?a:v>b?b:v;
+const lerp = (a,b,t)=> a+(b-a)*t;
+const smoothstep = (t)=>{ t=clamp(t,0,1); return t*t*(3-2*t); };
+
+/* ---- seed: URL hash is the shareable world ---- */
+function currentSeed(){
+  let h = (location.hash||'').replace(/^#/,'').trim();
+  if(h) return decodeURIComponent(h);
+  return randomSeed();
+}
+function randomSeed(){
+  // a pronounceable-ish short seed
+  const syl=['ael','vor','mir','thal','ken','dro','sae','lun','bre','oth','yr','fen','cael','mor','vel','sha'];
+  const r=()=>syl[(Math.random()*syl.length)|0];
+  return (r()+r()+((Math.random()*90+10)|0)).replace(/^(.)/,c=>c.toUpperCase());
+}
+
+/* ---- SOUND — Gate.sfx builders, gated on WS.muted, unlocked on first gesture ---- */
+const audio = { ctx:null, master:null, unlocked:false };
+function muted(){ try{ return (typeof WS!=='undefined'&&WS.muted)?WS.muted():localStorage.getItem('ws:pref:muted')==='1'; }catch(e){ return false; } }
+function ensureAudio(){
+  if(audio.ctx) return audio.ctx;
+  try{ const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return null;
+    audio.ctx=new AC(); audio.master=audio.ctx.createGain(); audio.master.gain.value=0.9;
+    audio.master.connect(audio.ctx.destination);
+  }catch(e){ audio.ctx=null; }
+  return audio.ctx;
+}
+function unlockAudio(){ const c=ensureAudio(); if(!c) return; if(c.state==='suspended') c.resume().catch(()=>{}); audio.unlocked=true; }
+const Gate=(typeof window!=='undefined'&&window.Gate)?window.Gate:{sfx:{}}; if(!Gate.sfx)Gate.sfx={};
+const SFX_DUR={ nib:0.11, fwump:0.5, ting:0.7 };
+function play(key,param){
+  if(muted()) return;
+  const c=ensureAudio(); if(!c||c.state!=='running') return;
+  const fn=Gate.sfx[key]; if(typeof fn!=='function') return;
+  try{ fn({ctx:c,dest:audio.master,dur:SFX_DUR[key],when:0,seed:(Math.random()*1e9)|0,param}); }catch(e){}
+}
+let _lastNib=0;
+function playNib(activity){
+  if(REDUCED) return;
+  const now=performance.now();
+  // rate scales with activity: busier sweep → more grains (min 60ms apart)
+  const gap = lerp(200, 55, clamp(activity,0,1));
+  if(now-_lastNib<gap) return; _lastNib=now;
+  play('nib', activity);
+}
+function syncMute(){ const m=$('mute'); const on=muted(); m.textContent=on?'♪ muted':'♪ sound'; m.style.opacity=on?'0.55':'1'; }
+$('mute').addEventListener('click',()=>{
+  try{ if(typeof WS!=='undefined'&&WS.setMuted){ WS.setMuted(!WS.muted()); } else { localStorage.setItem('ws:pref:muted',muted()?'0':'1'); } }catch(e){}
+  syncMute(); unlockAudio();
+});
+try{ if(typeof WS!=='undefined'&&WS.onMuteChange) WS.onMuteChange(syncMute); }catch(e){}
+
+/* ---- value-noise for fog grain + flicker (deterministic per seed) ---- */
+function makeNoise(seedStr){
+  // tiny hash-noise sufficient for grain/flicker
+  let s = 0; for(let i=0;i<seedStr.length;i++){ s=(Math.imul(s,31)+seedStr.charCodeAt(i))|0; }
+  const perm=new Uint8Array(512); const g=new Float32Array(256);
+  let a=s||1; const rnd=()=>{ a|=0; a=(a+0x6D2B79F5)|0; let t=Math.imul(a^(a>>>15),1|a); t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; };
+  const p=new Uint8Array(256); for(let i=0;i<256;i++){p[i]=i; g[i]=rnd();}
+  for(let i=255;i>0;i--){ const j=(rnd()*(i+1))|0; const tt=p[i];p[i]=p[j];p[j]=tt; }
+  for(let i=0;i<512;i++) perm[i]=p[i&255];
+  const sm=t=>t*t*t*(t*(t*6-15)+10);
+  const val=(ix,iy)=>g[perm[(ix&255)+perm[iy&255]]];
+  return (x,y)=>{ const ix=Math.floor(x),iy=Math.floor(y); const fx=x-ix,fy=y-iy;
+    const u=sm(fx),v=sm(fy); const A=val(ix,iy),Bv=val(ix+1,iy),C=val(ix,iy+1),Dv=val(ix+1,iy+1);
+    return lerp(lerp(A,Bv,u),lerp(C,Dv,u),v); };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   WORLD STATE — the pre-baked land + the reveal field.
+   ═══════════════════════════════════════════════════════════════════════════ */
+let W,H,DPR;
+let seed, land, layout, nib='fine';
+let noise;                      // fog grain / flicker noise for this seed
+let fogCanvas, fogCtx;          // offscreen fog (parchment+haze+grain), baked once
+let maskCanvas, maskCtx;        // offscreen lantern-pool alpha mask, per frame
+let revealCanvas, revealCtx;    // offscreen: exposure painted as reveal alpha
+
+// exposure grid — ~24px cells over the SHEET
+let RC, RR, RCELL;              // cols, rows, cell px
+let exposure;                   // Float32Array RC*RR, 0..1, MONOTONIC
+let wetAge;                     // Float32Array RC*RR, ms since crossing frontier
+let cellLand;                   // Uint8Array: 1 if this reveal-cell centre is over land
+let cellWater;                  // Uint8Array: 1 if over undiscovered-able WATER
+let reachableCells, litCells;   // for cartouche % (land reveal cells only)
+
+// serpents / flourishes seeded per world, living only in unmapped water
+let serpents=[], flourishes=[];
+
+// lantern
+const lant = { x:0, y:0, tx:0, ty:0, has:false, R:140, vel:0, lastX:0, lastY:0, lastT:0 };
+let autoDrift = true;           // on-ramp: lantern sweeps itself until the visitor grabs it
+let driftT = 0;
+let userTouched = false;
+
+// compass
+const compass = { angle:0, target:0, locked:false, lastLockAt:-1 };
+
+// cartouche
+let cartoucheFill = 0;          // 0..1 eased toward lit fraction
+let titled=false, titleReveal=0;
+
+// label trace progress (beat B): each label 0..1 arc-length
+let labelProg;
+
+let t0 = performance.now(), lastFrame=t0;
+
+/* ---- build / rebuild the world for a seed ---- */
+function buildWorld(newSeed, {fresh=false}={}){
+  seed = newSeed;
+  if(location.hash.replace(/^#/,'')!==encodeURIComponent(seed)){
+    try{ history.replaceState(null,'', '#'+encodeURIComponent(seed)); }catch(e){}
+  }
+  land = generateLand(seed);
+  noise = makeNoise(seed+"::fog");
+  layoutSheet();
+  if(fresh) play('fwump');
+}
+
+/* ---- (re)layout everything sized to the viewport ---- */
+function layoutSheet(){
+  DPR = Math.min(devicePixelRatio||1, 2);
+  W = innerWidth; H = innerHeight;
+  cv.width=Math.floor(W*DPR); cv.height=Math.floor(H*DPR);
+  cv.style.width=W+'px'; cv.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+
+  // pre-render the DRAWN LAND once (the expensive step)
+  layout = renderLand(land, W, H, {nib});
+
+  // exposure grid ~24px cells
+  RCELL = 24;
+  RC = Math.ceil(W/RCELL)+1; RR = Math.ceil(H/RCELL)+1;
+  const NC = RC*RR;
+  const oldExp = exposure, oldRC = exposure?exposure.__rc:0;
+  exposure = new Float32Array(NC); exposure.__rc = RC;
+  wetAge = new Float32Array(NC).fill(-1);
+  labelProg = new Float32Array(layout.labelLayout.length);
+  // preserve prior reveal on resize (best-effort: reset — a resize re-fogs, which is fine)
+
+  // classify each reveal cell centre: land vs sea (for cartouche % + serpents)
+  cellLand = new Uint8Array(NC); cellWater = new Uint8Array(NC);
+  reachableCells = 0;
+  for(let r=0;r<RR;r++) for(let cIx=0;cIx<RC;cIx++){
+    const px=cIx*RCELL+RCELL/2, py=r*RCELL+RCELL/2;
+    // map screen px → grid cell
+    const gcx=(px-layout.mapX)/layout.sx, gcy=(py-layout.mapY)/layout.sy;
+    if(gcx<0||gcy<0||gcx>=land.GW||gcy>=land.GH) continue; // outside chart = paper margin
+    const gi=(Math.min(land.GH-1,Math.floor(gcy)))*land.GW+Math.min(land.GW-1,Math.floor(gcx));
+    const idx=r*RC+cIx;
+    if(land.water[gi]===0){ cellLand[idx]=1; reachableCells++; }
+    else if(land.water[gi]===1){ cellWater[idx]=1; }
+  }
+  litCells=0;
+
+  // offscreen buffers
+  fogCanvas=document.createElement('canvas'); fogCanvas.width=W; fogCanvas.height=H; fogCtx=fogCanvas.getContext('2d');
+  maskCanvas=document.createElement('canvas'); maskCanvas.width=W; maskCanvas.height=H; maskCtx=maskCanvas.getContext('2d');
+  revealCanvas=document.createElement('canvas'); revealCanvas.width=W; revealCanvas.height=H; revealCtx=revealCanvas.getContext('2d');
+  bakeFog();
+
+  // serpents + flourishes seeded in big unmapped water regions
+  seedFogCreatures();
+
+  // reset run-state
+  cartoucheFill=0; titled=false; titleReveal=0;
+  compass.angle = Math.random()*TAU; compass.target=0; compass.locked=false;
+  lant.x=W*0.5; lant.y=H*0.42; lant.tx=lant.x; lant.ty=lant.y; lant.has=false;
+  lant.R = Math.max(110, Math.min(W,H)*0.20);
+  autoDrift = true; userTouched=false; driftT=0;
+}
+
+/* ---- bake the fog: warm parchment under a cooler haze + tooth grain ---- */
+function bakeFog(){
+  const g=fogCtx; g.clearRect(0,0,W,H);
+  // warm parchment base (the un-inked sheet)
+  const base=g.createLinearGradient(0,0,0,H);
+  base.addColorStop(0,'#d8c9a6'); base.addColorStop(1,'#cbb892');
+  g.fillStyle=base; g.fillRect(0,0,W,H);
+  // cooler cast (the "un-inked vellum" haze) — a soft blue-grey wash, stronger toward edges
+  const vg=g.createRadialGradient(W/2,H/2,Math.min(W,H)*0.15, W/2,H/2,Math.max(W,H)*0.7);
+  vg.addColorStop(0,'rgba(120,135,158,0.10)'); vg.addColorStop(1,'rgba(70,82,104,0.42)');
+  g.fillStyle=vg; g.fillRect(0,0,W,H);
+  // faint tooth/grain of the vellum (deterministic value-noise, cheap tile-stamp)
+  g.save(); g.globalAlpha=0.05; g.globalCompositeOperation='multiply';
+  const step=3;
+  for(let y=0;y<H;y+=step){ for(let x=0;x<W;x+=step){
+    const n=noise(x*0.09, y*0.09);
+    const v=Math.floor(120+n*90);
+    g.fillStyle=`rgb(${v},${v},${v})`;
+    g.fillRect(x,y,step,step);
+  }}
+  g.restore();
+  // a subtle fibrous mottle (larger-scale)
+  g.save(); g.globalAlpha=0.08; g.globalCompositeOperation='overlay';
+  for(let y=0;y<H;y+=6){ for(let x=0;x<W;x+=6){
+    const n=noise(x*0.015+30, y*0.015+12);
+    const v=Math.floor(90+n*140);
+    g.fillStyle=`rgb(${v},${v},${v})`; g.fillRect(x,y,6,6);
+  }}
+  g.restore();
+}
+
+/* ---- seed sea-serpents + "here be" flourishes in big unmapped water ---- */
+function seedFogCreatures(){
+  serpents=[]; flourishes=[];
+  // find big sea reveal-cell clusters and drop creatures at their centroids
+  const seen=new Uint8Array(RC*RR); const clusters=[];
+  for(let idx=0;idx<RC*RR;idx++){
+    if(seen[idx]||!cellWater[idx]) continue;
+    let sx=0,sy=0,n=0; const stack=[idx]; seen[idx]=1;
+    while(stack.length){ const c=stack.pop(); const cc=c%RC, cr=(c/RC)|0; sx+=cc; sy+=cr; n++;
+      const nb=[c+1,c-1,c+RC,c-RC];
+      if(cc<RC-1&&!seen[c+1]&&cellWater[c+1]){seen[c+1]=1;stack.push(c+1);}
+      if(cc>0&&!seen[c-1]&&cellWater[c-1]){seen[c-1]=1;stack.push(c-1);}
+      if(c+RC<RC*RR&&!seen[c+RC]&&cellWater[c+RC]){seen[c+RC]=1;stack.push(c+RC);}
+      if(c-RC>=0&&!seen[c-RC]&&cellWater[c-RC]){seen[c-RC]=1;stack.push(c-RC);}
+    }
+    if(n>=8) clusters.push({cx:sx/n,cy:sy/n,size:n});
+  }
+  clusters.sort((a,b)=>b.size-a.size);
+  const nr = makeNoise(seed+"::creatures");
+  let rk=0;
+  const nrand=()=>{ rk+=0.618; return nr(rk*13.1, rk*7.7); };
+  for(let i=0;i<clusters.length && (serpents.length<3 || flourishes.length<4); i++){
+    const c=clusters[i];
+    const px=c.cx*RCELL+RCELL/2, py=c.cy*RCELL+RCELL/2;
+    if(i%2===0 && serpents.length<3){
+      serpents.push({x:px,y:py, phase:nrand()*TAU, scale:0.8+nrand()*0.7, dir:nrand()<0.5?-1:1});
+    } else if(flourishes.length<4){
+      flourishes.push({x:px,y:py, rot:(nrand()-0.5)*0.5, scale:0.9+nrand()*0.5});
+    }
+  }
+  // guarantee at least one flourish somewhere in water
+  if(!flourishes.length && clusters.length){ const c=clusters[0]; flourishes.push({x:c.cx*RCELL+RCELL/2,y:c.cy*RCELL+RCELL/2,rot:0,scale:1}); }
+}
+
+/* how "sealed" (unmapped) a screen point still is — mean exposure of nearby cells (0 unmapped..1 lit) */
+function localExposure(px,py){
+  const cx=clamp(Math.round((px-RCELL/2)/RCELL),0,RC-1);
+  const cy=clamp(Math.round((py-RCELL/2)/RCELL),0,RR-1);
+  return exposure[cy*RC+cx]||0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   REVEAL — advance the exposure field under the lantern each frame.
+   Center fills fast (~0.5–1s), rim slow; exposure is monotonic (never falls).
+   Returns the total NEW exposure gained this frame (drives nib SFX + cartouche).
+   ═══════════════════════════════════════════════════════════════════════════ */
+function advanceReveal(dtSec, flickerR){
+  const R=flickerR;
+  const lx=lant.x, ly=lant.y;
+  // bounding cells under the pool
+  const c0=clamp(Math.floor((lx-R)/RCELL),0,RC-1), c1=clamp(Math.ceil((lx+R)/RCELL),0,RC-1);
+  const r0=clamp(Math.floor((ly-R)/RCELL),0,RR-1), r1=clamp(Math.ceil((ly+R)/RCELL),0,RR-1);
+  let gained=0;
+  const FILL = REDUCED ? 3.2 : 1.7; // per-second fill rate at pool centre
+  for(let r=r0;r<=r1;r++){ for(let cIx=c0;cIx<=c1;cIx++){
+    const px=cIx*RCELL+RCELL/2, py=r*RCELL+RCELL/2;
+    const d=Math.hypot(px-lx,py-ly);
+    if(d>R) continue;
+    const falloff=smoothstep(1-d/R);       // 1 centre → 0 rim
+    const idx=r*RC+cIx;
+    const before=exposure[idx];
+    if(before>=1) continue;
+    const add = FILL*dtSec*(0.25+0.75*falloff);
+    let after=before+add; if(after>1)after=1;
+    exposure[idx]=after;
+    gained += (after-before)*(cellLand[idx]?1:0.4);
+    // frontier bloom (beat A): the moment a cell crosses ~0.15, it goes "wet"
+    if(before<0.15 && after>=0.15){ wetAge[idx]=0; }
+    // count lit land cells for the cartouche %
+    if(cellLand[idx] && before<0.72 && after>=0.72){ litCells++; }
+  }}
+  return gained;
+}
+
+/* build the reveal-alpha canvas: draw the exposure field as smoothstep alpha,
+   soft-blurred by drawing bilinear-scaled from a tiny grid. Cheap. */
+let expGrid, expGridCanvas, expGridCtx;
+function paintRevealMask(){
+  if(!expGridCanvas){ expGridCanvas=document.createElement('canvas'); expGridCtx=expGridCanvas.getContext('2d'); }
+  expGridCanvas.width=RC; expGridCanvas.height=RR;
+  const im=expGridCtx.createImageData(RC,RR); const d=im.data;
+  for(let i=0;i<RC*RR;i++){ const a=Math.floor(smoothstep(exposure[i])*255); const j=i*4; d[j]=d[j+1]=d[j+2]=255; d[j+3]=a; }
+  expGridCtx.putImageData(im,0,0);
+  revealCtx.clearRect(0,0,W,H);
+  revealCtx.imageSmoothingEnabled=true; revealCtx.imageSmoothingQuality='high';
+  // scale the tiny grid up over the sheet (bilinear = soft reveal edges)
+  revealCtx.drawImage(expGridCanvas, RCELL/2, RCELL/2, W, H);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RENDER — the three layers, composited each frame.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function draw(now){
+  const dt = Math.min(0.05,(now-lastFrame)/1000); lastFrame=now;
+
+  // ---- lantern position: auto-drift on-ramp, else follow cursor ----
+  // The on-ramp is a GENTLE, SMALL, SLOW loop that reveals only a taste near the
+  // centre so a first-time visitor SEES the reveal happen — then they grab it and
+  // the rest of the sheet is theirs to discover. It is NOT an auto-mapper.
+  if(autoDrift && !userTouched){
+    driftT += dt;
+    const cx=W*0.5, cy=H*0.5;
+    const rad=Math.min(W,H)*0.11;          // a small orbit
+    const sp=0.55;                           // slow
+    lant.tx = cx + Math.cos(driftT*sp)*rad*1.3;
+    lant.ty = cy + Math.sin(driftT*sp*1.1)*rad;
+    lant.has=true;
+  }
+  // ease toward target
+  lant.x = lerp(lant.x, lant.tx, autoDrift? 1 : 0.28);
+  lant.y = lerp(lant.y, lant.ty, autoDrift? 1 : 0.28);
+  // lantern velocity (for compass + nib activity)
+  const vx=lant.x-lant.lastX, vy=lant.y-lant.lastY;
+  lant.vel = Math.hypot(vx,vy)/Math.max(1e-3,dt); lant.lastX=lant.x; lant.lastY=lant.y;
+
+  // candle flicker: ±3% radius/opacity value-noise (still under reduced-motion)
+  let flick=1, flickA=1;
+  if(!REDUCED){
+    const f=noise(now*0.004, 3.7);
+    flick=1+(f-0.5)*0.06; flickA=1+(noise(now*0.006,9.1)-0.5)*0.10;
+  }
+  const R=lant.R*flick;
+
+  // ---- advance the reveal ----
+  let gained=0;
+  if(lant.has) gained=advanceReveal(dt, R);
+  // age the wet frontier
+  for(let i=0;i<wetAge.length;i++){ if(wetAge[i]>=0){ wetAge[i]+=dt*1000; if(wetAge[i]>620) wetAge[i]=-1; } }
+
+  // ---- nib SFX scaled by activity (new-cells gained) ----
+  const activity = clamp(gained*7, 0, 1);
+  if(activity>0.04 && lant.has) playNib(activity);
+
+  // ---- cartouche fill eases toward lit-land fraction ----
+  const litFrac = reachableCells? litCells/reachableCells : 0;
+  cartoucheFill = lerp(cartoucheFill, litFrac, 0.06);
+  if(!titled && litFrac>=0.36){ titled=true; compass.lastLockAt=-1; play('ting'); }
+  if(titled){ titleReveal = Math.min(1, titleReveal + dt*0.55); }
+
+  // ---- compass: needle wanders while sweeping, swings to N + settles at rest ----
+  updateCompass(dt);
+
+  // ---- paint the reveal mask ----
+  paintRevealMask();
+
+  // ═══ COMPOSITE ═══
+  ctx.clearRect(0,0,W,H);
+
+  // background outside the sheet (dark table)
+  ctx.fillStyle='#0a0c11'; ctx.fillRect(0,0,W,H);
+
+  // LAYER 2 (fog) drawn first as the base everywhere
+  ctx.drawImage(fogCanvas,0,0,W,H);
+
+  // fog creatures live ON the fog, dissolving where exposure rises
+  drawFogCreatures(now);
+
+  // LAYER 1 (drawn land) revealed THROUGH the exposure mask:
+  //   composite land × revealAlpha into a scratch, then draw over the fog.
+  // Reuse maskCanvas as the scratch.
+  maskCtx.clearRect(0,0,W,H);
+  maskCtx.globalCompositeOperation='source-over';
+  maskCtx.drawImage(layout.canvas,0,0);
+  maskCtx.globalCompositeOperation='destination-in';
+  maskCtx.drawImage(revealCanvas,0,0);
+  maskCtx.globalCompositeOperation='source-over';
+  ctx.drawImage(maskCanvas,0,0,W,H);
+
+  // frontier wet-ink bloom (beat A): a warm bleed halo at freshly-crossed cells
+  if(!REDUCED) drawWetFrontier();
+
+  // labels letter themselves in (beat B)
+  drawLabels(now);
+
+  // LAYER 3 (lantern pool) — the warm glow, on top, multiplied for warmth
+  drawLantern(R, flickA);
+
+  // set-pieces
+  drawCompass(now);
+  drawCartouche();
+
+  // fade the whisper once the visitor has explored a little
+  if(userTouched || litFrac>0.03){ $('whisper').classList.add('dim'); }
+
+  requestAnimationFrame(draw);
+}
+
+/* ---- LANTERN pool: warm radial glow + soft rim ---- */
+function drawLantern(R, flickA){
+  if(!lant.has) return;
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  const g=ctx.createRadialGradient(lant.x,lant.y,0, lant.x,lant.y,R);
+  const a=0.5*flickA;
+  g.addColorStop(0,`rgba(255,225,150,${0.42*a})`);
+  g.addColorStop(0.25,`rgba(245,195,95,${0.26*a})`);
+  g.addColorStop(0.6,`rgba(210,150,70,${0.10*a})`);
+  g.addColorStop(1,'rgba(180,120,60,0)');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(lant.x,lant.y,R,0,TAU); ctx.fill();
+  ctx.restore();
+  // a tiny bright core so the lantern reads as a point of flame
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  const cg=ctx.createRadialGradient(lant.x,lant.y,0, lant.x,lant.y,10);
+  cg.addColorStop(0,`rgba(255,240,200,${0.7*flickA})`); cg.addColorStop(1,'rgba(255,220,150,0)');
+  ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(lant.x,lant.y,10,0,TAU); ctx.fill();
+  ctx.restore();
+}
+
+/* ---- WET FRONTIER (beat A): darker/thicker bleed halo at cells 0<wetAge<620ms ---- */
+function drawWetFrontier(){
+  ctx.save();
+  for(let r=0;r<RR;r++){ for(let cIx=0;cIx<RC;cIx++){
+    const idx=r*RC+cIx; const w=wetAge[idx]; if(w<0) continue;
+    if(!cellLand[idx]) continue; // ink bleeds on land features, not open sea
+    const k = 1-(w/620);         // 1 fresh → 0 dry
+    const px=cIx*RCELL+RCELL/2, py=r*RCELL+RCELL/2;
+    // only bloom where actually lit-ish
+    const ex=exposure[idx]; if(ex<0.12||ex>0.9) continue;
+    const g=ctx.createRadialGradient(px,py,0,px,py,RCELL*0.9);
+    g.addColorStop(0,`rgba(74,55,24,${0.16*k})`);
+    g.addColorStop(1,'rgba(74,55,24,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(px,py,RCELL*0.9,0,TAU); ctx.fill();
+  }}
+  ctx.restore();
+}
+
+/* ---- LABELS letter themselves in (beat B): per-label arc-length trace ---- */
+function drawLabels(now){
+  const L=layout.labelLayout;
+  ctx.save();
+  ctx.textBaseline='middle';
+  for(let i=0;i<L.length;i++){
+    const lab=L[i];
+    // exposure at the label's ANCHOR cell (region needs a % of footprint lit)
+    const [ax,ay]=layout.toScreen(lab.anchorCX+0.5, lab.anchorCY+0.5);
+    const anchorEx = localExposure(ax,ay);
+    const trigger = lab.region? 0.45 : (lab.kind==='sea'? 0.4 : 0.5);
+    let target = anchorEx>=trigger ? 1 : 0;
+    // advance the trace toward target (write-in speed depends on length)
+    const speed = REDUCED? 6 : (2.2/Math.max(0.6, lab.text.length*0.06));
+    labelProg[i] = clamp(labelProg[i] + (target - (labelProg[i]>=target?labelProg[i]:0))*0 + (target? speed*(1/60):0), 0, 1);
+    if(target && labelProg[i]<1) labelProg[i]=Math.min(1, labelProg[i]+speed/60);
+    if(!target){ /* not yet triggered — keep hidden */ labelProg[i]=Math.min(labelProg[i],1); if(anchorEx<trigger*0.6) labelProg[i]=0; }
+    const prog=labelProg[i];
+    if(prog<=0) continue;
+    drawTracedLabel(lab, prog);
+  }
+  ctx.restore();
+}
+function drawTracedLabel(lab, prog){
+  const fontStr=`${lab.font?lab.font+' ':''}${lab.size}px ${lab.family}`;
+  ctx.font=fontStr;
+  ctx.textAlign=lab.align;
+  // letter-spaced draw with a clip that advances left→right = "writing itself in"
+  const text=lab.text;
+  ctx.save();
+  // measure total advance width incl. letter spacing
+  let total=0; const adv=[];
+  for(const chc of text){ const w=ctx.measureText(chc).width; adv.push(w); total+=w+lab.letter; }
+  total-=lab.letter;
+  // origin left edge
+  let x0 = lab.align==='center'? lab.x-total/2 : lab.align==='right'? lab.x-total : lab.x;
+  const revealX = x0 + total*smoothstep(prog);
+  // clip to the revealed portion (the pen has reached revealX)
+  ctx.beginPath(); ctx.rect(x0-4, lab.y-lab.size, revealX-x0+lab.size*0.9, lab.size*2); ctx.clip();
+  // draw glyph by glyph so the wet-tip can be highlighted
+  let cx=x0; ctx.textAlign='left';
+  // soft halo for legibility over the chart
+  ctx.shadowColor='rgba(240,230,205,0.85)'; ctx.shadowBlur=3;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    const glyphMid = cx + adv[i]/2;
+    // wet tip: the character currently at the reveal frontier renders darker
+    const nearTip = Math.abs(glyphMid-revealX) < lab.size*0.9;
+    ctx.fillStyle = nearTip ? '#2c1f0c' : lab.color;
+    ctx.fillText(ch, cx, lab.y);
+    cx += adv[i]+lab.letter;
+  }
+  ctx.restore();
+}
+
+/* ---- FOG CREATURES: serpents + "here be —" flourishes, dissolving when lit ---- */
+function drawFogCreatures(now){
+  ctx.save();
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  // serpents
+  for(const s of serpents){
+    const ex=localExposure(s.x,s.y);
+    const alpha=(1-smoothstep(ex))*0.5;      // dissolve as lit
+    if(alpha<=0.01) continue;
+    const drift = REDUCED? 0 : Math.sin(now*0.0006*s.dir + s.phase)*10;
+    drawSerpent(s.x+drift, s.y, s.scale, s.phase+now*0.0004*s.dir, alpha);
+  }
+  // "here be —" flourishes
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(const f of flourishes){
+    const ex=localExposure(f.x,f.y);
+    const alpha=(1-smoothstep(ex))*0.42;
+    if(alpha<=0.01) continue;
+    ctx.save();
+    ctx.translate(f.x,f.y); ctx.rotate(f.rot);
+    ctx.globalAlpha=alpha;
+    ctx.fillStyle='#5a4a2e';
+    ctx.font=`italic ${Math.max(12,Math.min(W,H)*0.02)*f.scale}px ui-serif, Georgia, serif`;
+    ctx.fillText('here be —', 0, 0);
+    // a small flourish stroke under it
+    ctx.strokeStyle='rgba(90,74,46,'+alpha+')'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(-24,10); ctx.bezierCurveTo(-8,16,8,4,26,12); ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+function drawSerpent(x,y,scale,ph,alpha){
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.globalAlpha=alpha;
+  ctx.strokeStyle='#4e4130'; ctx.lineWidth=2.4*scale;
+  const seg=7, len=16*scale;
+  ctx.beginPath();
+  let px=-len*seg/2, py=0;
+  ctx.moveTo(px,py);
+  for(let i=1;i<=seg;i++){
+    const nx=-len*seg/2 + i*len;
+    const ny=Math.sin(i*0.9+ph)*8*scale;
+    const cx=(px+nx)/2, cy=(py+ny)/2 + Math.cos(i*0.9+ph)*6*scale;
+    ctx.quadraticCurveTo(cx,cy,nx,ny);
+    px=nx; py=ny;
+  }
+  ctx.stroke();
+  // head
+  const hx=-len*seg/2 + (seg+0.4)*len, hy=Math.sin((seg+0.4)*0.9+ph)*8*scale;
+  ctx.fillStyle='#4e4130';
+  ctx.beginPath(); ctx.ellipse(hx,hy,6*scale,4*scale,0,0,TAU); ctx.fill();
+  ctx.restore();
+}
+
+/* ---- COMPASS: wanders while sweeping, swings to true N + settles on pause ---- */
+function updateCompass(dt){
+  const still = lant.vel < 26;           // cursor velocity ~0
+  if(still){
+    compass.target = -Math.PI/2;         // "up" = true north
+    // ease to true north
+    let d = compass.target - compass.angle;
+    while(d> Math.PI) d-=TAU; while(d<-Math.PI) d+=TAU;
+    compass.angle += d * Math.min(1, dt*6);
+    if(!compass.locked && Math.abs(d)<0.05){
+      compass.locked=true;
+      if(now_since_lock()) play('ting');
+    }
+  } else {
+    compass.locked=false;
+    // wander: needle drifts with the sweep direction
+    const wander = Math.atan2(lant.y-lant.lastY, lant.x-lant.lastX);
+    let d = wander - compass.angle;
+    while(d> Math.PI) d-=TAU; while(d<-Math.PI) d+=TAU;
+    compass.angle += d*Math.min(1,dt*3) + (REDUCED?0:(noise(performance.now()*0.003,17)-0.5)*0.12);
+  }
+}
+let _lockCooldown=0;
+function now_since_lock(){ const t=performance.now(); if(t-_lockCooldown>1200){ _lockCooldown=t; return true; } return false; }
+
+function drawCompass(now){
+  const cx=W-64, cy=H-96, R=34;
+  ctx.save();
+  ctx.translate(cx,cy);
+  // faint rose ring
+  ctx.globalAlpha=compass.locked?0.6:0.4;
+  ctx.strokeStyle='rgba(233,220,192,0.5)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.arc(0,0,R,0,TAU); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0,0,R*0.66,0,TAU); ctx.globalAlpha*=0.6; ctx.stroke();
+  // tick marks
+  ctx.globalAlpha=compass.locked?0.55:0.35;
+  for(let i=0;i<8;i++){ const a=i*TAU/8; ctx.beginPath(); ctx.moveTo(Math.cos(a)*R*0.82,Math.sin(a)*R*0.82); ctx.lineTo(Math.cos(a)*R,Math.sin(a)*R); ctx.stroke(); }
+  // N marker
+  ctx.fillStyle=compass.locked?'rgba(240,199,102,0.9)':'rgba(233,220,192,0.5)';
+  ctx.font='10px ui-serif, Georgia, serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('N', 0, -R-8);
+  // needle
+  ctx.rotate(compass.angle);
+  ctx.globalAlpha=1;
+  // north half (gold when locked)
+  ctx.fillStyle=compass.locked?'#f0c766':'#c8663a';
+  ctx.beginPath(); ctx.moveTo(0,-R*0.78); ctx.lineTo(4,0); ctx.lineTo(-4,0); ctx.closePath(); ctx.fill();
+  // south half
+  ctx.fillStyle='rgba(233,220,192,0.55)';
+  ctx.beginPath(); ctx.moveTo(0,R*0.62); ctx.lineTo(4,0); ctx.lineTo(-4,0); ctx.closePath(); ctx.fill();
+  // hub
+  ctx.fillStyle='#e9dcc0'; ctx.beginPath(); ctx.arc(0,0,3,0,TAU); ctx.fill();
+  ctx.restore();
+}
+
+/* ---- CARTOUCHE: an empty ribboned title-frame; fills as coast is lit, then
+        letters the world's grand title once ~36% of reachable land is mapped ---- */
+function drawCartouche(){
+  const cw=Math.min(360, W*0.62), ch=64;
+  const cx=W/2, cy=H-70;
+  const x0=cx-cw/2, y0=cy-ch/2;
+  ctx.save();
+  ctx.globalAlpha=0.35+cartoucheFill*0.55;
+  // ribboned frame — a hand-drawn double border with rolled ends
+  ctx.strokeStyle='rgba(233,220,192,0.65)'; ctx.lineWidth=1.4;
+  roundedRibbon(x0,y0,cw,ch);
+  ctx.stroke();
+  ctx.lineWidth=0.7; ctx.globalAlpha*=0.7;
+  roundedRibbon(x0+5,y0+5,cw-10,ch-10);
+  ctx.stroke();
+  ctx.restore();
+  // the title letters in once earned
+  if(titled && titleReveal>0){
+    ctx.save();
+    ctx.globalAlpha=titleReveal;
+    ctx.fillStyle='#f0e2c0'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur=6;
+    const fs=Math.min(30, cw*0.09);
+    // small caps-ish grand hand
+    ctx.font=`${fs}px ui-serif, Georgia, "Times New Roman", serif`;
+    // trace the title too (arc-length reveal)
+    const txt = titleCase(land.title);
+    let total=0; const adv=[];
+    for(const chc of txt){ adv.push(ctx.measureText(chc).width); total+=adv[adv.length-1]; }
+    const revealFrac=smoothstep(titleReveal);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(cx-total/2-4, cy-fs, total*revealFrac+fs, fs*2); ctx.clip();
+    ctx.textAlign='left';
+    let gx=cx-total/2;
+    for(let i=0;i<txt.length;i++){ ctx.fillText(txt[i],gx,cy); gx+=adv[i]; }
+    ctx.restore();
+    ctx.restore();
+  } else {
+    // hint text while empty
+    ctx.save(); ctx.globalAlpha=0.25+cartoucheFill*0.2;
+    ctx.fillStyle='rgba(233,220,192,0.6)'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font=`italic 13px ui-serif, Georgia, serif`;
+    ctx.fillText('⚜', cx, cy);
+    ctx.restore();
+  }
+}
+function titleCase(s){ return s.replace(/\b([a-z])/g,(m,c)=>c.toUpperCase()); }
+function roundedRibbon(x,y,w,h){
+  const r=10;
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+  // rolled ribbon ends
+  ctx.moveTo(x,y+h/2); ctx.lineTo(x-10,y+h/2-7); ctx.lineTo(x-10,y+h/2+7); ctx.closePath();
+  ctx.moveTo(x+w,y+h/2); ctx.lineTo(x+w+10,y+h/2-7); ctx.lineTo(x+w+10,y+h/2+7); ctx.closePath();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   INPUT — the lantern is the cursor / finger.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function setLantern(x,y){ lant.tx=x; lant.ty=y; lant.has=true; }
+function grab(){ if(!userTouched){ userTouched=true; autoDrift=false; } unlockAudio(); }
+
+cv.addEventListener('pointermove', e=>{ grab(); setLantern(e.clientX,e.clientY); }, {passive:true});
+cv.addEventListener('pointerdown', e=>{ grab(); setLantern(e.clientX,e.clientY); }, {passive:true});
+cv.addEventListener('pointerenter', ()=>{ /* keep drift until real move */ });
+cv.addEventListener('touchmove', e=>{ if(e.touches[0]){ grab(); setLantern(e.touches[0].clientX,e.touches[0].clientY); } }, {passive:true});
+
+/* nib/era dial — changes the DRAWING HAND, re-renders the same land */
+$('nibFine').addEventListener('click',()=>{ if(nib==='fine')return; nib='fine'; setNibUI(); reRenderHand(); });
+$('nibBold').addEventListener('click',()=>{ if(nib==='bold')return; nib='bold'; setNibUI(); reRenderHand(); });
+function setNibUI(){ $('nibFine').classList.toggle('on',nib==='fine'); $('nibBold').classList.toggle('on',nib==='bold'); }
+function reRenderHand(){
+  // re-render the chart with the new hand, KEEPING the reveal (same land) — the
+  // lantern doesn't re-fog; only the ink weight under the light changes.
+  const savedExp = exposure.slice();
+  const savedLit = litCells, savedTitled=titled, savedTR=titleReveal, savedCF=cartoucheFill;
+  layout = renderLand(land, W, H, {nib});
+  // labelProg length matches (same labels)
+  exposure.set(savedExp.subarray(0, exposure.length));
+  litCells=savedLit; titled=savedTitled; titleReveal=savedTR; cartoucheFill=savedCF;
+  unlockAudio();
+}
+
+/* wax seal → new sheet (new random seed, re-fog) */
+$('seal').addEventListener('click',()=>{ unlockAudio(); buildWorld(randomSeed(), {fresh:true}); });
+
+addEventListener('resize', ()=>{ const s=seed; buildWorld(s); });
+addEventListener('hashchange', ()=>{ const h=(location.hash||'').replace(/^#/,''); if(h && decodeURIComponent(h)!==seed){ buildWorld(decodeURIComponent(h),{fresh:true}); } });
+
+/* first-visit breadcrumb for the Survey of Heaven / Undercroft */
+try{ var __ck='ws:seen:the-cartographers-dream'; if(!localStorage.getItem(__ck)) localStorage.setItem(__ck, String(Date.now())); }catch(e){}
+
+/* ---- boot ---- */
+syncMute();
+setNibUI();
+buildWorld(currentSeed());
+requestAnimationFrame(draw);
+
+/* debug hook (inert unless queried) — lets a verifier inspect the reveal without
+   disturbing the piece. Never referenced by the UI. */
+window.__dream = {
+  litFrac(){ let n=0,l=0; for(let i=0;i<exposure.length;i++){ if(cellLand[i]){ n++; if(exposure[i]>=0.72) l++; } } return l/Math.max(1,n); },
+  meanExp(){ let s=0; for(let i=0;i<exposure.length;i++) s+=exposure[i]; return s/exposure.length; },
+  refog(){ exposure.fill(0); wetAge.fill(-1); litCells=0; cartoucheFill=0; titled=false; titleReveal=0; for(let i=0;i<labelProg.length;i++)labelProg[i]=0; },
+  stopDrift(){ userTouched=true; autoDrift=false; },
+  state(){ return { seed, nib, autoDrift, userTouched, litFrac:this.litFrac(), meanExp:this.meanExp(), titled, cartoucheFill }; }
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SELF-TEST PILL — this is a DELIGHT piece (no math claim), so the "self-test"
+   is the well-formedness twin's determinism proof, surfaced quietly for the
+   publisher. Runs the SAME core inline: regenerate the current seed twice and
+   confirm the placement list is byte-identical. Console only — no HUD.
+   ═══════════════════════════════════════════════════════════════════════════ */
+try{
+  const a=generateLand(seed), b=generateLand(seed);
+  const sig=x=>{ const rows=['T|'+x.title]; for(const s of x.settlements)rows.push('S|'+s.x+'|'+s.y+'|'+(s.capital?1:0)+'|'+s.name); for(const l of x.labels)rows.push('L|'+l.kind+'|'+l.x+'|'+l.y+'|'+l.text); return rows.join('\n'); };
+  const same = sig(a)===sig(b);
+  const flood = a.landFraction>0.15 && a.landFraction<0.85;
+  console.log(`[dream self-test] seed "${seed}": determinism=${same?'PASS':'FAIL'} landFraction=${a.landFraction.toFixed(3)} (${flood?'ok':'FLOOD'}) rivers=${a.rivers.length} — the twin (core.test.mjs) proves the full battery.`);
+  window.__DREAM_SELFTEST={ determinism:same, flood, landFraction:a.landFraction, rivers:a.rivers.length, seed };
+}catch(e){ console.warn('[dream self-test] error', e); }
+</script>
+</body>
+</html>
