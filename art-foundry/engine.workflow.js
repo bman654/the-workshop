@@ -33,6 +33,43 @@ const CONTEXT_ROOT = A.contextRoot || '/tmp/gate-worktree'
 const MEDIUM_ID = A.medium || 'visual-gate'
 const OUT_ROOT = A.outRoot || '/tmp/art-foundry'
 
+// ── FOUNDRY RATE GATE ─────────────────────────────────────────────────────────
+// The takes/judges/synths below are effort:'high' agents. Fanned out across a
+// multi-asset batch (each asset K takes + judgeK judges, pipelined with NO barrier)
+// they burned tokens faster than the 5h rolling quota refilled and crashed the loop
+// on a spend-limit wall mid-cycle. This is a RATE problem, not a total-spend one, so
+// the fix is a concurrency cap (NOT a spend cap): a shared semaphore lets at most
+// FOUNDRY_MAX_CONCURRENCY agent() calls hit the API at once ACROSS this whole engine
+// run (every asset, every take/judge/synth). fun-forever already runs the per-medium
+// engine calls SEQUENTIALLY, so this per-engine cap is the effective GLOBAL cap.
+//
+// Set to 3 (= the max K takes / judgeK judges a SINGLE asset ever runs — takes, then
+// judges, then synth are sequential phases, so one asset never exceeds 3 in flight):
+// one asset forges at FULL parallel speed, but the instant a 2nd asset overlaps (the
+// pipeline has no barrier) its agents wait at the gate — so a batch can't pile up 4x3
+// the way it did when the loop crashed. This SUBSUMES the simpler "serialize the
+// assets" fix: same <=3 peak, but the gate still lets a finished asset's slow synth
+// tail overlap the next asset's first takes, so it's a touch faster at the same rate.
+// Drop to 2 for more headroom, 1 to fully serialize; raise only if quota room grows.
+// (Plain-JS pool: workflow scripts cannot import npm modules like async-await-queue.)
+const FOUNDRY_MAX_CONCURRENCY = 3
+function makeGate(max) {
+  let active = 0
+  const waiting = []
+  const pump = () => {
+    while (active < max && waiting.length) {
+      active++
+      const { job, resolve, reject } = waiting.shift()
+      Promise.resolve().then(job).then(
+        v => { active--; resolve(v); pump() },
+        e => { active--; reject(e); pump() }
+      )
+    }
+  }
+  return job => new Promise((resolve, reject) => { waiting.push({ job, resolve, reject }); pump() })
+}
+const gate = makeGate(FOUNDRY_MAX_CONCURRENCY)
+
 // ── INLINE MIRROR of art-foundry/engine-core.mjs (KEEP IN SYNC — workflows can't import) ──
 const CAPS = { maxK: 3, maxAssets: 15 }
 function clampK(k) { const n = Math.floor(Number(k)); return Number.isFinite(n) ? Math.max(1, Math.min(CAPS.maxK, n)) : 1 }
@@ -178,20 +215,20 @@ async function buildAsset(asset, assetIdx) {
   const dir = `${OUT_ROOT}/${asset.key}`
   phase('forge')
   log(`=== ${asset.key} (${asset.tier}, medium=${MEDIUM.id}, K=${asset.K}) — forging ${asset.K} takes ===`)
-  const takes = (await parallel(range(asset.K).map(i => () =>
+  const takes = (await parallel(range(asset.K).map(i => () => gate(() =>
     agent(takePrompt(asset, i, { candidate: `${dir}/take-${i}.js`, scratch: `${dir}/scratch-${i}`, outdir: `${dir}/take-${i}/out`, port: base + i }),
       { label: `${asset.key}:take-${i}`, phase: 'forge', schema: TAKE_SCHEMA, agentType: 'general-purpose', effort: 'high' })
-  ))).filter(Boolean)
+  )))).filter(Boolean)
   if (takes.length === 0) { log(`${asset.key}: NO takes returned — skipping`); return { asset: asset.key, status: 'FAILED-takes' } }
 
-  const judges = (await parallel(range(asset.judgeK).map(n => () =>
+  const judges = (await parallel(range(asset.judgeK).map(n => () => gate(() =>
     agent(judgePrompt(asset, takes, n), { label: `${asset.key}:judge-${n}`, phase: 'forge', schema: JUDGE_SCHEMA, agentType: 'general-purpose', effort: 'high' })
-  ))).filter(Boolean)
+  )))).filter(Boolean)
   const safeJudges = judges.length ? judges : [{ winner: takes[0].take, graftNotes: '(no judge returned)', overallVerdict: '' }]
   log(`${asset.key}: winners = ${safeJudges.map(j => 't' + j.winner).join(', ')}`)
 
-  const final = await agent(synthPrompt(asset, takes, safeJudges, { outdir: `${dir}/final`, scratch: `${dir}/final-scratch`, port: base + 9 }),
-    { label: `${asset.key}:synth`, phase: 'forge', schema: FINAL_SCHEMA, agentType: 'general-purpose', effort: 'high' })
+  const final = await gate(() => agent(synthPrompt(asset, takes, safeJudges, { outdir: `${dir}/final`, scratch: `${dir}/final-scratch`, port: base + 9 }),
+    { label: `${asset.key}:synth`, phase: 'forge', schema: FINAL_SCHEMA, agentType: 'general-purpose', effort: 'high' }))
   log(`${asset.key}: synth done — forgeClean=${final?.forgeClean} interfacePreserved=${final?.interfacePreserved}`)
   return { asset: asset.key, takes: takes.map(t => ({ take: t.take, iterations: t.iterations, artifacts: t.artifacts, notes: t.notes })), judges: safeJudges, final }
 }
