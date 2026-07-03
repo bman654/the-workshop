@@ -815,6 +815,30 @@
     t.textContent = (poi && poi.glyph) || "◇";
   }
 
+  // THE CONTRARY STONE — the rattleback (celt), gathered to the fairground register: a canoe-hulled
+  // stone seen from above on a felt table. It sways one way, stalls, and REVERSES — the signature
+  // spin-reversal — engraved as a slow sway about its centre, its two offset ballast pips (what makes
+  // it contrary) marked, and a reversal arrow above.
+  function drawContraryStone(g, poi, box, accent) {
+    var uid = "rb" + (_seq++), gy = box.y + box.h - box.h * 0.14;
+    groundLine(g, box, gy);
+    var tx = box.x + box.w * 0.10, ty = box.y + box.h * 0.30, tw = box.w * 0.80, th = gy - ty;
+    rectHatch(g, tx, ty, tw, th, 8, 6, 0.05);
+    add(g, "rect", { x: n(tx), y: n(ty), width: n(tw), height: n(th), rx: 2, "class": "eng-fine" });
+    var cx = box.x + box.w * 0.5, cy = box.y + box.h * 0.54, rx = box.w * 0.22, ry = box.h * 0.095;
+    swayKF("celt_" + uid, 14);                                           // rotate ± (the reversal)
+    var spin = anim(g, "celt_" + uid, 3.2, "transform-origin:" + n(cx) + "px " + n(cy) + "px");
+    add(spin, "ellipse", { cx: n(cx), cy: n(cy), rx: n(rx), ry: n(ry), "class": "eng fillp", "stroke-width": 1.2 });
+    hatch(spin, E("ellipse", { cx: n(cx), cy: n(cy), rx: n(rx), ry: n(ry) }), { x: cx - rx, y: cy - ry, w: rx * 2, h: ry * 2 }, 30, 2.2, 0.28);
+    add(spin, "line", { x1: n(cx - rx * 0.9), y1: n(cy), x2: n(cx + rx * 0.9), y2: n(cy), "class": "eng-fine" });
+    add(spin, "circle", { cx: n(cx - rx * 0.42), cy: n(cy - ry * 0.4), r: 1.4, "class": "eng-accent" });
+    add(spin, "circle", { cx: n(cx + rx * 0.42), cy: n(cy + ry * 0.4), r: 1.4, "class": "eng-accent" });
+    // a reversal arrow above (the "it spins back" tell)
+    var ax = cx, ay = cy - box.h * 0.22, ar = rx * 0.7;
+    add(g, "path", { d: "M" + n(ax - ar) + " " + n(ay) + " a " + n(ar) + " " + n(ar * 0.7) + " 0 1 1 " + n(ar * 2) + " 0", "class": "eng-accent", fill: "none" });
+    add(g, "path", { d: "M" + n(ax + ar) + " " + n(ay - 2) + " l 3 -3 l 1.4 5 z", "class": "eng-accent" });
+  }
+
   /* ════════════ THE PER-POI CHILD-SCENE REGISTRY (the reusable hook) ════════════ */
   var childScenes = {
     // literal rides
@@ -834,8 +858,10 @@
     "puzzle-pavilion": drawPuzzlePavilion,
     "the-shepherd": drawShepherdPen,
     "the-standing-stones": drawCromlech,
+    "rattleback": drawContraryStone,
     // ── footprint-tier fallbacks (a future detach:true child inherits by footprint) ──
-    "fp:pavilion": drawPavilionBase
+    "fp:pavilion": drawPavilionBase,
+    "fp:rattleback": drawContraryStone
   };
   var SCENE_LABEL = {
     drawCoaster: "coaster trestle", drawBumperTent: "bumper ring", drawFerris: "ferris wheel",
@@ -843,7 +869,7 @@
     drawWarren: "the crossing", drawConvectionRolls: "convection rolls", drawShakerJar: "shaker jar",
     drawSandHeap: "assayer's tray", drawMazePlate: "maze plate", drawStarlingFlock: "starling flock",
     drawPuzzlePavilion: "puzzle pavilion", drawShepherdPen: "the fold", drawCromlech: "the cromlech",
-    drawPavilionBase: "show pavilion"
+    drawPavilionBase: "show pavilion", drawContraryStone: "the contrary stone"
   };
 
   // resolve(id) — the TWO-TIER lookup: id first, then footprint tier (fp:<footprint>).
