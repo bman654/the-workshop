@@ -4,8 +4,12 @@
    smoke.cjs (retired in the same commit): the CROWDING_BASELINE ratchet is gone; the
    hard per-plate legibility gates live in legibility.test (armed by wave, §9.1).
 
-   Drives the v2 facade (layout.js) against the MIGRATED-PLACES fixture (estate.fixture.cjs —
-   a copy; the live page is not flipped until W1) and proves the §9.1 invariants:
+   Drives the v2 facade (layout.js) against the LIVE, migrated PLACES read straight out of
+   index.src.html (the single source of truth — the emit-mirror extraction idiom; the
+   estate.fixture.cjs stand-in retired its role when W1.1 flipped the page). The live table
+   is PRE-GATHER through W1 (all 93 rooms keep their POIs; the §2.6 gather retires rows in
+   W2.8), so the census assertions are PLACES-DERIVED and hold at every wave. It proves the
+   §9.1 invariants:
      · angle+tier deeds unique · same-tier separation ≥ 180/(t+1) · road+lane span
        clearance ≥ 1.5° · quantized tier radii monotone (·24) · district hulls pairwise
        disjoint (ALL pairs) · every footprint inside its district hull · no footprint
@@ -20,9 +24,18 @@
    Run: node tools/layout/estate.test.cjs   (pure Node; no DOM; part of the layout suite)
    ════════════════════════════════════════════════════════════════════════════ */
 'use strict';
+const fs = require('fs');
+const path = require('path');
 const Layout = require('./layout.js');
 const Contract = require('./contract.js');
-const { PLACES } = require('./estate.fixture.cjs');
+/* the LIVE, migrated PLACES literal — a pure data array — evaluated out of index.src.html
+   (identical to emit-mirror.cjs, so adding/removing a room can never drift this gate). */
+const _src = fs.readFileSync(path.join(__dirname, '..', '..', 'index.src.html'), 'utf8');
+const _pStart = _src.indexOf('const PLACES = [');
+const _pEnd = _src.indexOf('\n];', _pStart);
+if (_pStart < 0 || _pEnd < 0) throw new Error('estate.test: could not find the PLACES array in index.src.html');
+// eslint-disable-next-line no-eval
+const PLACES = eval('(' + _src.slice(_pStart + 'const PLACES = '.length, _pEnd + 2) + ')');
 
 let pass = 0, fail = 0;
 function ok(name, cond, detail) {
@@ -72,8 +85,11 @@ ok('+ structures [{district, box, label, tallies}]',
   sol.structures.every(s => s.district && s.box && s.label && s.tallies));
 ok('graph carries {door,spine,avenues,aisles,stubs}',
   sol.graph.door && sol.graph.spine && Array.isArray(sol.graph.avenues) && Array.isArray(sol.graph.aisles) && Array.isArray(sol.graph.stubs));
-ok('44 parent-plate footprints (the §2.1 census: 15+6+3+8+3+3+2+1+1+2)', Object.keys(sol.foot).length === 44,
-  'got ' + Object.keys(sol.foot).length);
+const detachedD = new Set(Object.keys(pl.detached));
+const parentRooms = PLACES.filter(p => !p.locked && !detachedD.has(p.district));
+ok('every parent room seats exactly one footprint (PLACES-derived; ' + parentRooms.length + ' pre-gather → 44 after the §2.6 gather)',
+  Object.keys(sol.foot).length === parentRooms.length,
+  'foot=' + Object.keys(sol.foot).length + ' parentRooms=' + parentRooms.length);
 ok('11 district precincts (10 non-fairground + the fairground gate face)', sol.districtRects.length === 11,
   'got ' + sol.districtRects.length);
 
@@ -147,7 +163,10 @@ for (let t = 0; t <= 24; t++) {
 }
 ok('road samples all lie in the wedge [168°,192°]', wedgeBad === 0);
 ok('the fold detaches exactly {fairground}', JSON.stringify(Object.keys(pl.detached).sort()) === '["fairground"]');
-ok('child:fairground carries all 16 tiles', (pl.members['child:fairground'] || []).length === 16);
+const fairRooms = PLACES.filter(p => p.district === 'fairground' && !p.locked);
+ok('child:fairground carries every fairground room (' + fairRooms.length + ' tiles)',
+  (pl.members['child:fairground'] || []).length === fairRooms.length,
+  'tiles=' + (pl.members['child:fairground'] || []).length + ' fairRooms=' + fairRooms.length);
 ok('a gate face at the fairground polar centre, descent edge child↔manor',
   pl.gates.length === 1 && pl.gates[0].district === 'fairground' && pl.gates[0].box.w === 96 && pl.gates[0].box.h === 120 &&
   pl.parentOf['child:fairground'] === 'manor' && pl.edges.some(e => e[0] === 'child:fairground' && e[1] === 'manor'));
