@@ -65,7 +65,10 @@ function die(msg) { console.error('manifest: ' + msg); process.exit(1); }
    wave-end would violate arm-by-wave. `rooms = 60` is the design value verbatim (it clears
    the post-gather census of 62 by construction, and the pre-gather 94 with room to spare). */
 const ROOMS_FLOOR = 60;
-const PIECES_FLOOR = 320;   // honest computed pieces at W2.1b = 324; RISES toward ≥340 by W2.7
+const PIECES_FLOOR = 324;   // W2.3: risen to the post-enrolment count (§10 W2.3). The R3 strays were
+                            // already enrolled at T2.1a, so the honest total is unchanged at 324 — the
+                            // W2.3 re-homing added on-page kin links, not new pieces. RISES toward ≥340
+                            // as the WITHINs (W2.5) and the gather (W2.7) enroll genuinely new pieces.
 
 /* ── the on-disk top-level dir universe ─────────────────────────────────────── */
 function topLevelDirs() {
