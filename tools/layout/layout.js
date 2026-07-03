@@ -233,14 +233,17 @@ var Layout = (function () {
     });
   }
 
-  /* §5.1 stub: one structure per precinct (the central "green" a §5 build later fills).
-     tallies provisional (room count) until the manifest feeds them (W2.5). */
+  /* §5.1: one engraved STRUCTURE per precinct. `box` = the district HULL (its precinct
+     rect) — the render display-clamps the drawn structure to [110,260]px centred on the
+     hull centre (the manor's great-house massing draws UNCLAMPED as the dominant centre),
+     so the box is the geometric anchor + natural size the LOD estate-tier reads. Tallies
+     are a PROVISIONAL room count (hand-count) until the manifest feeds them a true
+     rooms/within pair at W2.5. */
   function buildStructures(solution, memberCount) {
     solution.districtRects.forEach(function (dr) {
-      var w = Math.max(24, Math.min(dr.w, dr.h) * 0.42), h = w * 0.62;
       solution.structures.push({
         district: dr.district, label: dr.label,
-        box: { x: r01(dr.x + dr.w / 2 - w / 2), y: r01(dr.y + dr.h / 2 - h / 2), w: r01(w), h: r01(h) },
+        box: { x: r01(dr.x), y: r01(dr.y), w: r01(dr.w), h: r01(dr.h) },
         tallies: { rooms: memberCount[dr.district] || 0, provisional: true }
       });
     });

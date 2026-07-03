@@ -236,10 +236,41 @@ for (const id of PP.ids) {
 ok('NEG-CONTROL: name-only is LOAD-BEARING (a plate reads CROWDED full / LEGIBLE name-only)',
   loadBearing, lbId ? '[' + lbId + ']' : '');
 
-/* ── the ESTATE plate (district-STRUCTURE labels, ~11) — arms at W1.3 (round 4): the
-   structure labels are rendered by the LOD wave, so this composite SELF-SKIPS here,
-   reported not-yet-armed rather than green (the pill stays honest at every wave). ── */
-console.log('  ⏭ ESTATE-plate composite (structure labels) — not yet armed (arms at W1.3, §10)');
+/* ── the ESTATE plate (district-STRUCTURE labels, 11) — ARMED at W1.3 (§9.1, round 4):
+   the LOD wave draws ONE structure per district (box = the district hull, §5.1), so this
+   composite now scores the structure LABELS as one plate. Spread around the manor pole at
+   radii 408/792/1080, the hulls are pairwise disjoint (the polar clearance law) and the
+   labels seat at their hull centres → they never collide, so the ESTATE plate reads
+   LEGIBLE. The neg-control cramming the same 11 labels into one cluster proves teeth. ── */
+console.log('\nESTATE-plate composite (district-structure labels — §9.1 hard gate):');
+const ESTRUCTS = PP.structures;
+function estatePlate(placedAt) {
+  const foot = {}, footMeta = {}, placed = [];
+  for (const st of ESTRUCTS) {
+    const id = 'struct:' + st.district, box = placedAt(st);
+    foot[id] = { x: box.x, y: box.y, w: box.w, h: box.h };
+    footMeta[id] = { district: st.district };
+    placed.push({ id, room: st.label, piece: st.label, tag: '', district: st.district });
+  }
+  return { foot, footMeta, placed };
+}
+// labels seat at the STRUCTURE HULL (the §5.1 box the estate tier renders each rep into).
+const estOk = estatePlate(st => st.box);
+const estRep = Leg.score({ foot: estOk.foot, footMeta: estOk.footMeta, graph: null }, estOk.placed, { nameOnly: true });
+console.log('  estate composite =', estRep.overall.composite.toFixed(3), '(' + estRep.overall.verdict + ')');
+ok('HARD GATE: the ESTATE plate (' + ESTRUCTS.length + ' district-structure labels) clears < 0.30',
+  estRep.overall.composite < Leg.THRESHOLD,
+  '[' + estRep.overall.composite.toFixed(3) + ' < ' + Leg.THRESHOLD + ']');
+
+// NEG-CONTROL: the SAME labels crammed into one tight cluster → CROWDED (the gate has teeth).
+let ci = 0;
+const estNCplate = estatePlate(function () {
+  const box = { x: 1500 + (ci % 4) * 15, y: 1500 + Math.floor(ci / 4) * 15, w: 20, h: 14 }; ci++; return box;
+});
+const estNC = Leg.score({ foot: estNCplate.foot, footMeta: estNCplate.footMeta, graph: null }, estNCplate.placed, {});
+ok('NEG-CONTROL: the same structure labels crammed into one cluster → CROWDED (ESTATE gate has teeth)',
+  estNC.overall.composite >= Leg.THRESHOLD,
+  '[' + estNC.overall.composite.toFixed(3) + ' ≥ ' + Leg.THRESHOLD + ']');
 
 // reciprocal + connected road graph
 let recip2 = true;
