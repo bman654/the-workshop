@@ -1,48 +1,56 @@
 #!/usr/bin/env node
 /* ════════════════════════════════════════════════════════════════════════════
-   gate-dom.test.mjs — THE FAIRGROUND GATE (#369), asserted against the LIVE RENDERED DOM.
+   gate-dom.test.mjs — THE ESTATE PLATEWALK, asserted against the LIVE RENDERED DOM.
+   (§9.1 gate-dom row · §10 W1.3 block C · §4.6 platewalk · §5.1 LOD.)
 
-   THE BLIND SPOT IT CLOSES (the #369 bug, the #337 blind spot several times over): the Node
-   twins (fold.test.cjs, door.test.cjs) model the partition + score the conscience over MODELED
-   or MIRRORED boxes — they cannot see whether the PAGE actually applies the fold to the live
-   DOM. They shipped green while the rendered page kept the 15 amusement tiles crammed on the
-   parent, drew the gate OVER them, and a real pointer click in the open arch fell THROUGH the
-   thin-stroke art and missed. This test drives a REAL headless browser over the forged
-   index.html and asserts the things ONLY the rendered DOM can prove:
+   THE BLIND SPOT IT CLOSES: the pure-Node twins (estate.test / legibility / door.test)
+   model the polar solve + score the conscience over MODELED boxes — they cannot see whether
+   the PAGE actually wires the estate↔district LOD, the district STRUCTURES as nav, the
+   fairground gate's negative-space hit-test, or the ascend affordances to the live DOM. This
+   test drives a REAL headless browser over the forged index.html and asserts the things ONLY
+   the rendered page can prove, with REAL CDP INPUT throughout.
 
-     D1 — AT REST the parent's child:* tiles are NOT rendered (display:none / getBBox width 0):
-          the crowded canonical column is GONE; the fold is real, not a transient on-descend
-          transform. (We tour grounds-east — the gate's parent plate — so the gate is fully lit.)
-     D1b— AT REST the wing's OWN CHROME is folded too (#376 second defect): no dashed capsule
-          (.wing-bound) and no "AMUSEMENTS" caption (.wing-label) drawn round the gate — the
-          tile-only fold left those behind, an empty capsule + label wrapped on the lit gate.
-     D2 — THE GATE IS TRULY CLICKABLE: document.elementFromPoint over the gate's OPEN-ARCH centre
-          (negative space, not a stroke) returns a .gate-face descendant — a real click there
-          would catch, not fall through. (The invisible full-box .gate-hit rect under-paints the
-          art.)
-     D3 — A REAL CLICK DESCENDS — split into a synthetic CONTROL and the real fix, because the
-          #376 lesson is that they are NOT the same input:
-            D3a (CONTROL) a synthetic el.dispatchEvent(pointerdown..click) sequence STILL descends
-                — proves the gate's click→go listener is WIRED (necessary, not sufficient).
-            D3b (THE FIX) a TRUE input-level click — agent-browser's `find role button click`
-                issues a real CDP Input.dispatchMouseEvent press→release at the gate's painted
-                centre (a genuine pointerdown → mousedown → pointerup → mouseup → click). It goes
-                through #sheet's capture-phase pointerdown (where the #376 bug stole the click via
-                setPointerCapture) and then the gate group's own click→go — the path a dispatch can
-                NEVER exercise and the one the #376 bug broke. The gate shipped green-while-broken
-                twice precisely because the old D3 was a synthetic dispatch; now a regression of
-                THAT class fails D3b while D3a keeps passing.
-     D4 — ASCEND RETURNS + THE GATE IS RE-ENTERABLE: clicking the ribbon ascends — the ribbon
-          hides, the child tiles fold AWAY again (display:none), the midway hides, and
-          elementFromPoint over the arch once more returns the gate.
-     D4b— ASCEND re-folds the wing chrome too: no capsule, no "AMUSEMENTS" label round the gate.
-     D5 — THE LIVE #doortest PILL READS 17/17 (CLAIM C′ flipped ✗16/17→✓17/17 by the relay
-          DEPTH), AND the detach-OFF NEG-CONTROL stays RED: re-running the door claims in-page
-          with childFoot:{} (the byte-identical pre-fold path) goes ✗ on C′ — proving DEPTH (the
-          relay), not a scorer tweak, did it. A synthetic .click() alone can NEVER stand in for the
-          descend proof: D2 is a real hit-test (elementFromPoint), and D3b is a real INPUT click
-          (CDP press→release). THE STANDING LESSON THIS GATE RECORDS: el.dispatchEvent(...) and
-          .click() are NOT a real click — real-pointer behavior is only proven by real input.
+   THE STANDING HOUSE LESSON THIS GATE RECORDS: el.dispatchEvent(...) and .click() are NOT a
+   real click — they poke-fire the handler and SKIP pointerdown, pointer-capture, drag-vs-click
+   arbitration and painted-pixel hit-testing, the exact machinery a real pointer lives on (the
+   #369→#376 gate shipped green-while-broken twice precisely because its old descend check was a
+   synthetic dispatch). So every navigation here is a REAL agent-browser input (a genuine CDP
+   Input.dispatchMouseEvent press→release, or a real keyboard press on a focused element), and
+   the structure/gate descend keeps a SYNTHETIC CONTROL beside the real click so a regression of
+   that class makes the two diverge and names the bug.
+
+     D0  — AT REST the estate tier reads: #viewport.lod-estate, the district STRUCTURES shown,
+           the room-plan LABEL layers (#roomlabels/#winglabels) folded to opacity 0, and
+           #whereami reads "the estate · wander where you like" (§4.6 duty 3, §5.1 tier 1).
+     D1  — a district STRUCTURE is truly clickable: elementFromPoint over the monogram plinth's
+           painted centre returns a .district-rep descendant (a real click there CATCHES — it is
+           not stolen by #sheet's capture-phase pointerdown, the #376 class of bug).
+     D2  — a REAL INPUT click on a district STRUCTURE DESCENDS to its plate (§4.6 duty 1):
+             D2a (CONTROL, synthetic) a dispatched click sequence still descends — the rep's
+                 click→enter listener is WIRED (necessary, not sufficient).
+             D2b (THE REAL FIX) a true CDP press→release on the plinth descends — #viewport flips
+                 to .lod-district, #whereami reads "in THE …", the rep carries aria-current.
+     D3  — KEYBOARD parity (§4.6 duty 1): a focused .district-rep + a REAL Enter press enters the
+           plate (the same lod-district + "in THE …" lede). No mouse — keyboard alone.
+     D4  — the FAIRGROUND GATE descends by a REAL NEGATIVE-SPACE click (§9.2 gate hit-test):
+             D4a elementFromPoint over the open-arch void returns a .gate-face descendant (the
+                 invisible full-box .gate-hit under-paints the art — a real click catches).
+             D4b a REAL CDP click on the lit gate descends into the child layer — #whereami reads
+                 "down in THE FAIRGROUND", the depth ribbon shows, __fairgroundLiveness stays green.
+     D5  — Esc ASCENDS from the child straight to the estate home (§4.6 duty 4): a REAL Escape
+           key press folds the child away, hides the ribbon, returns to #viewport.lod-estate and
+           the resting #whereami lede.
+     D6  — the DEPTH RIBBON and the ⌂ HOME button both ascend by REAL input (§4.6 duty 4): a real
+           click on #depthribbon .ribbon ascends out of a re-descended child; a real click on
+           ⌂ #pz-home returns a district tour to the fit-view estate (lod-estate, no aria-current).
+     D7  — the LOD CROSSFADE leaves NO ORPHAN LABELS (post-transition DOM check, §5.1): after the
+           estate→district transition SETTLES the structures fade to the faint ground-etch
+           (opacity ≈ .1, inert) while the room plan is present; after district→estate settles the
+           room/wing label layers are opacity 0 and the structures are full — neither tier strands
+           the other's content.
+     D8  — the KEYBOARD WALK visits EVERY plate in the §2.5 STRUCT_WALK order: each of the eleven
+           nav elements (ten district reps + the fairground gate) is focusable (role=button,
+           tabindex 0) and a REAL Enter enters it; aria-current tracks the entered district.
 
    Run:  node tools/layout/gate-dom.test.mjs   (exit 0 = all pass, exit 1 = a check failed,
          exit 2 = harness could not run — agent-browser missing / server / forge error).
@@ -62,7 +70,7 @@ import net from 'node:net';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..', '..');
 const PORT = 8769;                       // an uncommon port we own + tear down
-const SESSION = 'gate-dom-test-369';     // a uniquely-named session we close at the end
+const SESSION = 'gate-dom-test-polar';   // a uniquely-named session we close at the end
 const URL = `http://127.0.0.1:${PORT}/index.html`;
 
 // every agent-browser call carries a HARD timeout (a hung headless launch must never strand the
@@ -93,6 +101,10 @@ function abEval(expr) {
 function ab(...args) {
   return sh('agent-browser', ['--session', SESSION, ...args]);
 }
+// a REAL input click on a CSS selector: agent-browser `click` issues a genuine CDP
+// Input.dispatchMouseEvent press→release at the element's painted centre (NOT a synthetic
+// dispatch) — the house-lesson-approved real pointer. Returns the spawn result.
+function realClick(sel) { return ab('click', sel); }
 function waitPort(port, ms) {
   const deadline = Date.now() + ms;
   return new Promise((resolve, reject) => {
@@ -110,126 +122,85 @@ function check(name, ok, detail) {
   if (!ok) fail++;
 }
 
-// read the descend state (midway opacity, ribbon shown, # of relayed child tiles) — used by both
-// the synthetic CONTROL and the real-input check, so they assert the IDENTICAL "we are down" shape.
-function descendState() {
+/* ── the single rich read of the platewalk state (used everywhere) ──
+   lod       : 'estate' | 'district' | '?'   (the #viewport LOD class, §5.1)
+   whereami  : the #whereami lede text (§4.6 duty 3)
+   ribbon    : is the depth ribbon showing (child depth, §4.6 duty 4)
+   struct/room/wing Op : the settled computed opacity of the three crossfade layers (§5.1)
+   ariaCurrent : the data-district of the rep carrying aria-current (§4.6 duty 2), or null
+   curAria   : the RAW aria-label of that aria-current rep ("THE NUMBER GARDEN — enter"), so a
+               "in THE …" lede can be proved to NAME exactly the district it entered — read off
+               the same DOM element that carries aria-current (no dependence on a page global)
+   fairPass  : window.__fairgroundLiveness.result.pass, when it has run (else null)          */
+function state() {
   return abEval(`(function(){
-    var mid=document.querySelector('.child-midway'); var ribbon=document.getElementById('depthribbon');
-    var tiles=Array.from(document.querySelectorAll('.poi[data-id]'));
-    var relayed=tiles.filter(function(t){ return getComputedStyle(t).display!=='none' && /translate/.test(t.getAttribute('transform')||''); });
+    function op(el){ return el? +getComputedStyle(el).opacity : null; }
+    var vp=document.getElementById('viewport');
+    var lod = vp ? (vp.classList.contains('lod-district')?'district':(vp.classList.contains('lod-estate')?'estate':'?')) : null;
+    var wa=document.getElementById('whereami');
+    var rib=document.getElementById('depthribbon');
+    var cur=null, curAria=null;
+    document.querySelectorAll('#structures .district-rep[data-district]').forEach(function(r){
+      if(r.getAttribute('aria-current')==='true'){ cur=r.dataset.district; curAria=r.getAttribute('aria-label'); } });
+    var fair = (window.__fairgroundLiveness && window.__fairgroundLiveness.result)
+      ? !!window.__fairgroundLiveness.result.pass : null;
     return JSON.stringify({
-      midOp: mid?getComputedStyle(mid).opacity:null,
-      ribbonShown: ribbon?ribbon.classList.contains('show'):false,
-      relayedCount: relayed.length });
-  })()`);
-}
-const isDescended = s => s.midOp === '1' && s.ribbonShown && s.relayedCount >= 10;
-
-// #382 — read the LIT child-label set the loupe is showing right now, with the RENDERED overlap
-// count (real getBoundingClientRect boxes). The child map now OWNS its labels: a re-solved fan
-// layout (all 15 seat) + a DYNAMIC loupe (the lit set recomputes as you zoom/pan). The OLD code
-// (translate-only canonical column + a frozen tour set) could only seat ~9/15 and never recomputed.
-//
-// #385 — the overlap test measures the INNER .labeltext box (the actual rendered roomname/sub
-// block), NOT the .labelgroup WRAPPER. The wrapper bbox also encloses the LEADER line + foot-dot;
-// once #385 reattached each leader to its TILE (not the wide relay cell), a leader honestly reaches
-// across the fan and a thin leader line can cross a neighbour's wrapper bbox — normal cartography,
-// not a label clash. "Do the LABELS collide" is a text-box question, and it is exactly what the
-// page's own loupe declutter scores (solvedBox() reads childSolved = the solved TEXT boxes). So we
-// score the .labeltext boxes: the #382 fan invariant (all seat, zero TEXT overlap) holds, and the
-// metric is robust to the correct leader geometry. (The lit SET is still read off .labelgroup.live.)
-function litChildState() {
-  return abEval(`(function(){
-    var live=Array.from(document.querySelectorAll('#roomlabels .labelgroup.live'))
-      .filter(function(L){ return getComputedStyle(L).display!=='none'; });
-    var boxes=live.map(function(L){
-        var t=L.querySelector('.labeltext')||L; var r=t.getBoundingClientRect();
-        return { id:L.dataset.id, x:r.left, y:r.top, w:r.width, h:r.height }; })
-      .filter(function(b){ return b.w>0; });
-    var ov=0; for(var i=0;i<boxes.length;i++) for(var j=i+1;j<boxes.length;j++){
-      var a=boxes[i],b=boxes[j]; if(a.x<b.x+b.w&&b.x<a.x+a.w&&a.y<b.y+b.h&&b.y<a.y+a.h) ov++; }
-    return JSON.stringify({ lit: boxes.length, overlaps: ov,
-      ids: boxes.map(function(b){ return b.id; }).sort(),
-      k: +(window.__panCamera ? window.__panCamera.k : 0).toFixed(3) });
+      lod:lod, whereami: wa?wa.textContent.trim():null,
+      ribbon: rib?rib.classList.contains('show'):false,
+      structOp: op(document.getElementById('structures')),
+      roomOp:  op(document.getElementById('roomlabels')),
+      wingOp:  op(document.getElementById('winglabels')),
+      ariaCurrent: cur, curAria: curAria, fairPass: fair });
   })()`);
 }
 
-// #385 — THE LEADER FOOT LANDS ON ITS TILE. When descended, each relayed child tile keeps its
-// CANONICAL footprint (a move, no scale) while the leader was anchored on the WIDE relay CELL —
-// so the foot-dot landed OFF the smaller tile (left col ≈ (-7,+16), right col ≈ (+53,+16) from the
-// tile centre). The fix anchors the leader on the rendered TILE footprint. This reader measures,
-// for every LIVE child leader-dot, the dot's screen position vs its OWN tile's rendered screen
-// bbox: maxOutside = the largest distance any dot sits OUTSIDE its tile bbox (0 == on/inside the
-// tile, the fix). It also reports the worst dot→tile-centre offset so a regression to the cell
-// anchor (which lands at the cell's far edge, tens of px past the tile) is loud. Screen-space
-// (getBoundingClientRect) is the robust common frame — both dot + tile bake in every transform/CTM.
-function childLeaderFootState() {
+// does the "in THE …" lede NAME exactly the district whose structure carries aria-current? The
+// rep's aria-label is "<LABEL> — enter"; the lede is "in <LABEL>". So the aria-label must start
+// with the lede's district name (lede minus the "in " prefix) — a self-consistent DOM check that
+// needs no page global and no em-dash stripping.
+function ledeNamesCurrent(s, district) {
+  if (s.ariaCurrent !== district) return false;
+  if (!/^in /.test(s.whereami || '')) return false;
+  const name = (s.whereami || '').slice(3);
+  return !!s.curAria && s.curAria.indexOf(name) === 0;
+}
+
+// elementFromPoint over a fractional point of an element's bounding box → does it return a
+// descendant of `wantSel`? (the real hit-test that proves a real click there CATCHES, not falls
+// through to #sheet). fx/fy are 0..1 across the box (0.5,0.5 = centre; 0.5,0.30 = the arch void).
+function hitTest(sel, fx, fy, wantSel) {
   return abEval(`(function(){
-    function rect(el){ var r=el.getBoundingClientRect(); return { x:r.left, y:r.top, w:r.width, h:r.height, cx:r.left+r.width/2, cy:r.top+r.height/2 }; }
-    // every LIVE child label group that is shown, with a foot-dot AND a matching rendered tile.
-    var live=Array.from(document.querySelectorAll('#roomlabels .labelgroup.live[data-id]'))
-      .filter(function(L){ return getComputedStyle(L).display!=='none'; });
-    var rows=[];
-    live.forEach(function(L){
-      var id=L.dataset.id;
-      var dot=L.querySelector('.leader-dot'); if(!dot) return;
-      var tile=document.querySelector('#pois .poi[data-id="'+(window.CSS&&CSS.escape?CSS.escape(id):id)+'"]');
-      if(!tile || getComputedStyle(tile).display==='none') return;
-      var tr=tile.getBoundingClientRect(); if(tr.width<=0||tr.height<=0) return;
-      var dr=dot.getBoundingClientRect(); var dx=dr.left+dr.width/2, dy=dr.top+dr.height/2;
-      // how far the dot sits OUTSIDE the tile bbox (0 if on/inside). Clamp each axis to the box.
-      var ox=Math.max(0, tr.left-dx, dx-(tr.left+tr.width));
-      var oy=Math.max(0, tr.top-dy, dy-(tr.top+tr.height));
-      var outside=Math.hypot(ox,oy);
-      var tcx=tr.left+tr.width/2, tcy=tr.top+tr.height/2;
-      var offCtr=Math.hypot(dx-tcx, dy-tcy);    // dot vs tile-centre (cell anchor → tens of px)
-      rows.push({ id:id, outside:+outside.toFixed(2), offCtr:+offCtr.toFixed(2),
-        tileW:+tr.width.toFixed(1), tileH:+tr.height.toFixed(1) });
-    });
-    var maxOutside=rows.reduce(function(m,r){ return Math.max(m,r.outside); }, 0);
-    var maxOffCtr=rows.reduce(function(m,r){ return Math.max(m,r.offCtr); }, 0);
-    var worst=rows.slice().sort(function(a,b){ return b.outside-a.outside; })[0]||null;
-    return JSON.stringify({ count:rows.length, maxOutside:+maxOutside.toFixed(2),
-      maxOffCtr:+maxOffCtr.toFixed(2), worst:worst });
+    var g=document.querySelector(${JSON.stringify(sel)}); if(!g) return JSON.stringify({found:false});
+    var r=g.getBoundingClientRect();
+    var x=r.left+r.width*${fx}, y=r.top+r.height*${fy};
+    var el=document.elementFromPoint(x,y);
+    var want=${JSON.stringify(wantSel)};
+    return JSON.stringify({ found:true,
+      inWant: !!(el && el.closest && el.closest(want)),
+      tag: el?(el.tagName.toLowerCase()+'.'+(el.getAttribute('class')||'')):null,
+      x:Math.round(x), y:Math.round(y) });
   })()`);
 }
 
-// read the detached AMUSEMENTS wing's OWN chrome — its dashed capsule (.wing-bound) and its
-// engraved caption (.wing-label "AMUSEMENTS"). At rest / after ascend BOTH must be display:none,
-// or the parent shows an empty capsule + label wrapped round the gate (the #376 incomplete fold).
-// We count the amusements capsules/labels as those NOT display:none (boundShown / labelShown);
-// 0 each == folded clean. (#283: amusements owns exactly one wing rect + one caption.)
-function chromeState() {
-  return abEval(`(function(){
-    var bounds=Array.from(document.querySelectorAll('.wing-bound'));
-    var labels=Array.from(document.querySelectorAll('.wing-label'));
-    // the amusements caption is the one reading 'AMUSEMENTS'; its capsule is the .wing-bound
-    // whose parent <g> sits in the same accent family — but display:none is what we assert, so we
-    // simply require the AMUSEMENTS label hidden AND no MORE bounds visible than the wings that
-    // legitimately show. Simplest robust read: the AMUSEMENTS label's display + the count of
-    // bounds/labels whose computed display is not 'none' that carry the amusements text/accent.
-    var amuseLabel=labels.find(function(t){return (t.textContent||'').trim()==='AMUSEMENTS';});
-    var amuseLabelHidden = amuseLabel ? getComputedStyle(amuseLabel).display==='none' : null;
-    // the amusements capsule(s): a .wing-bound whose group's --wa accent matches the gate accent
-    // (#37f7e0). Hidden == display:none on the <g> or the path.
-    function shown(el){ var e=el; while(e){ if(getComputedStyle(e).display==='none') return false; e=e.parentElement; } return true; }
-    var amuseBounds=bounds.filter(function(p){
-      var g=p.closest('g'); var wa=g?(g.getAttribute('style')||''):''; return /37f7e0/i.test(wa);
-    });
-    var amuseBoundsShown=amuseBounds.filter(shown).length;
-    return JSON.stringify({ amuseLabelHidden:amuseLabelHidden, amuseLabelFound:!!amuseLabel,
-      amuseBoundsTotal:amuseBounds.length, amuseBoundsShown:amuseBoundsShown });
+// a SYNTHETIC dispatch on the centre of `sel` (the CONTROL half — proves the listener is wired,
+// but is NOT a real click; the real click is the load-bearing proof beside it).
+function synthClick(sel) {
+  abEval(`(function(){
+    var g=document.querySelector(${JSON.stringify(sel)}); if(!g) return JSON.stringify({ok:false});
+    var r=g.getBoundingClientRect(); var x=r.left+r.width*0.5, y=r.top+r.height*0.5;
+    var el=document.elementFromPoint(x,y)||g;
+    ['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(t){
+      el.dispatchEvent(new MouseEvent(t,{bubbles:true,cancelable:true,clientX:x,clientY:y,view:window})); });
+    return JSON.stringify({ok:true});
   })()`);
 }
-const chromeFolded = c => c.amuseLabelFound && c.amuseLabelHidden === true && c.amuseBoundsTotal >= 1 && c.amuseBoundsShown === 0;
-// ascend back to the grounds-east tour (gate lit) by clicking the depth ribbon, and settle.
-function ascendToParent() {
-  abEval(`(function(){ var r=document.querySelector('#depthribbon .ribbon'); if(r) r.click(); return JSON.stringify({ok:!!r}); })()`);
-  ab('wait', '1300');
-}
+
+// return to the fit-view estate home from anywhere via the ⌂ button (a real HTML button click),
+// and settle the crossfade.
+function goHome() { realClick('#pz-home'); ab('wait', '900'); }
 
 async function main() {
-  console.log('gate-dom.test — THE FAIRGROUND GATE (#369): the LIVE RENDERED DOM, headless browser\n');
+  console.log('gate-dom.test — THE ESTATE PLATEWALK (§4.6/§5.1): the LIVE RENDERED DOM, headless browser, REAL input\n');
 
   if (!haveAgentBrowser()) {
     console.error('  ⚠ agent-browser not on PATH — cannot run the live-DOM gate. (Install: npm i -g agent-browser)');
@@ -248,206 +219,150 @@ async function main() {
   try { await waitPort(PORT, 10000); }
   catch (e) { try { server.kill('SIGKILL'); } catch (_) {} console.error('  ⚠ ' + e.message); process.exit(2); }
 
-  let exitCode = 0;
+  const exitCode = 0;
+  // the plinth district we drive for the structure checks (a monogram plinth — NOT the manor /
+  // approach nav-pads, NOR the fairground which rides its gate) + a second for the keyboard test.
+  const PLINTH = 'number';                       // The Number Garden — a monogram-plinth rep
+  const KEYDIST = 'gardens';                      // a second plinth rep for the keyboard-Enter check
+  const repSel = d => `#structures .district-rep[data-district="${d}"]`;
+  const monoSel = d => `${repSel(d)} .struct-plinth`;   // the plinth PATH (a filled descendant of the rep <g>)
+  const GATE = '.gate-face';                      // the fairground gate group (its .gate-hit under-paints the box)
+  // the §2.5 walk order — single-sourced in DoorClaims; mirrored here for the keyboard walk (D8).
+  const STRUCT_WALK = ['approach', 'manor', 'promenades', 'fairground', 'works', 'cavern',
+                       'number', 'gardens', 'opticks', 'observatory', 'outbuilding'];
+
   try {
-    // 3. OPEN headless + settle (the platewalk defers a double-rAF; give it room).
+    // 3. OPEN headless + settle (the platewalk defers a double-rAF; give it room to seat the tier).
     ab('open', URL); ab('wait', '--load', 'networkidle'); ab('wait', '2000');
 
-    // tour grounds-east (the gate's parent plate) so the gate is fully lit + the column, if it
-    // existed, would be on this plate. The detached child tiles must be GONE here.
-    abEval(`(function(){var d=Array.from(document.querySelectorAll('#platebar .door')).find(x=>(x.dataset.to||'')==='grounds-east'); if(d) d.click(); return JSON.stringify({ok:!!d});})()`);
-    ab('wait', '1200');
+    // ── D0 — AT REST the estate tier reads ──
+    const rest = state();
+    check('D0 — at rest the ESTATE tier reads (#viewport.lod-estate, structures shown, room/wing labels folded to 0, resting lede)',
+      rest.lod === 'estate' && rest.structOp > 0.9 && rest.roomOp === 0 && rest.wingOp === 0 &&
+      /^the estate/.test(rest.whereami || ''),
+      '[lod=' + rest.lod + ', structOp=' + rest.structOp + ', roomOp=' + rest.roomOp + ', wingOp=' + rest.wingOp + ', lede="' + rest.whereami + '"]');
 
-    // ── D1 — AT REST the parent's child:* tiles are NOT rendered ──
-    const rest = abEval(`(function(){
-      var gate=document.querySelector('.gate-face');
-      var tiles=Array.from(document.querySelectorAll('.poi[data-id]'));
-      // child tiles = those hidden via display:none with the gate present (the fold). Identify by
-      // measuring: a tile with display:none + getBBox width 0 that the engine folded away.
-      var hidden=tiles.filter(function(t){ return getComputedStyle(t).display==='none'; });
-      var hiddenBBoxZero=hidden.every(function(t){ try{return t.getBBox().width===0;}catch(e){return true;} });
-      return JSON.stringify({
-        gatePresent:!!gate, gateGlow:document.querySelectorAll('.gate-face .gate-glow').length,
-        gateChev:document.querySelectorAll('.gate-face .gate-chev').length,
-        gateLit: gate?getComputedStyle(gate).opacity:null,
-        hiddenCount:hidden.length, hiddenBBoxZero:hiddenBBoxZero,
-        hiddenIds:hidden.map(function(t){return t.dataset.id;})
-      });
-    })()`);
-    check('D1 — at rest the parent shows ONLY the gate (≥15 child tiles folded away: display:none, getBBox=0)',
-      rest.gatePresent && rest.gateGlow === 1 && rest.gateChev === 1 &&
-      rest.hiddenCount >= 15 && rest.hiddenBBoxZero,
-      '[gate lit op=' + rest.gateLit + ', ' + rest.hiddenCount + ' tiles folded away, glow/chev ' + rest.gateGlow + '/' + rest.gateChev + ']');
-
-    // ── D1b — AT REST the wing's OWN CHROME is folded too (the #376 second defect): no dashed
-    //    capsule (.wing-bound), no "AMUSEMENTS" caption (.wing-label) drawn round the gate ──
-    const restChrome = chromeState();
-    check('D1b — at rest NO wing capsule + NO "AMUSEMENTS" label round the gate (the wing chrome is folded, not just the tiles)',
-      chromeFolded(restChrome),
-      '[AMUSEMENTS label hidden=' + restChrome.amuseLabelHidden + ', capsules ' + restChrome.amuseBoundsShown + '/' + restChrome.amuseBoundsTotal + ' shown]');
-
-    // ── D2 — THE GATE IS TRULY CLICKABLE (real hit-test in the OPEN ARCH negative space) ──
-    const hit = abEval(`(function(){
-      var g=document.querySelector('.gate-face'); var r=g.getBoundingClientRect();
-      var ax=r.left+r.width*0.5, ay=r.top+r.height*0.30;   // upper-third centre = the open arch void
-      var el=document.elementFromPoint(ax,ay);
-      return JSON.stringify({ inGate: !!(el&&el.closest&&el.closest('.gate-face')===g),
-        tag: el?(el.tagName.toLowerCase()+'.'+(el.getAttribute('class')||'')):null, ax:Math.round(ax), ay:Math.round(ay) });
-    })()`);
-    check('D2 — elementFromPoint over the open-arch centre returns a .gate-face descendant (real click catches)',
-      hit.inGate, '[hit ' + hit.tag + ' at (' + hit.ax + ',' + hit.ay + ')]');
+    // ── D1 — a district STRUCTURE is truly clickable (real hit-test on the plinth) ──
+    const sHit = hitTest(repSel(PLINTH), 0.5, 0.5, '.district-rep');
+    check('D1 — elementFromPoint over the plinth centre returns a .district-rep descendant (a real click catches, not stolen by #sheet)',
+      sHit.found && sHit.inWant, '[hit ' + sHit.tag + ' at (' + sHit.x + ',' + sHit.y + ')]');
 
     // ════════════════════════════════════════════════════════════════════════════
-    //  D3 — A REAL CLICK DESCENDS. The #376 lesson, made a guard: el.dispatchEvent(...) and
-    //  .click() are NOT a real click — they poke-fire the handler and SKIP pointerdown,
-    //  pointer-capture, drag-vs-click arbitration, and painted-pixel hit-testing, the exact
-    //  machinery a real pointer (and the #369→#376 bug) lives on. The gate reported green twice
-    //  while broken twice precisely because D3 used a synthetic dispatch. So D3 now carries TWO
-    //  steps that pull apart:
-    //
-    //    D3a (CONTROL, synthetic) — the synthetic dispatch path STILL descends. This proves the
-    //        gate's click→go listener is correctly WIRED. It is necessary but NOT sufficient.
-    //    D3b (THE REAL FIX) — a TRUE input-level click (CDP Input.dispatchMouseEvent via
-    //        `mouse move/down/up` at the arch's screen point) descends. THIS is the one that was
-    //        green-while-broken: under a real pointer, sheet.setPointerdown→setPointerCapture used
-    //        to steal the gate group's compatibility click. A regression of THAT class now fails
-    //        D3b (real input) while D3a (synthetic) keeps passing — the two diverge, naming the bug.
+    //  D2 — a REAL INPUT click on a district STRUCTURE DESCENDS. Split into the synthetic CONTROL
+    //  (proves the listener is wired) and the true CDP press→release (the load-bearing fix).
     // ════════════════════════════════════════════════════════════════════════════
 
-    // ── D3a — CONTROL: the synthetic dispatch path reaches descend (the handler is wired) ──
-    abEval(`(function(){
-      var g=document.querySelector('.gate-face'); var r=g.getBoundingClientRect();
-      var ax=r.left+r.width*0.5, ay=r.top+r.height*0.30;
-      var el=document.elementFromPoint(ax,ay);
-      ['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(t){
-        el.dispatchEvent(new MouseEvent(t,{bubbles:true,cancelable:true,clientX:ax,clientY:ay,view:window})); });
-      return JSON.stringify({ok:true});
-    })()`);
-    ab('wait', '1400');
-    const synth = descendState();
-    check('D3a — CONTROL: the SYNTHETIC dispatch path descends (proves the gate click→go listener is wired)',
-      isDescended(synth),
-      '[midway op=' + synth.midOp + ', ribbon=' + synth.ribbonShown + ', ' + synth.relayedCount + ' tiles relayed]');
+    // ── D2a — CONTROL: a synthetic dispatch on the plinth descends (the rep's listener is wired) ──
+    goHome();
+    synthClick(monoSel(PLINTH));
+    ab('wait', '900');
+    const synth = state();
+    check('D2a — CONTROL: the SYNTHETIC dispatch path descends (proves the district-rep click→enter listener is wired)',
+      synth.lod === 'district' && /^in /.test(synth.whereami || ''),
+      '[lod=' + synth.lod + ', lede="' + synth.whereami + '", aria-current=' + synth.ariaCurrent + ']');
 
-    // ascend back to the lit grounds-east tour so the REAL-input click starts from rest.
-    ascendToParent();
+    // ── D2b — THE REAL FIX: a true CDP press→release on the plinth descends to its plate ──
+    goHome();
+    const rc = realClick(monoSel(PLINTH));
+    ab('wait', '1100');
+    const real = state();
+    check('D2b — a REAL input click on the plinth DESCENDS to its plate (lod-district · "in THE …" lede names it · aria-current on the rep)',
+      rc.status === 0 && real.lod === 'district' && ledeNamesCurrent(real, PLINTH),
+      '[real-click status ' + rc.status + ', lod=' + real.lod + ', lede="' + real.whereami + '", aria-current=' + real.ariaCurrent + ']');
 
-    // ── D3b — THE REAL FIX: a TRUE input-level click on the lit gate descends ──
-    // agent-browser's `find role button click` resolves the gate's accessibility node (role=button,
-    // its aria-label ends "… descend through the fairground gate") and issues a REAL CDP
-    // Input.dispatchMouseEvent press→release at the element's painted centre — a genuine pointer
-    // sequence (pointerdown → mousedown → pointerup → mouseup → click) that goes through
-    // #sheet's capture-phase pointerdown (where the #376 bug stole the click via setPointerCapture)
-    // and then the gate group's own click→go. This is the input a synthetic dispatch can NEVER be.
-    // (NB: the low-level `mouse move/down/up` verbs do NOT carry the moved position into down/up in
-    // this agent-browser — they press at (0,0) and miss — so the ref/role click is the real driver.)
-    const GATE_NAME = 'descend through the fairground gate';   // the stable aria-label suffix (index.src.html ~L4522)
-    const rClick = ab('find', 'role', 'button', 'click', '--name', GATE_NAME);
-    if (rClick.status !== 0) {
-      check('D3b — REAL input-level click on the gate (CDP press→release) descends', false,
-        '[real-click driver failed (status ' + rClick.status + '): ' + (rClick.stderr || rClick.stdout || '').trim() + ']');
-    } else {
-      ab('wait', '1400');
-      const real = descendState();
-      check('D3b — REAL input-level click on the lit gate (CDP press→release) descends — pointer-capture does NOT steal it',
-        isDescended(real),
-        '[midway op=' + real.midOp + ', ribbon=' + real.ribbonShown + ', ' + real.relayedCount + ' tiles relayed]');
-    }
+    // ── D3 — KEYBOARD parity: a focused rep + a REAL Enter enters the plate (§4.6 duty 1) ──
+    goHome();
+    ab('focus', repSel(KEYDIST));
+    ab('press', 'Enter');
+    ab('wait', '900');
+    const kb = state();
+    check('D3 — KEYBOARD: a focused .district-rep + a REAL Enter press enters the plate (lod-district · "in THE …" names it · aria-current)',
+      kb.lod === 'district' && ledeNamesCurrent(kb, KEYDIST),
+      '[lod=' + kb.lod + ', lede="' + kb.whereami + '", aria-current=' + kb.ariaCurrent + ']');
 
-    // ── D4 — ASCEND RETURNS + the gate is RE-ENTERABLE ──
-    abEval(`(function(){ var r=document.querySelector('#depthribbon .ribbon'); if(r) r.click(); return JSON.stringify({ok:!!r}); })()`);
+    // ── D4 — the FAIRGROUND gate descends by a REAL NEGATIVE-SPACE click ──
+    goHome();
+    // D4a — the open-arch void catches (elementFromPoint over the upper-third centre).
+    const gHit = hitTest(GATE, 0.5, 0.30, '.gate-face');
+    check('D4a — elementFromPoint over the gate open-arch void returns a .gate-face descendant (the .gate-hit under-paint catches a real click)',
+      gHit.found && gHit.inWant, '[hit ' + gHit.tag + ' at (' + gHit.x + ',' + gHit.y + ')]');
+    // D4b — a REAL CDP click on the lit gate descends into the child layer.
+    const gc = realClick(GATE);
     ab('wait', '1300');
-    const up = abEval(`(function(){
-      var ribbon=document.getElementById('depthribbon');
-      var mid=document.querySelector('.child-midway');
-      var g=document.querySelector('.gate-face'); var r=g.getBoundingClientRect();
-      var ax=r.left+r.width*0.5, ay=r.top+r.height*0.30;
-      var el=document.elementFromPoint(ax,ay);
-      var foldedAway=Array.from(document.querySelectorAll('.poi[data-id]')).filter(function(t){return getComputedStyle(t).display==='none';}).length;
-      return JSON.stringify({
-        ribbonShown: ribbon?ribbon.classList.contains('show'):true,
-        midOp: mid?getComputedStyle(mid).opacity:null,
-        reEnterable: !!(el&&el.closest&&el.closest('.gate-face')===g),
-        foldedAway: foldedAway });
-    })()`);
-    check('D4 — ascend hides the ribbon + folds the child away again (display:none) + the gate is re-enterable',
-      !up.ribbonShown && up.midOp === '0' && up.reEnterable && up.foldedAway >= 15,
-      '[ribbon=' + up.ribbonShown + ', midway op=' + up.midOp + ', re-enterable=' + up.reEnterable + ', ' + up.foldedAway + ' folded away]');
+    const child = state();
+    check('D4b — a REAL input click on the lit fairground gate DESCENDS into the child ("down in THE FAIRGROUND" · ribbon shown · liveness green)',
+      gc.status === 0 && child.ribbon === true && /^down in /.test(child.whereami || '') &&
+      /FAIRGROUND/.test(child.whereami || '') && child.fairPass !== false,
+      '[real-click status ' + gc.status + ', ribbon=' + child.ribbon + ', lede="' + child.whereami + '", liveness=' + child.fairPass + ']');
 
-    // ── D4b — ascend ALSO re-folds the wing's own chrome (capsule + label gone again) ──
-    const upChrome = chromeState();
-    check('D4b — ascend re-folds the wing chrome too: no capsule, no "AMUSEMENTS" label round the re-enterable gate',
-      chromeFolded(upChrome),
-      '[AMUSEMENTS label hidden=' + upChrome.amuseLabelHidden + ', capsules ' + upChrome.amuseBoundsShown + '/' + upChrome.amuseBoundsTotal + ' shown]');
+    // ── D5 — Esc ASCENDS from the child straight to the estate home ──
+    ab('press', 'Escape');
+    ab('wait', '1100');
+    const up = state();
+    check('D5 — a REAL Escape press ASCENDS out of the child to the estate home (lod-estate · ribbon hidden · resting lede)',
+      up.lod === 'estate' && up.ribbon === false && /^the estate/.test(up.whereami || ''),
+      '[lod=' + up.lod + ', ribbon=' + up.ribbon + ', lede="' + up.whereami + '"]');
 
-    // ── D5 — the live #doortest pill is 17/17, AND the detach-OFF neg-control stays RED ──
-    const pill = abEval(`(function(){
-      var dt=document.getElementById('dt-text'); var btn=document.getElementById('doortest');
-      return JSON.stringify({ text: dt?dt.textContent:null, ok: btn?btn.classList.contains('ok'):false });
-    })()`);
-    check('D5 — the live #doortest pill reads PASSABLE 17/17 GREEN (CLAIM C′ flipped ✗16/17→✓17/17 by the relay DEPTH)',
-      pill.ok && /17\/17/.test(pill.text || ''), '[' + pill.text + ']');
-    // (the detach-OFF C′-RED neg-control — DEPTH did the flip, not a scorer tweak — is proven in
-    // Node: fold.test.cjs F4 [21/38 < 23 → RED] AND door.test.cjs's explicit childFoot:{} run.)
+    // ── D6 — the DEPTH RIBBON click AND the ⌂ HOME button both ascend by REAL input ──
+    // re-descend the fairground, then ascend by a REAL click on the depth ribbon.
+    realClick(GATE); ab('wait', '1200');
+    const reDesc = state();
+    const rrc = realClick('#depthribbon .ribbon'); ab('wait', '1100');
+    const ribbonUp = state();
+    check('D6a — a REAL click on the depth ribbon ASCENDS out of the re-descended child (ribbon hidden, back at lod-estate)',
+      reDesc.ribbon === true && rrc.status === 0 && ribbonUp.ribbon === false && ribbonUp.lod === 'estate',
+      '[re-descend ribbon=' + reDesc.ribbon + ', ribbon-click status ' + rrc.status + ' → lod=' + ribbonUp.lod + ', ribbon=' + ribbonUp.ribbon + ']');
+    // enter a district, then the ⌂ HOME button returns to the fit-view estate (no aria-current).
+    realClick(monoSel(PLINTH)); ab('wait', '900');
+    const hc = realClick('#pz-home'); ab('wait', '1000');
+    const home = state();
+    check('D6b — a REAL click on ⌂ #pz-home returns a district tour to the fit-view estate (lod-estate · resting lede · no aria-current)',
+      hc.status === 0 && home.lod === 'estate' && /^the estate/.test(home.whereami || '') && home.ariaCurrent === null,
+      '[home-click status ' + hc.status + ', lod=' + home.lod + ', lede="' + home.whereami + '", aria-current=' + home.ariaCurrent + ']');
 
-    // ════════════════════════════════════════════════════════════════════════════
-    //  #382 — THE CHILD MAP OWNS ITS LABELS. The two coupled root causes the old code shipped:
-    //    (1) the child REUSED the canonical column placement (boxes packed for a 23px column),
-    //        so only ~9/15 could light in the airy fan without overlap; and
-    //    (2) the reveal was the FROZEN tour set — the loupe was INERT inside the child (zooming
-    //        / panning never recomputed the lit labels).
-    //  These two checks prove BOTH are fixed in the LIVE rendered DOM (real CDP input):
-    //    D6 — re-solved fan: the landing lights WELL PAST 9 (the old ceiling) with ZERO rendered
-    //         overlaps — the fan's room is used, not the inherited column's.
-    //    D7 — dynamic loupe: a REAL zoom-in (CDP click on the brass +) RECOMPUTES the lit set
-    //         (it changes — the loupe lights what's under its circle + drops what's outside) and
-    //         stays overlap-free. The frozen-set bug would leave the lit set IDENTICAL on zoom.
-    // ════════════════════════════════════════════════════════════════════════════
-    // re-descend (we ascended in D4) via a REAL input click on the lit gate.
-    const rD = ab('find', 'role', 'button', 'click', '--name', GATE_NAME);
-    ab('wait', '1500');
-    if (rD.status !== 0) {
-      check('D6 — child map OWNS its labels: landing lights > 9 with zero overlap (re-solved fan)', false,
-        '[could not re-descend for the #382 checks: ' + (rD.stderr || rD.stdout || '').trim() + ']');
-      check('D7 — dynamic loupe: a real zoom-in recomputes the lit child set, overlap-free', false, '[skipped — re-descend failed]');
-      check('D8 (#385) — every child leader FOOT-DOT lands ON its tile', false, '[skipped — re-descend failed]');
-    } else {
-      const landing = litChildState();
-      check('D6 — child map OWNS its labels: the landing lights > 9 (past the old column ceiling) with ZERO rendered overlap',
-        landing.lit > 9 && landing.overlaps === 0,
-        '[' + landing.lit + ' labels lit at framed scale, ' + landing.overlaps + ' rendered overlaps, k=' + landing.k + ']');
+    // ── D7 — the LOD crossfade leaves NO ORPHAN LABELS (post-transition DOM check) ──
+    // DISTRICT settle: enter a plate, let the .5s crossfade settle, then read the layer opacities.
+    realClick(monoSel(PLINTH)); ab('wait', '1000');
+    const dTier = state();
+    check('D7a — at the DISTRICT tier the structures fade to the faint ground-etch (structOp ≈ .1, inert) and no structure orphans over the room plan',
+      dTier.lod === 'district' && dTier.structOp !== null && dTier.structOp <= 0.12,
+      '[lod=' + dTier.lod + ', structOp=' + dTier.structOp + ', roomOp=' + dTier.roomOp + ']');
+    // ESTATE settle: ascend home, let it settle, confirm the room/wing label layers are 0.
+    goHome();
+    const eTier = state();
+    check('D7b — at the ESTATE tier the room/wing label layers are opacity 0 (no orphan labels) and the structures are full',
+      eTier.lod === 'estate' && eTier.roomOp === 0 && eTier.wingOp === 0 && eTier.structOp > 0.9,
+      '[lod=' + eTier.lod + ', roomOp=' + eTier.roomOp + ', wingOp=' + eTier.wingOp + ', structOp=' + eTier.structOp + ']');
 
-      // ── D8 (#385) — EVERY child leader's FOOT-DOT lands ON its tile, BOTH fan columns ──
-      // Measured AT THE LANDING (framed base scale, full set lit, so both fan columns are present).
-      // The bug anchored each leader on the wide relay CELL, not the rendered TILE, so the foot-dot
-      // sat OFF the tile (right col ~+53 viewBox-px from centre, well past the smaller tile's right
-      // edge). The fix anchors on the TILE footprint: every dot now sits ON its tile's bbox
-      // (outside≈0). FOOT_TOL is a few screen px for the dot radius (r:2) + AA — a cell-anchor
-      // regression lands tens of px out and fails loudly (maxOffCentre exposes it even louder).
-      const FOOT_TOL = 5;
-      const foot = childLeaderFootState();
-      check('D8 (#385) — every child leader FOOT-DOT lands ON its tile (relay TILE anchor, not the wide CELL) — both fan columns',
-        foot.count >= 6 && foot.maxOutside <= FOOT_TOL,
-        '[' + foot.count + ' leaders measured, maxOutside=' + foot.maxOutside + 'px (tol ' + FOOT_TOL +
-        '), maxOffCentre=' + foot.maxOffCtr + 'px' +
-        (foot.worst ? ', worst=' + foot.worst.id + ' (outside ' + foot.worst.outside + ', tile ' +
-          foot.worst.tileW + '×' + foot.worst.tileH + ')' : '') + ']');
-
-      // D7 — REAL zoom-in (CDP click on the brass + control) must RECOMPUTE the lit set.
-      const before = litChildState();
-      ab('find', 'role', 'button', 'click', '--name', 'zoom in'); ab('wait', '450');
-      ab('find', 'role', 'button', 'click', '--name', 'zoom in'); ab('wait', '550');
-      const after = litChildState();
-      const recomputed = (after.k > before.k + 0.01) &&            // the camera really zoomed
-        (after.lit !== before.lit || after.ids.join(',') !== before.ids.join(',')); // the set changed
-      check('D7 — the loupe is LIVE inside the child: a real zoom-in RECOMPUTES the lit set (not a frozen tour set), overlap-free',
-        recomputed && after.overlaps === 0,
-        '[k ' + before.k + '→' + after.k + ', lit ' + before.lit + '→' + after.lit + ', set-changed=' +
-        (after.ids.join(',') !== before.ids.join(',')) + ', overlaps=' + after.overlaps + ']');
-
-      // ascend back so teardown leaves the estate clean (and to not strand the camera deep).
-      ascendToParent();
+    // ── D8 — the KEYBOARD WALK visits EVERY plate in the §2.5 STRUCT_WALK order ──
+    goHome();
+    const walk = [];
+    for (const d of STRUCT_WALK) {
+      const isFair = d === 'fairground';
+      const sel = isFair ? GATE : repSel(d);
+      // focusability: the nav element is role=button + tabindex 0 (a real keyboard target).
+      const meta = abEval(`(function(){
+        var el=document.querySelector(${JSON.stringify(sel)});
+        if(!el) return JSON.stringify({present:false});
+        return JSON.stringify({ present:true, role:el.getAttribute('role'), tabindex:el.getAttribute('tabindex') });
+      })()`);
+      ab('focus', sel);
+      ab('press', 'Enter');
+      ab('wait', '650');
+      const st = state();
+      const entered = isFair
+        ? (st.ribbon === true && /FAIRGROUND/.test(st.whereami || ''))
+        : (st.lod === 'district' && st.ariaCurrent === d && /^in /.test(st.whereami || ''));
+      walk.push({ d, present: meta.present, role: meta.role, tabindex: meta.tabindex, entered });
+      goHome();   // back to the estate home before the next plate
     }
+    const focusable = walk.filter(w => w.present && w.role === 'button' && w.tabindex === '0').length;
+    const enteredAll = walk.filter(w => w.entered).length;
+    const misses = walk.filter(w => !w.entered).map(w => w.d);
+    check('D8 — the KEYBOARD WALK visits EVERY plate in STRUCT_WALK order (11 nav elements focusable role=button/tabindex 0; a real Enter enters each)',
+      focusable === STRUCT_WALK.length && enteredAll === STRUCT_WALK.length,
+      '[' + focusable + '/' + STRUCT_WALK.length + ' focusable, ' + enteredAll + '/' + STRUCT_WALK.length + ' entered' +
+      (misses.length ? ', missed: ' + misses.join(',') : '') + ']');
 
   } finally {
     // 4. TEARDOWN — close exactly OUR session + kill exactly OUR server child (never a broad pkill;
@@ -458,10 +373,10 @@ async function main() {
 
   console.log('');
   if (fail === 0) {
-    console.log('PASS — the fold is REAL in the live DOM: tiles AND wing chrome gone at rest, the gate is truly clickable, a REAL INPUT click descends (CDP press→release, not a synthetic dispatch), ascend re-folds, the pill is 17/17 — AND (#382) the child map OWNS its labels: the re-solved fan lights past the old 9-ceiling with zero overlap, and the loupe is LIVE (a real zoom-in recomputes the lit set) — AND (#385) every child leader FOOT-DOT lands ON its tile (anchored on the relay TILE, not the wide CELL).');
+    console.log('PASS — the estate platewalk is REAL in the live DOM: the estate tier rests on the structures, a REAL click / keyboard Enter on a district structure descends to its plate, the fairground gate catches a REAL negative-space click, Esc + the depth ribbon + the ⌂ home button all ascend, the LOD crossfade strands no orphan labels at either tier, and the keyboard walk reaches every plate — none of which the pure-Node twins can see.');
     process.exit(exitCode);
   } else {
-    console.log('FAIL — ' + fail + ' live-DOM check(s) failed: the fold is NOT executing in the rendered page (the #369 bug). The headless twins cannot see this — that is why this gate exists.');
+    console.log('FAIL — ' + fail + ' live-DOM check(s) failed: the platewalk is NOT wired as the rendered page claims. The headless twins cannot see this — that is why this gate exists.');
     process.exit(1);
   }
 }
