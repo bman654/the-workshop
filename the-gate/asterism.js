@@ -7,7 +7,7 @@
 
    Phase D (this file): AST.current() returns the visitor's OWN earned figure —
    one of their UNLOCKED Survey-of-Heaven constellations, picked at random per
-   VISIT (cached for the page load), affine-fit from Sky's 1440×900 catalog into
+   VISIT (cached for the page load), affine-fit from Sky's polar catalog into
    the 0..100 local box scene.js drawAsterism expects. Cold-start (nothing
    unlocked, or Sky/WS absent) → null, and drawAsterism draws the bare starfield.
 
@@ -89,7 +89,9 @@
 
   /* ── affine-fit a chosen Survey asterism into the local 0..100 box ────────────
      `ast` is a Sky asterisms[] entry ({id,name,myth,members,complete}); we read each
-     member's {x,y,mag} from Sky.CATALOG (a 1440×900 viewBox) and map the figure's
+     member's {x,y,mag} from Sky.CATALOG (positions hang on the derived polar world,
+     §3.1 — the fit reads the figure's OWN bbox, so it is coord-frame-agnostic) and
+     maps the figure's
      bounding box into [PAD,100-PAD] × [PAD,BOX_Y_MAX], preserving aspect (uniform
      scale = min of the two axis scales) and centering. Lines thread members in their
      listed order (the same polyline Sky draws). Returns the {stars,lines,name,myth}

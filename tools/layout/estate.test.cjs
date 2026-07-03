@@ -28,6 +28,7 @@ const fs = require('fs');
 const path = require('path');
 const Layout = require('./layout.js');
 const Contract = require('./contract.js');
+const Sky = require('../sky/sky.js');   // the emitted polar CATALOG — for the star-vs-footprint sweep
 /* the LIVE, migrated PLACES literal — a pure data array — evaluated out of index.src.html
    (identical to emit-mirror.cjs, so adding/removing a room can never drift this gate). */
 const _src = fs.readFileSync(path.join(__dirname, '..', '..', 'index.src.html'), 'utf8');
@@ -146,6 +147,30 @@ Object.keys(sol.foot).forEach(id => {
 });
 ok('every footprint inside its district hull', outOfHull === 0, outOfHull + ' out');
 ok('no footprint overlaps (discs by centre distance, rects by bbox)', footOverlaps(sol.foot) === 0);
+
+/* ── 4b. the SKY star-vs-footprint sweep (the retired smoke's role; §3.1/§3.4) ──
+   The emitted polar CATALOG (sky.js) must be current vs THIS live solve — every star
+   hangs on the ring OUTSIDE every solved footprint + the manor structure box, and
+   inside the viewBox. This mirrors derive-sky.mjs verify()'s footprint check against
+   the same solve, so the estate gate catches a stale/colliding slab directly. ── */
+console.log('\n§3.1 sky — star-vs-footprint sweep');
+(function () {
+  const STAR_PAD = 12;
+  const CATALOG = Sky.CATALOG;
+  const boxes = Object.keys(sol.foot).map((id) => Object.assign({ id }, bboxOf(sol.foot[id])));
+  const manorStruct = (sol.structures || []).find((s) => s.district === 'manor' && s.box);
+  if (manorStruct) boxes.push(Object.assign({ id: 'manor-pool' }, manorStruct.box));
+  const starHit = (s, b) => (s.x + STAR_PAD > b.x && s.x - STAR_PAD < b.x + b.w && s.y + STAR_PAD > b.y && s.y - STAR_PAD < b.y + b.h);
+  let inBox = true, clear = true, nStars = 0;
+  for (const id in CATALOG) {
+    nStars++;
+    const s = CATALOG[id];
+    if (s.x - STAR_PAD < 0 || s.y - STAR_PAD < 0 || s.x + STAR_PAD > world.W || s.y + STAR_PAD > world.H) { inBox = false; console.log('    · ' + id + ' out of viewBox at (' + s.x + ',' + s.y + ')'); }
+    for (const b of boxes) if (starHit(s, b)) { clear = false; console.log('    · ' + id + ' over footprint ' + b.id); }
+  }
+  ok('every catalog star lies inside the 3100² viewBox (' + nStars + ' stars)', inBox);
+  ok('every catalog star clears every solved footprint + the manor pool', clear);
+})();
 
 /* ── 5. plates partition + road + fold + basement ───────────────────────────── */
 console.log('\n§1.9 plates: partition, road, fold, basement');

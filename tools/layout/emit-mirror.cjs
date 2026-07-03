@@ -32,19 +32,32 @@ function bbox(id){
   if(f.r != null) return { x: Math.round(f.x-f.r), y: Math.round(f.y-f.r), w: Math.round(f.r*2), h: Math.round(f.r*2) };
   return { x: Math.round(f.x), y: Math.round(f.y), w: Math.round(f.w), h: Math.round(f.h) };
 }
-// the catalog-tied ids the sky test mirrors (front-door catalog stars + gnomon),
-// in the test's order. Keep in lockstep with sky.test.cjs's FOOTPRINTS block.
+// the footprint ids the sky test mirrors — a wheel-SPANNING subset (§3.4 step 3:
+// one id per district so a stray star anywhere on the polar ring is caught): manor,
+// gardens, observatory, opticks, promenades, number, works, approach, cavern,
+// outbuilding + the basement slot. (fairground is a DETACHED gate — no room foot to
+// mirror.) Keep in lockstep with sky.test.cjs's FOOTPRINTS block.
 const MIRROR_IDS = ['verse','compositor','cartographer','sound-garden','threshold',
-  'strange-garden','firmament','daedalus','arcade','workbench','undercroft','hall-of-mirrors',
-  'refraction-run','gnomon'];
+  'strange-garden','firmament','the-sightline','hall-of-mirrors','refraction-run',
+  'gnomon','holonomy','hexapawn','lodestone-hall','card-catalog','estate-gate',
+  'physics-lab','workbench','undercroft'];
 
 function starHit(s,b){ return s.x+STAR_PAD>b.x && s.x-STAR_PAD<b.x+b.w && s.y+STAR_PAD>b.y && s.y-STAR_PAD<b.y+b.h; }
 
 const notes = {
-  firmament: '  // tower r→bbox',
-  'hall-of-mirrors': '  // the optics wing — the feat-stars cluster beside it',
-  'refraction-run': '  // The Photon\'s Errand — the optics fly-through, the new \'tank\' footprint below the Hall',
-  gnomon: '  // The Hours — the horology wing\'s open east-park sundial'
+  firmament: '  // observatory tower r→bbox',
+  'the-sightline': '  // observatory — the vantages wing',
+  'hall-of-mirrors': '  // opticks — the Hall the feat-stars ring beside',
+  'refraction-run': '  // opticks — The Photon\'s Errand fly-through',
+  gnomon: '  // promenades — The Hours sundial',
+  holonomy: '  // promenades — Curved Country',
+  hexapawn: '  // number — the solved-games cabinet',
+  'lodestone-hall': '  // works — electromagnetism',
+  'card-catalog': '  // approach — the gatehouse register',
+  'estate-gate': '  // approach — the gate lodge',
+  'physics-lab': '  // cavern — the physics grotto',
+  workbench: '  // outbuilding — the shed',
+  undercroft: '  // manor basement (beneathSlot)'
 };
 
 console.log('const FOOTPRINTS = [');
