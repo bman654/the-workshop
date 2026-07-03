@@ -18,10 +18,12 @@
    in Node and the browser by construction (no box-source injection, no mirror, no anneal
    noise). The rendered-truth check the mirror used to carry moves to gate-dom.test.mjs, which
    verifies the real DOM with REAL browser input (the house lesson — real input, not a
-   synthetic snapshot). Claims LIGHT UP BY WAVE (§9.2): the sky-slab claim arms at W1.4 and the
-   register/tally claims at W2.5 — before their wave they SELF-SKIP (reported "awaiting …", not
-   counted), so the pill is honest at every wave point. The gate is "door pill fully GREEN
-   (N/N)"; N is the count of ARMED claims (not 17).
+   synthetic snapshot). Claims LIGHT UP BY WAVE (§9.2): the tally-vs-register claim armed at W2.5
+   (manifest-fed, CLAIM 11 — the pill takes the emitted MANIFEST_TALLIES via `args.tallies`); the
+   two night-sky claims stay a self-skip (they read the sky slab, not PLACES — freshness is owned
+   by `derive-sky --check` + sky.test, not the door pill). Before its wave a claim SELF-SKIPS
+   (reported "awaiting …", not counted), so the pill is honest at every wave point. The gate is
+   "door pill fully GREEN (N/N)"; N is the count of ARMED claims (not 17).
 
    The LOUPE (index.src.html) still delegates its declutter to revealedSet/declutterIds here —
    those helpers are unchanged; only runDoorClaims is rewritten.
@@ -211,12 +213,15 @@ function crowdedSolution(n) {
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
-   runDoorClaims({ Legibility, Layout, places, [layout], [plates] }) → the pill report.
+   runDoorClaims({ Legibility, Layout, places, [layout], [plates], [tallies] }) → the pill report.
 
    places  — the live PLACES (declarations, INCLUDING locked rooms). Geometry is read from
              the solve below, never from any x/y baked onto a place, so page + twin agree.
    layout  — Layout.solve(livePlaces) (optional; computed if absent).
    plates  — Layout.plates(livePlaces) (optional; computed if absent).
+   tallies — the MANIFEST_TALLIES const (§6.1 shape; the page bakes it, the twin reads
+             estate-tallies.json). Present ⇒ CLAIM 11 (tally-vs-register) ARMS; absent ⇒ it
+             self-skips (arm-by-wave, §9.2). The page + twin pass the SAME projection.
 
    Returns { pass, total, passed, armed, skipped, lines:[{name,ok,detail,skip}],
              + summary fields the pill's sub-line reads (structureCount, estateCollisions,
@@ -358,16 +363,32 @@ function runDoorClaims(args) {
   arm('every plate is reachable by keyboard — a structure or gate stands for it in the estate walk (§4.6)',
     everyParentReachable && everyChildHasGate, '[' + parentPlates.length + ' plates + ' + childPids.length + ' gate]');
 
-  // ── CLAIM 11 — the room tallies match the live plates (PROVISIONAL — a hand count until the
-  //    manifest feeds them at W2.5). Each structure's rooms tally equals its plate population.
-  var tallyOk = true, tBad = null;
-  (layout.structures || []).forEach(function (s) {
-    var pid = detached[s.district] ? 'child:' + s.district : s.district;
-    var pop = (part.members[pid] || []).length;
-    if (!s.tallies || s.tallies.rooms !== pop) { tallyOk = false; tBad = s.district + ' ' + (s.tallies ? s.tallies.rooms : '?') + '≠' + pop; }
-  });
-  arm('the room tallies match the live plates (provisional — the manifest feeds them at a later wave)',
-    tallyOk, tBad ? '[' + tBad + ']' : '[all match]');
+  // ── CLAIM 11 — the depth tallies are MANIFEST-FED and TRUE (§5.5, arms at W2.5). The drawn
+  //    map tally reads MANIFEST_TALLIES (the §6.3 consumer-2 forge-emitted const the page bakes
+  //    from tools/manifest/estate-tallies.json); this claim proves that register AGREES with the
+  //    live estate: every district's manifest room count equals its declared PLACES rooms —
+  //    counted over ALL rows of the district INCLUDING locked basement rooms + detached child
+  //    tiles (the manifest's denomination, §6.1), NOT the non-locked plate seat count — and its
+  //    WITHIN is internally consistent (within = pieces − rooms). A stale register (PLACES edited
+  //    without re-deriving the manifest) turns this red on the visitor-facing pill. SELF-SKIPS
+  //    when no tallies are injected (arm-by-wave, §9.2 — a pre-W2.5 caller stays honest).
+  var tallies = args.tallies;
+  if (tallies && tallies.districts) {
+    var roomsByDistrict = {};
+    allPlaces.forEach(function (p) { roomsByDistrict[p.district] = (roomsByDistrict[p.district] || 0) + 1; });
+    var regOk = true, rBad = null;
+    (layout.structures || []).forEach(function (s) {
+      var mt = tallies.districts[s.district];
+      var declared = roomsByDistrict[s.district] || 0;
+      if (!mt) { regOk = false; rBad = s.district + ' has no register tally'; return; }
+      if (mt.rooms !== declared) { regOk = false; rBad = s.district + ' register ' + mt.rooms + ' ≠ ' + declared + ' declared'; return; }
+      if (mt.within !== mt.pieces - mt.rooms) { regOk = false; rBad = s.district + ' within ' + mt.within + ' ≠ pieces−rooms ' + (mt.pieces - mt.rooms); return; }
+    });
+    arm('the depth tallies match the estate register — every district reads its manifest room count (within = pieces − rooms)',
+      regOk, rBad ? '[' + rBad + ']' : '[all districts agree]');
+  } else {
+    skip('the depth tallies match the estate register', 'the register wave');
+  }
 
   // ── CLAIM 12 — the conscience that judges legibility is itself sound: the clean/crowded
   //    controls straddle the derived threshold and the weights are the gap-dominant blend.
@@ -380,9 +401,12 @@ function runDoorClaims(args) {
     straddle && weightsOk, '[clean ' + cleanRep.overall.composite + ' << ' + TH + ' << ' + crowdedRep.overall.composite + ']');
 
   // ── SELF-SKIP (arm by wave, §9.2) — honest "not yet", never counted against green.
-  skip('the night sky is current (positions & groups)', 'the sky wave');
-  skip('the room tallies match the estate register', 'the register wave');
-  skip('the star catalog is fresh', 'the register wave');
+  //    The night-sky claims stay OUT of the door pill: they are functions of the emitted sky
+  //    slab (positions/STAR_META), which the pill (a pure PLACES+solve twin) does not read —
+  //    their freshness is owned by `derive-sky --check` (STAR_META canonical from W2.5) + sky.test
+  //    in the §9.4 gate set. The tally-vs-register claim (CLAIM 11) armed above at W2.5.
+  skip('the night sky is current (positions & groups)', 'the sky gate (derive-sky --check)');
+  skip('the star catalog is fresh', 'the sky gate (derive-sky --check + STAR_META)');
 
   var passN = 0, armedN = 0;
   for (var li = 0; li < lines.length; li++) { if (!lines[li].skip) { armedN++; if (lines[li].ok) passN++; } }

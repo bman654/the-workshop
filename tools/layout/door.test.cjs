@@ -55,7 +55,10 @@ const PLACES = readArray('PLACES');
 const live = PLACES.filter(p => !p.locked);
 const LAYOUT = Layout.solve(live);
 const PART = Layout.plates(live);
-const rep = DoorClaims.runDoorClaims({ Legibility, Layout, places: PLACES, layout: LAYOUT, plates: PART });
+// the map depth-tally register (§6.3 consumer 2) — the page forge:json-bakes this same file as
+// MANIFEST_TALLIES; the twin reads it straight so CLAIM 11 (tally-vs-register) arms identically.
+const TALLIES = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools', 'manifest', 'estate-tallies.json'), 'utf8'));
+const rep = DoorClaims.runDoorClaims({ Legibility, Layout, places: PLACES, layout: LAYOUT, plates: PART, tallies: TALLIES });
 
 console.log('door.test — the front door legibility + well-formedness pill, node twin (#337, v2 polar)');
 console.log('  ' + live.length + ' live rooms · ' + rep.structureCount + ' fit-view structures · ' +

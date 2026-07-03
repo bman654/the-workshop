@@ -1680,6 +1680,11 @@ const PLACES = [
    (x/y/w/h or x/y/r) so the existing footprint drawers + label/leader geometry —
    which read r.x/r.y/r.w/r.h — run UNCHANGED against the derived slots. */
 const LAYOUT = Layout.solve(PLACES);
+/* §6.3 consumer 2 / §5.5 — the map depth-tallies, MANIFEST-FED (W2.5). Forge bakes the small
+   estate-tallies.json projection (§6.1 shape: districts{rooms,pieces,within} + hubs{within})
+   in place; the map draws "N ROOMS · M WITHIN" from it (WITHIN only when positive) and the door
+   pill (CLAIM 11) proves it agrees with the live estate register. The page never fetches. */
+const MANIFEST_TALLIES = <!-- forge:json tools/manifest/estate-tallies.json -->;
 /* #411 — which DISTRICTS detach into their own child layer (a {districtId:true} map; the
    fairground is the sole one today). Under the polar contract (§1.9) `detach` lives on the
    district CONTRACT, so Layout.detachedWings() is now DISTRICT-keyed (was wing-keyed in v1).
@@ -3911,8 +3916,16 @@ const STRUCT_SKIP = new Set(["manor","fairground","approach"]);   // massing / g
 // pill's §9.2 collision check can never drift apart (the pill checks exactly what we draw).
 const STRUCT_WALK = DoorClaims.STRUCT_WALK;
 const structDisplayBox = DoorClaims.structDisplayBox;
-// house voice: the provisional room count line (the WITHIN number is manifest-fed, arms W2.5).
-function structTally(rooms){ return rooms + (rooms===1 ? " ROOM" : " ROOMS"); }
+// house voice: the depth tally, MANIFEST-FED (§5.5, W2.5). Reads the forge-baked MANIFEST_TALLIES
+// register: "N ROOMS · M WITHIN" where WITHIN = pieces − rooms, shown ONLY when positive (a bare
+// "N ROOMS" otherwise). Never bakes a number into art; never leaks engine vocabulary (§4.6).
+function structTally(dist){
+  var t = (MANIFEST_TALLIES.districts && MANIFEST_TALLIES.districts[dist]) || null;
+  var rooms = t ? t.rooms : 0, within = t ? t.within : 0;
+  var line = rooms + (rooms===1 ? " ROOM" : " ROOMS");
+  if(within > 0) line += " · " + within + " WITHIN";
+  return line;
+}
 function drawStructures(){
   if(!structuresG) return;
   const byDistrict = {};
@@ -3938,7 +3951,14 @@ function drawStructures(){
       mono.textContent = s.label.replace(/^THE /,"").charAt(0);
       g.appendChild(mono);
       const tal = el("text",{ x:b.cx, y:r01(b.y + b.h - 12), "text-anchor":"middle", class:"struct-tally" });
-      tal.textContent = structTally(s.tallies.rooms);
+      const tstr = structTally(dist);
+      tal.textContent = tstr;
+      // the manifest-fed "N ROOMS · M WITHIN" runs longer than the old bare count; on a small
+      // single-room plinth (cavern/outbuilding) it would spill past the hull. Squeeze ONLY when
+      // it would overflow (deterministic char-metric estimate at the 12px mono face) so the
+      // engraved tally always sits inside its plinth — imperceptible at fit view, never a spill.
+      const natW = tstr.length*7.23 + (tstr.length-1)*2.16, maxW = b.w - 16;
+      if(natW > maxW){ tal.setAttribute("textLength", r01(maxW)); tal.setAttribute("lengthAdjust","spacingAndGlyphs"); }
       g.appendChild(tal);
     }
     navG.appendChild(g);
@@ -6329,7 +6349,8 @@ const LOUPE = (function(){
     return DoorClaims.runDoorClaims({
       Legibility: Legibility, Layout: Layout,
       places: PLACES, layout: LAYOUT,
-      plates: Layout.plates(PLACES.filter(function(p){ return !p.locked; }))
+      plates: Layout.plates(PLACES.filter(function(p){ return !p.locked; })),
+      tallies: MANIFEST_TALLIES   // §6.3 consumer 2 — arms CLAIM 11 (tally-vs-register) at W2.5
     });
   }
 

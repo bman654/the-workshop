@@ -13,8 +13,9 @@
    clear — a DERIVED budget bounded by SKY_BAND, hard-error on exhaustion), VERIFIES
    every star (inside the viewBox; STAR_PAD clear of every solved footprint + the manor
    pool; 2*STAR_PAD inter-figure clearance — intra-figure spacing is inherited/rigid and
-   EXEMPT), and EMITS the legacy {id:{x,y,mag}} CATALOG slab (+ GROUPS + HINTS; STAR_META
-   is manifest-guarded, W2.5) into tools/sky/sky.js between sentinels.
+   EXEMPT), and EMITS the legacy {id:{x,y,mag}} CATALOG slab (+ GROUPS + HINTS + STAR_META,
+   the manifest-fed name resolver of §3.3 — canonical from W2.5) into tools/sky/sky.js
+   between sentinels.
 
    Determinism (§1.6): no Math.random / Date / locale; (theta,id) total sort; reuses
    Polar.hash01; every emitted coord 0.1-rounded. A double run is byte-identical.
@@ -34,6 +35,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const Layout = require('../layout/layout.js');
 const Polar = require('../layout/polar.js');
+const MANIFEST = join(__dirname, '..', 'manifest', 'estate-manifest.json');
 
 const DEG = Math.PI / 180;
 const r01 = (v) => Math.round(v * 10) / 10;
@@ -247,6 +249,45 @@ function verify(CATALOG, sol, world, opts = {}) {
   return true;
 }
 
+/* ── STAR_META (§3.3, the name resolver — second phase, W2.5) ──────────────────
+   The card layer reads NAMES from STAR_META, never PLACES: ~20 non-feat star ids are
+   companions/withins/hidden that aren't PLACES rooms, and the gather retires more. So the
+   name+href of every star comes from the MANIFEST (the one place that knows every piece's
+   display name + href). STAR_META = `id → { name, href?, hidden? }` for every star the
+   manifest names. `hidden:true` (starlight-bend, any within) is lock-parity: the card layer
+   reveals name+link only once `ws:seen:<id>` exists (§4.4 discipline).
+
+   Figure-internal sub-stars have NO manifest piece — the nine `feat-*` Optician feats and the
+   ten crumbs of the Automaton / Furnace / Carillonneur asterisms are parts of a constellation,
+   not pages (no dir, no href), so there is nothing in the manifest to resolve and STAR_META
+   omits them; their identity is the FIGURE's engraved name (sky.js FEATS), and the W3.4 card
+   layer shows the group name/hint for a star lacking a STAR_META entry. (Repo-wins, §header:
+   §3.3 illustratively listed the crumbs among the "manifest-resolvable" ids, but the repo has
+   never made them pieces.) Pure manifest consumer — deterministic, no page re-scrape. */
+function starMeta() {
+  const M = JSON.parse(readFileSync(MANIFEST, 'utf8'));
+  const dirOf = (href) => String(href || '').split('/')[0];
+  const idx = new Map();
+  const put = (dir, name, href, hidden) => { if (dir && !idx.has(dir)) idx.set(dir, { name, href, hidden: !!hidden }); };
+  for (const d of M.districts) for (const r of d.rooms) {
+    put(dirOf(r.href), r.room, r.href, false);
+    if (r.id && r.id !== dirOf(r.href)) put(r.id, r.room, r.href, false);
+    for (const ex of (r.exhibits || [])) put(dirOf(ex.href), ex.name, ex.href, ex.kind === 'within' || ex.kind === 'hidden');
+  }
+  for (const col of (M.collections || [])) for (const p of col.pieces) put(dirOf(p.href), p.name, p.href, false);
+  for (const h of (M.hidden || [])) put(dirOf(h.href), h.name, h.href, true);
+  const meta = {};
+  for (const id of Object.keys(STARS)) {              // catalog declaration order (deterministic)
+    const hit = idx.get(id);
+    if (!hit) continue;
+    const e = { name: hit.name };
+    if (hit.href) e.href = hit.href;
+    if (hit.hidden) e.hidden = true;
+    meta[id] = e;
+  }
+  return meta;
+}
+
 /* ── slab I/O (sentinels in sky.js) ──────────────────────────────────────────── */
 const SKY_JS = join(__dirname, 'sky.js');
 const BEGIN = '/* CATALOG-POLAR BEGIN */';
@@ -270,7 +311,19 @@ function renderSlab(CATALOG, includeStarMeta) {
   // GROUPS + HINTS (browser-consumed by the W3.4 card layer; positions-only tools ignore them)
   out += '  var SKY_GROUPS = ' + JSON.stringify(GROUPS) + ';\n';
   out += '  var SKY_HINTS = ' + JSON.stringify(HINTS) + ';\n';
-  if (includeStarMeta) out += '  /* STAR_META arms at W2.5 (manifest-fed) */\n';
+  if (includeStarMeta) {
+    // §3.3 — the manifest-fed name resolver (W2.5 second phase). Cards read this only.
+    const meta = starMeta();
+    out += '  /* STAR_META (§3.3) — id → {name, href?, hidden?} from the estate manifest; the\n';
+    out += '     W3.4 card layer reads names from here. hidden ⇒ name+link only once ws:seen. */\n';
+    out += '  var STAR_META = {\n';
+    for (const id of Object.keys(STARS)) {
+      if (!meta[id]) continue;
+      out += '    ' + JSON.stringify(id) + ': ' + JSON.stringify(meta[id]) + ',\n';
+    }
+    out += '  };\n';
+    out += '  Sky.STAR_META = STAR_META;\n';   // expose for the W3.4 card layer (Sky is in scope)
+  }
   out += '  ' + END;
   return out;
 }
@@ -323,12 +376,17 @@ function preflight() {
 
 /* ── CLI ── */
 const arg = process.argv[2] || '--preflight';
+// STAR_META is manifest-fed and CANONICAL from W2.5 on (§3.3 second phase), so the slab
+// carries it by DEFAULT — `--check` (the §9.4 gate) now inherently checks it. `--star-meta`
+// stays accepted (a harmless explicit form); `--no-star-meta` re-emits the W1.4 positions-only
+// slab (the two-phase escape hatch).
+const includeStarMeta = !process.argv.includes('--no-star-meta');
 try {
   if (arg === '--emit') {
-    const rep = emit(process.argv.includes('--star-meta'));
-    console.log('derive-sky: slab emitted into sky.js (reach ' + rep.maxReach + ', headroom ' + rep.headroom + 'px).');
+    const rep = emit(includeStarMeta);
+    console.log('derive-sky: slab emitted into sky.js (reach ' + rep.maxReach + ', headroom ' + rep.headroom + 'px' + (includeStarMeta ? ', STAR_META manifest-fed' : ', positions-only') + ').');
   } else if (arg === '--check') {
-    const ok = check(process.argv.includes('--star-meta'));
+    const ok = check(includeStarMeta);
     if (ok) { console.log('derive-sky --check: sky.js slab is current.'); process.exit(0); }
     else { console.error('derive-sky --check: sky.js slab is STALE — re-run `node tools/sky/derive-sky.mjs --emit`.'); process.exit(1); }
   } else {

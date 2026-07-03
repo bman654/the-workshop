@@ -44,6 +44,11 @@ const ROOT = join(__dirname, '..', '..');
 const require = createRequire(import.meta.url);
 const Contract = require('../layout/contract.js');
 const OUT = join(__dirname, 'estate-manifest.json');
+// §6.3 consumer 2 — the map depth-tallies. A SMALL projection of the manifest in the §6.1
+// MANIFEST_TALLIES shape, forge:json-baked into the map as `const MANIFEST_TALLIES` (the page
+// stays lean — it never inlines the 60KB full manifest). Regenerated + staleness-checked
+// alongside estate-manifest.json.
+const TALLIES_OUT = join(__dirname, 'estate-tallies.json');
 const PLACES_SRC = join(ROOT, 'index.src.html');
 
 const dirOf = (href) => String(href || '').split('/')[0];
@@ -295,7 +300,10 @@ function build(opts = {}) {
     pieces: crossOnDisk.map((d) => ({ name: readName(CROSS.dir + '/' + d), href: CROSS.dir + '/' + d + '/index.html' })),
   };
   stake(CROSS.dir, 'collection:' + CROSS.id);
-  const hidden = HIDDEN.map((h) => ({ id: h.id, gate: h.gate, ws: h.ws, href: h.href }));
+  // hidden pieces carry their display name too, so the manifest "knows every piece's display
+  // name + href" (§3.3) — the sky STAR_META resolver reads the name from here (e.g. the hidden
+  // starlight-bend star's card, once ws:seen, shows its title), never re-scraping the page.
+  const hidden = HIDDEN.map((h) => ({ id: h.id, name: readName(dirOf(h.href)), gate: h.gate, ws: h.ws, href: h.href }));
   for (const h of HIDDEN) { if (!existsSync(join(ROOT, dirOf(h.href)))) die('hidden dir does not exist: ' + h.href); stake(dirOf(h.href), 'hidden:' + h.id); }
 
   // allowlist (present-or-future; presence not required)
@@ -370,7 +378,29 @@ function normalizeForCompare(manifestObj) {
   return JSON.stringify(rest, null, 2);
 }
 
-function evaluate(result, committedJson) {
+/* §6.1/§6.3 consumer 2 — project the manifest into the pinned MANIFEST_TALLIES shape:
+   `{ districts: { [districtId]: { rooms, pieces, within } }, hubs: { [hubRoomId]: within } }`.
+   The generator COMPUTES within; the page only prints it (§5.5). District keys + hub keys are
+   codepoint-sorted so the emit is deterministic (§1.6) and diffs are stable. A hub row's within
+   = its exhibits primary to it (pieces beyond the room-page); rows with none are omitted.
+   No generatedAt — this is a pure derivation, so `--check` byte-compares it straight. */
+function buildTallies(manifest) {
+  const districts = {};
+  for (const d of [...manifest.districts].sort((a, b) => cmp(a.id, b.id))) {
+    districts[d.id] = { rooms: d.counts.rooms, pieces: d.counts.pieces, within: d.counts.within };
+  }
+  const hubRows = [];
+  for (const d of manifest.districts) for (const r of d.rooms) {
+    const within = (r.exhibits || []).length;
+    if (within > 0) hubRows.push([r.id, within]);
+  }
+  const hubs = {};
+  for (const [id, within] of hubRows.sort((a, b) => cmp(a[0], b[0]))) hubs[id] = within;
+  return { districts, hubs };
+}
+function talliesJson(manifest) { return JSON.stringify(buildTallies(manifest), null, 2); }
+
+function evaluate(result, committedJson, committedTalliesJson) {
   const failures = [];
   const m = result.manifest;
   // 1. completeness — the structural no-more-orphans law
@@ -397,6 +427,13 @@ function evaluate(result, committedJson) {
       failures.push('estate-manifest.json is STALE — re-derive: `node tools/manifest/manifest.mjs` (then commit it in the same change)');
     }
   }
+  // 5. the depth-tally projection (§6.3 consumer 2) must be fresh too — the map bakes it, so a
+  //    stale estate-tallies.json would ship a wrong on-map tally. Pure derivation → byte compare.
+  if (committedTalliesJson == null) {
+    failures.push('estate-tallies.json is MISSING — run `node tools/manifest/manifest.mjs`');
+  } else if (committedTalliesJson.replace(/\n$/, '') !== talliesJson(m)) {
+    failures.push('estate-tallies.json is STALE — re-derive: `node tools/manifest/manifest.mjs` (then commit it in the same change)');
+  }
   return { ok: failures.length === 0, failures };
 }
 
@@ -412,7 +449,8 @@ function main() {
     const plant = argv.filter((a) => a.startsWith('--plant=')).map((a) => a.slice('--plant='.length));
     const result = build({ extraDirs: plant });
     const committed = existsSync(OUT) ? readFileSync(OUT, 'utf8') : null;
-    const { ok, failures } = evaluate(result, committed);
+    const committedTallies = existsSync(TALLIES_OUT) ? readFileSync(TALLIES_OUT, 'utf8') : null;
+    const { ok, failures } = evaluate(result, committed, committedTallies);
     const m = result.manifest;
     console.log(`manifest --check: ${m.counts.districts} districts · ${m.counts.rooms} rooms · ${m.counts.pieces} pieces · unclaimed ${result.unclaimed.length} · floors rooms≥${ROOMS_FLOOR} pieces≥${PIECES_FLOOR}`);
     if (ok) { console.log('manifest --check: OK — complete · no double-claim · floors met · not stale'); process.exit(0); }
@@ -427,6 +465,11 @@ function main() {
     const prev = existsSync(OUT) ? readFileSync(OUT, 'utf8') : null;
     if (prev === json) console.log('manifest: estate-manifest.json already current');
     else { writeFileSync(OUT, json + '\n'); console.log('manifest: estate-manifest.json ' + (prev ? 're-derived' : 'written')); }
+    // §6.3 consumer 2 — the map depth-tally projection (the page forge:json-bakes this one)
+    const tjson = talliesJson(manifest);
+    const prevT = existsSync(TALLIES_OUT) ? readFileSync(TALLIES_OUT, 'utf8').replace(/\n$/, '') : null;
+    if (prevT === tjson) console.log('manifest: estate-tallies.json already current');
+    else { writeFileSync(TALLIES_OUT, tjson + '\n'); console.log('manifest: estate-tallies.json ' + (prevT ? 're-derived' : 'written')); }
   }
 
   const outbuilding = manifest.districts.find((d) => d.id === 'outbuilding');
@@ -456,4 +499,4 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   try { main(); } catch (e) { console.error('manifest: ' + (e && e.stack ? e.stack : e)); process.exit(1); }
 }
 
-export { build, evaluate, normalizeForCompare, ROOMS_FLOOR, PIECES_FLOOR };
+export { build, evaluate, normalizeForCompare, buildTallies, talliesJson, ROOMS_FLOOR, PIECES_FLOOR };

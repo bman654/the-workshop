@@ -107,6 +107,57 @@
   };
   var SKY_GROUPS = {"automaton":{"theta":319,"rOff":20,"lane":null,"hang":0},"carillonneur":{"theta":253,"rOff":20,"lane":null,"hang":0},"celestial":{"theta":277,"rOff":20,"lane":null,"hang":0},"coilwright":{"theta":169,"rOff":20,"lane":null,"hang":0},"design":{"theta":43,"rOff":20,"lane":null,"hang":0},"drover":{"theta":88,"rOff":-190,"lane":"east-lane","hang":88},"feats":{"theta":261,"rOff":20,"lane":null,"hang":-8.8},"furnace":{"theta":112,"rOff":20,"lane":null,"hang":19.2},"garden":{"theta":186,"rOff":20,"lane":null,"hang":0},"labyrinth":{"theta":113,"rOff":20,"lane":null,"hang":0},"letters":{"theta":342,"rOff":20,"lane":null,"hang":0},"pilot":{"theta":252,"rOff":-210,"lane":"west-lane","hang":72},"realm":{"theta":250,"rOff":20,"lane":null,"hang":0},"reckoner":{"theta":124,"rOff":20,"lane":null,"hang":0},"sirenist":{"theta":260,"rOff":20,"lane":null,"hang":0},"strategist":{"theta":118,"rOff":20,"lane":null,"hang":0},"surveyor":{"theta":240,"rOff":20,"lane":null,"hang":0},"wagerer":{"theta":115,"rOff":20,"lane":null,"hang":0}};
   var SKY_HINTS = {"automaton":"Models its own making; keeps none of it.","carillonneur":"Sets the pins, then lets the turning hand be the only clock.","celestial":"Invents a sky; reads the true one.","coilwright":"Makes the current by moving; pays for every spark.","design":"Letter and shield, one measure.","drover":"Never pushes the flock; only chooses where to stand.","feats":"Bends every ray to its purpose.","furnace":"Turns heat to work; never quite all of it.","garden":"Tends the tile till the pattern comes true.","labyrinth":"Builds the turning; keeps the way back.","letters":"Speaks the verse; copies it fair.","pilot":"Flies the least-time road; falls into the law.","realm":"Draws the coast; raises the keep.","reckoner":"Reckons by measuring a shape; one reads the mean, one the integral.","sirenist":"Spins the rate you watch into the pitch you hear.","strategist":"Wins by the move that looks like a mistake.","surveyor":"Walks the loop; brings home the twist no chart can hide.","wagerer":"Pours belief, never spills it; lets the evidence decide the level.","aerodrome":"an unvisited hall of THE OBSERVATORY RISE","arcade":"an unvisited hall of THE FAIRGROUND","benford-mill":"an unvisited hall of THE NUMBER GARDEN","collisions":"an unvisited hall of THE NUMBER GARDEN","gnomon":"an unvisited hall of THE PROMENADES","museum":"an unvisited hall of THE MANOR HOUSE","sound-garden":"an unvisited hall of THE MANOR HOUSE","the-barrel-house":"an unvisited hall of THE MANOR HOUSE","the-drawing-room":"an unvisited hall of THE NUMBER GARDEN","the-heap":"an unvisited hall of THE FAIRGROUND","the-keystone-arch":"an unvisited hall of THE WORKS","the-long-way-home":"an unvisited hall of THE PROMENADES","the-rolling-room":"an unvisited hall of THE FAIRGROUND","the-sightline":"an unvisited hall of THE OBSERVATORY RISE","theogony":"an unlit corner of the estate — a room you have yet to enter","threshold":"an unvisited hall of THE MANOR HOUSE","undercroft":"an unvisited hall of THE MANOR HOUSE","workbench":"an unvisited hall of THE MAKER'S SHED"};
+  /* STAR_META (§3.3) — id → {name, href?, hidden?} from the estate manifest; the
+     W3.4 card layer reads names from here. hidden ⇒ name+link only once ws:seen. */
+  var STAR_META = {
+    "firmament": {"name":"The Observatory","href":"firmament/index.html"},
+    "orrery": {"name":"Orrery","href":"orrery/index.html"},
+    "lodestone-hall": {"name":"The Lodestone Hall","href":"lodestone-hall/index.html"},
+    "bootstrap-bench": {"name":"The Bootstrap Bench","href":"bootstrap-bench/index.html"},
+    "compositor": {"name":"The Print Room","href":"compositor/index.html"},
+    "blazon": {"name":"Blazon","href":"blazon/index.html"},
+    "the-shepherd": {"name":"The Arcade · The Fold","href":"the-shepherd/index.html"},
+    "the-standing-stones": {"name":"The Arcade · The Drover","href":"the-standing-stones/index.html"},
+    "strange-garden": {"name":"The Gardens · Glasshouse","href":"strange-garden/index.html"},
+    "tessellarium": {"name":"Tessellarium","href":"tessellarium/index.html"},
+    "daedalus": {"name":"The Hedge Maze","href":"daedalus/index.html"},
+    "ariadne": {"name":"Ariadne","href":"ariadne/index.html"},
+    "verse": {"name":"The Study","href":"verse/index.html"},
+    "scriptorium": {"name":"Scriptorium","href":"scriptorium/index.html"},
+    "refraction-run": {"name":"The Photon's Errand","href":"refraction-run/index.html"},
+    "starlight-bend": {"name":"The Light That Falls Around a Star","href":"starlight-bend/index.html","hidden":true},
+    "cartographer": {"name":"The Map Room","href":"cartographer/index.html"},
+    "bastion": {"name":"Bastion","href":"bastion/index.html"},
+    "differential-gear": {"name":"The Differential Gear","href":"differential-gear/index.html"},
+    "ball-and-disk": {"name":"The Ball-and-Disk Integrator","href":"ball-and-disk/index.html"},
+    "tone-mill": {"name":"The Tone Mill","href":"tone-mill/index.html"},
+    "singing-plate": {"name":"The Singing Plate","href":"singing-plate/index.html"},
+    "hexapawn": {"name":"The Matchbox That Learns","href":"hexapawn/index.html"},
+    "the-long-chain": {"name":"The Long Chain","href":"the-long-chain/index.html"},
+    "holonomy": {"name":"The Holonomy Walk","href":"holonomy/index.html"},
+    "unrolled-cone": {"name":"The Unrolled Cone","href":"unrolled-cone/index.html"},
+    "belief-beam": {"name":"The Belief Beam","href":"belief-beam/index.html"},
+    "likelihood-sluice": {"name":"The Likelihood Sluice","href":"likelihood-sluice/index.html"},
+    "aerodrome": {"name":"The Aerodrome","href":"aerodrome/index.html"},
+    "arcade": {"name":"The Arcade","href":"arcade/index.html"},
+    "benford-mill": {"name":"The Benford Mill","href":"benford-mill/index.html"},
+    "collisions": {"name":"The Clack Counter","href":"collisions/index.html"},
+    "gnomon": {"name":"The Hours","href":"hours/index.html"},
+    "museum": {"name":"The Museum","href":"museum/index.html"},
+    "sound-garden": {"name":"The Music Room","href":"sound-garden/index.html"},
+    "the-barrel-house": {"name":"The Barrel House","href":"the-barrel-house/index.html"},
+    "the-drawing-room": {"name":"The Drawing Room","href":"the-drawing-room/index.html"},
+    "the-heap": {"name":"The Gardens · The Assayer's Tray","href":"the-heap/index.html"},
+    "the-keystone-arch": {"name":"The Keystone Arch","href":"the-keystone-arch/index.html"},
+    "the-long-way-home": {"name":"The Long Way Home","href":"the-long-way-home/index.html"},
+    "the-rolling-room": {"name":"The Gardens · The Rolling Room","href":"the-rolling-room/index.html"},
+    "the-sightline": {"name":"The Sightline","href":"the-sightline/index.html"},
+    "theogony": {"name":"Theogony","href":"theogony/index.html"},
+    "threshold": {"name":"The East Wing · Threshold","href":"threshold/index.html"},
+    "undercroft": {"name":"The Undercroft · Beneath","href":"undercroft/index.html"},
+    "workbench": {"name":"The Maker's Shed","href":"workbench/index.html"},
+  };
+  Sky.STAR_META = STAR_META;
   /* CATALOG-POLAR END */
 
   /* ── DATA: the six wings (companion-pairs), each an asterism ────────────────
