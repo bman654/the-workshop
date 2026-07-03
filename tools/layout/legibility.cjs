@@ -88,7 +88,10 @@ const BOX_H_COMPANION = 50;// + the "↳ companion within" line
 const BOX_H_NAME = 18;     // NAME-ONLY block height (just the 16.5px serif name line, no sub)
 const PAD = 3;             // LABEL_PAD — the backing-stroke halo (index.src.html:2004)
 const LABEL_GAP = 14;      // LABEL_GAP (index.src.html:2000) — leader breathing room
-const LABEL_BOUNDS = { x: 46, y: 52, w: 1348, h: 790 }; // index.src.html:1995
+// §1.7 — DERIVED from the solved world (viewBox inset 46/52), read from Layout so the
+// conscience and the page share one source of truth. Fallback = the old frozen bounds
+// (only if Layout hasn't attached its world yet — never in Node or the forged page).
+const LABEL_BOUNDS = (Layout && Layout.LABEL_BOUNDS) || { x: 46, y: 52, w: 1348, h: 790 };
 const LABEL_SEED = 0x5EED; // LABEL_SEED (index.src.html:3504) — the placeLabels solver seed
 
 /* composite weights + derived threshold (see header) */
@@ -461,7 +464,9 @@ function compositeOf(gap, density, leader) {
    the kernel-density peak at each cell, normalized to the grid's own max so contrast
    always reads — the hottest corner is darkest, open ground is blank. */
 function buildPlate(model, COLS, ROWS) {
-  const F = Layout.FIELD;
+  // §1.7 — the density-grid ASCII shades over the whole solved plate (the world IS the
+  // field now; the old star-clear FIELD envelope retired). Display-only: never scores.
+  const F = Layout.FIELD || (Layout.world ? { x: 0, y: 0, w: Layout.world.W, h: Layout.world.H } : { x: 0, y: 0, w: 1440, h: 900 });
   const cs = model.boxes.map(b => ({ x: b.box.x + b.box.w / 2, y: b.box.y + b.box.h / 2 }));
   const grid = [];
   let gmax = 0;

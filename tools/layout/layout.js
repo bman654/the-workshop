@@ -278,6 +278,16 @@ var Layout = (function () {
     solution.road = [door, { x: r01(centre.x), y: r01(centre.y + world.Rgate) }];
   }
 
+  /* §1.7 — LABEL_BOUNDS is the viewBox inset by the fixed 46/52 label margins, DERIVED
+     from the solved world (the frozen 0 0 1440 900 bounds die with the reorg). One helper,
+     read by both the conscience (legibility.cjs) and the page (index.src.html) so the two
+     can never drift. `field` is the whole-plate extent the density-grid ASCII shades over
+     (the old star-clear FIELD envelope retires; the world IS the field now). */
+  var LABEL_INSET_X = 46, LABEL_INSET_Y = 52;
+  function labelBoundsOf(w) {
+    return { x: LABEL_INSET_X, y: LABEL_INSET_Y, w: r01(w.W - 2 * LABEL_INSET_X), h: r01(w.H - 2 * LABEL_INSET_Y) };
+  }
+
   function worldModel(w, contracts) {
     var maxTier = w.tiers[w.tiers.length - 1];
     var Rarr = []; for (var t = 0; t <= maxTier; t++) Rarr[t] = (w.R[t] != null) ? w.R[t] : null;
@@ -287,6 +297,7 @@ var Layout = (function () {
       R: Rarr, tiers: w.tiers.slice(), maxRho: w.maxRho,
       Rsky: w.Rsky, Rgate: w.Rgate, skyOuter: w.skyOuter, skyBand: w.skyBand,
       manorRho: w.manorRho, K_MIN: w.K_MIN, K_MAX: w.K_MAX, K_LOD: w.K_LOD,
+      labelBounds: labelBoundsOf(w), field: { x: 0, y: 0, w: w.W, h: w.H },
       freeSlots: fs, districts: w.districts
     };
   }
@@ -498,9 +509,15 @@ var Layout = (function () {
   };
 })();
 
-/* attach the derived world eagerly so a page read (viewBox at build) needs no solve call. */
+/* attach the derived world eagerly so a page read (viewBox at build) needs no solve call.
+   FIELD + LABEL_BOUNDS are the world-derived furniture/label envelopes (§1.7) the conscience
+   and the page both read from here — the single source of truth that kills the frozen pair. */
 if (typeof Layout !== 'undefined' && Layout && !Layout.world) {
-  try { Layout.world = Layout.solve([]).world; } catch (e) { /* an empty estate is still a valid world */ }
+  try {
+    Layout.world = Layout.solve([]).world;
+    Layout.FIELD = Layout.world.field;
+    Layout.LABEL_BOUNDS = Layout.world.labelBounds;
+  } catch (e) { /* an empty estate is still a valid world */ }
 }
 
 if (typeof module !== 'undefined' && module.exports) { module.exports = Layout; }

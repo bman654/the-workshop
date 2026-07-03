@@ -3,12 +3,17 @@
    falsifiable geometry crux. GREEN (exit 0) is the regression guard that lives
    here (NOT in smoke.cjs, whose live-door legibility red is an intended WARNING).
 
-   The four DoD claims:
-     1. clean-positive control (6 rooms, 1/district, spread) → composite < threshold (PASS)
-     2. crowded-negative control (12 in one wing)            → composite > threshold (FAIL)
-     3. MONOTONICITY: add-rooms-to-one-district sweep n=2..12 → density AND composite
-        strictly non-decreasing (no inversion)
+   The DoD claims (v2 — polar, §9.1):
+     1. clean-positive control (6 rooms, 1 per POLAR district, spread) → composite < threshold
+     2. crowded-negative control (a tight hand-placed cluster)         → composite > threshold
+     3. MONOTONICITY: growing that cluster n=2..12 → density AND composite strictly
+        non-decreasing (measured on a controlled cluster, not the packer — the polar
+        formations pack non-monotonically as n grows, so a packer sweep would confound it)
      4. THRESHOLD DERIVATION asserted from the controls (clean << threshold << crowded)
+     5. THE HARD PER-DISTRICT-PLATE GATE (replaces the dead CROWDING_BASELINE ratchet):
+        every district plate, re-laid into RELAY_FIELD + name-only, scores < 0.30 over the
+        LIVE PLACES — achievable pre-gather because LABEL_BOUNDS is world-derived (§1.7).
+        The ESTATE-plate composite (structure labels) self-skips until W1.3.
    Plus: facet-2 exact-integer crossing-counter unit proofs, and a renderAscii smoke.
    ════════════════════════════════════════════════════════════════════════════ */
 'use strict';
@@ -24,31 +29,39 @@ function ok(name, cond, detail) {
 }
 
 /* ── THE SHARED CONTROL CORPUS (defined ONCE — resolves coupling #4) ────────── */
-// clean-positive: 6 rooms, 1 per district, well spread.
+// clean-positive: 6 rooms, 1 per POLAR district (§2.1), well spread — the packer seats
+// each in its own precinct across the world, so the conscience reads it LEGIBLE.
 const CLEAN = [
-  { id: 'a', room: 'Alpha',   piece: 'Alpha',   tag: 'one', district: 'manor',       tier: 2, wing: 'studies', footprint: 'house-wing' },
-  { id: 'b', room: 'Beta',    piece: 'Beta',    tag: 'two', district: 'observatory', tier: 1,                  footprint: 'tower' },
-  { id: 'c', room: 'Gamma',   piece: 'Gamma',   tag: 'three', district: 'grounds',   tier: 2, wing: 'works',   footprint: 'engine' },
-  { id: 'd', room: 'Delta',   piece: 'Delta',   tag: 'four', district: 'cavern',     tier: 1,                  footprint: 'cave' },
-  { id: 'e', room: 'Epsilon', piece: 'Epsilon', tag: 'five', district: 'outbuilding', tier: 3,                 footprint: 'shed' },
-  { id: 'f', room: 'Zeta',    piece: 'Zeta',    tag: 'six', district: 'grounds',     tier: 2, wing: 'optics',  footprint: 'hall' }
+  { id: 'a', room: 'Alpha',   piece: 'Alpha',   tag: 'one',   district: 'manor',       tier: 2, footprint: 'house-wing' },
+  { id: 'b', room: 'Beta',    piece: 'Beta',    tag: 'two',   district: 'observatory', tier: 1, footprint: 'tower' },
+  { id: 'c', room: 'Gamma',   piece: 'Gamma',   tag: 'three', district: 'gardens',     tier: 2, footprint: 'hall' },
+  { id: 'd', room: 'Delta',   piece: 'Delta',   tag: 'four',  district: 'cavern',      tier: 1, footprint: 'cave' },
+  { id: 'e', room: 'Epsilon', piece: 'Epsilon', tag: 'five',  district: 'outbuilding', tier: 3, footprint: 'shed' },
+  { id: 'f', room: 'Zeta',    piece: 'Zeta',    tag: 'six',   district: 'works',       tier: 2, footprint: 'engine' }
 ];
-// crowded-negative: 12 rooms stuffed into the grounds amusements wing.
-function crowdedCorpus(n) {
-  const out = [];
-  for (let i = 0; i < n; i++) out.push({
-    id: 'x' + i, room: 'Crowded Room ' + i, piece: 'Crowded Piece ' + i, tag: 'jammed',
-    district: 'grounds', tier: 1, wing: 'amusements', footprint: 'arcade', order: i
-  });
-  return out;
+// crowded-negative + the monotonicity sweep: n footprints HAND-PLACED on a tight grid
+// near the world core. This proves the CONSCIENCE (not the packer): adding a room to a
+// fixed cluster strictly raises the density peak AND the composite, with no packer
+// re-arrangement to confound the sweep (the polar formations pack non-monotonically as n
+// grows — a real repo fact, so the monotonicity claim is measured on a controlled cluster).
+function crowdedSolution(n) {
+  const foot = {}, footMeta = {}, places = [];
+  const cx = 1400, cy = 1400, COLW = 70, ROWH = 52; // tight → labels compete
+  for (let i = 0; i < n; i++) {
+    const c = i % 3, r = Math.floor(i / 3);
+    foot['x' + i] = { x: cx + c * COLW, y: cy + r * ROWH, w: 44, h: 32 };
+    footMeta['x' + i] = { district: 'number', tier: 2 };
+    places.push({ id: 'x' + i, room: 'Crowded Room ' + i, piece: 'Crowded Piece ' + i, tag: 'jammed', district: 'number', tier: 2, order: i });
+  }
+  return { solution: { foot, footMeta, graph: null }, places };
 }
-const CROWDED = crowdedCorpus(12);
+function crowdedRepOf(n) { const c = crowdedSolution(n); return Leg.score(c.solution, c.places); }
 
 console.log('=== legibility.test.cjs ===\n');
 
 /* ── CLAIM 1 + 2: the two controls straddle the threshold ──────────────────── */
 const cleanRep = Leg.score(Layout.solve(CLEAN), CLEAN);
-const crowdedRep = Leg.score(Layout.solve(CROWDED), CROWDED);
+const crowdedRep = crowdedRepOf(12);
 
 console.log('Controls:');
 console.log('  clean   composite =', cleanRep.overall.composite, '(' + cleanRep.overall.verdict + ')');
@@ -76,12 +89,11 @@ ok('weights are gap-dominant and normalized',
 
 /* ── CLAIM 3: monotonicity — density AND composite non-decreasing across the
    add-rooms-to-one-district sweep n=2..12. No inversion. ───────────────────── */
-console.log('\nMonotonicity sweep (grounds/amusements):');
+console.log('\nMonotonicity sweep (a tight hand-placed cluster, n=2..12):');
 let prevDens = -1, prevComp = -1, densMono = true, compMono = true;
 const EPS = 1e-9;
 for (let n = 2; n <= 12; n++) {
-  const corpus = crowdedCorpus(n);
-  const rep = Leg.score(Layout.solve(corpus), corpus);
+  const rep = crowdedRepOf(n);
   const dens = rep.overall.density;
   const comp = rep.overall.composite;
   if (dens < prevDens - EPS) densMono = false;
@@ -147,7 +159,7 @@ ok('every box carries owner id + district + a leader segment',
 console.log('\nName-only label mode (#262 — drops the "PIECE · tag" sub-line):');
 // a room whose UPPERCASE sub-line is much WIDER than its name: full box >> name box.
 const wide = [{ id: 'w', room: 'Hex', piece: 'The Game That Cannot Tie', tag: 'union-find',
-  district: 'grounds', tier: 2, wing: 'number', footprint: 'numbers-room' }];
+  district: 'number', tier: 2, footprint: 'numbers-room' }];
 const solW = Layout.solve(wide);
 const full = Leg.buildLabelModel(wide, solW);
 const nameO = Leg.buildLabelModel(wide, solW, { nameOnly: true });
@@ -183,33 +195,51 @@ ok('partition is TOTAL + DISJOINT (every live room → exactly one plate)',
   tot === LIVE2.length && seen2.size === LIVE2.length && !dup2,
   '[' + tot + '/' + LIVE2.length + ' rooms, ' + PP.ids.length + ' plates]');
 
-// per-plate floor: each plate re-laid + name-only < THRESHOLD
+// re-lay a plate's rooms into the airy RELAY_FIELD and attach each room's OUTWARD fan
+// side (sideById) — the exact geometry the page uses when you ENTER a plate. Without the
+// side a right-column label fans LEFT into its neighbour's footprint, a FALSE collision
+// (relayPlate returns {foot,footMeta,sideById} in v2 — the old relay.places is gone).
+function scorePlate(members, opts) {
+  const relay = Layout.relayPlate(members);
+  const placed = members.map(r => ({ ...r, relaySide: relay.sideById[r.id] }));
+  return Leg.score({ foot: relay.foot, footMeta: relay.footMeta, graph: null }, placed, opts);
+}
+
+/* ── THE HARD PER-DISTRICT-PLATE GATE (§9.1 — replaces the dead CROWDING_BASELINE
+   ratchet). Every district plate, re-laid and name-only, scores < 0.30. This is now
+   ACHIEVABLE pre-gather: LABEL_BOUNDS is world-derived (§1.7 — labels seat by their
+   footprints, not clamped to the retired 1440×900 box), and the outward fan keeps a
+   plate's own labels apart. The ESTATE-plate composite (the district-STRUCTURE labels)
+   arms at W1.3 when the structures render — it SELF-SKIPS below. ─────────────────── */
 let floorAll = true; const worst = { id: null, c: -1 };
 for (const id of PP.ids) {
-  const relay = Layout.relayPlate(PP.members[id]);
-  const rep = Leg.score({ foot: relay.foot, footMeta: relay.footMeta, graph: null }, relay.places, { nameOnly: true });
+  const rep = scorePlate(PP.members[id], { nameOnly: true });
   if (rep.overall.composite >= Leg.THRESHOLD) floorAll = false;
   if (rep.overall.composite > worst.c) { worst.id = id; worst.c = rep.overall.composite; }
 }
-ok('EVERY plate clears the floor ALONE (re-lay + name-only < threshold)', floorAll,
+ok('HARD GATE: every district plate clears < 0.30 ALONE (re-lay + name-only)', floorAll,
   '[worst: ' + worst.id + ' = ' + worst.c.toFixed(3) + ' < ' + Leg.THRESHOLD + ']');
 
-// NEG-CONTROL 1: all rooms on one plate, full labels → CROWDED
-const oneRelay = Layout.relayPlate(LIVE2);
-const ncAll = Leg.score({ foot: oneRelay.foot, footMeta: oneRelay.footMeta, graph: null }, LIVE2);
-ok('NEG-CONTROL: all ' + LIVE2.length + ' rooms on one plate (full labels) → CROWDED',
+// NEG-CONTROL 1: all rooms on ONE plate, full labels → CROWDED (the gate has teeth).
+const ncAll = scorePlate(LIVE2, {});
+ok('NEG-CONTROL: all ' + LIVE2.length + ' rooms on ONE plate (full labels) → CROWDED',
   ncAll.overall.composite >= Leg.THRESHOLD,
   '[' + ncAll.overall.composite.toFixed(3) + ' ≥ ' + Leg.THRESHOLD + ']');
 
-// NEG-CONTROL 2: name-only is load-bearing — a plate where full FAILS but name-only PASSES
-let loadBearing = false;
+// NEG-CONTROL 2: name-only is load-bearing — a plate where FULL fails but name-only passes.
+let loadBearing = false, lbId = null;
 for (const id of PP.ids) {
-  const relay = Layout.relayPlate(PP.members[id]);
-  const f = Leg.score({ foot: relay.foot, footMeta: relay.footMeta, graph: null }, relay.places);
-  const n = Leg.score({ foot: relay.foot, footMeta: relay.footMeta, graph: null }, relay.places, { nameOnly: true });
-  if (f.overall.composite >= Leg.THRESHOLD && n.overall.composite < Leg.THRESHOLD) loadBearing = true;
+  const f = scorePlate(PP.members[id], {});
+  const n = scorePlate(PP.members[id], { nameOnly: true });
+  if (f.overall.composite >= Leg.THRESHOLD && n.overall.composite < Leg.THRESHOLD) { loadBearing = true; lbId = lbId || id; }
 }
-ok('NEG-CONTROL: name-only is LOAD-BEARING (a plate reads CROWDED full / LEGIBLE name-only)', loadBearing);
+ok('NEG-CONTROL: name-only is LOAD-BEARING (a plate reads CROWDED full / LEGIBLE name-only)',
+  loadBearing, lbId ? '[' + lbId + ']' : '');
+
+/* ── the ESTATE plate (district-STRUCTURE labels, ~11) — arms at W1.3 (round 4): the
+   structure labels are rendered by the LOD wave, so this composite SELF-SKIPS here,
+   reported not-yet-armed rather than green (the pill stays honest at every wave). ── */
+console.log('  ⏭ ESTATE-plate composite (structure labels) — not yet armed (arms at W1.3, §10)');
 
 // reciprocal + connected road graph
 let recip2 = true;
