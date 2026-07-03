@@ -271,9 +271,14 @@
   #viewport.lod-estate #paths .aisle,
   #viewport.lod-estate #paths .room-stub,
   #viewport.lod-estate #precincts .wing-tint,
-  #viewport.lod-estate #precincts .wing-bound,
-  #viewport.lod-estate .first-thread,
-  #viewport.lod-estate .first-thread-tip{ opacity:0; pointer-events:none; }
+  #viewport.lod-estate #precincts .wing-bound{ opacity:0; pointer-events:none; }
+  /* §1.7 the first-visit DRIVE-THREAD is an ESTATE-tier on-ramp (gate → road → manor door):
+     it lives among the estate-tier road/gate/manor, so — inverse to the room-plan layers
+     above — it fades once you DESCEND into a plate, not at the fit view. `animation:none`
+     is load-bearing here: the running threadpulse animates `opacity`, and a CSS animation
+     overrides a normal `opacity:0` — so the animation must be cancelled for the hide to win. */
+  #viewport.lod-district .first-thread,
+  #viewport.lod-district .first-thread-tip{ animation:none; opacity:0; pointer-events:none; }
   #viewport #pois .poi{ transition:opacity .5s ease; }
   @media (prefers-reduced-motion:reduce){ #structures, #viewport #pois .poi{ transition:none; } }
 
@@ -301,7 +306,7 @@
   .door-plate{ font:600 8.5px/1 var(--mono); letter-spacing:.2em; fill:var(--brass);
     text-transform:uppercase; opacity:.82; paint-order:stroke;
     stroke:rgba(6,8,13,.6); stroke-width:2.2px; }
-  /* the soft pulsing FIRST-VISIT THREAD from the door to the nearest unseen anchor */
+  /* the soft pulsing FIRST-VISIT THREAD — the on-ramp that walks the drive, gate → road → manor door (§1.7) */
   .first-thread{ fill:none; stroke:var(--brass-bright); stroke-width:1.6; opacity:.5;
     stroke-dasharray:3 6; stroke-linecap:round; animation:threadpulse 2.6s ease-in-out infinite; }
   @keyframes threadpulse{ 0%,100%{ opacity:.28; } 50%{ opacity:.7; } }
@@ -3784,9 +3789,11 @@ function catmullRomPath(pts){
 /* §4.1 THE ROAD — the drive from the estate gate up to the manor's south door, a
    deterministic meander inside the road wedge, drawn in the existing survey-path +
    avenue-tree idiom (LAYOUT.road = [door, gate]). offset(t) = 26·sin(2.2πt+0.9)·taper(t),
-   taper = min(1,3t,3(1−t)); t=0 at the gate, t=1 at the door. 24 samples. */
-function drawRoad(){
-  const road = LAYOUT.road; if(!road || road.length < 2) return;
+   taper = min(1,3t,3(1−t)); t=0 at the gate, t=1 at the door. 24 samples.
+   The sample geometry is factored into roadSamples() so the first-visit on-ramp
+   (drawFirstVisitThread) traces the SAME drive and can never drift off the road. */
+function roadSamples(){
+  const road = LAYOUT.road; if(!road || road.length < 2) return null;
   const door = road[0], gate = road[1];
   const adx = door.x - gate.x, ady = door.y - gate.y, alen = Math.hypot(adx, ady) || 1;
   const nx = -ady/alen, ny = adx/alen;                 // unit perpendicular to the drive axis
@@ -3797,9 +3804,14 @@ function drawRoad(){
     const off = 26*Math.sin(2.2*Math.PI*t + 0.9)*taper;
     pts.push([ gate.x + adx*t + nx*off, gate.y + ady*t + ny*off ]);
   }
+  return { pts, door, gate, nx, ny };
+}
+function drawRoad(){
+  const rs = roadSamples(); if(!rs) return;
+  const { pts, nx, ny } = rs;
   paths.appendChild(el("path",{ class:"survey-path", d:catmullRomPath(pts) }));
   // flanking avenue-tree dots (the drawAvenue idiom), skipping the two endpoints
-  for(let i=3;i<N-3;i+=3){
+  for(let i=3;i<pts.length-3;i+=3){
     const [px,py] = pts[i];
     paths.appendChild(el("circle",{ cx:(px+nx*11).toFixed(1), cy:(py+ny*11).toFixed(1), r:2.6, class:"avenue-tree" }));
     paths.appendChild(el("circle",{ cx:(px-nx*11).toFixed(1), cy:(py-ny*11).toFixed(1), r:2.6, class:"avenue-tree" }));
@@ -3934,9 +3946,12 @@ function drawStructures(){
   structuresG.appendChild(navG);
 }
 
-/* the FIRST-VISIT THREAD: on a visitor's first load (no ws:seen breadcrumbs), light
-   a soft pulsing thread from the door up the spine to the nearest unseen tier-1
-   anchor — an explicit on-ramp. Fades once any room is seen. Degrades to nothing. */
+/* §1.7 the FIRST-VISIT THREAD: on a visitor's first load (no ws:seen breadcrumbs),
+   a soft pulsing thread traces the DRIVE — from the estate gate UP the road to the
+   manor's south door — an explicit on-ramp that walks the eye up the drive. (It replaces
+   the old door→spine→nearest-unseen aim; the road, gate, and manor are the estate-tier
+   citizens this thread now lives among.) An ESTATE-tier layer: the CSS fades it once you
+   descend into a plate. Never shown to a returning visitor; degrades to nothing. */
 function drawFirstVisitThread(){
   let seenAny = false;
   try{
@@ -3946,22 +3961,14 @@ function drawFirstVisitThread(){
     } else { return; }   // storage off → no thread
   }catch(e){ return; }
   if(seenAny) return;    // a returning visitor needs no on-ramp
-  // the nearest unseen tier-1 anchor (by distance from the door)
-  const door = LAYOUT.door;
-  let best = null, bestD = Infinity;
-  PLACES.forEach(r=>{
-    if(r.locked || r.tier !== 1) return;
-    const f = LAYOUT.foot[r.id]; if(!f) return;
-    const c = f.r!=null ? {x:f.x,y:f.y} : {x:f.x+f.w/2, y:f.y+f.h/2};
-    const dist = (c.x-door.x)**2 + (c.y-door.y)**2;
-    if(dist < bestD){ bestD = dist; best = c; }
-  });
-  if(!best) return;
-  // thread: door → spine top → the anchor
-  const sp = LAYOUT.graph.spine;
-  paths.appendChild(el("path",{ class:"first-thread",
-    d:`M${door.x} ${door.y} L${sp.x1} ${sp.y1} L${best.x} ${best.y}` }));
-  const tip = el("text",{ x:door.x+14, y:door.y-16, class:"first-thread-tip" });
+  const rs = roadSamples(); if(!rs) return;
+  // the pulse walks the visitor UP THE DRIVE: gate (t=0) → the meander → the manor door (t=1),
+  // riding the very samples drawRoad() draws, so the on-ramp can never leave the road.
+  paths.appendChild(el("path",{ class:"first-thread", d:catmullRomPath(rs.pts) }));
+  // the invitation sits at the gate — the start of the walk. The road reservation pins the
+  // gate below the manor door in world coords, so the drive climbs up-world (↑ points up it).
+  const g = rs.gate;
+  const tip = el("text",{ x:(g.x+14).toFixed(1), y:(g.y-18).toFixed(1), class:"first-thread-tip" });
   tip.textContent = "start here ↑";
   paths.appendChild(tip);
 }

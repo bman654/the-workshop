@@ -1,31 +1,29 @@
 #!/usr/bin/env node
 /* ════════════════════════════════════════════════════════════════════════════
-   fold.test.cjs — THE FAIRGROUND GATE (#369), AS A NODE TWIN over the LIVE door.
+   fold.test.cjs — THE FAIRGROUND FOLD, a pure-Node twin over the v2 polar engine.
 
-   The estate's first true DETACH-INTO-DEPTH layer. A wing whose any room declares
-   `detach:true` folds out of its parent plate into a `child:<wing>` LAYER reached only
-   through a synthetic GATE FACE; the parent fills the vacated footprint with that one
-   gate tile. `amusements` is the primitive's first caller. This twin is the headless
-   proof of the layer's load-bearing claims, lifted from the proven /tmp/foldsim.cjs
-   kernel into the smoke.cjs CRUX idiom, run over the LIVE Layout.plates of index.src.html
-   (no eyeballing the load-bearing wins).
+   The estate's one true DETACH-INTO-DEPTH layer. In v2 the `detach` lever lives on the
+   district CONTRACT (fairground): its layoutFn goes DORMANT, its rooms lay out in a
+   `child:fairground` LAYER via relayPlate on RELAY_FIELD, and the parent plate collapses
+   to a single synthetic GATE FACE at the district's polar centre. This twin is the
+   headless proof of the fold's four KEPT load-bearing claims (§9.1) — bijection, descent
+   tree, generality, the detachOff neg-control — computed straight off Layout.solve /
+   Layout.plates, so it reads identically in Node and the browser (no getBBox mirror, no
+   font raster; the v1 label-declutter cruxes F3/F6 retired with the door-pill rewrite §9.2).
 
-   THE FIVE CRUXES:
+   THE FOUR CRUXES (§9.1 "kept: bijection · descent tree · generality · detachOff neg-control"):
      F1 — BIJECTION ACROSS LAYERS: Σ|members| over every plate (parent ∪ child) === live
-          room count; every id ∈ exactly ONE plate's members AND one plate's bbox; the
-          synthetic gate FACE is excluded from the count (it is furniture, not a room).
-     F2 — DESCENT GRAPH IS A TREE rooted at the door: the plate graph (P.adj, which already
-          carries the descent edges) is acyclic (|edges| === |reachable|−1, BFS finds no
-          back-edge), every plate reachable from 'manor', adjacency reciprocal. Proven for
-          the LIVE estate AND a SYNTHETIC 2-detached-wing fixture (N children, not 1).
-     F3 — THE LOAD-BEARING WIN (the live signal, MEASURED): with detach ON the aggregate
-          tier-1 survival crosses ⌈raw×0.6⌉ → door.test CLAIM C′ flips ✗→✓ (the pill goes
-          16/17 RED → 17/17 GREEN). Measured here off the SAME modeled SOLVED boxes the door
-          twin uses, partitioned by the LIVE Layout.plates (so the child gets its own frame).
-     F4 — NEG-CONTROL: plates(..,{detachOff:true}) is byte-identical to the pre-fold
-          partition AND keeps C′ ✗ — depth did it, not a scorer tweak.
-     F5 — GENERALITY: a SYNTHETIC detach of a DIFFERENT wing mints child:<that-wing>, passes
-          F1/F2, emits exactly one gate face — amusements is just the first caller.
+          room count, no double-count; every room centre sits inside its OWN plate bbox;
+          the gate FACE is furniture, excluded from the room count.
+     F2 — DESCENT GRAPH IS A TREE rooted at the manor: reachable + reciprocal, each child
+          plate hangs off the parent mesh by EXACTLY ONE gate edge (no child↔child edge,
+          no second parent). Proven for the LIVE estate AND a SYNTHETIC 2-detach table.
+     F3 — GENERALITY: the fold is a CONTRACT primitive — a DIFFERENT district flagged
+          detach:true mints child:<that-district> + one gate the same way. The fairground
+          is just the §2.1 caller.
+     F4 — DETACHOFF NEG-CONTROL (the fold is LOAD-BEARING): plates(PLACES,{detachOff:true})
+          THROWS — with the fold suppressed the fairground cannot fit its dormant knot, so
+          the config is infeasible. Depth did it, not a scorer tweak.
 
    Run:  node tools/layout/fold.test.cjs    (exit 0 = all cruxes pass, exit 1 = a crux failed)
    ════════════════════════════════════════════════════════════════════════════ */
@@ -34,13 +32,9 @@
 const fs = require('fs');
 const path = require('path');
 const Layout = require('./layout.js');
-const LabelPlacer = require('../label/label.js');
-const Legibility = require('./legibility.cjs');
-const DoorClaims = require('./door-claims.cjs');
 
 const ROOT = path.join(__dirname, '..', '..');
-const SRC = path.join(ROOT, 'index.src.html');
-const src = fs.readFileSync(SRC, 'utf8');
+const src = fs.readFileSync(path.join(ROOT, 'index.src.html'), 'utf8');
 
 function readArray(name) {
   const head = 'const ' + name + ' = [';
@@ -49,188 +43,86 @@ function readArray(name) {
   if (start < 0 || end < 0) throw new Error('fold.test: could not find array ' + name);
   return eval('(' + src.slice(start + ('const ' + name + ' = ').length, end + 2) + ')');
 }
-function readExpr(name) {
-  const m = src.match(new RegExp('const\\s+' + name + '\\s*=\\s*([^;]*);'));
-  if (!m) throw new Error('fold.test: could not find const ' + name);
-  return eval('(' + m[1].trim() + ')');
-}
 
 const PLACES = readArray('PLACES');
-const LABEL_BOUNDS = readExpr('LABEL_BOUNDS');
-const LABEL_SEED = readExpr('LABEL_SEED');
-const LABEL_GAP = readExpr('LABEL_GAP');
+const live = PLACES.filter(p => !p.locked);
 
-/* ── solve + copy the canonical footprints onto a clone (exactly the page + door.test) ── */
-function footBBox(r) {
-  return r.footprint === 'tower' ? { x: r.x - r.r, y: r.y - r.r, w: r.r * 2, h: r.r * 2 }
-                                 : { x: r.x, y: r.y, w: r.w, h: r.h };
+/* ── the live solve + partition (exactly the page's own calls) ── */
+const SOL = Layout.solve(PLACES.map(p => Object.assign({}, p)));
+const P = Layout.plates(PLACES);
+
+/* the centre of a room IN ITS OWN PLATE'S coordinate layer: a child room reads its relay
+   foot (childLayout), a parent room reads the canonical solve foot. A tower foot is {x,y,r}
+   (centre already), a box foot is {x,y,w,h}. */
+function footCentre(f) { return f.r != null ? { x: f.x, y: f.y } : { x: f.x + f.w / 2, y: f.y + f.h / 2 }; }
+function roomCentre(part, id) {
+  const pid = part.roomPlate[id];
+  const cl = part.childLayout && part.childLayout[pid];
+  if (cl && cl.foot[id]) return footCentre(cl.foot[id]);
+  const f = (part.solution && part.solution.foot[id]) || SOL.foot[id];
+  return f ? footCentre(f) : null;
 }
-function footCentre(r) {
-  return r.footprint === 'tower' ? { x: r.x, y: r.y } : { x: r.x + r.w / 2, y: r.y + r.h / 2 };
-}
-function labelGap(r) { const b = footBBox(r); return Math.max(b.w, b.h) / 2 + LABEL_GAP; }
-function preferList(r) { return r.prefer ? (Array.isArray(r.prefer) ? r.prefer.slice() : [r.prefer]) : undefined; }
-
-const clone = PLACES.map(p => Object.assign({}, p));
-const LAYOUT = Layout.solve(clone);
-for (const p of clone) {
-  const f = LAYOUT.foot[p.id]; if (!f) continue;
-  if (f.r != null) { p.x = f.x; p.y = f.y; p.r = f.r; }
-  else { p.x = f.x; p.y = f.y; p.w = f.w; p.h = f.h; }
-}
-const live = clone.filter(p => !p.locked);
-
-/* ── model the SOLVED canonical-plate label boxes (CHAR_W) → boxOf, like door.test PASS 1.
-   Used for the PARENT plates (whose bbox/frame read canonical foot). ── */
-const placed = clone.filter(p => !p.locked && LAYOUT.foot[p.id]);
-const obstacles = placed.map(p => footBBox(p));
-const features = placed.map(r => {
-  const wh = Legibility.labelBoxWH(r);
-  const f = { id: r.id, anchor: footCentre(r), label: { w: wh.w, h: wh.h }, gap: labelGap(r) };
-  const pref = preferList(r); if (pref) f.prefer = pref;
-  if (r.pin) f.pin = r.pin;
-  return f;
-});
-let res = LabelPlacer.solve(Object.assign({ positions: 8 }, { bounds: LABEL_BOUNDS, features, obstacles, seed: LABEL_SEED }));
-const solvedCanon = new Map();
-res.placements.forEach(p => solvedCanon.set(p.id, { x: p.label.x, y: p.label.y, w: p.label.w, h: p.label.h }));
-
-/* ── model the CHILD plate's SOLVED boxes from its OWN relay foot envelope (childLayout):
-   a child is re-laid by relayPlate, so its label boxes anneal over the relay foot, NOT the
-   canonical foot. Returns a boxOf over the child's members. ── */
-function childBoxOf(members, childLayout) {
-  const m = new Map();
-  const placedC = members.filter(r => childLayout.foot[r.id]);
-  const obsC = placedC.map(r => { const f = childLayout.foot[r.id]; return { x: f.x, y: f.y, w: f.w, h: f.h }; });
-  const featC = placedC.map(r => {
-    const f = childLayout.foot[r.id];
-    const wh = Legibility.labelBoxWH(r);
-    return { id: r.id, anchor: { x: f.x + f.w / 2, y: f.y + f.h / 2 }, label: { w: wh.w, h: wh.h }, gap: Math.max(f.w, f.h) / 2 + LABEL_GAP };
-  });
-  const rc = LabelPlacer.solve({ positions: 8, bounds: LABEL_BOUNDS, features: featC, obstacles: obsC, seed: LABEL_SEED });
-  rc.placements.forEach(p => m.set(p.id, { x: p.label.x, y: p.label.y, w: p.label.w, h: p.label.h }));
-  return m;
-}
-
-/* ── the live partition with the fold ON, and the neg-control with it OFF ── */
-const P = Layout.plates(live);
-const OFF = Layout.plates(live, { detachOff: true });
-
-/* a unified boxOf over BOTH layers: parent ids read the canonical solve, child ids read
-   the child's own relay solve. */
-const childBoxes = {};   // pid → Map(id→box)
-for (const cpid of P.childPlates) childBoxes[cpid] = childBoxOf(P.members[cpid], P.childLayout[cpid]);
-function boxOfAll(id) {
-  const pid = P.roomPlate[id];
-  if (pid && childBoxes[pid] && childBoxes[pid].has(id)) return childBoxes[pid].get(id);
-  return solvedCanon.get(id) || null;
-}
+function inBox(c, b) { return !!(c && b && c.x >= b.x && c.x <= b.x + b.w && c.y >= b.y && c.y <= b.y + b.h); }
 
 /* ════════════════════════════════════════════════════════════════════════════
-   the per-plate aggregate tier-1 survival, decluttering each plate's whole-POI set the
-   SAME greedy way the loupe/door does (DoorClaims.declutterIds), at the plate's framed
-   scale. This is the door pill's CLAIM C/C′ computation, partitioned by Layout.plates.
-   ════════════════════════════════════════════════════════════════════════════ */
-function tier1Survival(part, boxOf) {
-  const byPlate = {};
-  for (const r of live) { if (!boxOf(r.id)) continue; const pid = part.roomPlate[r.id]; if (!pid) continue; (byPlate[pid] = byPlate[pid] || []).push(r.id); }
-  let t1raw = 0, t1lit = 0, litTotal = 0, rawTotal = 0;
-  const byId = {}; for (const r of live) byId[r.id] = r;
-  // child plates need their members modeled with footCentre from the RELAY foot (so the
-  // loupe distance term matches the child layer); build a per-plate places view.
-  for (const pk of Object.keys(byPlate)) {
-    const ids = byPlate[pk];
-    const fr = part.frame[pk] || { cx: 720, cy: 450, k: 1 };
-    rawTotal += ids.length;
-    const cl = part.childLayout && part.childLayout[pk];
-    // places-view: for a child plate, swap each room's footprint to its relay foot so
-    // DoorClaims.footCentre reads the child-layer centre.
-    const placesView = live.map(r => {
-      if (cl && cl.foot[r.id]) { const f = cl.foot[r.id]; return Object.assign({}, r, { x: f.x, y: f.y, w: f.w, h: f.h, footprint: undefined }); }
-      return r;
-    });
-    const lit = DoorClaims.declutterIds(ids, placesView, boxOf, { x: fr.cx, y: fr.cy }, fr.k || 1);
-    litTotal += lit.length;
-    const litSet = {}; lit.forEach(i => litSet[i] = 1);
-    for (const id of ids) { const r = byId[id]; if (r && r.tier === 1) { t1raw++; if (litSet[id]) t1lit++; } }
-  }
-  return { t1raw, t1lit, litTotal, rawTotal };
-}
+   the DESCENT-TREE check over a plates() partition. The plate graph is part.adj (the
+   reciprocal inter-plate road graph); part.edges / part.childPlates are the v2 keys.
 
-/* ════════════════════════════════════════════════════════════════════════════
-   GRAPH HELPERS — the plate graph is P.adj (already carries the descent edges).
-
-   NOTE on the TREE property: the PARENT road graph is a deliberate MESH (the manor hub +
-   the W/E mid-wall edge form a triangle — manor↔W, manor↔E, W↔E), so the WHOLE graph is
-   NOT a tree, and never was. The property the FOLD must hold is that the DESCENT structure
-   is a tree: every child plate hangs off the parent mesh by EXACTLY ONE edge (its gate
-   parent), so a child is reachable exactly one way (no child↔child edge, no second parent).
-   That + connected + reciprocal is the "descent graph is a tree rooted at the door" claim:
-   removing the parent mesh's cycles, the children form a forest of depth-1 leaves on the door.
+   NOTE on the TREE property: the PARENT road graph is a hub (manor ↔ every parent plate),
+   so the WHOLE graph is a star, not a chain. The property the FOLD must hold is that the
+   DESCENT structure is a tree: every child plate hangs off the parent mesh by EXACTLY ONE
+   edge (its gate parent), so a child is reachable exactly one way — no child↔child edge,
+   no second parent. That + connected + reciprocal is "the descent graph is a tree rooted
+   at the door": the children are depth-1 leaves on the manor hub.
    ════════════════════════════════════════════════════════════════════════════ */
 function graphCheck(part) {
-  // reciprocity
   let recip = true; const nonRecip = [];
   for (const a in part.adj) for (const b in part.adj[a]) if (!(part.adj[b] && part.adj[b][a])) { recip = false; nonRecip.push(a + '→' + b); }
-  // BFS from manor: reachable set.
   const root = part.ids.indexOf('manor') >= 0 ? 'manor' : part.ids[0];
   const vis = new Set([root]); const q = [root];
   while (q.length) { const x = q.shift(); for (const y in (part.adj[x] || {})) if (!vis.has(y)) { vis.add(y); q.push(y); } }
-  const reachable = vis.size;
-  const allReachable = reachable === part.ids.length;
-  // the DESCENT TREE property: every child plate has exactly ONE neighbour (its gate parent),
-  // and that neighbour is a PARENT (non-child) plate. So no child is reachable two ways, and
-  // the children form leaves on the parent mesh — a tree of descent rooted at the door.
+  const reachable = vis.size, allReachable = reachable === part.ids.length;
   const childPids = part.childPlates || [];
-  let descentTree = true; const descentDetail = [];
+  let descentTree = true; const bad = [];
   for (const cp of childPids) {
     const nbrs = Object.keys(part.adj[cp] || {});
     const parents = nbrs.filter(n => childPids.indexOf(n) < 0);
     const childNbrs = nbrs.filter(n => childPids.indexOf(n) >= 0);
-    if (nbrs.length !== 1 || parents.length !== 1 || childNbrs.length !== 0) {
-      descentTree = false; descentDetail.push(cp + '→[' + nbrs.join(',') + ']');
-    }
+    if (nbrs.length !== 1 || parents.length !== 1 || childNbrs.length !== 0) { descentTree = false; bad.push(cp + '→[' + nbrs.join(',') + ']'); }
   }
-  // tree of descent is acyclic by construction (depth-1 leaves); confirm via the global
-  // formula restricted to the spanning structure: |descent edges| === |children| (one per).
   let descentEdges = 0;
   for (const [a, b] of part.edges) if (childPids.indexOf(a) >= 0 || childPids.indexOf(b) >= 0) descentEdges++;
   const descentEdgesOk = descentEdges === childPids.length;
-  const isTree = allReachable && recip && descentTree && descentEdgesOk;
-  return { recip, nonRecip, reachable, total: part.ids.length, allReachable, descentTree, descentEdges, descentEdgesOk, descentDetail, isTree };
+  return {
+    recip, nonRecip, reachable, total: part.ids.length, allReachable, descentTree, descentEdges, descentEdgesOk, bad,
+    isTree: allReachable && recip && descentTree && descentEdgesOk
+  };
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
-   A SYNTHETIC 2-detached-wing FIXTURE — prove the tree/bijection/gate for N children.
-   We build a minimal places set: a manor anchor, a grounds anchor on each side, and two
-   distinct grounds wings each flagged detach:true. Pure declarations; the engine folds both.
-   ════════════════════════════════════════════════════════════════════════════ */
-function syntheticTwoDetach() {
-  // two wings that have real GROUNDS_WINGS regions so each emits a gate face.
-  // 'amusements' (east, x910) + 'optics' (west, x214) → one east gate, one west gate.
-  const mk = (id, wing, tier, order) => ({ id, room: id, piece: id, tag: id, district: 'grounds', tier, wing, footprint: 'hall', order });
-  return [
-    { id: 'm1', room: 'Manor', piece: 'Manor', tag: 'home', district: 'manor', tier: 1, footprint: 'house-wing', order: 1 },
-    { id: 'gw', room: 'WestAnchor', piece: 'W', tag: 'w', district: 'grounds', tier: 2, wing: 'works', footprint: 'hall', order: 2, x: 300, y: 600 },
-    mk('a1', 'amusements', 1, 10), mk('a2', 'amusements', 2, 11), mk('a3', 'amusements', 1, 12),
-    mk('o1', 'optics', 1, 20), mk('o2', 'optics', 2, 21),
-  ].map(r => {
-    if (r.wing === 'amusements' && r.id === 'a1') r.detach = true;
-    if (r.wing === 'optics' && r.id === 'o1') r.detach = true;
-    return r;
-  });
+/* ── synthetic contract tables (v2: `detach` is a CONTRACT flag; angles 30/130 clear the
+   road wedge [168,192] and both sky lanes [82,94]/[246,258] AND sit ≥90° apart, the orbit-1
+   angular-separation law π/(t+1); the base is proven to solve). ── */
+function synthManor() { return { tier: 0, theme: { label: 'M', hue: '#111', tint: 0.04, style: 'x' }, layoutFn: 'greathouse', frame: { w: 280, h: 200 }, capacity: 23, clusters: [] }; }
+function synthDistrict(angle, label, detach) {
+  const c = { tier: 1, angle, theme: { label, hue: '#222', tint: 0.04, style: 'x' }, layoutFn: 'court', frame: { w: 240, h: 180 }, capacity: 6, clusters: [] };
+  if (detach) c.detach = true;
+  return c;
 }
+const districtRooms = (d, n) => Array.from({ length: n }, (_, i) => ({ id: d + i, district: d, tier: 2, order: i }));
+const manorAnchor = () => ({ id: 'm0', district: 'manor', tier: 1, order: 0 });   // members['manor'] must exist so the gate edges link
 
 /* ════════════════════════════════════════════════════════════════════════════
    RUN THE CRUXES
    ════════════════════════════════════════════════════════════════════════════ */
 let fail = 0;
-function crux(name, ok, detail) {
-  console.log('  ' + (ok ? '✓' : '✗') + ' ' + name + (detail ? '  ' + detail : ''));
-  if (!ok) fail++;
+function crux(name, ok, detail) { console.log('  ' + (ok ? '✓' : '✗') + ' ' + name + (detail ? '  ' + detail : '')); if (!ok) fail++; }
+function throwsCrux(name, fn, detail) {
+  let threw = false, msg = '';
+  try { fn(); } catch (e) { threw = true; msg = String((e && e.message) || e); }
+  crux(name, threw, detail || (threw ? '[threw: ' + msg.slice(0, 90) + ']' : '[DID NOT THROW]'));
 }
 
-console.log('fold.test — THE FAIRGROUND GATE (#369): the declarative detach-into-depth layer, node twin\n');
+console.log('fold.test — THE FAIRGROUND FOLD (v2 polar): the contract-level detach-into-depth layer, node twin\n');
 
 /* ── F1 — BIJECTION ACROSS LAYERS ── */
 console.log('CRUX F1 — BIJECTION ACROSS LAYERS (Σ rooms over parent ∪ child === live count):');
@@ -239,120 +131,71 @@ console.log('CRUX F1 — BIJECTION ACROSS LAYERS (Σ rooms over parent ∪ child
   for (const id of P.ids) for (const r of P.members[id]) { if (seen.has(r.id)) dup = true; seen.add(r.id); total++; }
   crux('Σ|members| === live rooms, no double-count', total === live.length && seen.size === live.length && !dup,
     '[' + total + '/' + live.length + ' over ' + P.ids.length + ' plates' + (dup ? ', DUP!' : '') + ']');
-  // every live id ∈ exactly one plate's bbox
-  let inOneBbox = 0, stranded = [];
-  for (const r of live) {
-    const c = childBoxes[P.roomPlate[r.id]] && P.childLayout[P.roomPlate[r.id]]
-      ? (() => { const f = P.childLayout[P.roomPlate[r.id]].foot[r.id]; return { x: f.x + f.w / 2, y: f.y + f.h / 2 }; })()
-      : footCentre(r);
-    let count = 0;
-    for (const pid of P.ids) { const bb = P.bbox[pid]; if (c.x >= bb.x && c.x <= bb.x + bb.w && c.y >= bb.y && c.y <= bb.y + bb.h) count++; }
-    if (count >= 1) inOneBbox++; else stranded.push(r.id);
-  }
-  crux('every room centre inside ≥1 plate bbox (none stranded)', stranded.length === 0,
-    '[' + inOneBbox + '/' + live.length + (stranded.length ? ' stranded: ' + stranded.join(',') : '') + ']');
-  // the gate face is NOT a member, NOT in the room count
-  const gateInMembers = P.gates.some(g => P.members[P.roomPlate[g.wing]] || (P.roomPlate && P.roomPlate['gate:' + g.wing]));
-  const noGateRoom = !live.some(r => r.kind === 'gate') && P.gates.length === 1;
-  crux('exactly one gate FACE emitted, excluded from the room count', noGateRoom && !gateInMembers,
-    '[' + P.gates.length + ' gate(s); ' + total + ' rooms; gate is furniture]');
-  console.log('    child:amusements n=' + P.members['child:amusements'].length + '  parent grounds-east n=' + (P.members['grounds-east'] || []).length);
+  let inOwn = 0; const stranded = [];
+  for (const r of live) { if (inBox(roomCentre(P, r.id), P.bbox[P.roomPlate[r.id]])) inOwn++; else stranded.push(r.id); }
+  crux('every room centre inside its OWN plate bbox (none stranded)', stranded.length === 0,
+    '[' + inOwn + '/' + live.length + (stranded.length ? ' stranded: ' + stranded.join(',') : '') + ']');
+  const noGateRoom = !live.some(r => r.kind === 'gate');
+  crux('exactly one gate FACE emitted, excluded from the room count', P.gates.length === 1 && noGateRoom,
+    '[' + P.gates.length + ' gate(s), ' + total + ' rooms; the gate is furniture]');
+  console.log('    child:fairground n=' + (P.members['child:fairground'] || []).length + '  (the detached fairground tiles)');
 }
 
-/* ── F2 — DESCENT GRAPH IS A TREE rooted at the door ── */
-console.log('\nCRUX F2 — DESCENT GRAPH IS A TREE rooted at the door (live + synthetic):');
+/* ── F2 — DESCENT GRAPH IS A TREE rooted at the manor ── */
+console.log('\nCRUX F2 — DESCENT GRAPH IS A TREE rooted at the manor (live + synthetic 2-detach):');
 {
   const g = graphCheck(P);
   crux('LIVE: every plate reachable from manor + reciprocal + each child hangs by ONE gate edge',
     g.isTree,
     '[' + g.reachable + '/' + g.total + ' reachable' + (g.recip ? ', reciprocal' : ', NON-RECIP ' + g.nonRecip.join(',')) +
-    ', descent edges=' + g.descentEdges + ' (one per child)' + (g.descentTree ? '' : ', BAD: ' + g.descentDetail.join(' ')) + ']');
+    ', descent edges=' + g.descentEdges + ' (one per child)' + (g.descentTree ? '' : ', BAD: ' + g.bad.join(' ')) + ']');
   console.log('    descent edges: ' + P.edges.filter(e => e[0].indexOf('child:') === 0 || e[1].indexOf('child:') === 0).map(e => e[0] + '↔' + e[1]).join(', '));
-  // synthetic 2-detach fixture
-  const SYN = syntheticTwoDetach();
-  const SP = Layout.plates(SYN);
+  // SYNTHETIC two-detach table: a manor anchor + two tier-1 districts, both contract-detached.
+  const C = { manor: synthManor(), alpha: synthDistrict(30, 'A', true), beta: synthDistrict(130, 'B', true) };
+  const rooms = [manorAnchor()].concat(districtRooms('alpha', 3)).concat(districtRooms('beta', 2));
+  const SP = Layout.plates(rooms, { contracts: C });
   const sg = graphCheck(SP);
-  const synChildren = SP.childPlates.length;
   crux('SYNTHETIC 2-detach: two children mint, each hangs by one edge, all reachable (N children, not 1)',
-    synChildren === 2 && sg.isTree,
-    '[children=' + synChildren + ' (' + SP.childPlates.join(',') + '), descent edges=' + sg.descentEdges + ', ' +
+    SP.childPlates.length === 2 && sg.isTree,
+    '[children=[' + SP.childPlates.join(',') + '], descent edges=' + sg.descentEdges + ', ' +
     sg.reachable + '/' + sg.total + ' reachable' + (sg.recip ? ', reciprocal' : ', NON-RECIP') + ']');
 }
 
-/* ── F3 — THE LOAD-BEARING WIN (MEASURED) ── */
-console.log('\nCRUX F3 — THE LOAD-BEARING WIN (aggregate tier-1 survival, MEASURED):');
+/* ── F3 — GENERALITY (a DIFFERENT district folds the same way) ── */
+console.log('\nCRUX F3 — GENERALITY (a contract-flagged district ≠ fairground folds identically):');
 {
-  const on = tier1Survival(P, boxOfAll);
-  const need = Math.ceil(on.t1raw * 0.6);
-  crux('detach ON: aggregate tier-1 survival ≥ ⌈raw×0.6⌉ → CLAIM C′ flips ✓',
-    on.t1lit >= need,
-    '[' + on.t1lit + '/' + on.t1raw + ' tier-1 survive, need ≥ ' + need + ']');
-  console.log('    (foldsim measured 26/38 ≥ 23 by amusements alone; this is the live-engine partition)');
-}
-
-/* ── F4 — NEG-CONTROL ── */
-console.log('\nCRUX F4 — NEG-CONTROL (detach OFF: byte-identical partition, C′ stays ✗):');
-{
-  // partition byte-identical to pre-fold: no child plates, no gates, roomPlate equals the
-  // detach-suppressed plateOf. Compare OFF.roomPlate to a hand-rolled non-detach partition.
-  const noChild = OFF.childPlates.length === 0 && OFF.gates.length === 0 &&
-    Object.keys(OFF.detached).length === 0 && OFF.ids.indexOf('child:amusements') < 0;
-  crux('detachOff: no child plates, no gate faces, no detached wings',
-    noChild, '[childPlates=' + OFF.childPlates.length + ' gates=' + OFF.gates.length + ' detached=' + Object.keys(OFF.detached).length + ']');
-  // amusements rooms ride grounds-east again under the neg-control
-  const amuOnEast = live.filter(r => r.wing === 'amusements').every(r => OFF.roomPlate[r.id] === 'grounds-east');
-  crux('detachOff: the amusements rooms ride the parent grounds-east plate again', amuOnEast);
-  // C′ stays ✗ with detach OFF — depth did it, not a scorer tweak.
-  const off = tier1Survival(OFF, id => solvedCanon.get(id) || null);
-  const need = Math.ceil(off.t1raw * 0.6);
-  crux('detachOff: aggregate tier-1 survival < ⌈raw×0.6⌉ → C′ stays ✗ (depth, not a scorer tweak)',
-    off.t1lit < need, '[' + off.t1lit + '/' + off.t1raw + ' tier-1 survive, need ≥ ' + need + ' → still RED]');
-}
-
-/* ── F5 — GENERALITY ── */
-console.log('\nCRUX F5 — GENERALITY (a DIFFERENT wing detaches the same way):');
-{
-  // detach OPTICS instead of amusements on a synthetic estate; assert one child + one gate.
-  const mk = (id, wing, tier, order, detach) => { const r = { id, room: id, piece: id, tag: id, district: 'grounds', tier, wing, footprint: 'hall', order }; if (detach) r.detach = true; return r; };
-  const places = [
-    { id: 'm1', room: 'Manor', piece: 'Manor', tag: 'home', district: 'manor', tier: 1, footprint: 'house-wing', order: 1 },
-    { id: 'e1', room: 'EastAnchor', piece: 'E', tag: 'e', district: 'grounds', tier: 2, wing: 'works', footprint: 'hall', order: 2, x: 800, y: 600 },
-    mk('p1', 'optics', 1, 10, true), mk('p2', 'optics', 2, 11), mk('p3', 'optics', 1, 12),
-  ];
-  const GP = Layout.plates(places);
-  const minted = GP.childPlates.length === 1 && GP.childPlates[0] === 'child:optics';
-  const oneGate = GP.gates.length === 1 && GP.gates[0].wing === 'optics' && GP.gates[0].toPlate === 'child:optics';
+  const C = { manor: synthManor(), alpha: synthDistrict(30, 'A', true) };
+  const rooms = [manorAnchor()].concat(districtRooms('alpha', 3));
+  const GP = Layout.plates(rooms, { contracts: C });
   const g = graphCheck(GP);
-  crux('a DIFFERENT wing (optics) mints child:optics, one gate face, descent tree holds',
-    minted && oneGate && g.isTree,
-    '[children=' + GP.childPlates.join(',') + ', gates=' + GP.gates.length + ', tree=' + g.isTree + ', reachable=' + g.reachable + '/' + g.total + ']');
-  console.log('    amusements is just the primitive\'s first caller — the fold is general.');
+  const minted = JSON.stringify(Object.keys(GP.detached).sort()) === '["alpha"]' &&
+    GP.childPlates.length === 1 && GP.childPlates[0] === 'child:alpha';
+  const oneGate = GP.gates.length === 1 && GP.gates[0].district === 'alpha' && GP.gates[0].toPlate === 'child:alpha' &&
+    GP.gates[0].box.w === 96 && GP.gates[0].box.h === 120;
+  crux('a DIFFERENT district (alpha) mints child:alpha, one 96×120 gate face, descent tree holds',
+    minted && oneGate && GP.parentOf['child:alpha'] === 'manor' && g.isTree,
+    '[detached=' + Object.keys(GP.detached).join(',') + ', children=' + GP.childPlates.join(',') + ', gates=' + GP.gates.length + ', tree=' + g.isTree + ']');
+  console.log('    the fairground is just the §2.1 caller — the fold is a general contract primitive.');
 }
 
-/* ── F6 — THE SHARED C′ SEAM (the EXACT path the live #doortest pill runs) ── */
-console.log('\nCRUX F6 — THE LIVE C′ SEAM (DoorClaims.runDoorClaims with the engine childFoot):');
+/* ── F4 — DETACHOFF NEG-CONTROL (the fold is load-bearing) ── */
+console.log('\nCRUX F4 — DETACHOFF NEG-CONTROL (suppress the fold → the fairground is infeasible):');
 {
-  // run the SHARED door-claims module the page + door.test both call, with the LIVE relay foot
-  // (DoorClaims.childFootOf(P)) as the override, over the canonical modeled boxes — the SAME
-  // computation the live pill performs. C′ MUST flip green; with childFoot:{} (the relay
-  // suppressed) it MUST stay red. This binds fold.test directly to the page's code path: the
-  // #369 bug was the page NOT feeding this relay, so the live pill stayed red while the twins
-  // (which modeled their own relay) went green. Now they share one seam.
-  const childFoot = DoorClaims.childFootOf(P);
-  const boxOfCanon = id => solvedCanon.get(id) || null;
-  const repOn = DoorClaims.runDoorClaims({ Legibility, Layout, places: clone, layout: LAYOUT, boxOf: boxOfCanon, childFoot });
-  const repOff = DoorClaims.runDoorClaims({ Legibility, Layout, places: clone, layout: LAYOUT, boxOf: boxOfCanon, detachOff: true });
-  const cpOn = repOn.lines.find(l => /CLAIM C′/.test(l.name));
-  const cpOff = repOff.lines.find(l => /CLAIM C′/.test(l.name));
-  crux('childFoot present (the page\'s fold): C′ flips ✓ AND detachOff (no fold): C′ stays ✗',
-    childFoot && Object.keys(childFoot).length > 0 && cpOn && cpOn.ok && cpOff && !cpOff.ok,
-    '[fold ON ' + cpOn.detail + ' → ' + (cpOn.ok ? '✓' : '✗') + '  ·  detachOff ' + cpOff.detail + ' → ' + (cpOff.ok ? '✓' : '✗') + ']');
-  console.log('    this is the path the live pill runs — fold.test now fails iff the page would.');
+  // with the fold ON: exactly {fairground} detaches, one gate, the child carries every fairground tile.
+  const fairRooms = live.filter(r => r.district === 'fairground');
+  crux('the fold detaches exactly {fairground}; child:fairground carries all ' + fairRooms.length + ' tiles; one gate',
+    JSON.stringify(Object.keys(P.detached).sort()) === '["fairground"]' &&
+    (P.members['child:fairground'] || []).length === fairRooms.length &&
+    P.gates.length === 1 && P.gates[0].district === 'fairground',
+    '[detached=' + Object.keys(P.detached).join(',') + ', child tiles=' + (P.members['child:fairground'] || []).length + '/' + fairRooms.length + ', gates=' + P.gates.length + ']');
+  // with the fold OFF: the dormant knot cannot seat the fairground → plates() THROWS.
+  throwsCrux('detachOff: plates(PLACES,{detachOff:true}) THROWS — depth is load-bearing, not a scorer tweak',
+    () => Layout.plates(PLACES, { detachOff: true }));
 }
 
 console.log('');
 if (fail === 0) {
-  console.log('PASS — all six cruxes hold: the declarative fold ships a real depth layer (bijection + tree + the C′ flip + neg-control + generality + the shared live C′ seam).');
+  console.log('PASS — all four cruxes hold: the contract-level fold ships a real depth layer (bijection + descent tree + generality + the load-bearing detachOff neg-control).');
   process.exit(0);
 } else {
   console.log('FAIL — ' + fail + ' crux(es) failed.');
