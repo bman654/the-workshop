@@ -63,6 +63,8 @@ node tools/layout/emit-mirror.cjs  # re-emit the FOOTPRINTS mirror for sky.test.
 node tools/sky/sky.test.cjs        # must stay 73/73 (the mirror is updated in lockstep)
 node tools/forge/forge.mjs --check index.src.html   # current
 node tools/forge/forge.mjs --audit-seen             # all 18 breadcrumbs
+node tools/manifest/manifest.mjs --check            # W2 (§6.2/§9.4): completeness · no double-claim · count floors · not stale
+node tools/manifest/manifest.test.mjs               # the manifest gate's own neg-controls (a planted unclaimed dir FAILS loud)
 ```
 
 `sky.test.cjs` MIRRORS the generated footprint bboxes; if a room's declaration

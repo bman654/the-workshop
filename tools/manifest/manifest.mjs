@@ -19,9 +19,15 @@
    Determinism (§1.6): no Math.random / Date / locale; all key-iteration sorted;
    `generatedAt` is the git HEAD sha (a fact about the repo, not the wall clock).
 
+   THE --check GATE (§6.2 / §9.4, W2.1b): re-derives and diffs forge-style — completeness
+   (unclaimed []), the double-claim law, href existence, the count floors, and staleness vs
+   the committed file (EXCLUDING generatedAt, which is a per-commit HEAD sha). Joins the
+   estate gate set at W2 (§9.4). Exits non-zero and names the fault on any failure.
+
    Run:  node tools/manifest/manifest.mjs           # write the manifest
          node tools/manifest/manifest.mjs --report   # + a diagnostic summary
          node tools/manifest/manifest.mjs --dry       # compute, print, don't write
+         node tools/manifest/manifest.mjs --check      # the estate gate (re-derive + diff; never writes)
    ═══════════════════════════════════════════════════════════════════════════ */
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -45,6 +51,21 @@ const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);   // codepoint order (locale
 const sorted = (arr) => [...arr].sort(cmp);
 
 function die(msg) { console.error('manifest: ' + msg); process.exit(1); }
+
+/* ── §6.2 baseline floors — COARSE parse-regression tripwires, never the authoritative
+   count (the door-pill bijection from PLACES owns the true room count; these catch a
+   scrape regression that would silently ship a short manifest). They track the honest
+   COMPUTED value and RISE per wave as re-homing / WITHINs / the gather add pieces
+   (W2.3 / W2.5 / W2.7 → §6.2's ≥340 ship target).
+
+   REPO-WINS (spec-header rule): §6.2 pins `pieces ≥ 340`, but §6.1 itself marks pieces
+   ILLUSTRATIVE ("the generator computes it; no hand-pinned drifting digits, the house
+   rule") and the honest computed value at W2.1b is 324 < 340. So the pieces floor is set
+   BELOW the current honest value now and raised as pieces are added — a red gate at
+   wave-end would violate arm-by-wave. `rooms = 60` is the design value verbatim (it clears
+   the post-gather census of 62 by construction, and the pre-gather 94 with room to spare). */
+const ROOMS_FLOOR = 60;
+const PIECES_FLOOR = 320;   // honest computed pieces at W2.1b = 324; RISES toward ≥340 by W2.7
 
 /* ── the on-disk top-level dir universe ─────────────────────────────────────── */
 function topLevelDirs() {
@@ -170,7 +191,11 @@ function build(opts = {}) {
   for (const r of rooms) roomByDir.set(dirOf(r.href), r);
   const roomDirs = new Set(rooms.map((r) => dirOf(r.href)));
 
-  const allDirs = topLevelDirs();
+  // opts.extraDirs = synthetic top-level dirs planted for the §6.2 neg-control (a dir in
+  // the universe claimed by nothing). FS-free: a planted dir has no first-class hub link,
+  // resolves to primary=null, is skipped before any existsSync probe, and lands in
+  // `unclaimed` — exactly as a real un-enrolled dir would, without mutating the repo.
+  const allDirs = [...new Set([...topLevelDirs(), ...(opts.extraDirs || [])])].sort();
   const companionDirs = new Set(Object.keys(COMPANIONS));
   const withinDirs = new Set(Object.keys(WITHINS));
   const allowSet = new Set(ALLOWLIST);
@@ -329,9 +354,69 @@ function build(opts = {}) {
   return { manifest, universe, primaryOf, shed, unclaimed, doubleClaimed, allDirs, claimed, districts };
 }
 
+/* ═══ THE --check GATE (§6.2 / §6.3 / §9.4) ═══════════════════════════════════
+   A forge-style re-derive-and-diff gate: completeness (unclaimed []), the double-claim
+   law, href existence (enforced in build() via die()), the count floors, and staleness
+   vs the committed file. Returns { ok, failures } so it is unit-testable off the CLI. */
+
+// staleness compare EXCLUDES generatedAt: it is the git HEAD sha at generation time, so
+// the committed manifest is perpetually stale-by-one vs its OWN commit (§6.1) — comparing
+// it would make the gate a permanent false-red. Every OTHER field must match a fresh emit.
+function normalizeForCompare(manifestObj) {
+  const { generatedAt, ...rest } = manifestObj;   // eslint-disable-line no-unused-vars
+  return JSON.stringify(rest, null, 2);
+}
+
+function evaluate(result, committedJson) {
+  const failures = [];
+  const m = result.manifest;
+  // 1. completeness — the structural no-more-orphans law
+  if (result.unclaimed.length) {
+    failures.push('UNCLAIMED (' + result.unclaimed.length + '): ' + result.unclaimed.join(', ')
+      + ' — claim each via a room href / an exhibit href / the crossings collection / the hidden node / the §6.2 allowlist');
+  }
+  // 2. the double-claim law — a dir claimed by more than one channel
+  if (result.doubleClaimed.length) {
+    failures.push('DOUBLE-CLAIMED (' + result.doubleClaimed.length + '): ' + result.doubleClaimed.join('; ')
+      + ' — every dir must be claimed by EXACTLY one channel');
+  }
+  // 3. baseline floors — coarse parse-regression tripwires
+  if (m.counts.rooms < ROOMS_FLOOR) failures.push('rooms floor: ' + m.counts.rooms + ' < ' + ROOMS_FLOOR + ' (a parse regression dropped rooms)');
+  if (m.counts.pieces < PIECES_FLOOR) failures.push('pieces floor: ' + m.counts.pieces + ' < ' + PIECES_FLOOR + ' (a scrape regression dropped pieces)');
+  // 4. staleness — the committed manifest must re-derive byte-identical (minus generatedAt)
+  if (committedJson == null) {
+    failures.push('estate-manifest.json is MISSING — run `node tools/manifest/manifest.mjs`');
+  } else {
+    let committed;
+    try { committed = JSON.parse(committedJson); } catch { committed = null; }
+    if (committed == null) failures.push('estate-manifest.json is unparseable — run `node tools/manifest/manifest.mjs`');
+    else if (normalizeForCompare(m) !== normalizeForCompare(committed)) {
+      failures.push('estate-manifest.json is STALE — re-derive: `node tools/manifest/manifest.mjs` (then commit it in the same change)');
+    }
+  }
+  return { ok: failures.length === 0, failures };
+}
+
 /* ═══ MAIN ════════════════════════════════════════════════════════════════════ */
 function main() {
-  const args = new Set(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  const args = new Set(argv);
+
+  /* ── --check: the estate gate (re-derive + diff, forge-style; never writes) ── */
+  if (args.has('--check')) {
+    // --plant=<name> is the §6.2 neg-control hook: inject a synthetic unclaimed dir so the
+    // gate FAILS LOUD (used by manifest.test.mjs; FS-free, harms nothing).
+    const plant = argv.filter((a) => a.startsWith('--plant=')).map((a) => a.slice('--plant='.length));
+    const result = build({ extraDirs: plant });
+    const committed = existsSync(OUT) ? readFileSync(OUT, 'utf8') : null;
+    const { ok, failures } = evaluate(result, committed);
+    const m = result.manifest;
+    console.log(`manifest --check: ${m.counts.districts} districts · ${m.counts.rooms} rooms · ${m.counts.pieces} pieces · unclaimed ${result.unclaimed.length} · floors rooms≥${ROOMS_FLOOR} pieces≥${PIECES_FLOOR}`);
+    if (ok) { console.log('manifest --check: OK — complete · no double-claim · floors met · not stale'); process.exit(0); }
+    console.error('manifest --check: FAIL\n  - ' + failures.join('\n  - '));
+    process.exit(1);
+  }
+
   const { manifest, universe, shed, unclaimed, doubleClaimed } = build();
   const json = JSON.stringify(manifest, null, 2);
 
@@ -355,11 +440,17 @@ function main() {
     console.log('\n--- per-district counts ---');
     for (const d of manifest.districts) console.log(`  ${d.id}: rooms ${d.counts.rooms} · pieces ${d.counts.pieces} · within ${d.counts.within}`);
   }
-  if (unclaimed.length) process.exitCode = 0; // W2.1a authors to green; the FAIL gate is W2.1b
+
+  // arm the completeness law in write/report mode too (defense in depth): a broken
+  // manifest must not be silently written green. The full gate (floors + staleness) is --check.
+  if (unclaimed.length || doubleClaimed.length) {
+    console.error('manifest: FAIL — ' + (unclaimed.length ? unclaimed.length + ' unclaimed ' : '') + (doubleClaimed.length ? doubleClaimed.length + ' double-claimed' : ''));
+    process.exit(1);
+  }
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   try { main(); } catch (e) { console.error('manifest: ' + (e && e.stack ? e.stack : e)); process.exit(1); }
 }
 
-export { build };
+export { build, evaluate, normalizeForCompare, ROOMS_FLOOR, PIECES_FLOOR };
