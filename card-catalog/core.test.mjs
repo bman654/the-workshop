@@ -41,8 +41,9 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
-  ORDERINGS, buildTree, search, matches, searchText, subjectOf, SUBJECTS,
-  filterUnlocked, unlockedFor, runSelfTest, verdict
+  ORDERINGS, buildTree, search, matches, matchInfo, searchText, subjectOf, SUBJECTS,
+  filterUnlocked, unlockedFor, runSelfTest, verdict,
+  indexedExhibits, exhibitGated, exhibitPhrase, SEALED_CARDS
 } from './core.mjs';
 import { parsePlacesText } from './reclaim.mjs';
 
@@ -190,29 +191,136 @@ section('(c) HREF RESOLVABILITY — every card points at a real in-repo page');
 // ═══════════════ (d) SEARCH SOUND + COMPLETE ═══════════════
 section('(d) SEARCH is SOUND + COMPLETE vs an independent brute-force reference');
 {
-  // an independent reference predicate — deliberately NOT core.matches
-  const ref = (r, q) => {
+  // an independent, spoiler-aware reference predicate — deliberately NOT core.matches.
+  // The searchable surface is room | piece | blurb PLUS the room's INDEXED exhibit
+  // names (§4.4): a gated (within/hidden) exhibit joins the surface only once its
+  // `gate` key is earned in `store`. Joined with '\x01' (as searchText does) so a
+  // query can't straddle a field boundary.
+  const idxExNames = (r, store) => (Array.isArray(r.exhibits) ? r.exhibits : []).filter((ex) => {
+    const gated = ex.kind === 'within' || ex.hidden === true;
+    if (!gated) return true;
+    return !!(ex.gate && store && store.ok && store.has(ex.gate));
+  }).map((ex) => ex.name);
+  const ref = (r, q, store) => {
     const needle = String(q).trim().toLowerCase();
     if (needle === '') return true;
-    const hay = (String(r.room) + String(r.piece == null ? '' : r.piece) + String(r.blurb == null ? '' : r.blurb)).toLowerCase();
+    const hay = [r.room, r.piece, r.blurb, ...idxExNames(r, store)]
+      .map((s) => String(s == null ? '' : s)).join('\x01').toLowerCase();
     return hay.indexOf(needle) !== -1;
   };
+  // queries hit every surface: room/piece/blurb prose AND exhibit names (Census of
+  // Hands, Slipstick, Carillon, Bastion are NON-gated exhibits of real rooms).
   const QUERIES = ['', 'the', 'mirror', 'GARDEN', 'π', 'Snell', 'cradle', 'zzz-nope', 'Engine', 'light',
-    'maze', 'star', 'A', 'time', 'number', 'magnetic', 'fold'];
-  let allMatch = true, firstBad = null;
-  for (const q of QUERIES) {
-    const got = sortedIds(search(unlocked, q));
-    const want = sortedIds(unlocked.filter((r) => ref(r, q)));
-    if (!eqArr(got, want)) { allMatch = false; firstBad = JSON.stringify(q) + ' got ' + got.length + ' want ' + want.length; break; }
+    'maze', 'star', 'A', 'time', 'number', 'magnetic', 'fold',
+    'Census', 'Slipstick', 'Carillon', 'Bastion', 'planimeter'];
+  // prove BOTH store branches so the spoiler gate is exercised in the sound+complete test
+  for (const [storeName, store] of [['SEALED', SEALED], ['UNSEALED', UNSEALED], ['STORAGE_OFF', STORAGE_OFF]]) {
+    let allMatch = true, firstBad = null;
+    for (const q of QUERIES) {
+      const got = sortedIds(search(unlocked, q, store));
+      const want = sortedIds(unlocked.filter((r) => ref(r, q, store)));
+      if (!eqArr(got, want)) { allMatch = false; firstBad = JSON.stringify(q) + ' got ' + got.length + ' want ' + want.length; break; }
+    }
+    check('search(q, ' + storeName + ') === brute-force reference over ' + QUERIES.length + ' queries', allMatch, firstBad || 'all match');
   }
-  check('search(q) === brute-force reference over ' + QUERIES.length + ' queries', allMatch, firstBad || 'all match');
-  check('empty query returns the whole volume', search(unlocked, '').length === unlocked.length, '');
-  check('a guaranteed-absent query returns none', search(unlocked, '☃zzqx-no-room').length === 0, '');
-  // case-insensitivity proven explicitly
-  check('search is case-insensitive', eqArr(sortedIds(search(unlocked, 'GARDEN')), sortedIds(search(unlocked, 'garden'))), '');
+  check('empty query returns the whole volume', search(unlocked, '', SEALED).length === unlocked.length, '');
+  check('a guaranteed-absent query returns none', search(unlocked, '☃zzqx-no-room', SEALED).length === 0, '');
+  // case-insensitivity proven explicitly (over prose AND an exhibit name)
+  check('search is case-insensitive (prose)', eqArr(sortedIds(search(unlocked, 'GARDEN', SEALED)), sortedIds(search(unlocked, 'garden', SEALED))), '');
+  check('search is case-insensitive (exhibit name)', eqArr(sortedIds(search(unlocked, 'CARILLON', SEALED)), sortedIds(search(unlocked, 'carillon', SEALED))), '');
   // matches/searchText are consistent with search
   check('matches() agrees with search() membership',
-    unlocked.every((r) => matches(r, 'the') === search(unlocked, 'the').includes(r)), '');
+    unlocked.every((r) => matches(r, 'the', SEALED) === search(unlocked, 'the', SEALED).includes(r)), '');
+  // searchText includes an indexed (non-gated) exhibit name so the surface is real
+  const withEx = unlocked.find((r) => (r.exhibits || []).some((e) => !(e.kind === 'within' || e.hidden)));
+  if (withEx) {
+    const anEx = withEx.exhibits.find((e) => !(e.kind === 'within' || e.hidden));
+    check('searchText carries an indexed exhibit name (' + anEx.name + ')',
+      searchText(withEx, SEALED).toLowerCase().includes(anEx.name.toLowerCase()), withEx.id);
+  }
+}
+
+// ═══════════════ (d2) THE EXHIBIT JOIN + SPOILER LAW (phantom-witness, §4.4) ═══════════════
+section('(d2) EXHIBITS — the manifest join, the ↳via verdict, and the spoiler law');
+{
+  // every card carries an exhibits ARRAY (reclaim joins the manifest; no holes)
+  const everyArr = DATA.every((r) => Array.isArray(r.exhibits));
+  check('every card carries an `exhibits` array (manifest join, no holes)', everyArr,
+    everyArr ? DATA.length + ' joined' : 'a card has no exhibits array');
+  const withEx = DATA.filter((r) => (r.exhibits || []).length).length;
+  check('at least one room hosts exhibits (the join is non-empty)', withEx > 0, withEx + ' rooms host exhibits');
+
+  // matchInfo `via`: a query that hits ONLY an exhibit name (not room/piece/blurb)
+  // reports via:'exhibit' and carries the matched exhibit for the ↳ within line.
+  const host = DATA.find((r) => r.id === 'museum');   // hosts "The Census of Hands" (kind exhibit)
+  if (host) {
+    const mi = matchInfo(host, 'Census of Hands', SEALED);
+    const roomHasIt = String(host.room + host.piece + host.blurb).toLowerCase().includes('census of hands');
+    check('museum has a non-gated Census exhibit but no such prose', !roomHasIt, 'prose-clean');
+    check('matchInfo("Census of Hands") on the museum → via:exhibit', mi.hit && mi.via === 'exhibit', mi.via);
+    check('matchInfo carries the matched exhibit (for the ↳ within line)', !!(mi.exhibit && /Census/.test(mi.exhibit.name)), mi.exhibit && mi.exhibit.name);
+    check('exhibitPhrase renders a house-voice line', /this room|shown/.test(exhibitPhrase(mi.exhibit)), exhibitPhrase(mi.exhibit));
+    // a room-level match still reports via:'room' (priority room > … > exhibit)
+    check('a room-name match reports via:room (priority)', matchInfo(host, 'museum', SEALED).via === 'room', '');
+  }
+
+  // THE SPOILER LAW — a WITHIN piece is a phantom until its own witness is earned.
+  // The 4 within-exhibits live on the-top / warren / reversing-room / the-wrinkling,
+  // each gated by its OWN ws:seen breadcrumb. Prove each is INVISIBLE to search under a
+  // sealed store and RESOLVES its host room ONLY under a store carrying its gate key.
+  const gatedExhibits = [];
+  for (const r of DATA) for (const ex of (r.exhibits || [])) if (exhibitGated(ex)) gatedExhibits.push({ r, ex });
+  check('the estate has gated (within/hidden) exhibits to guard', gatedExhibits.length > 0, gatedExhibits.length + ' gated');
+  let spoilerOk = true, spoilerDetail = 'all gated pieces stay phantom until earned', testable = 0;
+  for (const { r, ex } of gatedExhibits) {
+    const key = ex.gate;
+    const earned = storeOf([key]);
+    const term = ex.name.replace(/^[^A-Za-z0-9]+/, '').slice(0, 12);  // a distinctive slice of the piece name
+    // the piece name must not ALSO appear in the host's prose (else the test proves nothing)
+    const inProse = String(r.room + (r.piece || '') + (r.blurb || '')).toLowerCase().includes(term.toLowerCase());
+    if (inProse) continue;
+    testable++;
+    // under SEALED: the piece must NOT be indexed → search by its name must NOT surface its host via the exhibit
+    const sealedHit = matchInfo(r, term, SEALED);
+    // under EARNED: the piece IS indexed → search by its name surfaces the host via:exhibit
+    const earnedHit = matchInfo(r, term, earned);
+    // storage-off must also hide it
+    const offHit = matchInfo(r, term, STORAGE_OFF);
+    if (sealedHit.hit && sealedHit.via === 'exhibit') { spoilerOk = false; spoilerDetail = 'LEAK sealed: ' + r.id + '/' + ex.name; break; }
+    if (offHit.hit && offHit.via === 'exhibit') { spoilerOk = false; spoilerDetail = 'LEAK storage-off: ' + r.id + '/' + ex.name; break; }
+    if (!(earnedHit.hit && earnedHit.via === 'exhibit')) { spoilerOk = false; spoilerDetail = 'MISS earned: ' + r.id + '/' + ex.name; break; }
+  }
+  check('spoiler law: every within/hidden exhibit is a phantom until its witness is earned', spoilerOk, spoilerDetail);
+  check('the spoiler law is actually exercised (a gated piece is prose-clean + testable)', testable > 0, testable + ' testable');
+
+  // indexedExhibits parity: gated ⊆ shown only when keyed; sealed hides all gated
+  let idxOk = true, idxDetail = 'parity holds';
+  for (const r of DATA) {
+    const sealedIdx = new Set(indexedExhibits(r, SEALED).map((e) => e.href));
+    for (const ex of (r.exhibits || [])) {
+      if (exhibitGated(ex) && sealedIdx.has(ex.href)) { idxOk = false; idxDetail = 'sealed indexed a gated piece: ' + r.id + '/' + ex.name; break; }
+    }
+    if (!idxOk) break;
+  }
+  check('indexedExhibits(SEALED) never includes a gated piece', idxOk, idxDetail);
+}
+
+// ═══════════════ (d3) SEALED CARDS (steer 4) — acknowledged, never opened ═══════════════
+section('(d3) SEALED CARDS — a greyed register presence with no navigable room, excluded from every proof');
+{
+  check('SEALED_CARDS is a non-empty const', Array.isArray(SEALED_CARDS) && SEALED_CARDS.length > 0, SEALED_CARDS.length + ' sealed');
+  check('the Cabinet of Honors is a sealed card', SEALED_CARDS.some((c) => /Cabinet of Honors/.test(c.room)), '');
+  // no href → not navigable
+  check('no sealed card carries an href', SEALED_CARDS.every((c) => c.href == null), '');
+  check('every sealed card carries a note + glyph (rendered greyed)', SEALED_CARDS.every((c) => c.note && c.glyph), '');
+  // EXCLUDED from the records slab (no id collision, never in the volume)
+  const slabRooms = new Set(DATA.map((r) => String(r.room)));
+  check('no sealed card is in the records slab (excluded from set-equality)',
+    SEALED_CARDS.every((c) => !slabRooms.has(String(c.room))), '');
+  // and never appears in an ordering of the real volume
+  const alphaRooms = new Set(ORDERINGS.alpha(unlocked).map((r) => String(r.room)));
+  check('no sealed card leaks into an ordering of the volume',
+    SEALED_CARDS.every((c) => !alphaRooms.has(String(c.room))), '');
 }
 
 // ═══════════════ (e) STRICT TREE ═══════════════

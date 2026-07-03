@@ -63,6 +63,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..');
 const SRC_PATH = join(__dirname, 'index.src.html');
 const PLACES_PATH = join(__dirname, '..', 'index.src.html');
+const MANIFEST_PATH = join(REPO_ROOT, 'tools', 'manifest', 'estate-manifest.json');
 
 /* A room whose first-add commit cannot be found (brand-new, uncommitted, or a
    renamed path) gets this sentinel `entry` so it sorts LAST in the Register
@@ -347,12 +348,55 @@ export function withEntryTimes(records) {
   });
 }
 
+/* ── EXHIBITS, joined from the estate manifest (§4.4, build-time) ────────────────
+   The manifest (tools/manifest/estate-manifest.json, §6) is the estate's authority on
+   which PIECES belong to which room. reclaim reads it and joins each room's exhibit
+   list onto its card, keyed by room id, so the Register can resolve a room by one of
+   the pieces it hosts. Each exhibit is projected to { name, href, kind } plus a `gate`
+   (its ws:seen breadcrumb) and/or `hidden` flag when the manifest marks it a SECRET —
+   the two fields core.mjs's spoiler law reads to keep a within/hidden piece out of the
+   index until the visitor has earned it. companionOf and other manifest-internal fields
+   are dropped (the card is room-level). Cards stay room-level; a card with no manifest
+   exhibits gets `exhibits: []`.
+
+   Build-time only: the manifest is a committed repo fact, so reading it here is as
+   legitimate as shelling git for entry-time — core.mjs never touches the filesystem.
+   A missing/broken manifest REFUSES loudly rather than shipping a silently
+   exhibit-less catalog (the same discipline as the short-parse floor guard). */
+export function loadExhibitsByRoom(manifestPath = MANIFEST_PATH) {
+  const man = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  if (!man || !Array.isArray(man.districts)) {
+    throw new Error('REFUSING: estate manifest has no districts array — cannot join exhibits.');
+  }
+  const byRoom = new Map();
+  for (const d of man.districts) {
+    for (const room of (d.rooms || [])) {
+      const list = (room.exhibits || []).map((ex) => {
+        const o = { name: ex.name, href: ex.href, kind: ex.kind };
+        if (ex.gate != null) o.gate = ex.gate;         // the ws:seen key a secret is earned by
+        if (ex.hidden === true) o.hidden = true;       // an explicitly hidden exhibit
+        return o;
+      });
+      byRoom.set(room.id, list);
+    }
+  }
+  return byRoom;
+}
+
+/* stamp each record with its manifest exhibit list (room-level join by id). A card
+   the manifest does not know gets an empty list, never undefined, so every slab card
+   carries an `exhibits` array. */
+export function withExhibits(records, byRoom) {
+  return records.map((r) => ({ ...r, exhibits: byRoom.get(r.id) || [] }));
+}
+
 /* ── emit the slab + re-pin ─────────────────────────────────────────────────── */
 function main() {
-  const records = withEntryTimes(loadPlaces());
+  const records = withExhibits(withEntryTimes(loadPlaces()), loadExhibitsByRoom());
   // canonical field order, stable, pretty-printed for a readable diff. `entry`
-  // (git depth-from-root) + `entryDate` (YYYY-MM-DD) are git-derived, baked here.
-  const FIELD_ORDER = ['id', 'room', 'piece', 'glyph', 'accent', 'district', 'tier', 'wing', 'order', 'href', 'blurb', 'tag', 'locked', 'entry', 'entryDate'];
+  // (git depth-from-root) + `entryDate` (YYYY-MM-DD) are git-derived; `exhibits` is
+  // the estate-manifest join (§4.4) — both baked here.
+  const FIELD_ORDER = ['id', 'room', 'piece', 'glyph', 'accent', 'district', 'tier', 'wing', 'order', 'href', 'blurb', 'tag', 'locked', 'entry', 'entryDate', 'exhibits'];
   const projected = records.map((r) => {
     const o = {};
     for (const f of FIELD_ORDER) if (r[f] !== undefined) o[f] = r[f];

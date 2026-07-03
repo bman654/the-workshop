@@ -30,7 +30,7 @@
    spatial fields (district/tier/wing/order) for the indexes. */
 export const FIELDS = [
   'id', 'room', 'piece', 'glyph', 'accent', 'district', 'tier',
-  'wing', 'order', 'href', 'blurb', 'tag', 'locked', 'entry', 'entryDate'
+  'wing', 'order', 'href', 'blurb', 'tag', 'locked', 'entry', 'entryDate', 'exhibits'
 ];
 
 /* ── THE LOCK PREDICATE — PURE (ids/wsHas in, not localStorage reads) ──────────
@@ -292,22 +292,110 @@ function wingLabel(wing, district) {
   return WING_LABEL[wing] || ('The ' + String(wing).replace(/[-_]/g, ' ') + ' wing');
 }
 
-/* ── search: the manicule predicate — case-insensitive substring over the
-   visible text (room | piece | blurb). Returns the matching cards (unordered;
-   the page orders them by the active index). Empty/blank query ⇒ ALL records
-   (search clears to the full volume). Sound + complete by construction; the twin
-   proves it against an independent brute-force reference. */
-export function searchText(record) {
-  return [record.room, record.piece, record.blurb].map((s) => String(s == null ? '' : s)).join('');
+/* ═══ EXHIBITS — the estate-manifest join (§4.4) ════════════════════════════════
+   Each card carries `exhibits: [{ name, href, kind, gate? }]`, joined onto it from
+   the estate manifest (§6) by reclaim at build time. The card stays ROOM-LEVEL; the
+   exhibit list lets the search resolve a room by one of the PIECES it hosts — search
+   "Snell" and the hall that shows the Spyglass answers, even though "Spyglass" is no
+   card of its own. `kind` is the manifest's own vocabulary for how a piece belongs to
+   its room (bench | companion | cross | exhibit | game | instrument | piece | stray |
+   within); it drives the search sub-line's phrasing and the spoiler law below.
+
+   THE SPOILER LAW (§4.4): a WITHIN piece (`kind:'within'`) or a hidden exhibit
+   (`hidden:true`) is a discoverable SECRET — indexed ONLY once the visitor has earned
+   it, i.e. its `gate` breadcrumb (a `ws:seen:<id>` key) is present in the live store.
+   Non-secret exhibits are always indexed. This is the SAME lock-parity discipline the
+   Reliquary uses to hide a whole room until entered (the phantom-witness precedent),
+   pushed one level down to a room's own pieces: no piece the visitor has not yet met
+   can leak into the register's search. */
+
+/* is this exhibit a spoiler-gated secret (a within-piece or an explicitly hidden one)? */
+export function exhibitGated(ex) {
+  return !!ex && (ex.kind === 'within' || ex.hidden === true);
 }
-export function matches(record, query) {
+
+/* the exhibits of a record that are INDEXED given the live store: every non-gated
+   exhibit, plus a gated one only when its own `gate` key is earned. `store` may be
+   undefined ⇒ gated exhibits excluded (the spoiler-safe default a fresh visitor sees).
+   Pure: depends only on the record and the store snapshot. */
+export function indexedExhibits(record, store) {
+  const list = Array.isArray(record && record.exhibits) ? record.exhibits : [];
+  return list.filter((ex) => {
+    if (!exhibitGated(ex)) return true;
+    if (!ex.gate) return false;                 // gated but keyless → never index
+    return !!(store && store.ok && store.has(ex.gate));
+  });
+}
+
+/* house-voice phrasing for the "↳ within: <name> — <phrase>" search sub-line, keyed
+   on the manifest's exhibit kind; a plain-spoken account of how the piece belongs to
+   its room. An unlisted kind reads as the neutral catch-all. */
+export const KIND_PHRASE = {
+  bench: 'a bench of this room',
+  companion: 'a companion of this room',
+  cross: 'a crossing shown here',
+  exhibit: 'an exhibit of this room',
+  game: 'an amusement of this room',
+  instrument: 'an instrument of this room',
+  piece: 'a piece of this room',
+  stray: 'kept with this room',
+  within: 'found within this room'
+};
+export function exhibitPhrase(ex) {
+  return (ex && KIND_PHRASE[ex.kind]) || 'shown in this room';
+}
+
+/* ── search: the manicule predicate — case-insensitive substring over the visible
+   text (room | piece | blurb) AND the room's INDEXED exhibit names (§4.4). Returns
+   the matching cards (unordered; the page orders them by the active index). Empty/
+   blank query ⇒ ALL records (search clears to the full volume). Sound + complete by
+   construction; the twin proves it against an independent brute-force reference.
+   `store` gates the exhibit surface by the spoiler law; optional (legacy 2-arg calls
+   still resolve every room-level match). */
+export function searchText(record, store) {
+  const base = [record.room, record.piece, record.blurb];
+  const exNames = indexedExhibits(record, store).map((e) => e && e.name);
+  // \x01 separator: fields never contain it, so a query can't straddle a boundary
+  // (keeps searchText's substring semantics identical to matchInfo's per-field scan).
+  return base.concat(exNames).map((s) => String(s == null ? '' : s)).join('');
+}
+
+/* matchInfo: the query verdict for one record, given the live store. Returns
+   { hit, via, exhibit? } where `via` names the FIRST field that answered (priority
+   room > piece > blurb > exhibit). When the answer came via an exhibit, `exhibit`
+   carries the matched exhibit so the page can render the "↳ within" sub-line. Empty
+   query ⇒ hit via 'room'. Sound + complete: hit iff q is a substring of the
+   spoiler-aware surface. */
+export function matchInfo(record, query, store) {
   const q = String(query == null ? '' : query).trim().toLowerCase();
-  if (q === '') return true;
-  return searchText(record).toLowerCase().includes(q);
+  if (q === '') return { hit: true, via: 'room' };
+  const has = (s) => String(s == null ? '' : s).toLowerCase().includes(q);
+  if (has(record.room)) return { hit: true, via: 'room' };
+  if (has(record.piece)) return { hit: true, via: 'piece' };
+  if (has(record.blurb)) return { hit: true, via: 'blurb' };
+  for (const ex of indexedExhibits(record, store)) {
+    if (has(ex && ex.name)) return { hit: true, via: 'exhibit', exhibit: ex };
+  }
+  return { hit: false, via: null };
 }
-export function search(records, query) {
-  return records.filter((r) => matches(r, query));
+export function matches(record, query, store) {
+  return matchInfo(record, query, store).hit;
 }
+export function search(records, query, store) {
+  return records.filter((r) => matches(r, query, store));
+}
+
+/* ── SEALED CARDS (steer 4) — register presences with no navigable room ─────
+   A short, hand-authored list of rooms the Register ACKNOWLEDGES but does not open.
+   The Cabinet of Honors (§4.5) is off every visitor path — no PLACES row, no nav link,
+   no sky star — so its ONLY estate-wide presence is this greyed, href-less card. Sealed
+   cards are NOT part of the records slab: they carry no id/district/entry and are
+   EXCLUDED from every proof (set-equality, the four orderings, the drill tree, the
+   search predicate). The page renders them greyed and unclickable; the twin asserts
+   they never leak into the volume's ordered/searchable set. */
+export const SEALED_CARDS = [
+  { room: 'The Cabinet of Honors', note: 'closed to visitors', glyph: '🗝' }
+];
 
 /* ── runSelfTest: the COMPLETENESS + FIDELITY battery ──────────────────────────
    Pure, given the FULL records slab (every PLACES entry incl. locked) and a
@@ -373,12 +461,31 @@ export function runSelfTest(records, store) {
   add('every card lands in exactly one subject shelf', allClassified,
     allClassified ? SUBJECTS.length + ' shelves' : 'unclassified: ' + badSubj);
 
-  // (e) SEARCH edges — empty all, absent none
+  // (e) SEARCH edges — empty all, absent none (spoiler-aware, gated on `store`)
   const ABSENT = '☃zzqx-no-such-room';   // a query no blurb contains
-  add('empty query returns the whole volume', search(visible, '').length === visible.length,
-    search(visible, '').length + '');
-  add('a guaranteed-absent query returns none', search(visible, ABSENT).length === 0,
-    search(visible, ABSENT).length + '');
+  add('empty query returns the whole volume', search(visible, '', store).length === visible.length,
+    search(visible, '', store).length + '');
+  add('a guaranteed-absent query returns none', search(visible, ABSENT, store).length === 0,
+    search(visible, ABSENT, store).length + '');
+
+  // (e2) EXHIBIT SPOILER PARITY — a gated (within/hidden) exhibit is indexed by the
+  // search ONLY when its own key is earned in THIS store; non-gated exhibits always.
+  // This is the phantom-witness discipline one level down: no unmet piece leaks in.
+  let exhibitParity = true, exhibitDetail = 'no gated exhibits', gatedSeen = 0;
+  for (const r of visible) {
+    const all = Array.isArray(r.exhibits) ? r.exhibits : [];
+    const idx = new Set(indexedExhibits(r, store).map((e) => e.href));
+    for (const ex of all) {
+      const shouldIndex = !exhibitGated(ex)
+        ? true
+        : !!(ex.gate && store && store.ok && store.has(ex.gate));
+      if (exhibitGated(ex)) gatedSeen++;
+      if (idx.has(ex.href) !== shouldIndex) { exhibitParity = false; exhibitDetail = r.id + '/' + ex.name; break; }
+    }
+    if (!exhibitParity) break;
+  }
+  add('each gated exhibit is indexed iff its own key is earned (spoiler parity)',
+    exhibitParity, exhibitParity ? gatedSeen + ' gated exhibit(s) checked' : 'leak at ' + exhibitDetail);
 
   // (g) ENTRY-TIME — the Register of Admissions now tells the TRUE order. Every
   // card carries an integer `entry` (git depth, baked by reclaim — no holes); the
