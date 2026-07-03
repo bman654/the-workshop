@@ -1,5 +1,15 @@
 # layout.js — the estate plan's declarative placement engine
 
+> **WS1 v2 note (W0.3):** `layout.js` is now the thin **facade** over three pure libraries —
+> `contract.js` (the polar DEEDS: `CONTRACTS` + `CLUSTER_META` + `ROAD`/`LANES` + schema),
+> `polar.js` (the tier-radius/angle/derived-viewBox solver), and `formations.js` (the named
+> packers). The closed `DISTRICTS`/`GROUNDS_WINGS` region tables are RETIRED; a district now
+> holds an immutable `(angle, orbit)` deed and everything derives from it. The v2 estate gate
+> is **`estate.test.cjs`** (it replaces `smoke.cjs`), driven against the migrated-PLACES
+> **`estate.fixture.cjs`** until the page is flipped (W1). The prose below still describes the
+> v1 surface pending the W5 map-process/README doc rewrite — read `contract.js`/`polar.js` for
+> the binding v2 contract.
+
 `Layout` turns a room's **declared intent** (`district` + `tier` + optional `wing`)
 into **every coordinate** on the map: footprint size & position, district & wing
 boundaries, the circulation graph (door → spine → avenues → aisles → stubs), and
@@ -44,7 +54,9 @@ Every district frame is confined to the **star-clear interior envelope** `FIELD`
 generated footprint can never collide with a star. After any change run:
 
 ```
-node tools/layout/smoke.cjs        # footprints in-field, star-clear, no overlaps, asserts
+node tools/layout/polar.test.cjs       # the polar contract engine (schema + determinism, 37)
+node tools/layout/formations.test.cjs  # the packer registry n-sweep + capacity+1 throws (87)
+node tools/layout/estate.test.cjs      # the v2 estate gate: hulls, partition, fold, neg-controls (was smoke.cjs)
 node tools/layout/legibility.test.cjs  # the conscience's self-consistency on the controls (29 checks)
 node tools/layout/door.test.cjs    # the front-door 17-claim pill, as a NODE TWIN (see below)
 node tools/layout/emit-mirror.cjs  # re-emit the FOOTPRINTS mirror for sky.test.cjs

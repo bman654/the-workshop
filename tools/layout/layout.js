@@ -1,1457 +1,506 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   layout.js — the Workshop estate plan's DECLARATIVE PLACEMENT engine (Layout).
+   layout.js — THE FACADE (layout engine v2, WS1 §1.9)
 
-   The map's rooms DECLARE intent (district + tier + optional wing); this module
-   DERIVES every coordinate, size, boundary, route, and zone label from those
-   declarations plus two closed config tables (DISTRICTS, WING_META). No room
-   carries a pixel. Adding a room = appending {district, tier, wing?, +content}.
+   The single global `Layout` the page and the tests call. It WIRES the three pure
+   libraries built in W0.1/W0.2 —
+     · contract.js   → the polar DEEDS (CONTRACTS + CLUSTER_META + ROAD/LANES + schema)
+     · polar.js      → the SOLVER (tier radii, angular law, derived viewBox, freeSlots)
+     · formations.js → the PACKERS (one per layoutFn; the generic grid is retired)
+   — and translates each district's locally-packed slots to WORLD coordinates about the
+   manor pole. It keeps v1's public surface as a STRICT SUPERSET (§1.9):
+     Layout.solve(places[,opts])   → { foot, footMeta, wingRects, districtRects,
+                                        structures, graph{door,spine,avenues,aisles,stubs},
+                                        door, road, world }
+     Layout.plates(places[,opts])  → the total/disjoint plate partition (parent ∪ child),
+                                        per-plate camera frames, the reciprocal road graph,
+                                        the fold (contract-level detach), + world + structures.
+     Layout.basementSlot(0|1)      → the two gated ways down (Undercroft/Reliquary), world
+                                        coords; beneathSlot/sealedStudySlot alias them (§1.9).
+     Layout.freeSlots(tier[,ρ])    → the live petition menu (§1.5), interpolated by the relief.
 
-   THE PIPELINE (Layout.solve(places, opts) → a frozen solution):
-     1. validate    — an unknown district id is a HARD BUILD ERROR (assert).
-     2. group        — rooms → districts → wings (stable-sorted by order,id).
-     3. pack wings   — densest-first interior grid per wing → a wing AABB.
-     4. shelf wings   — first-fit-decreasing wing AABBs into the district frame.
-     5. fit district  — scale/centre each district's packed content into its frame.
-     6. footprints    — every room gets {x,y,w,h} (or {x,y,r} for a tower) by tier.
-     7. graph         — door → spine → district avenues → wing aisles → room stubs.
+   THE FOLD (§1.9): `detach` now lives on the district CONTRACT (fairground). A detached
+   district's parent plate is JUST its gate face (GATE_W 96 × GATE_H 120, ρ≈77) — its
+   layoutFn is DORMANT; the rooms lay out in a `child:<districtId>` plate via relayPlate on
+   RELAY_FIELD (1116×668, centred in the derived world). `opts.detachOff` suppresses the fold
+   as a NEG-CONTROL — with it, the fairground's 16 tiles are asked to fit its dormant knot and
+   the build THROWS loud (the fold is proven load-bearing).
 
-   The whole solve is DETERMINISTIC (seeded; no RNG, no resize re-solve) and
-   coordinate-pure (no DOM) so it runs identically in Node for tests. In a browser
-   this attaches a `Layout` global; under forge it is inlined as the 4th include.
-
-   All coordinates are raw viewBox units in the 1440×900 plate. The plate's dark
-   margins are RESERVED for the Survey-of-Heaven stars; every district frame is
-   confined to the star-clear interior envelope so a footprint can never collide
-   with a catalog star (verified: all 35 stars lie outside FIELD).
+   DETERMINISM (§1.6): the world derives from CONTRACTS alone (never from n×band), so it is
+   cached; every iteration is `Object.keys(...).sort()`; all emitted coords round to 0.1;
+   solve()+plates() double-run byte-identical (estate.test.cjs). Pure + Node-testable; the
+   forge inlines it (the require guard below is stripped, the globals come from the sibling
+   includes). Where a room and the spec disagree, the ROOM/REPO wins — flagged, not guessed.
    ════════════════════════════════════════════════════════════════════════════ */
 
 var Layout = (function () {
   'use strict';
 
-  /* ── the star-clear interior envelope. Every catalog star lies outside this
-     rectangle (min star inside-x 318 y34; the envelope stops short of all of
-     them), so a generated footprint constrained here never touches a star. ── */
-  var FIELD = { x: 162, y: 150, w: 1116, h: 668 };   // x 162..1278, y 150..818
-
-  /* ── SIZE_BAND[tier]: footprint w×h by rank. tier-1 grand, tier-2 standard,
-     tier-3 folly. A 'tower' footprint uses r = min(w,h)/2 of its band.        */
-  var SIZE_BAND = {
-    1: { w: 168, h: 116 },
-    2: { w: 122, h: 86 },
-    3: { w: 92, h: 64 }
-  };
-  /* a district may carry a `lotScale` < 1 — interior rooms (the manor's wing cells)
-     are naturally smaller than free-standing grounds buildings, so the manor packs
-     its six rooms inside its pinned shell at a tighter lot without scale-crushing. */
-  function bandFor(tier, district) {
-    var b = SIZE_BAND[tier] || SIZE_BAND[2];
-    var ls = (district && DISTRICTS[district] && DISTRICTS[district].lotScale) || 1;
-    if (ls === 1) return b;
-    return { w: Math.round(b.w * ls), h: Math.round(b.h * ls) };
+  /* ── the three sibling libraries: forge-inlined globals in the browser; require()d in
+       Node (the guard block is stripped at forge, leaving the globalThis reads). ── */
+  var Contract    = (typeof globalThis !== 'undefined') ? globalThis.Contract : null;
+  var Polar       = (typeof globalThis !== 'undefined') ? globalThis.Polar : null;
+  var Formations  = (typeof globalThis !== 'undefined') ? globalThis.Formations : null;
+  if (typeof module !== 'undefined' && module.exports) {
+    Contract   = require('./contract.js');
+    Polar      = require('./polar.js');
+    Formations = require('./formations.js');
   }
 
-  var GUTTER = 16;        // gap between slots in a wing grid and between wing blocks
-  var WING_PAD = 14;      // pad from a wing's slot-union to its tinted boundary
-  var DISTRICT_PAD = 16;  // pad from a district's wing-union to its frame boundary
+  var r01 = function (v) { return Math.round(v * 10) / 10; };
 
-  /* the manor packs tightly inside its small pinned shell (interior cells, small
-     gutters) so six rooms read at a legible size rather than scale-crushing. */
-  function gutterFor(district) { return district === 'manor' ? 9 : GUTTER; }
-  function wingPadFor(district) { return district === 'manor' ? 7 : WING_PAD; }
-  function districtPadFor(district) { return district === 'manor' ? 8 : DISTRICT_PAD; }
+  /* ── §1.9 constants (lifted; the RELAY/PLATE/GATE families kept). ── */
+  var RELAY_FIELD_DIM = { w: 1116, h: 668 };   // the child plate's fan envelope (centred in world)
+  var RELAY_VSPREAD   = 0.85;                   // fraction of RELAY_FIELD height the stack uses
+  var RELAY_GUTTER    = 6;                       // house slot gutter (the detached-budget denominator)
+  var PLATE_PAD       = 1.45;                    // camera bbox padding factor
+  var PLATE_MIN_W     = 360, PLATE_MIN_H = 240;  // minimum frame so a narrow plate breathes
+  var DISTRICT_PAD    = 8;                        // roadside precinct pad (framed precincts = the frame box)
+  var GATE_W = 96, GATE_H = 120;                 // the detached parent gate face
 
-  /* ── DISTRICTS: the closed config table. Each district owns a fixed rectangular
-     REGION budget in the plate (the packer fills within it; it is NOT a room
-     position). `inside` is derived here, never declared per-room. An unknown
-     district id passed to solve() is a HARD BUILD ERROR. ──
-
-     The MANOR region is PINNED to the historic static shell box (x586 y296
-     270×208) so the candle-pool (x421 y150 600×600) and the frozen coordinate
-     envelope stay sky-valid. Other regions tile the interior, manor-central. */
-  var DISTRICTS = {
-    manor: {
-      // #410 — the manor is no longer PINNED to the 270×208 shell that crushed its 20
-      // rooms into one 44px column of overlapping POI hitboxes. It is a WIDER + SHORTER
-      // GREAT HOUSE (see placeManor + MANOR_BLOCKS): a taller CENTRAL block flanked by
-      // lower left/right wings, the district rect emitted as the UNION of those blocks.
-      // This `region` no longer packs the rooms (the blocks do) — it only seats the
-      // FRONT DOOR + spine (buildGraph reads region south-centre) at the house's base.
-      // Enlarged WESTWARD into the open pocket west of the old shell (candle-pool
-      // decoration, no keep-out; waves footprints end x521, figures-you-construct begin
-      // x807 — the blocks stay clear of both) and shortened to relieve the vertical
-      // squeeze on Processions (north, footprint ends y287) and the beneath cellar (y514).
-      region: { x: 530, y: 300, w: 264, h: 176 },
-      inside: true, anchor: true, style: 'party-wall', lotScale: 0.74,
-      label: 'THE MANOR HOUSE', hue: '#c9a24a', tint: 0.045
-    },
-    grounds: {
-      // the grounds wrap the manor; its wings get their own sub-regions placed by
-      // the district-frame table below, so the grounds REGION is the whole field
-      // envelope and wings are distributed by their declared sub-anchors.
-      region: { x: 162, y: 150, w: 1116, h: 668 },
-      inside: false, style: 'park-line',
-      label: 'THE GROUNDS', hue: '#86b39a', tint: 0.03
-    },
-    observatory: {
-      region: { x: 175, y: 175, w: 250, h: 180 },
-      inside: false, tier: 1, style: 'rise-line',
-      label: 'THE OBSERVATORY RISE', hue: '#9db4ff', tint: 0.035
-    },
-    outbuilding: {
-      region: { x: 470, y: 560, w: 188, h: 120 },
-      inside: false, tier: 3, style: 'shed-line',
-      label: 'THE OUTBUILDING', hue: '#c9a24a', tint: 0.03
-    },
-    cavern: {
-      region: { x: 980, y: 660, w: 230, h: 150 },
-      inside: false, style: 'hatch',
-      label: 'THE OUTSKIRTS', hue: '#7fd4c0', tint: 0.04
-    },
-    /* THE LOWER WORKS — the structural / masonry precinct, graduated to its OWN
-       district + plate (#335) so the statics rooms (The Keystone Arch + The Infinite
-       Overhang) stop elbowing the foundry, the works and the cavern in the crowded SE.
-       Seated in the open lower-central pocket BELOW the works (alchemy ends ~y694),
-       RIGHT of the foundry casting-floor (ends ~x855) and LEFT of the cavern/physics-
-       lab (starts ~x1026). placeLowerWorks lays its rooms as a COURSE of equal dry-cut
-       ashlar stones (a corbel that wraps to stacked courses as the precinct grows), so
-       a structural sibling can NEVER re-collide its neighbours — it just lengthens the
-       course. Verified clear of every footprint + catalog star via smoke.cjs's live
-       Layout.solve (the region sits wholly inside the star-clear FIELD envelope). */
-    lowerworks: {
-      region: { x: 884, y: 704, w: 132, h: 108 },
-      inside: false, style: 'course-line',
-      label: 'THE LOWER WORKS', hue: '#c9974c', tint: 0.045
-    },
-    beneath: {
-      // widened to seat TWO gated ways down side by side — the Undercroft cellar
-      // stair (left) and the Reliquary's sealed study (right). Each locked POI gets
-      // its own half of the region (beneathSlot / sealedStudySlot); the manor plate
-      // is extended to enclose BOTH so neither is ever stranded (#399).
-      region: { x: 664, y: 514, w: 116, h: 70 },
-      inside: true, gated: true, style: 'stipple',
-      label: 'BENEATH', hue: '#c9a24a', tint: 0.05
-    }
-  };
-
-  /* WING sub-regions inside the GROUNDS — declarative anchors for each grounds
-     wing block, spread to kill the dead upper-right quadrant. The packer fills
-     a wing's rooms inside its sub-region; the balance is hand-budgeted here once
-     (it is the district-tiling table, not a per-room position). */
-  var GROUNDS_WINGS = {
-    optics:      { x: 214, y: 392, w: 196, h: 132 },   // west park (Hall of Mirrors) — pulled E off the far wall
-    number:      { x: 432, y: 651, w: 214, h: 150 },   // lower-central park (Numbers Room) — a Pascal's-TRIANGLE host (#328), not a column. ENLARGED + re-anchored to seat the bespoke triangle (placeNumberPascal): the old 224×120 column-region crushed the wing's 9 rooms into one 14×10px stack (packGrid forced 1 column). This wider+taller band fills the lower-central gap between drawing-engines (right ~x428) and the (#328-nudged) induction wing (left ~x649), below the workbench shed (bottom y651) and above the benford-mill catalog star (x490 y810) — finalized via the LIVE Layout.solve so the solved triangle (39×28 lots, base bottom ~y792) is star-clear + DISJOINT from both neighbor wings.
-    works:       { x: 700, y: 540, w: 300, h: 222 },   // working edge, south of the house — lifted, tightened
-    glasshouses: { x: 240, y: 560, w: 230, h: 130 },   // living systems (Strange Garden) west-low
-    amusements:  { x: 910, y: 240, w: 190, h: 280 }    // upper-right court (arcade + maze); width 280→190 (#283) so the budget ends at x1100, disjoint from horology (x1100+). The old 280 budget overlapped horology, and a SPARSE amusements pack (e.g. the 3-room hours.test fixture) packed wide enough that its SOLVED rect clipped horology — the new wing-disjoint guard caught it. The live 9 rooms still pack one tidy column at x986-1024.
-  };
-  /* the Conservatory (living-systems wing, glasshouse-wing footprint) sits on the
-     east grounds; give it its own east-band sub-region distinct from the western
-     glasshouses so the two glass wings don't fight for one block. */
-  GROUNDS_WINGS.conservatory_band = { x: 1006, y: 548, w: 212, h: 150 };  // pulled W off the SE corner toward the working core
-  /* HOROLOGY — the estate's timekeeping garden (The Hours' master sundial). Set in
-     the OPEN upper-right park band along the east edge, where the sun sweeps the
-     whole day across an unobstructed sky — a sundial wants open ground. Its own
-     sub-region (verified star/footprint/furniture/pool-clear by hours.test.cjs's
-     live Layout.solve) so the gnomon never crowds amusements or a catalog star. */
-  GROUNDS_WINGS.horology = { x: 1100, y: 152, w: 178, h: 200 };
-  /* AEROSPACE — The Aerodrome, where you push off and AUTHOR an orbit by hand
-     (sibling to the Observatory's Orrery, which wheels the orbits already chosen).
-     Set in the OPEN upper-LEFT sky court, left of the candle-pool decoration
-     (x421+) — a launch needs clear sky up-and-right. Its own sub-region keeps the
-     launch-rail footprint just to the RIGHT of the Observatory's firmament tower
-     (x242-358) in the upper sky band — adjacent sibling, collision-free. Verified
-     clear of every footprint + catalog star (FINALIZED via smoke.cjs's live
-     Layout.solve: the brief's x214 region overlapped firmament's tower, so the
-     court is nudged right to seat the rail clear in the open upper court). */
-  GROUNDS_WINGS.aerospace = { x: 366, y: 156, w: 200, h: 140 };
-  /* CURVED COUNTRY — The Holonomy Walk, where you carry a gold spear around a loop
-     on a court you can BEND and it comes home pointing wrong (the curvature you
-     enclosed). A curved LANDSCAPE you traverse OUTSIDE → the open WEST PARK, set in
-     the clear band BELOW the Hall of Mirrors (its optics footprint ends ~y507) and
-     LEFT of the western glasshouses cluster (kirigami/strange-garden anchor ~x322),
-     clear of the manor candle-pool (x421+). Sized for GROWTH: the seed promises
-     siblings (a Gauss-Bonnet polygon, a cone's deficit angle, a curvature-cancelling
-     torus). Verified clear of every footprint + catalog star via smoke.cjs's live
-     Layout.solve (a wider region collides the glasshouses; this band seats it clean). */
-  GROUNDS_WINGS['curved-country'] = { x: 170, y: 520, w: 150, h: 160 };
-  /* INDUCTION — The Lodestone Hall, the estate's first ELECTROMAGNETISM wing: a
-     working generator/alternator bench where the only current is the one you make
-     by MOVING (no battery). Seated as a KIN PILLAR beside thermo: in the working
-     south band just LEFT of The Works (x700,y540), so EM sits adjacent to the
-     Engine Room as a fellow power-house. Its own sub-region, sized for ≥4 growth
-     lots (the obvious siblings: an LC tank, a transformer, an eddy brake, a
-     betatron). Builder finalises exact x/y via smoke.cjs's live Layout.solve —
-     verified clear of every footprint + catalog star (the works block ends ~x1000,
-     amusements begins ~x910 upper-right; this lower-mid band is open).
-     RE-BUDGETED (#283) when The Lodestone Plate (iron-filings) joined the wing: three
-     rooms pack as a short scaled column; the region is nudged left+narrowed to x582,130
-     so the column seats at x621-673 — clear of the number wing (ends ~x592) on its left
-     and DISJOINT from the works wing rect (its bottom-left corner reached ~y708) above,
-     now enforced by assertGroundsWingsDisjoint. Still west of the x720 midline, so all
-     three EM rooms ride the West Grounds plate together. */
-  GROUNDS_WINGS.induction = { x: 624, y: 686, w: 102, h: 124 };  // #328 nudge: shifted RIGHT ~28px (from x582 w130) so the Numbers wing's new Pascal TRIANGLE can breathe to ~39px lots in the lower-central gap. Its solved column moves to x~649-701 — still WEST of The Works (rect left x706, ~5px clear) and clear of foundry/catalog stars (verified via the live Layout.solve + assertGroundsWingsDisjoint). The three EM rooms still ride the West-Grounds plate together.
-  /* DRAWING-ENGINES — The Drawing Room, the estate's COMPUTE-BY-DRAWING wing (a
-     Scheiner pantograph that copies your hand at a dialed scale). Kin to the other
-     brass drawing-engines (linkage's exact line, the trammel's ellipse, the
-     spirograph's rosette). Seated in the open LOWER-CENTRAL west park, in the clear
-     band BELOW the western glasshouses (their wing ends ~y684) and LEFT of the number
-     wing (x574+): a genuinely open lower-west lot. Sized for ≥4 growth lots (the
-     named-dark siblings: Hart's inversor, a conchoidograph — plus room for two more).
-     MOVED here (#283) off its old x166,y540 anchor, which OVERLAPPED curved-country
-     (both held one room near x170 → the West-Grounds label-stack bug). Re-budgeted via
-     smoke.cjs's live Layout.solve: this lot is clear of every footprint, every catalog
-     star, AND mutually DISJOINT from curved-country and every other wing region (the
-     new pairwise-disjoint guard now enforces that — see assertGroundsWingsDisjoint). */
-  GROUNDS_WINGS['drawing-engines'] = { x: 316, y: 688, w: 150, h: 118 };
-  /* WAVES — the wave-INTERFERENCE family (Ripple, the silent tank, + The Loud and the
-     Quiet Walk, the same field sung to your ear). Kin to OPTICS (both are "what light/
-     waves DO"), but a distinct family: interference & superposition, not geometric
-     bending. Seated as OPTICS' downstairs neighbour in the open west-central park —
-     directly RIGHT of the optics block (x269–354,y398–458) and ABOVE the lower-west
-     glasshouse cluster — so the two wave wings read as a column down the west grounds.
-     Sized for ≥2 lots now with room to grow (a beat/standing-wave bench, a diffraction
-     grating). Builder verified clear of every footprint + catalog star via smoke.cjs's
-     live Layout.solve (the fallback crammed it into the curved-country/glasshouse band;
-     this west-central band seats both tank footprints clean). */
-  GROUNDS_WINGS.waves = { x: 398, y: 392, w: 168, h: 150 };
-  /* FIGURES-YOU-CONSTRUCT — The Construction Bench, the estate's straightedge-and-
-     compass STAGE: trisect 60° by hand, watch a brass power-of-2 standpipe refuse to
-     grow a rung for the degree-3 root, then flip a marked ruler and watch it LAND.
-     Neighbour to DRAWING-ENGINES (both turn geometry into a thing you make): there a
-     linkage draws ONE curve; here you ASSEMBLE a figure from intersections. Seated in
-     the OPEN central-east park band — in the genuinely STAR-FREE corridor RIGHT of the
-     manor house (its footprint ends ~x785), LEFT of the amusements column (begins
-     ~x966), and ABOVE The Works (begins ~y594). The crowded east-edge band held the
-     lone the-shepherd catalog star (x1130,y430) dead-centre; this central corridor is
-     clear of every catalog star. Sized for ≥4 growth lots (the named-dark siblings: a
-     Galois Cabinet, a double-the-cube origami bench, a Gauss–Wantzel regular-n-gon
-     table, a neusis/conics annex). FINALIZED via smoke.cjs's live Layout.solve +
-     assertGroundsWingsDisjoint — clear of every footprint, every catalog star, AND
-     mutually DISJOINT from amusements, works and every other wing region. */
-  GROUNDS_WINGS['figures-you-construct'] = { x: 790, y: 336, w: 168, h: 232 };
-  /* STATICS — the structural-mechanics precinct (The Keystone Arch + The Infinite
-     Overhang): masonry that stands by its own shape. Seated in the OPEN lower-right
-     grounds band, BELOW the Conservatory band (it ends ~y698) and RIGHT of The Works
-     (ends ~x1000), a genuinely clear SE lot. Sized for the two rooms + a growth lot
-     (an obvious sibling: a flying-buttress / thrust-line bench). Verified mutually
-     DISJOINT from every grounds wing (nearest = conservatory_band above) and clear of
-     the keystone catalog star (1250,872, just SE of the budget) via smoke.cjs's live
-     Layout.solve + assertGroundsWingsDisjoint. */
-  GROUNDS_WINGS.statics = { x: 1020, y: 712, w: 196, h: 140 };
-  /* THE WINGLESS REMAINDER BUCKET — grounds rooms that declare NO wing (currently just
-     the rattleback) pack into this sub-region. It was a hard-coded fallback at the field's
-     lower-LEFT edge (x162) that crammed the rattleback's 122px footprint against the western
-     glasshouses cluster (x341), overlapping strange-garden + weather-you-can-make. Given its
-     OWN clear west band (right edge ~x314, well clear of the glasshouses), it re-homes the
-     loner without crowding a sibling. placeGrounds emits NO wing rect for '_remainder' (it is
-     a bucket, not a precinct), so this adds no drawn wing + no wing-pair to the disjointness
-     count — it only moves the footprint to clear ground. */
-  GROUNDS_WINGS._remainder = { x: 176, y: 660, w: 150, h: 104 };
-  /* FOUNDRY — The Casting Floor, the estate's CASTING HOUSE: a pinned mold (Dirichlet
-     rim) is poured full of molten chaos, then RELEASED to cool and forget the pour,
-     relaxing to the one harmonic field its boundary allows; a bead then rides −∇T to
-     a cold gate. A POTENTIAL-FIELD kin to THE WORKS (heat → form): seated in the open
-     SOUTH working band directly BELOW The Works (its solved rect ends ~y708) and RIGHT
-     of the number wing (solved ~x591), in the clear lower-central lot. Sized for ≥4
-     growth lots (the named-dark benches: a Wave Front, a Streamline Cast, a Charge
-     Mold). FINALIZED via smoke.cjs's live Layout.solve + assertGroundsWingsDisjoint —
-     clear of every footprint, every catalog star, AND mutually DISJOINT from The Works,
-     induction, the number wing and every other grounds wing region. */
-  GROUNDS_WINGS.foundry = { x: 706, y: 714, w: 200, h: 96 };
-  /* PROCESSIONS — The Processional Ground, where THE LONG WAY HOME is walked: the
-     twelve stations of the hero's journey laid as a tilted ring that sinks below one
-     horizon into a frozen star sky and climbs back to a new dawn. A WALKED PLACE
-     (not a chart), so it lives on the GROUNDS — seated in the open UPPER-CENTRAL
-     court NORTH of the manor house, a ceremonial approach to the seat of the estate:
-     in the clear band RIGHT of The Aerodrome's launch court (ends ~x566) and LEFT of
-     The Construction Bench's figures-you-construct wing (begins ~x790), ABOVE the
-     manor district (begins y296). Sized for a tier-1 grand anchor footprint. Finalized
-     via the LIVE Layout.solve (the solved tier-1 footprint seats at x595-763 y171-287,
-     star-clear, and mutually DISJOINT from aerospace, figures-you-construct, the manor
-     and every other wing region — verified by assertGroundsWingsDisjoint + smoke.cjs). */
-  GROUNDS_WINGS.processions = { x: 568, y: 150, w: 222, h: 158 };
-  /* THE DEEP HEARTH — the estate's wing for the planet's own heat engine: one side-on
-     survey plate read sky→core, whose live bench tunes a volcanic conduit until the gas
-     volume fraction reaches ¾ and the coherent lava ooze UNZIPS into an explosive jet.
-     A DEEP-EARTH theme wants the LOW band, but the dense lower-right (foundry, statics,
-     physics-lab) is full; the live Layout.solve scan found the LOWEST genuinely-open
-     pocket in the lower WEST-CENTRAL park — ABOVE the Number wing (its solved rect begins
-     ~y651), BELOW the Waves tanks (end ~y536), RIGHT of the Glasshouses cluster (ends
-     ~x372), and LEFT of the pinned manor shell (x574). Footprints may overlap the candle-
-     pool decoration (the Number wing already does), so the pool is no keep-out. One front-
-     door POI (tier-1 wing landing) ⇒ a compact solved rect. FINALIZED via the live
-     Layout.solve + assertGroundsWingsDisjoint + smoke.cjs — clear of every footprint,
-     every catalog star, and mutually DISJOINT from Waves, the Number wing, the Glasshouses
-     and every other grounds wing. Its page-content kinship to The Foundry rides the cards,
-     not the map. */
-  GROUNDS_WINGS['the-deep-hearth'] = { x: 392, y: 550, w: 152, h: 88 };
-
-  /* ── MANOR_BLOCKS (#410) — the manor's own multi-lot partition, the manor-side echo
-     of GROUNDS_WINGS. The old single-grid pack shelf-stacked all 9 manor wings into the
-     one narrow pinned shell and fitInto crushed the tall result to 17×12 specks whose
-     POI hitboxes overlapped at fit-view (the #103/#410 crowd). Instead the 20 rooms are
-     partitioned across THREE sub-lots — a taller CENTRAL block (the main house, seated
-     HIGHER) flanked by LOWER left + right wings — each packed in its OWN region so the
-     footprints read at a legible size with real gaps and the plate reads as a great
-     house, not a rectangle. placeManor emits the district rect as the UNION of the three.
-     Each block lists its wings MULTI-room-first; every 1-room wing pairs into one shared
-     trailing band (so five single-room wings don't each hog a whole row). Regions
-     FINALIZED against the LIVE Layout.solve — every footprint clears waves (x≤521),
-     figures-you-construct (x≥807), processions (y≤287) and the beneath cellar (y≥514),
-     and stays inside FIELD. The wing→block balance keeps CENTRAL the tallest mass. */
-  var MANOR_BLOCKS = {
-    central: { region: { x: 620, y: 300, w: 86, h: 190 }, wings: ['reckoning', 'archive', 'arrow'] },
-    left:    { region: { x: 526, y: 348, w: 84, h: 142 }, wings: ['studies', 'sewing'] },
-    right:   { region: { x: 716, y: 348, w: 84, h: 142 }, wings: ['east', 'barrel-house', 'kinetics-sound', 'maker'] }
-  };
-  var MANOR_BLOCK_ORDER = ['left', 'central', 'right'];
-
-  /* ── THE WING-ON-WING DISJOINTNESS GUARD (#283). Nothing used to assert that two
-     grounds wings never shared the SAME DRAWN GROUND. Each wing was budgeted + checked
-     only against room footprints and catalog stars — never against ANOTHER wing's
-     rendered region — so the loose GROUNDS_WINGS budget rectangles (which legitimately
-     OVERLAP each other; the packer scales each wing's content down into its own slice)
-     hid a real collision: curved-country {x170,y520} and drawing-engines {x166,y540}
-     were budgeted onto almost the same patch of lower-west park, so their SOLVED tint
-     rects (x176–314,y549–651 vs x172–310,y564–666) genuinely overlapped and the West-
-     Grounds plate stacked The Holonomy Walk on The Drawing Room with their engraved wing
-     labels (CURVED COUNTRY / DRAWING ENGINES) printed nearly on top of each other.
-
-     THE RIGHT INVARIANT is on the DRAWN geometry, not the loose anchors: every pair of
-     SOLVED grounds wing rects (the tinted boundary + its engraved label that actually
-     ship) must be mutually disjoint. A shared rect is a HARD BUILD ERROR (not a warning),
-     naming BOTH wings + their solved rects so the next collision is obvious. Pure axis-
-     aligned overlap. Scoped to GROUNDS because the OBSERVATORY's concentric-ring wings
-     (#275) intentionally use overlapping SQUARE bboxes that are disc-disjoint — a rect
-     test there would false-fire. Run inside solve() (below) on the real content, AND
-     re-exported so smoke.cjs can prove it FIRES on a deliberately-collided wing. ── */
-  function rectsOverlap(a, b) {
-    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-  }
-  function assertGroundsWingsDisjoint(solution) {
-    var gw = solution.wingRects.filter(function (w) { return w.district === 'grounds'; });
-    for (var i = 0; i < gw.length; i++) {
-      for (var j = i + 1; j < gw.length; j++) {
-        var A = gw[i], B = gw[j];
-        if (rectsOverlap(A, B)) {
-          var fmt = function (w) {
-            return '"' + w.wing + '" {x:' + Math.round(w.x) + ',y:' + Math.round(w.y) +
-              ',w:' + Math.round(w.w) + ',h:' + Math.round(w.h) + '}';
-          };
-          throw new Error('Layout: two GROUNDS wings share DRAWN ground — ' + fmt(A) +
-            ' overlaps ' + fmt(B) + '. Their tint rects + engraved labels would print on ' +
-            'top of each other (the West-Grounds #283 bug). Re-budget ONE wing in ' +
-            'GROUNDS_WINGS to a clear, mutually-DISJOINT band (verify via smoke.cjs).');
-        }
-      }
-    }
-  }
-
-  /* ── WING_META: display label, representative accent (for tint + engraved
-     label), and optional grows:N reserved-lot count. An unknown wing is allowed
-     (it just gets a default label derived from the slug). ── */
-  var WING_META = {
-    studies:     { label: 'THE STUDIES',        accent: '#cba15a' },
-    east:        { label: 'THE EAST WING',      accent: '#74b0a6' },
-    maker:       { label: "THE MAKER'S WING",   accent: '#7ad0c4' },
-    archive:     { label: 'THE ARCHIVE',        accent: '#c9a44e' },
-    reckoning:   { label: 'THE RECKONING CABINET', accent: '#c9a24a' },
-    glasshouses: { label: 'THE GLASSHOUSES',    accent: '#7fd1c7' },
-    optics:      { label: 'OPTICS',             accent: '#8fd9ff' },
-    number:      { label: 'THE NUMBER WING',    accent: '#c9a24a' },
-    amusements:  { label: 'AMUSEMENTS',         accent: '#37f7e0' },
-    works:       { label: 'THE WORKS',          accent: '#d9a441' },
-    conservatory:{ label: 'LIVING-SYSTEMS WING', accent: '#86d39a' },
-    horology:    { label: 'HOROLOGY',           accent: '#e6bd6f' },
-    aerospace:   { label: 'THE AERODROME',      accent: '#cdd6e0' },
-    sewing:      { label: 'THE SEWING ROOM',    accent: '#d9b873' },
-    stellar:     { label: 'THE STELLAR WING',   accent: '#9db4ff' },
-    vantages:    { label: 'SCENES YOU WALK INTO', accent: '#9db4ff' },
-    'moving-frame': { label: 'THE MOVING FRAME', accent: '#9db4ff' },
-    cosmology:   { label: 'COSMOLOGY',          accent: '#9db4ff' },
-    arrow:       { label: 'THE ARROW WING',     accent: '#c9a24a' },
-    'curved-country': { label: 'CURVED COUNTRY', accent: '#caa15a' },
-    induction:   { label: 'ELECTROMAGNETISM', accent: '#7fd4ff' },
-    foundry:     { label: 'THE FOUNDRY',        accent: '#e6a13a' },
-    'drawing-engines': { label: 'DRAWING ENGINES', accent: '#c9a24a' },
-    'figures-you-construct': { label: 'FIGURES YOU CONSTRUCT', accent: '#6f9fc0' },
-    'kinetics-sound': { label: 'KINETICS & SOUND', accent: '#d8a94a' },
-    'barrel-house': { label: 'THE BARREL HOUSE', accent: '#c9a24a' },
-    waves:       { label: 'WAVES',              accent: '#54d6d0' },
-    processions: { label: 'THE PROCESSIONAL GROUND', accent: '#c9a24a' },
-    statics:     { label: 'STATICS',                accent: '#c9974c' },
-    'the-deep-hearth': { label: 'THE DEEP HEARTH',  accent: '#e24a2a' }
-  };
-  function wingLabel(slug) {
-    if (WING_META[slug] && WING_META[slug].label) return WING_META[slug].label;
-    return ('THE ' + String(slug).replace(/[-_]/g, ' ') + ' WING').toUpperCase();
-  }
-  function wingAccent(slug, fallback) {
-    if (WING_META[slug] && WING_META[slug].accent) return WING_META[slug].accent;
-    return fallback || '#b29a64';
-  }
-
-  /* ── stable comparator: (order asc, then id asc) ── */
-  function byOrderId(a, b) {
-    var oa = a.order == null ? 1e9 : a.order, ob = b.order == null ? 1e9 : b.order;
-    if (oa !== ob) return oa - ob;
-    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-  }
-
-  /* ── pack n slots (each w×h) densest-first into a grid bounded by maxW.
-     cols = min(ceil(sqrt(n)), floor((maxW+G)/(w+G))), at least 1. Returns slot
-     top-lefts (origin 0,0) + the union AABB {w,h}. Deterministic. ── */
-  function packGrid(n, sw, sh, maxW, gut) {
-    gut = gut == null ? GUTTER : gut;
-    var colsByWidth = Math.max(1, Math.floor((maxW + gut) / (sw + gut)));
-    var cols = Math.min(Math.max(1, Math.ceil(Math.sqrt(n))), colsByWidth);
-    var slots = [];
-    for (var i = 0; i < n; i++) {
-      var c = i % cols, rr = Math.floor(i / cols);
-      slots.push({ x: c * (sw + gut), y: rr * (sh + gut), w: sw, h: sh });
-    }
-    var rows = Math.ceil(n / cols);
-    var usedCols = Math.min(cols, n);
-    return {
-      slots: slots,
-      w: usedCols * sw + (usedCols - 1) * gut,
-      h: rows * sh + (rows - 1) * gut
-    };
-  }
-
-  /* ── THE COLUMN-COLLAPSE GUARD (general principle, #275). A district's POI
-     placement must NEVER let a crowded room set collapse into one tall column that
-     scale-crushes every footprint (and its label) into a single illegible stack.
-     packGrid() picks cols = min(ceil√n, colsByWidth); when colsByWidth forces ONE
-     column for n rooms that don't fit the region HEIGHT, the grid is a tall stack
-     that fitInto() then crushes. This guard asserts the failure LOUD: a future
-     crowded district trips a build error pointing at the fix (widen the region, or
-     give the district a 2-D formation like the observatory's rings), rather than
-     silently overlapping. It is a no-op for every district that packs ≥ 2 columns
-     or whose single column genuinely fits its region. ── */
-  function assertNoColumnCollapse(district, n, band, region, gut, pad) {
-    if (n < 2) return;
-    var innerW = region.w - 2 * pad;
-    var colsByWidth = Math.max(1, Math.floor((innerW + gut) / (band.w + gut)));
-    if (colsByWidth >= 2) return;                         // packs ≥ 2 columns → fine
-    var colH = n * band.h + (n - 1) * gut;                // height of the 1-col stack
-    var innerH = region.h - 2 * pad;
-    if (colH <= innerH + 0.5) return;                     // the single column genuinely fits
-    throw new Error('Layout: district "' + district + '" would collapse ' + n +
-      ' rooms into ONE crushed column (region ' + region.w + '×' + region.h +
-      ' fits only 1 column of ' + band.w + 'px lots, but the stack is ' +
-      Math.round(colH) + 'px tall > ' + Math.round(innerH) + 'px). Widen the ' +
-      'region or give the district a 2-D formation (see placeObservatoryRings).');
-  }
-
-  /* ── CONCENTRIC-RING formation (#275) — the observatory's contour-map look from
-     above. n rooms become: ONE at the centre; an inner ring of up to 8 (so the
-     band reads as one contour); then outer rings holding the remainder, one
-     POI-width further out each. Ring radii + a UNIFORM backing radius `b` are SIZED
-     to the slot so (1) every pair of foot-circle backings is disjoint with a gutter,
-     and (2) the whole formation fits inside a disc of radius `halfMin` centred in
-     the region (so nothing spills past the plate frame). Deterministic; pure. ── */
-  function ringCounts(n) {
-    var rings = [], rem = n;
-    if (rem > 0) { rings.push(1); rem -= 1; }             // the centre
-    if (rem > 0) { var c = Math.min(8, rem); rings.push(c); rem -= c; }  // inner ring ≤ 8
-    var cap = 12;
-    while (rem > 0) { var k = Math.min(cap, rem); rings.push(k); rem -= k; cap += 4; }
-    return rings;                                          // [centre, inner, outer, …]
-  }
-  /* solve equal ring spacing S + the largest uniform backing radius b that keeps
-     every backing pairwise-disjoint (within-ring chord, radial spacing, centre↔ring1)
-     AND fits the outermost ring + b inside halfMin. Returns {radii, b}. */
-  function solveRingRadii(counts, halfMin, gut) {
-    var nRings = counts.length - 1;                       // outer rings (excl. centre)
-    if (nRings === 0) return { radii: [0], b: Math.max(4, Math.min(halfMin * 0.5, 18)) };
-    var best = null;
-    for (var S = 4; S <= halfMin; S += 0.25) {
-      var radii = [0];
-      for (var k = 1; k <= nRings; k++) radii.push(k * S);
-      var b = (S - gut) / 2;                               // radial spacing (centre↔r1 + r_k↔r_{k+1})
-      for (var j = 1; j <= nRings; j++) {
-        var nk = counts[j];
-        if (nk >= 2) {                                     // within-ring chord ≥ 2b+gut
-          var chordB = radii[j] * Math.sin(Math.PI / nk) - gut / 2;
-          if (chordB < b) b = chordB;
-        }
-      }
-      var fitB = halfMin - radii[nRings];                 // outermost ring + b ≤ halfMin
-      if (fitB < b) b = fitB;
-      if (b > 0 && (!best || b > best.b)) best = { radii: radii.slice(), b: b };
-    }
-    return best || { radii: [0], b: Math.max(4, halfMin * 0.4) };
-  }
-
-  /* place one observatory district's rooms as concentric rings. Emits a circular
-     foot for every room (towers stay circular; a non-tower footprint gets a centred
-     square whose inscribed circle == the backing) and the per-wing tint rects.
-     Supersedes wing-shelving for THIS district (the rise has no room to shelf wings
-     side by side); wing membership still drives breadcrumbs/links elsewhere. */
-  function placeObservatoryRings(rooms, solution) {
-    if (!rooms.length) return null;
-    var conf = DISTRICTS.observatory, region = conf.region;
-    var pad = DISTRICT_PAD, gut = 6;
-    var list = rooms.slice().sort(byOrderId);
-    var n = list.length;
-    var cx = region.x + region.w / 2, cy = region.y + region.h / 2;
-    var halfMin = Math.min(region.w - 2 * pad, region.h - 2 * pad) / 2;
-    var counts = ringCounts(n);
-    var sol = solveRingRadii(counts, halfMin, gut);
-    var b = sol.b, radii = sol.radii;
-
-    // assign each room to a (ring, slot-within-ring); centre first, then rings.
-    var idx = 0;
-    var allCircles = [];
-    for (var ri = 0; ri < counts.length; ri++) {
-      var cnt = counts[ri], R = radii[ri];
-      // offset each ring's start bearing by half a step from the previous so a
-      // cardinal POI sits beside its neighbour's diagonal — keeps backings clear
-      // even when two sub-rings are close (the design's alternating-bearing note).
-      var base = (ri % 2 === 0) ? -Math.PI / 2 : (-Math.PI / 2 + Math.PI / Math.max(1, cnt));
-      for (var s = 0; s < cnt && idx < n; s++) {
-        var ang = base + (cnt > 1 ? (2 * Math.PI * s / cnt) : 0);
-        var px = cx + (R === 0 ? 0 : R * Math.cos(ang));
-        var py = cy + (R === 0 ? 0 : R * Math.sin(ang));
-        var room = list[idx++];
-        // a 2b×2b slot CENTRED on (px,py). setFoot derives both a tower's circle
-        // (centre = slot.x+slot.w/2 = px, r = b) and a non-tower's square (inscribed
-        // circle = b) from the SAME top-left origin, so every backing is centred on
-        // its ring point regardless of footprint.
-        var slot = { x: px - b, y: py - b, w: 2 * b, h: 2 * b };
-        setFoot(solution, room, slot);
-        allCircles.push({ cx: px, cy: py, r: b, room: room });
-      }
-    }
-
-    // emit per-wing tint rects (a bounded tint over each wing's members), so wing
-    // membership still reads on the plate even under the ring formation.
-    var wingGroups = {};
-    for (var w = 0; w < allCircles.length; w++) {
-      var wid = allCircles[w].room.wing || '';
-      if (wid === '') continue;
-      (wingGroups[wid] = wingGroups[wid] || []).push(allCircles[w]);
-    }
-    var wkeys = Object.keys(wingGroups).sort();
-    for (var wk = 0; wk < wkeys.length; wk++) {
-      var grp = wingGroups[wkeys[wk]];
-      var rects = grp.map(function (c) { return { x: c.cx - c.r, y: c.cy - c.r, w: 2 * c.r, h: 2 * c.r }; });
-      var wu = rectUnion(rects);
-      solution.wingRects.push({
-        district: 'observatory', wing: wkeys[wk],
-        label: wingLabel(wkeys[wk]), accent: wingAccent(wkeys[wk], conf.hue),
-        x: wu.x - 3, y: wu.y - 3, w: wu.w + 6, h: wu.h + 6
-      });
-    }
-
-    // the district union = the bounding box of every backing circle.
-    var du = rectUnion(allCircles.map(function (c) {
-      return { x: c.cx - c.r, y: c.cy - c.r, w: 2 * c.r, h: 2 * c.r };
-    }));
-    return du;
-  }
-
-  /* ── shelf-pack a list of {w,h} blocks into a frame of inner width fw, first-fit
-     by row (skyline), top-left origin, GUTTER between. Returns block offsets +
-     the union AABB. Used to lay wing blocks side by side in a district. ── */
-  function shelfPack(blocks, fw, gut) {
-    gut = gut == null ? GUTTER : gut;
-    var offs = [], cx = 0, cy = 0, rowH = 0, unionW = 0, unionH = 0;
-    for (var i = 0; i < blocks.length; i++) {
-      var b = blocks[i];
-      if (cx > 0 && cx + b.w > fw) { cx = 0; cy += rowH + gut; rowH = 0; }
-      offs.push({ x: cx, y: cy, w: b.w, h: b.h });
-      cx += b.w + gut;
-      if (b.h > rowH) rowH = b.h;
-      if (offs[i].x + b.w > unionW) unionW = offs[i].x + b.w;
-      if (cy + b.h > unionH) unionH = cy + b.h;
-    }
-    return { offs: offs, w: unionW, h: unionH };
-  }
-
-  /* fit a packed content AABB (w,h at origin) into a target region, returning a
-     transform {ox,oy,s} that centres + uniformly scales DOWN (never up past 1)
-     so the content sits inside region with DISTRICT_PAD breathing room. */
-  function fitInto(contentW, contentH, region, pad) {
-    pad = pad == null ? DISTRICT_PAD : pad;
-    var availW = region.w - 2 * pad, availH = region.h - 2 * pad;
-    var s = 1;
-    if (contentW > availW) s = Math.min(s, availW / contentW);
-    if (contentH > availH) s = Math.min(s, availH / contentH);
-    var ox = region.x + pad + (availW - contentW * s) / 2;
-    var oy = region.y + pad + (availH - contentH * s) / 2;
-    return { ox: ox, oy: oy, s: s };
-  }
-
-  function clampToField(box) {
-    var x = Math.max(FIELD.x, Math.min(box.x, FIELD.x + FIELD.w - box.w));
-    var y = Math.max(FIELD.y, Math.min(box.y, FIELD.y + FIELD.h - box.h));
-    return { x: x, y: y, w: box.w, h: box.h };
-  }
-
-  function rectUnion(rects) {
-    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (var i = 0; i < rects.length; i++) {
-      var r = rects[i];
-      if (r.x < x0) x0 = r.x; if (r.y < y0) y0 = r.y;
-      if (r.x + r.w > x1) x1 = r.x + r.w; if (r.y + r.h > y1) y1 = r.y + r.h;
-    }
+  /* ── tiny geometry helpers (byOrderId + rectUnion lifted from formations, §1.9). ── */
+  var byOrderId = Formations.byOrderId;
+  function footCentreOf(f) { return f.r != null ? { x: f.x, y: f.y } : { x: f.x + f.w / 2, y: f.y + f.h / 2 }; }
+  function footBBoxOf(f)  { return f.r != null ? { x: f.x - f.r, y: f.y - f.r, w: f.r * 2, h: f.r * 2 } : { x: f.x, y: f.y, w: f.w, h: f.h }; }
+  function rectsOverlap(a, b) { return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h; }
+  function unionRect(a, b) {
+    var x0 = Math.min(a.x, b.x), y0 = Math.min(a.y, b.y);
+    var x1 = Math.max(a.x + a.w, b.x + b.w), y1 = Math.max(a.y + a.h, b.y + b.h);
     return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
   }
+  function titleCase(s) { return String(s).toLowerCase().replace(/\b\w/g, function (c) { return c.toUpperCase(); }); }
 
-  /* ── the core solve ──────────────────────────────────────────────────────── */
-  function solve(places, opts) {
-    opts = opts || {};
-    var solution = {
-      foot: {},        // id → {x,y,w,h} or {x,y,r} (tower)
-      footMeta: {},    // id → {tier, district, wing, footprint}
-      wingRects: [],   // [{district, wing, label, accent, x,y,w,h}]
-      districtRects: [], // [{district, label, hue, tint, style, x,y,w,h, anchor}]
-      graph: { door: null, spine: null, avenues: [], aisles: [], stubs: [] },
-      door: null
+  /* ── the frame's bounding box + local centre. Box → {w,h}; disc {r} → 2r×2r. ── */
+  function frameBox(frame) {
+    if (frame.r != null) return { w: 2 * frame.r, h: 2 * frame.r, cx: frame.r, cy: frame.r };
+    return { w: frame.w, h: frame.h, cx: frame.w / 2, cy: frame.h / 2 };
+  }
+
+  /* ── CLUSTER label/accent (cluster-keyed; §1.9 wingLabel/wingAccent kept). ── */
+  function wingLabel(slug) { var m = Contract.CLUSTER_META[slug]; return m ? m.label : titleCase(String(slug).replace(/-/g, ' ')); }
+  function wingAccent(slug, fallback) { var m = Contract.CLUSTER_META[slug]; return (m && m.accent) || fallback || '#c9a24a'; }
+
+  /* ── FLATTEN the polar solve ({world, manor, districts}) into one world model the facade
+       reads (centre/R/Rgate/… promoted; districts + manor kept). ── */
+  function normalizeWorld(s) {
+    var w = s.world;
+    return {
+      viewBox: w.viewBox, W: w.W, H: w.H, centre: w.centre, R: w.R, maxRho: w.maxRho, tiers: w.tiers,
+      Rsky: w.Rsky, Rgate: w.Rgate, skyOuter: w.skyOuter, skyBand: w.skyBand, manorRho: w.manorRho,
+      K_MIN: w.K_MIN, K_MAX: w.K_MAX, K_LOD: w.K_LOD, manor: s.manor, districts: s.districts
     };
-
-    // ── 1. validate + group ──
-    var byDistrict = {};
-    for (var i = 0; i < places.length; i++) {
-      var r = places[i];
-      if (!DISTRICTS[r.district]) {
-        throw new Error('Layout: room "' + r.id + '" declares unknown district "' +
-          r.district + '". Add it to DISTRICTS or fix the declaration.');
-      }
-      if (r.locked) continue;   // beneath/undercroft is placed by revealUndercroft
-      (byDistrict[r.district] = byDistrict[r.district] || []).push(r);
-    }
-
-    // ── 2..6: place each district's rooms ──
-    placeManor(byDistrict.manor || [], solution);
-    placeGrounds(byDistrict.grounds || [], solution);
-    placeObservatory(byDistrict.observatory || [], solution);
-    placeSimpleDistrict('outbuilding', byDistrict.outbuilding || [], solution);
-    placeSimpleDistrict('cavern', byDistrict.cavern || [], solution);
-    placeLowerWorks(byDistrict.lowerworks || [], solution);
-
-    // ── HARD GUARD (#283): no two GROUNDS wings may share DRAWN ground (tint rect +
-    //    engraved label). A build error here means a GROUNDS_WINGS budget collided a
-    //    sibling's slice — re-budget one wing to a clear band. See the guard's header. ──
-    assertGroundsWingsDisjoint(solution);
-
-    // ── 7: the circulation graph ──
-    buildGraph(solution);
-
-    return solution;
   }
 
-  /* assign footprint geometry for one room into a slot rect (already absolute) */
-  function setFoot(solution, r, slot) {
-    var meta = { tier: r.tier, district: r.district, wing: r.wing || null,
-                 footprint: r.footprint || null };
-    solution.footMeta[r.id] = meta;
-    if (r.footprint === 'tower') {
-      var rad = Math.min(slot.w, slot.h) / 2;
-      solution.foot[r.id] = { x: slot.x + slot.w / 2, y: slot.y + slot.h / 2, r: rad };
-    } else {
-      solution.foot[r.id] = { x: slot.x, y: slot.y, w: slot.w, h: slot.h };
-    }
+  /* ── the world derives from CONTRACTS alone → cache it (deterministic, never mutated).
+       An injected table (opts.contracts, the neg-controls) is solved FRESH, uncached. ── */
+  var _world = null;
+  function estateWorld() {
+    if (!_world) _world = normalizeWorld(Polar.solve(Contract.CONTRACTS, { road: Contract.ROAD, lanes: Contract.LANES }));
+    return _world;
+  }
+  function worldFor(contracts) {
+    return (contracts === Contract.CONTRACTS) ? estateWorld()
+      : normalizeWorld(Polar.solve(contracts, { road: Contract.ROAD, lanes: Contract.LANES }));
   }
 
-  /* group rooms of one district by wing, pack each wing, shelf the wing blocks,
-     fit the content into `region`, emit footprints + wing rects + a district rect.
-     `regionOverride` lets the grounds place wings into their own sub-regions. */
-  function packDistrictInto(district, rooms, region, solution, opts) {
-    opts = opts || {};
-    if (!rooms.length) return null;
-    var conf = DISTRICTS[district];
-    var GUT = gutterFor(district), WPAD = wingPadFor(district), DPAD = districtPadFor(district);
-
-    // group by wing (undefined wing → '' remainder bucket)
-    var wings = {};
-    for (var i = 0; i < rooms.length; i++) {
-      var w = rooms[i].wing || '';
-      (wings[w] = wings[w] || []).push(rooms[i]);
-    }
-    var wingIds = Object.keys(wings).sort();
-
-    // GENERAL PRINCIPLE (#275): a district whose rooms can't fit a single column's
-    // width must overflow into a SECOND dimension, never stack one crushed column.
-    // Assert loud here so a future crowded district fails at build time pointing at
-    // the fix (the observatory escapes this via its concentric-ring formation).
-    var tierBand = bandFor((rooms[0] && rooms[0].tier) || 2, district);
-    assertNoColumnCollapse(district, rooms.length, tierBand, region, GUT, DPAD);
-
-    // pack each wing into a local grid; collect its block size + per-room slots
-    var blocks = [];
-    var wingPacks = {};
-    var frameInnerW = region.w - 2 * DPAD;
-    for (var wi = 0; wi < wingIds.length; wi++) {
-      var wid = wingIds[wi];
-      var list = wings[wid].slice().sort(byOrderId);
-      // all rooms in a wing share a tier (kin look alike); use the first room's band
-      var band = bandFor(list[0].tier, district);
-      var pk = packGrid(list.length, band.w, band.h, frameInnerW - 2 * WPAD, GUT);
-      wingPacks[wid] = { list: list, pack: pk };
-      // a wing block is its slot-union + WPAD all around
-      blocks.push({ wid: wid, w: pk.w + 2 * WPAD, h: pk.h + 2 * WPAD });
-    }
-    // shelf-pack the wing blocks (first-fit-decreasing by area for tighter packing)
-    var order = blocks.slice().sort(function (a, b) { return b.w * b.h - a.w * a.h; });
-    var sp = shelfPack(order, frameInnerW, GUT);
-    // map back: order[k] sits at sp.offs[k]
-    var blockOff = {};
-    for (var k = 0; k < order.length; k++) blockOff[order[k].wid] = sp.offs[k];
-
-    // fit the packed content into the region
-    var ft = fitInto(sp.w, sp.h, region, DPAD);
-
-    // emit absolute footprints + wing rects
-    var allSlots = [];
-    for (var wj = 0; wj < wingIds.length; wj++) {
-      var wid2 = wingIds[wj];
-      var bo = blockOff[wid2];
-      var wp = wingPacks[wid2];
-      var wingSlotRects = [];
-      for (var si = 0; si < wp.list.length; si++) {
-        var s = wp.pack.slots[si];
-        // local: blockOff + WPAD + slot, then scale+offset
-        var lx = bo.x + WPAD + s.x, ly = bo.y + WPAD + s.y;
-        var abs = {
-          x: ft.ox + lx * ft.s,
-          y: ft.oy + ly * ft.s,
-          w: s.w * ft.s,
-          h: s.h * ft.s
-        };
-        setFoot(solution, wp.list[si], abs);
-        wingSlotRects.push(abs);
-        allSlots.push(abs);
-      }
-      // a wing rect (even a solo wing gets a bounded tint) — only if the wing is named
-      if (wid2 !== '') {
-        var wu = rectUnion(wingSlotRects);
-        solution.wingRects.push({
-          district: district, wing: wid2,
-          label: wingLabel(wid2), accent: wingAccent(wid2, conf.hue),
-          x: wu.x - WPAD * ft.s, y: wu.y - WPAD * ft.s,
-          w: wu.w + 2 * WPAD * ft.s, h: wu.h + 2 * WPAD * ft.s
-        });
-      }
-    }
-    var du = rectUnion(allSlots);
-    return du;
-  }
-
-  /* ── THE MANOR — a GREAT HOUSE, not one crushed column (#410). Partition the 20 rooms
-     across three sub-lots (MANOR_BLOCKS): a taller CENTRAL block seated higher, flanked by
-     lower LEFT + RIGHT wings, each packed in its own region by placeManorBlock. The
-     district rect is the UNION of the three blocks (wider + shorter + irregular); the three
-     block hulls are stashed on solution.manorLots so drawManorInterior can draw the
-     central-block-plus-wings massing (a great-house silhouette) rather than one box. ── */
-  function placeManor(rooms, solution) {
-    if (!rooms.length) return;
-    var conf = DISTRICTS.manor;
-    var byWing = {};
-    for (var i = 0; i < rooms.length; i++) {
-      var w = rooms[i].wing || '';
-      (byWing[w] = byWing[w] || []).push(rooms[i]);
-    }
-    // effective per-block wing lists. TOTALITY: any manor wing NOT named in the block
-    // table (or the no-wing bucket '') is folded into the first block, so EVERY manor room
-    // is placed — the packer never silently drops a room (a future wing, or a fixture's
-    // wingless manor room, still gets a footprint rather than an undefined-foot crash).
-    var assigned = {};
-    for (var a = 0; a < MANOR_BLOCK_ORDER.length; a++)
-      MANOR_BLOCKS[MANOR_BLOCK_ORDER[a]].wings.forEach(function (w) { assigned[w] = true; });
-    var extra = Object.keys(byWing).filter(function (w) { return !assigned[w]; }).sort();
-    var effWings = {};
-    MANOR_BLOCK_ORDER.forEach(function (key) { effWings[key] = MANOR_BLOCKS[key].wings.slice(); });
-    if (extra.length) effWings[MANOR_BLOCK_ORDER[0]] = effWings[MANOR_BLOCK_ORDER[0]].concat(extra);
-
-    var lots = [], allDU = [];
-    for (var k = 0; k < MANOR_BLOCK_ORDER.length; k++) {
-      var key = MANOR_BLOCK_ORDER[k], blk = MANOR_BLOCKS[key];
-      var du = placeManorBlock(blk.region, effWings[key], byWing, solution, conf);
-      if (du) { lots.push({ key: key, x: du.x, y: du.y, w: du.w, h: du.h }); allDU.push(du); }
-    }
-    solution.manorLots = lots;   // the 3 massing blocks (central/left/right), for the interior drawer
-    emitDistrictRect('manor', rectUnion(allDU), solution);
-  }
-
-  /* pack ONE manor block: stack its wings as bands (each MULTI-room wing keeps its own
-     rows; all 1-room wings PAIR into one shared trailing band, so five single-room wings
-     don't each hog a full row), size a uniform lot to FILL the block region at the tier-2
-     building aspect (capped legible), centre each row, setFoot every room, emit a per-wing
-     tint rect (bands never share a row ⇒ tints never interleave), and return the block
-     hull. Pure + deterministic; mirrors the bespoke-placer contract (placeNumberPascal). */
-  function placeManorBlock(region, wingOrder, byWing, solution, conf) {
-    var GUT = 12, VGAP = 13, PAD = 8, COLS = 2, LOT_MAX = 42;
-    var aspect = SIZE_BAND[2].h / SIZE_BAND[2].w;           // rooms read as tier-2 buildings
-    // bands: each multi-room wing → its own 2-col band; all 1-room wings → one shared band.
-    var multi = [], singles = [];
-    for (var i = 0; i < wingOrder.length; i++) {
-      var wid = wingOrder[i], list = (byWing[wid] || []).slice().sort(byOrderId);
-      if (!list.length) continue;
-      (list.length === 1 ? singles : multi).push({ wid: wid, list: list });
-    }
-    var bands = multi.map(function (m) {
-      return { cells: m.list.map(function (r) { return { wid: m.wid, room: r }; }), cols: COLS };
-    });
-    if (singles.length) {
-      // ≥2 single-room wings STACK in ONE column so no two share a row — else their engraved
-      // wing labels (each ~a full name wide) print on top of each other (the #410 tour blemish
-      // where THE BARREL HOUSE overlapped KINETICS & SOUND). A lone single keeps 1 col too.
-      bands.push({ cells: singles.map(function (s) { return { wid: s.wid, room: s.list[0] }; }), cols: 1 });
-    }
-    if (!bands.length) return null;
-    // global row index across bands → uniform row spacing over the block.
-    var R = 0, maxCols = 1;
-    for (var bi = 0; bi < bands.length; bi++) {
-      bands[bi].startRow = R;
-      bands[bi].rows = Math.ceil(bands[bi].cells.length / bands[bi].cols);
-      R += bands[bi].rows;
-      if (bands[bi].cols > maxCols) maxCols = bands[bi].cols;
-    }
-    var availW = region.w - 2 * PAD, availH = region.h - 2 * PAD;
-    // fill: the largest lot (aspect-locked) that seats R rows in availH AND maxCols in availW.
-    var sh = Math.min(
-      (availH - (R - 1) * VGAP) / R,
-      ((availW - (maxCols - 1) * GUT) / maxCols) * aspect,
-      LOT_MAX * aspect
-    );
-    var sw = sh / aspect;
-    var stackH = R * sh + (R - 1) * VGAP;
-    var top = region.y + (region.h - stackH) / 2;
-    var cx = region.x + region.w / 2;
-    var slotRects = [];
-    for (var b = 0; b < bands.length; b++) {
-      var band = bands[b], n = band.cells.length, cols = band.cols, wingSlots = {};
-      for (var ci = 0; ci < n; ci++) {
-        var col = ci % cols, rr = Math.floor(ci / cols), gRow = band.startRow + rr;
-        var usedInRow = Math.min(cols, n - rr * cols);
-        var rowW = usedInRow * sw + (usedInRow - 1) * GUT;
-        var slot = { x: cx - rowW / 2 + col * (sw + GUT), y: top + gRow * (sh + VGAP), w: sw, h: sh };
-        setFoot(solution, band.cells[ci].room, slot);
-        slotRects.push(slot);
-        (wingSlots[band.cells[ci].wid] = wingSlots[band.cells[ci].wid] || []).push(slot);
-      }
-      for (var wk in wingSlots) {
-        if (wk === '') continue;                             // the no-wing bucket gets no engraved tint
-        var wu = rectUnion(wingSlots[wk]);
-        solution.wingRects.push({
-          district: 'manor', wing: wk, label: wingLabel(wk), accent: wingAccent(wk, conf.hue),
-          x: wu.x - 5, y: wu.y - 5, w: wu.w + 10, h: wu.h + 10
-        });
-      }
-    }
-    return rectUnion(slotRects);
-  }
-
-  /* ── THE PASCAL-TRIANGLE formation (#328) — the number wing's bespoke 2-D layout,
-     the grounds-side echo of placeObservatoryRings (#275). The wing's nine tier-2
-     rooms cannot fit ≥2 columns in a tight grounds sub-region, so the shared grid
-     packed them as ONE crushed column of 9 (14×10px specks). Instead lay the rooms as
-     a CENTRED PASCAL'S TRIANGLE: row r holds (r+1) rooms; every row is centred over
-     the apex; the final partial row SPREADS its rooms symmetrically across a span one
-     pitch wider than the row above, so the rows STRICTLY widen toward the base (a real
-     triangle) and the silhouette stays balanced — the live n=9 base of 3 sits at the
-     far-left, centre, and far-right of a 4-wide base, "a balancing gap". SCALES as the
-     wing grows (a 10th room completes the base; an 11th opens a new base row). The
-     uniform slot is sized to FILL the sub-region at the tier-2 building aspect, well
-     above the crush. Pure + deterministic; mirrors placeObservatoryRings's contract
-     (setFoot each room, push one wing tint-rect, return the slot rects). ── */
-  function triangleRows(n) {
-    var rows = [], placed = 0, cap = 1;
-    while (placed < n) { var k = Math.min(cap, n - placed); rows.push(k); placed += k; cap++; }
-    // never hang a single room alone on the base — merge a lone last room up so the base
-    // stays ≥ 2 wide (keeps strict-widening + a balanced silhouette for the n=2,4,7,11,…
-    // "triangular+1" counts the wing will pass through as it grows).
-    if (rows.length >= 2 && rows[rows.length - 1] === 1) { rows[rows.length - 2] += 1; rows.pop(); }
-    return rows;
-  }
-  function placeNumberPascal(list, region, solution, conf) {
-    var rows = triangleRows(list.length);
-    var R = rows.length;
-    var gh = 11, gv = 7, pad = 9;                            // row gutters + slot-union→tint pad
-    // each row r spreads its rooms across spanU(r) slot-pitches, centred. spanU strictly
-    // increases down the rows (≥ r, and ≥ count−1 so rooms never collide), so the base is
-    // the widest row and every row is strictly wider than the one above it.
-    var spanU = [];
-    for (var r = 0; r < R; r++) spanU.push(Math.max(r, rows[r] - 1));
-    var baseU = spanU[R - 1];                                // widest row's span, in pitches
-    var aspect = SIZE_BAND[2].h / SIZE_BAND[2].w;            // rooms read as tier-2 grounds buildings
-    var availW = region.w - 2 * pad, availH = region.h - 2 * pad;
-    // base pixel width = baseU·pitchX + sw = (baseU+1)·sw + baseU·gh ≤ availW;
-    // total height = R·sh + (R−1)·gv ≤ availH, sh = aspect·sw.
-    var swByW = (availW - baseU * gh) / (baseU + 1);
-    var swByH = (availH - (R - 1) * gv) / (R * aspect);
-    var sw = Math.min(swByW, swByH, SIZE_BAND[2].w);         // fill, but never past a tier-2 lot
-    var sh = aspect * sw;
-    var pitchX = sw + gh, pitchY = sh + gv;
-    var formH = R * sh + (R - 1) * gv;
-    var cx = region.x + region.w / 2;
-    var top = region.y + (region.h - formH) / 2;            // vertically centred in the region
-    var slotRects = [], used = 0;
-    for (var ri = 0; ri < R; ri++) {
-      var c = rows[ri], ext = spanU[ri] * pitchX, rowY = top + ri * pitchY;
-      for (var s = 0; s < c; s++) {
-        var t = (c === 1) ? 0.5 : s / (c - 1);             // 0..1 across the row's span
-        var slotCx = cx - ext / 2 + t * ext;
-        var slot = { x: slotCx - sw / 2, y: rowY, w: sw, h: sh };
-        setFoot(solution, list[used++], slot);
-        slotRects.push(slot);
-      }
-    }
-    // one wing tint-rect over the slot union (+ pad), exactly like placeObservatoryRings,
-    // so the engraved "THE NUMBER WING" label + accent wash still read on the plate.
-    var wu = rectUnion(slotRects);
-    solution.wingRects.push({
-      district: 'grounds', wing: 'number',
-      label: wingLabel('number'), accent: wingAccent('number', conf.hue),
-      x: wu.x - pad, y: wu.y - pad, w: wu.w + 2 * pad, h: wu.h + 2 * pad
-    });
-    return slotRects;
-  }
-
-  /* the GROUNDS: each wing goes to its own sub-region (GROUNDS_WINGS), so the
-     grounds spread across the field instead of crowding one block. */
-  function placeGrounds(rooms, solution) {
-    if (!rooms.length) return;
-    var conf = DISTRICTS.grounds;
-    // bucket rooms by wing → sub-region
-    var wings = {};
-    for (var i = 0; i < rooms.length; i++) {
-      var w = rooms[i].wing || '_remainder';
-      (wings[w] = wings[w] || []).push(rooms[i]);
-    }
-    var allDU = [];
-    var wingIds = Object.keys(wings).sort();
-    for (var wj = 0; wj < wingIds.length; wj++) {
-      var wid = wingIds[wj];
-      var list = wings[wid].slice().sort(byOrderId);
-      // pick a sub-region: conservatory-wing rooms use the east band
-      var sub = GROUNDS_WINGS[wid];
-      if (!sub && wid === 'conservatory') sub = GROUNDS_WINGS.conservatory_band;
-      if (!sub) sub = GROUNDS_WINGS[wid] || { x: FIELD.x, y: FIELD.y + 480, w: 240, h: 130 };
-      // THE NUMBER WING takes a bespoke Pascal's-triangle formation (#328) instead of
-      // the shared grid (which collapsed its 9 rooms into one crushed column) — the
-      // grounds-side echo of the observatory's rings. It setFoots its own rooms + pushes
-      // its own wing tint-rect, and returns the slot rects to fold into the district union.
-      if (wid === 'number') {
-        var triRects = placeNumberPascal(list, sub, solution, conf);
-        for (var ti = 0; ti < triRects.length; ti++) allDU.push(triRects[ti]);
-        continue;
-      }
-      var band = bandFor(list[0].tier, 'grounds');
-      var pk = packGrid(list.length, band.w, band.h, sub.w - 2 * WING_PAD);
-      var ft = fitInto(pk.w + 2 * WING_PAD, pk.h + 2 * WING_PAD, sub, 6);
-      var slotRects = [];
-      for (var si = 0; si < list.length; si++) {
-        var s = pk.slots[si];
-        var lx = WING_PAD + s.x, ly = WING_PAD + s.y;
-        var abs = clampToField({
-          x: ft.ox + lx * ft.s, y: ft.oy + ly * ft.s,
-          w: s.w * ft.s, h: s.h * ft.s
-        });
-        setFoot(solution, list[si], abs);
-        slotRects.push(abs);
-        allDU.push(abs);
-      }
-      if (wid !== '_remainder') {
-        var wu = rectUnion(slotRects);
-        var pad = WING_PAD * ft.s;
-        solution.wingRects.push({
-          district: 'grounds', wing: wid,
-          label: wingLabel(wid), accent: wingAccent(wid, conf.hue),
-          x: wu.x - pad, y: wu.y - pad, w: wu.w + 2 * pad, h: wu.h + 2 * pad
-        });
-      }
-    }
-    var du = rectUnion(allDU);
-    emitDistrictRect('grounds', du, solution);
-  }
-
-  /* the OBSERVATORY: a concentric-ring formation (the rise's contour-map look),
-     NOT a packed grid (#275 — the grid collapsed its ~13 rooms into one crushed,
-     overlapping column). See placeObservatoryRings. */
-  function placeObservatory(rooms, solution) {
-    if (!rooms.length) return;
-    var du = placeObservatoryRings(rooms, solution);
-    emitDistrictRect('observatory', du, solution);
-  }
-
-  /* a SIMPLE district (outbuilding/cavern): pack into its own region.
-     These have no named wings — one bounded precinct. */
-  function placeSimpleDistrict(district, rooms, solution) {
-    if (!rooms.length) return;
-    var conf = DISTRICTS[district];
-    var du = packDistrictInto(district, rooms, conf.region, solution);
-    emitDistrictRect(district, du, solution);
-  }
-
-  /* ── THE COURSED-ASHLAR formation (#335) — THE LOWER WORKS' bespoke 2-D layout, the
-     structural-precinct echo of placeNumberPascal (#328) / placeObservatoryRings (#275).
-     The masonry rooms (a keystone arch, an overhang) are laid as a COURSE of EQUAL dry-cut
-     stones — a horizontal row, every stone the same size, each sized to FILL the lot — that
-     WRAPS to stacked courses (a corbel) as the precinct grows, base widest. All stones are
-     equal regardless of declared tier (the masonry metaphor: dressed ashlar in a course),
-     and read as landscape blocks (the tier-2 building aspect), well above any speck crush.
-     SCALES by lengthening the course / adding a course, so a structural sibling never elbows
-     a neighbour — it just extends the masonry. Pure + deterministic; mirrors the bespoke-
-     placer contract (setFoot each room, push ONE wing tint-rect, return the slot rects;
-     the caller emitDistrictRect's the district hull). ── */
-  function placeLowerWorks(rooms, solution) {
-    if (!rooms.length) return;
-    var conf = DISTRICTS.lowerworks, region = conf.region;
-    var list = rooms.slice().sort(byOrderId);
-    var n = list.length;
-    var gh = 10, gv = 9, pad = 8;                           // stone gutters (h/v) + slot-union→tint pad
-    var aspect = SIZE_BAND[2].h / SIZE_BAND[2].w;           // stones read as landscape ashlar blocks
-    var availW = region.w - 2 * pad, availH = region.h - 2 * pad;
-    // choose the course layout (C stones/course × R courses): lay the FEWEST courses (one
-    // long low course for the live 2 rooms), each stone FILLING the lot width, and WRAP to a
-    // new course only when another stone would shrink the course below the legibility floor —
-    // the masonry intent (a row of dressed ashlar, not a tall column). Rt rising → fewer
-    // stones per course → WIDER stones, so the first Rt that clears the floor is the longest
-    // legible course. Fall back to the widest-stone layout if no course count clears it.
-    var MIN_SW = 30;                                        // the no-speck floor (crowded siblings sit ~28-31px)
-    var chosen = null, fallback = null;
-    for (var Rt = 1; Rt <= n; Rt++) {
-      var Ct = Math.ceil(n / Rt);
-      var swByW = (availW - (Ct - 1) * gh) / Ct;            // fill the course width
-      var shByH = (availH - (Rt - 1) * gv) / Rt;            // fill the stack height
-      var swT = Math.min(swByW, shByH / aspect, SIZE_BAND[1].w);  // aspect-locked, capped at a grand lot
-      if (swT <= 0) continue;
-      if (!fallback || swT > fallback.sw) fallback = { C: Ct, R: Rt, sw: swT };
-      if (swT >= MIN_SW && !chosen) chosen = { C: Ct, R: Rt, sw: swT };
-    }
-    var best = chosen || fallback;
-    var C = best.C, R = best.R, sw = best.sw, sh = sw * aspect;
-    var pitchX = sw + gh, pitchY = sh + gv;
-    var totalH = R * sh + (R - 1) * gv;
-    var cx = region.x + region.w / 2;
-    var top = region.y + (region.h - totalH) / 2;           // the corbel is vertically centred
-    var slotRects = [], used = 0;
-    for (var r = 0; r < R; r++) {
-      // the TOP course (r=0) may be partial; every lower course is full C — so the BASE
-      // is the widest, a real corbel (a stack that never hangs a wide row over a narrow one).
-      var inThis = (r === 0) ? (n - (R - 1) * C) : C;
-      var courseW = inThis * sw + (inThis - 1) * gh;
-      var left = cx - courseW / 2;
-      var rowY = top + r * pitchY;
-      for (var s = 0; s < inThis; s++) {
-        var slot = { x: left + s * pitchX, y: rowY, w: sw, h: sh };
-        setFoot(solution, list[used++], slot);
-        slotRects.push(slot);
-      }
-    }
-    // ONE wing tint-rect over the slot union (+ pad) — the engraved "STATICS" label + accent
-    // wash still read inside the district (emitted here now, not by placeGrounds).
-    var wid = list[0].wing || 'statics';
-    var wu = rectUnion(slotRects);
-    solution.wingRects.push({
-      district: 'lowerworks', wing: wid,
-      label: wingLabel(wid), accent: wingAccent(wid, conf.hue),
-      x: wu.x - pad, y: wu.y - pad, w: wu.w + 2 * pad, h: wu.h + 2 * pad
-    });
-    emitDistrictRect('lowerworks', wu, solution);
-  }
-
-  function emitDistrictRect(district, du, solution) {
-    if (!du) return;
-    var conf = DISTRICTS[district];
-    var pad = districtPadFor(district);
-    solution.districtRects.push({
-      district: district, label: conf.label, hue: conf.hue, tint: conf.tint,
-      style: conf.style, anchor: !!conf.anchor,
-      x: du.x - pad, y: du.y - pad, w: du.w + 2 * pad, h: du.h + 2 * pad
-    });
-  }
-
-  /* a district rect's south-centre gate point (where its avenue terminates) */
-  function gateOf(dr) {
-    if (dr.district === 'observatory') return { x: dr.x + dr.w / 2, y: dr.y + dr.h }; // gate at base of rise
-    return { x: dr.x + dr.w / 2, y: dr.y };  // gate at the north (manor-facing) edge
-  }
-
-  /* build the circulation graph: door → spine → district avenues → wing aisles
-     → room stubs. Coordinates from the solved district/wing/footprint rects. */
-  function buildGraph(solution) {
-    var manorRect = null;
-    for (var i = 0; i < solution.districtRects.length; i++)
-      if (solution.districtRects[i].district === 'manor') manorRect = solution.districtRects[i];
-    var manorRegion = DISTRICTS.manor.region;
-    // the FRONT DOOR: south-centre of the manor region (historic ~x721 y504)
-    var door = { x: manorRegion.x + manorRegion.w / 2, y: manorRegion.y + manorRegion.h };
-    solution.door = door;
-    solution.graph.door = door;
-
-    // the SPINE: a short heavy avenue rising up the manor centre from the door
-    var spineTop = { x: door.x, y: manorRegion.y + manorRegion.h * 0.18 };
-    solution.graph.spine = { x0: door.x, y0: door.y, x1: spineTop.x, y1: spineTop.y };
-
-    // DISTRICT AVENUES: from the door to each non-manor district gate
-    for (var d = 0; d < solution.districtRects.length; d++) {
-      var dr = solution.districtRects[d];
-      if (dr.district === 'manor') continue;
-      var gate = gateOf(dr);
-      solution.graph.avenues.push({
-        district: dr.district, label: 'to ' + titleCase(dr.label),
-        x0: door.x, y0: door.y, x1: gate.x, y1: gate.y
-      });
-    }
-
-    // WING AISLES: from each wing rect's nearest edge toward the door, + a stub
-    // to each room footprint edge (kin connectors). Manor wings get short stubs.
-    for (var w2 = 0; w2 < solution.wingRects.length; w2++) {
-      var wr = solution.wingRects[w2];
-      var wc = { x: wr.x + wr.w / 2, y: wr.y + wr.h / 2 };
-      // the wing's gate: the point on its boundary nearest the door
-      var gx = Math.max(wr.x, Math.min(door.x, wr.x + wr.w));
-      var gy = Math.max(wr.y, Math.min(door.y, wr.y + wr.h));
-      solution.graph.aisles.push({
-        district: wr.district, wing: wr.wing,
-        x0: gx, y0: gy, x1: wc.x, y1: wc.y
-      });
-    }
-
-    // ROOM STUBS: short connector from each footprint edge toward its wing centre
-    for (var id in solution.foot) {
-      var f = solution.foot[id];
-      var c = f.r != null ? { x: f.x, y: f.y } : { x: f.x + f.w / 2, y: f.y + f.h / 2 };
-      var meta = solution.footMeta[id];
-      // find the wing rect this room belongs to (for a short kin stub)
-      var target = null;
-      if (meta && meta.wing) {
-        for (var wk = 0; wk < solution.wingRects.length; wk++) {
-          var w3 = solution.wingRects[wk];
-          if (w3.district === meta.district && w3.wing === meta.wing) {
-            target = { x: w3.x + w3.w / 2, y: w3.y + w3.h / 2 }; break;
-          }
-        }
-      }
-      if (!target) target = door;
-      solution.graph.stubs.push({ id: id, x0: c.x, y0: c.y, x1: target.x, y1: target.y });
-    }
-  }
-
-  function titleCase(s) {
-    return String(s).toLowerCase().replace(/\b\w/g, function (c) { return c.toUpperCase(); });
-  }
-
-  /* ════════════════════════════════════════════════════════════════════════════
-     PLATES — "More Than One Front Door" (#262). The front door is no longer one
-     crowded plate; it is a SET of plates the visitor TRAVELS between. This pure,
-     deterministic, Node-testable partition is the SOLE authority's model.
-
-     THE PARTITION (total + disjoint): every live room resolves to EXACTLY one plate.
-     District is the default plate grain; the GROUNDS split West/East at the field
-     x-midline (the biggest district → two walkable plates); cavern + outbuilding
-     pool into "outskirts". A room landing exactly on the W/E midline tiebreaks by
-     district-region order (deterministic), not raw x.
-
-     Each plate's CAMERA target = its rooms' bbox padded ×1.45, k clamped ≤ ~3.2,
-     with a minimum frame so a narrow plate does not over-zoom. The MANOR plate's
-     bbox is EXTENDED to enclose the gated BENEATH slot so the Undercroft rides the
-     manor plate and is never stranded (crux: beneath ∈ exactly one plate's bbox).
-
-     THE ROAD GRAPH (reciprocal): manor is the hub (the front door lives in the
-     manor), so every plate links to manor; the two grounds halves share the mid
-     wall; the observatory rise shares the NW corner with grounds-west. Every edge
-     is reciprocal (A↔B ⇔ B↔A) and every plate is reachable from the door. ── */
-  var PLATE_PAD = 1.45;          // bbox padding factor for the camera frame
-  var PLATE_K_MAX = 3.2;         // max zoom so a tiny plate never over-magnifies
-  var PLATE_MIN_W = 360, PLATE_MIN_H = 240;  // minimum frame so narrow plates breathe
-
-  var PLATE_META = {
-    'manor':        { label: 'THE MANOR HOUSE',     hue: '#c9a24a' },
-    'grounds-west': { label: 'THE WEST GROUNDS',    hue: '#86b39a' },
-    'grounds-east': { label: 'THE EAST GROUNDS',    hue: '#37c9b0' },
-    'observatory':  { label: 'THE OBSERVATORY RISE', hue: '#9db4ff' },
-    'outskirts':    { label: 'THE OUTSKIRTS',       hue: '#7fd4c0' },
-    'lowerworks':   { label: 'THE LOWER WORKS',     hue: '#c9974c' }
-  };
-
-  function footCentreOf(f) {
-    return f.r != null ? { x: f.x, y: f.y } : { x: f.x + f.w / 2, y: f.y + f.h / 2 };
-  }
-  function footBBoxOf(f) {
-    return f.r != null ? { x: f.x - f.r, y: f.y - f.r, w: f.r * 2, h: f.r * 2 }
-                       : { x: f.x, y: f.y, w: f.w, h: f.h };
-  }
-
-  /* ── THE DECLARATIVE FOLD (#369) — a wing DETACHES into its own child LAYER iff any of
-     its rooms declares `detach:true`. Pure, deterministic, reads only `places`: returns a
-     {wingSlug:true,...} map (empty when nothing detaches). A detached wing's rooms leave the
-     parent plate for a `child:<wing>` plate (a first-class plate reached only through a gate),
-     and the parent fills the vacated footprint with one synthetic GATE FACE. This is the one
-     primitive; `amusements` is simply its first caller. ── */
-  function detachedWings(places) {
+  /* ── the detached DISTRICT set: reads the CONTRACT `detach` flag (§1.9 — detachedWings
+       reads contracts now), restricted to districts with ≥1 live room; suppressed entirely
+       under the detachOff neg-control. ── */
+  function detachedWings(places, opts, contracts) {
+    opts = opts || {}; contracts = contracts || Contract.CONTRACTS;
+    if (opts.detachOff) return {};
+    var have = {};
+    (places || []).forEach(function (r) { if (!r.locked) have[r.district] = true; });
     var det = {};
-    for (var i = 0; i < places.length; i++) {
-      var r = places[i];
-      if (r.locked) continue;
-      if (r.detach && r.wing) det[r.wing] = true;
-    }
+    Object.keys(contracts).sort().forEach(function (id) { if (contracts[id].detach && have[id]) det[id] = true; });
     return det;
   }
 
-  /* which plate a room belongs to, given the solved solution (for the W/E split). The
-     `detached` map (from detachedWings) is threaded in: a room in a detached wing goes to
-     its child plate BEFORE the district/midline logic — everything else is UNCHANGED. */
-  function plateOf(r, solution, detached) {
-    if (detached && r.wing && detached[r.wing]) return 'child:' + r.wing;  // the fold
-    if (r.district === 'grounds') {
-      var c = footCentreOf(solution.foot[r.id]);
-      var mid = FIELD.x + FIELD.w / 2;
-      // tiebreak a room exactly on the midline by id order → 'grounds-west' (lower x bias)
-      return c.x < mid ? 'grounds-west' : (c.x > mid ? 'grounds-east' : 'grounds-west');
-    }
-    if (r.district === 'outbuilding' || r.district === 'cavern') return 'outskirts';
-    return r.district; // manor, observatory
+  /* ── §1.8 the detached child-tile budget (the relayPlate feasibility formula, pinned). ── */
+  function maxCapacityDetached() {
+    return 2 * Math.floor(RELAY_FIELD_DIM.h * RELAY_VSPREAD / (Formations.SIZE_BAND[3].h + RELAY_GUTTER));
   }
 
-  /* Layout.plates(places[, opts]) → the total/disjoint partition (parent ∪ child layers) +
-     per-plate camera bbox + the reciprocal inter-plate road graph. Pure & deterministic
-     (solves once). `opts.detachOff:true` forces every wing back onto its parent plate — the
-     NEG-CONTROL that proves the fold (with it set, the return is byte-identical to pre-#369). */
+  /* ── §1.8 capacity FEASIBILITY per contract (detached → child budget, else the packer's
+       honest ceiling). A config promising seats it cannot legibly deliver is a build error. ── */
+  function assertFeasible(contracts, opts) {
+    var FORMS = Formations.FORMATIONS;
+    Object.keys(contracts).sort().forEach(function (id) {
+      var c = contracts[id];
+      var detached = !!c.detach && !(opts && opts.detachOff);
+      var max = detached ? maxCapacityDetached() : FORMS[c.layoutFn].maxCapacity(c.frame);
+      if (c.capacity > max) {
+        throw new Error('Layout: district "' + id + '" declares capacity ' + c.capacity + ' but formation "' +
+          c.layoutFn + '" seats at most ' + max + ' in frame ' +
+          (c.frame.r != null ? 'r' + c.frame.r : c.frame.w + '×' + c.frame.h) +
+          (detached ? ' (detached child budget)' : '') +
+          '. A config that promises seats it cannot legibly deliver is a build error (§1.8) — ' +
+          'shrink the capacity, GROW the frame, or FOLD.');
+      }
+    });
+  }
+
+  /* ── the §1.8 relief error (verbatim template); the PETITION menu interpolates freeSlots LIVE. ── */
+  function fmtRange(r) { return '[' + r[0] + '°..' + (((r[1] % 360) + 360) % 360) + '°]'; }
+  function reliefError(id, c, n, contracts) {
+    var tier = (c.tier != null) ? c.tier : 2;
+    var fs = freeSlotsFor(contracts, tier, 140);
+    var menu = fs.ranges.length ? fs.ranges.map(fmtRange).join(' · ')
+      : 'none at orbit ' + tier + ' — the menu is honestly empty; petition an outer orbit';
+    return new Error('Layout: district "' + id + '" is AT CAPACITY (' + n + '/' + c.capacity + '). ' +
+      'More breadth here would crush legibility —\nthe plate refuses. Four honest reliefs:\n' +
+      '  GATHER — fold kin leaves into a themed room (the §2.6 pattern; the cheapest depth);\n' +
+      '  GROW — petition a FRAME increase (re-runs every span assert; the wedge law may refuse —\n' +
+      '         then the answer is depth, not width);\n' +
+      '  FOLD — the district becomes a child world (contract detach:true; the fairground is the template);\n' +
+      '  PETITION — split the family / found a district at a free slot: ' + menu + '\n' +
+      'Never: nudging capacity upward without re-running the feasibility check.');
+  }
+
+  /* ════════════════════════════════ SOLVE ════════════════════════════════ */
+
+  function setFoot(solution, r, slot) {
+    solution.footMeta[r.id] = { tier: r.tier, district: r.district, wing: r.wing || null, footprint: r.footprint || null };
+    // a DISC footprint carries the v1 tower convention: x,y ARE the centre + r (footCentreOf/
+    // footBBoxOf read it that way). A RECT footprint is {x,y,w,h} top-left.
+    if (slot.disc) solution.foot[r.id] = { x: slot.cx, y: slot.cy, r: slot.r };
+    else solution.foot[r.id] = { x: slot.x, y: slot.y, w: slot.w, h: slot.h };
+  }
+
+  function translateSlot(slot, ox, oy) {
+    if (slot.disc) return { id: slot.id, x: r01(slot.x + ox), y: r01(slot.y + oy), w: slot.w, h: slot.h, cx: r01(slot.cx + ox), cy: r01(slot.cy + oy), r: slot.r, disc: true };
+    return { id: slot.id, x: r01(slot.x + ox), y: r01(slot.y + oy), w: slot.w, h: slot.h };
+  }
+
+  /* where a district's frame centre lands in the world: the manor pole, the south gate
+     (the road-special approach), or the district's solved polar centre. */
+  function centreOf(id, contracts, world) {
+    if (id === 'manor') return { x: world.centre.x, y: world.centre.y };
+    if (contracts[id].road) return { x: world.centre.x, y: r01(world.centre.y + world.Rgate) };  // the approach, south on the road
+    var d = world.districts[id];
+    return { x: d.x, y: d.y };
+  }
+
+  /* pack ONE non-detached district's live rooms + translate to the world; emit foot,
+     wing (cluster) rects, and a district precinct hull. */
+  function packDistrict(id, c, live, contracts, world, solution) {
+    var centre = centreOf(id, contracts, world);
+    var fn = Formations.FORMATIONS[c.layoutFn];
+    var roadside = (c.layoutFn === 'roadside');
+    if (!live.length) {                                  // an empty district still owns a precinct
+      var fb0 = frameBox(c.frame);
+      pushDistrictRect(solution, id, c, { x: r01(centre.x - fb0.w / 2), y: r01(centre.y - fb0.h / 2), w: fb0.w, h: fb0.h });
+      return;
+    }
+    var packed = fn.pack(live, c.frame, undefined);      // slots at the local frame origin
+    var ox, oy, hull;
+    if (roadside) {
+      // the roadside frame is nominal (the stops table is the budget); centre its HULL at the gate.
+      hull = packed.hull;
+      ox = r01(centre.x - hull.w / 2); oy = r01(centre.y - hull.h / 2);
+    } else {
+      var fb = frameBox(c.frame);
+      ox = r01(centre.x - fb.cx); oy = r01(centre.y - fb.cy);
+    }
+    // footprints
+    var roomOf = {}; live.forEach(function (r) { roomOf[r.id] = r; });
+    packed.slots.forEach(function (s) { setFoot(solution, roomOf[s.id], translateSlot(s, ox, oy)); });
+    // cluster (wing) tint rects → world
+    packed.clusterRects.forEach(function (cr) {
+      solution.wingRects.push({
+        district: id, wing: cr.cluster, label: wingLabel(cr.cluster), accent: wingAccent(cr.cluster, c.theme.hue),
+        x: r01(cr.x + ox), y: r01(cr.y + oy), w: cr.w, h: cr.h
+      });
+    });
+    // the precinct hull: framed → the frame box (inscribed in the ρ-disc, disjoint by the
+    // polar clearance law); roadside → the packed hull + a small pad (isolated at the gate).
+    var rect;
+    if (roadside) rect = { x: r01(centre.x - hull.w / 2 - DISTRICT_PAD), y: r01(centre.y - hull.h / 2 - DISTRICT_PAD), w: r01(hull.w + 2 * DISTRICT_PAD), h: r01(hull.h + 2 * DISTRICT_PAD) };
+    else { var fb2 = frameBox(c.frame); rect = { x: r01(centre.x - fb2.w / 2), y: r01(centre.y - fb2.h / 2), w: fb2.w, h: fb2.h }; }
+    pushDistrictRect(solution, id, c, rect);
+  }
+
+  /* the detached parent: just the gate face (its whole parent-plate extent), centred on the
+     district's polar centre; its rooms lay out in the child (plates()). */
+  function packDetached(id, c, world, solution) {
+    var d = world.districts[id];
+    pushDistrictRect(solution, id, c, { x: r01(d.x - GATE_W / 2), y: r01(d.y - GATE_H / 2), w: GATE_W, h: GATE_H });
+  }
+
+  function pushDistrictRect(solution, id, c, rect) {
+    solution.districtRects.push({
+      district: id, label: c.theme.label, hue: c.theme.hue, tint: c.theme.tint, style: c.theme.style,
+      detached: !!c.detach, x: rect.x, y: rect.y, w: rect.w, h: rect.h
+    });
+  }
+
+  /* §5.1 stub: one structure per precinct (the central "green" a §5 build later fills).
+     tallies provisional (room count) until the manifest feeds them (W2.5). */
+  function buildStructures(solution, memberCount) {
+    solution.districtRects.forEach(function (dr) {
+      var w = Math.max(24, Math.min(dr.w, dr.h) * 0.42), h = w * 0.62;
+      solution.structures.push({
+        district: dr.district, label: dr.label,
+        box: { x: r01(dr.x + dr.w / 2 - w / 2), y: r01(dr.y + dr.h / 2 - h / 2), w: r01(w), h: r01(h) },
+        tallies: { rooms: memberCount[dr.district] || 0, provisional: true }
+      });
+    });
+  }
+
+  /* the circulation graph (§4.1 re-derives geometry; the {door,spine,avenues,aisles,stubs}
+     CONTRACT is kept). Plus a straight south ROAD polyline (θ=180, door → gate) for the
+     in-wedge invariant. */
+  function buildGraph(solution, world) {
+    var centre = world.centre, manorRho = world.manorRho;
+    var door = { x: r01(centre.x), y: r01(centre.y + manorRho) };
+    solution.door = door; solution.graph.door = door;
+    solution.graph.spine = { x0: door.x, y0: door.y, x1: door.x, y1: r01(centre.y + manorRho * 0.2) };
+    solution.districtRects.forEach(function (dr) {
+      if (dr.district === 'manor') return;
+      var gx = dr.x + dr.w / 2, gy = dr.y + dr.h / 2;
+      solution.graph.avenues.push({ district: dr.district, label: 'to ' + titleCase(dr.label), x0: door.x, y0: door.y, x1: r01(gx), y1: r01(gy) });
+    });
+    solution.wingRects.forEach(function (wr) {
+      var wc = { x: wr.x + wr.w / 2, y: wr.y + wr.h / 2 };
+      var gx = Math.max(wr.x, Math.min(door.x, wr.x + wr.w));
+      var gy = Math.max(wr.y, Math.min(door.y, wr.y + wr.h));
+      solution.graph.aisles.push({ district: wr.district, wing: wr.wing, x0: r01(gx), y0: r01(gy), x1: r01(wc.x), y1: r01(wc.y) });
+    });
+    Object.keys(solution.foot).sort().forEach(function (id) {
+      var f = solution.foot[id], c = footCentreOf(f), meta = solution.footMeta[id], target = door;
+      if (meta && meta.wing) {
+        for (var i = 0; i < solution.wingRects.length; i++) {
+          var w = solution.wingRects[i];
+          if (w.district === meta.district && w.wing === meta.wing) { target = { x: w.x + w.w / 2, y: w.y + w.h / 2 }; break; }
+        }
+      }
+      solution.graph.stubs.push({ id: id, x0: r01(c.x), y0: r01(c.y), x1: r01(target.x), y1: r01(target.y) });
+    });
+    solution.road = [door, { x: r01(centre.x), y: r01(centre.y + world.Rgate) }];
+  }
+
+  function worldModel(w, contracts) {
+    var maxTier = w.tiers[w.tiers.length - 1];
+    var Rarr = []; for (var t = 0; t <= maxTier; t++) Rarr[t] = (w.R[t] != null) ? w.R[t] : null;
+    var fs = {}; for (var ti = 1; ti <= maxTier + 1; ti++) fs[ti] = freeSlotsFor(contracts, ti, 140).ranges;
+    return {
+      viewBox: w.viewBox, W: w.W, H: w.H, centre: { x: w.centre.x, y: w.centre.y },
+      R: Rarr, tiers: w.tiers.slice(), maxRho: w.maxRho,
+      Rsky: w.Rsky, Rgate: w.Rgate, skyOuter: w.skyOuter, skyBand: w.skyBand,
+      manorRho: w.manorRho, K_MIN: w.K_MIN, K_MAX: w.K_MAX, K_LOD: w.K_LOD,
+      freeSlots: fs, districts: w.districts
+    };
+  }
+
+  function solve(places, opts) {
+    opts = opts || {};
+    var contracts = opts.contracts || Contract.CONTRACTS;
+    var FORMS = Formations.FORMATIONS;
+
+    // 1. schema + formation-membership validation (unknown district/cluster/formation → throw)
+    Contract.validate(contracts, FORMS);
+    // 2. §1.8 capacity feasibility per contract
+    assertFeasible(contracts, opts);
+    // 3. the polar world (throws on any §1.4/§1.5 angular/clearance violation)
+    var world = worldFor(contracts);
+
+    var solution = {
+      foot: {}, footMeta: {}, wingRects: [], districtRects: [], structures: [],
+      graph: { door: null, spine: null, avenues: [], aisles: [], stubs: [] },
+      door: null, road: null, world: null
+    };
+
+    // 4. group + validate rooms (unknown district / cluster → throw)
+    var byDistrict = {};
+    (places || []).forEach(function (r) {
+      var c = contracts[r.district];
+      if (!c) throw new Error('Layout: room "' + r.id + '" declares unknown district "' + r.district +
+        '". Add a CONTRACT for it (contract.js) or fix the declaration.');
+      if (r.wing && (c.clusters || []).indexOf(r.wing) === -1)
+        throw new Error('Layout: room "' + r.id + '" declares cluster "' + r.wing + '" not legal in district "' +
+          r.district + '" (allowed: ' + ((c.clusters || []).join(', ') || 'none') + '). A wing slug is never silent (§1.2).');
+      (byDistrict[r.district] = byDistrict[r.district] || []).push(r);
+    });
+
+    var detached = detachedWings(places, opts, contracts);
+    var memberCount = {};
+
+    // 5/6. per-district capacity + pack (sorted iteration, §1.6)
+    Object.keys(contracts).sort().forEach(function (id) {
+      var c = contracts[id];
+      var all = byDistrict[id] || [];
+      if (all.length > c.capacity) throw reliefError(id, c, all.length, contracts);
+      if (detached[id]) {
+        memberCount[id] = all.filter(function (r) { return !r.locked; }).length;   // child tiles
+        packDetached(id, c, world, solution);
+        return;
+      }
+      var live = all.filter(function (r) { return !r.locked; });
+      memberCount[id] = live.length;
+      packDistrict(id, c, live, contracts, world, solution);
+    });
+
+    // 7. graph + 8. structures + 9. world
+    buildGraph(solution, world);
+    buildStructures(solution, memberCount);
+    solution.world = worldModel(world, contracts);
+    return solution;
+  }
+
+  /* ════════════════════════════════ PLATES ════════════════════════════════ */
+
+  function relayField(world) {
+    return { x: r01(world.centre.x - RELAY_FIELD_DIM.w / 2), y: r01(world.centre.y - RELAY_FIELD_DIM.h / 2), w: RELAY_FIELD_DIM.w, h: RELAY_FIELD_DIM.h };
+  }
+
+  /* relayPlate(rooms, world) → a plate-LOCAL two-column outward fan in RELAY_FIELD (centred
+     in the derived world); folly footprints so name-only labels never collide. Never written
+     back onto solution.foot (§1.9). */
+  function relayPlate(rooms, world) {
+    world = world || estateWorld();
+    var RF = relayField(world);
+    var list = rooms.slice().sort(byOrderId), n = list.length;
+    var band = Formations.SIZE_BAND[3];
+    var half = Math.ceil(n / 2);
+    var fh = RF.h * RELAY_VSPREAD, fy = RF.y + (RF.h - fh) / 2;
+    var rowH = half > 0 ? fh / half : fh;
+    var cxL = RF.x + RF.w * 0.40, cxR = RF.x + RF.w * 0.60;
+    var foot = {}, footMeta = {}, sideById = {};
+    for (var i = 0; i < n; i++) {
+      var r = list[i], col = i % 2, rr = Math.floor(i / 2);
+      var cy = fy + (rr + 0.5) * rowH, cx = (col === 0 ? cxL : cxR);
+      foot[r.id] = { x: r01(cx - band.w / 2), y: r01(cy - band.h / 2), w: band.w, h: band.h };
+      footMeta[r.id] = { tier: r.tier, district: r.district, wing: r.wing || null };
+      sideById[r.id] = (col === 0 ? 'left' : 'right');
+    }
+    return { foot: foot, footMeta: footMeta, sideById: sideById };
+  }
+
+  function basementSlotLocal(half) { return Formations.FORMATIONS.greathouse.basementSlot(Contract.CONTRACTS.manor.frame, half); }
+  function basementSlot(half) {
+    var world = estateWorld(), frame = Contract.CONTRACTS.manor.frame, s = basementSlotLocal(half);
+    var ox = world.centre.x - frame.w / 2, oy = world.centre.y - frame.h / 2;
+    return { x: r01(s.x + ox), y: r01(s.y + oy), w: r01(s.w), h: r01(s.h) };
+  }
+  function beneathSlot() { return basementSlot(0); }        // the Undercroft (west) — alias (§1.9)
+  function sealedStudySlot() { return basementSlot(1); }    // the Reliquary (east) — alias (§1.9)
+  function basementUnion() { return unionRect(basementSlot(0), basementSlot(1)); }
+
   function plates(places, opts) {
     opts = opts || {};
-    var live = places.filter(function (p) { return !p.locked; });
-    var solution = solve(live);
+    var contracts = opts.contracts || Contract.CONTRACTS;
+    var live = (places || []).filter(function (p) { return !p.locked; });
+    var solution = solve(live, opts);        // detachOff propagates → THROWS (the neg-control)
+    var world = worldFor(contracts);
 
-    // 0. THE FOLD: which wings detach into their own child layer (empty unless a room
-    //    declares detach:true; suppressed entirely under the detachOff neg-control).
-    var detached = opts.detachOff ? {} : detachedWings(live);
+    var detached = detachedWings(live, opts, contracts);
 
-    // 1. PARTITION (total + disjoint) — a detached wing's rooms route to child:<wing>.
-    var members = {};   // plateId → [room,...]
-    var roomPlate = {}; // roomId → plateId
-    for (var i = 0; i < live.length; i++) {
-      var pid = plateOf(live[i], solution, detached);
-      (members[pid] = members[pid] || []).push(live[i]);
-      roomPlate[live[i].id] = pid;
-    }
+    // 1. PARTITION (total + disjoint): a detached district's rooms → child:<districtId>
+    var members = {}, roomPlate = {};
+    live.forEach(function (r) {
+      var pid = detached[r.district] ? 'child:' + r.district : r.district;
+      (members[pid] = members[pid] || []).push(r); roomPlate[r.id] = pid;
+    });
 
-    // 1b. CHILD LAYOUT: re-lay each child plate's rooms in its OWN field envelope via the
-    //     plate-LOCAL relayPlate fan (the same construction the floor-twin scores). The relay
-    //     foot is plate-LOCAL and is NEVER written back onto solution.foot (its own warning) —
-    //     emit-mirror.cjs / sky.test.cjs keep reading the untouched canonical foot. We expose
-    //     it in a SEPARATE childLayout map so the page draws the child midway from it.
-    var childPlates = [];          // ['child:amusements',...] sorted
-    var childLayout = {};          // pid → {foot:{id:{x,y,w,h}}, sideById:{id:'left'|'right'}}
-    var childWingOf = {};          // pid → wing slug
-    for (var cw in detached) {
-      var cpid = 'child:' + cw;
-      if (!members[cpid]) continue;                 // a detached wing with no live rooms folds nothing
-      var relay = relayPlate(members[cpid]);
+    // 2. CHILD LAYOUT via relayPlate (plate-local; never written to solution.foot)
+    var childPlates = [], childLayout = {}, childDistrictOf = {};
+    Object.keys(detached).sort().forEach(function (d) {
+      var cpid = 'child:' + d; if (!members[cpid]) return;
+      var relay = relayPlate(members[cpid], world);
       childLayout[cpid] = { foot: relay.foot, sideById: relay.sideById };
-      childWingOf[cpid] = cw;
-      childPlates.push(cpid);
-    }
+      childDistrictOf[cpid] = d; childPlates.push(cpid);
+    });
     childPlates.sort();
 
-    // 2. per-plate bbox over member footprints + camera frame. A PARENT plate's bbox reads
-    //    the canonical solution.foot; a CHILD plate's bbox reads its OWN relay foot envelope
-    //    (childLayout) — a child is a first-class plate framed from its own field.
-    var bbox = {};
-    var pids = Object.keys(members).sort();
-    for (var pi = 0; pi < pids.length; pi++) {
-      var p = pids[pi], rooms = members[p];
-      var cl = childLayout[p];
-      var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-      for (var ri = 0; ri < rooms.length; ri++) {
-        var b = cl ? cl.foot[rooms[ri].id] : footBBoxOf(solution.foot[rooms[ri].id]);
-        if (!b) continue;
-        if (b.x < x0) x0 = b.x; if (b.y < y0) y0 = b.y;
-        if (b.x + b.w > x1) x1 = b.x + b.w; if (b.y + b.h > y1) y1 = b.y + b.h;
-      }
-      bbox[p] = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
-    }
-    // EXTEND the manor plate to enclose the gated BENEATH slots (the Undercroft AND
-    // the Reliquary both ride the manor plate, never stranded). The UNION of the two
-    // gated slots ∈ exactly the manor plate's bbox.
-    if (bbox.manor) {
-      var bs = beneathUnion();
-      var mx0 = Math.min(bbox.manor.x, bs.x);
-      var my0 = Math.min(bbox.manor.y, bs.y);
-      var mx1 = Math.max(bbox.manor.x + bbox.manor.w, bs.x + bs.w);
-      var my1 = Math.max(bbox.manor.y + bbox.manor.h, bs.y + bs.h);
-      bbox.manor = { x: mx0, y: my0, w: mx1 - mx0, h: my1 - my0 };
-    }
-
-    // 3. CAMERA FRAME per plate: bbox padded ×PLATE_PAD, min-framed, centred, k clamped.
-    //    A child is framed by the SAME math the parents use — first-class.
-    var VB = { w: 1440, h: 900 };
-    var frame = {};
-    for (var fi = 0; fi < pids.length; fi++) {
-      var pp = pids[fi], box = bbox[pp];
-      var cx = box.x + box.w / 2, cy = box.y + box.h / 2;
-      var fw = Math.max(box.w * PLATE_PAD, PLATE_MIN_W);
-      var fh = Math.max(box.h * PLATE_PAD, PLATE_MIN_H);
-      var k = Math.min(VB.w / fw, VB.h / fh, PLATE_K_MAX);
-      frame[pp] = {
-        k: k,
-        tx: VB.w / 2 - cx * k,
-        ty: VB.h / 2 - cy * k,
-        cx: cx, cy: cy, fw: fw, fh: fh
-      };
-    }
-
-    // 3b. THE PARENT GATE FACE: when a wing fully detaches, its room footprints vanish
-    //     from the parent plate, leaving a hole. The engine fills it with ONE synthetic
-    //     gate-face tile, centred in the wing's GROUNDS_WINGS region. It is NOT a PLACES
-    //     room — no card, no ws:seen, no sky-star — it is furniture excluded from every
-    //     count. The page draws it as the in-map threshold that descends into the child.
-    var gates = [];
-    var parentOf = {};   // child plate → the parent plate its gate centre falls on
-    var GATE_W = 96, GATE_H = 120;
-    for (var ci = 0; ci < childPlates.length; ci++) {
-      var cpid2 = childPlates[ci], cwing = childWingOf[cpid2];
-      var reg = GROUNDS_WINGS[cwing];
-      if (!reg) continue;
-      var gx = reg.x + reg.w / 2 - GATE_W / 2;
-      var gy = reg.y + reg.h / 2 - GATE_H / 2;
-      // the parent plate the gate centre falls on (mirrors plateOf's grounds W/E split).
-      // FALLBACK so a child is NEVER stranded: if that plate has no live rooms (e.g. all of
-      // one grounds side detached), attach the descent edge to the other grounds plate, else
-      // to the manor hub — the guaranteed-present warm centre. The graph stays connected.
-      var gcx = gx + GATE_W / 2, gMid = FIELD.x + FIELD.w / 2;
-      var parentPid = gcx < gMid ? 'grounds-west' : 'grounds-east';
-      if (!members[parentPid]) {
-        var other = parentPid === 'grounds-west' ? 'grounds-east' : 'grounds-west';
-        parentPid = members[other] ? other : 'manor';
-      }
-      gates.push({
-        wing: cwing, kind: 'gate', toPlate: cpid2,
-        box: { x: gx, y: gy, w: GATE_W, h: GATE_H },
-        accent: wingAccent(cwing),
-        label: wingLabel(cwing)
+    // 3. per-plate bbox (parent → solution.foot; child → its relay foot)
+    var bbox = {}, pids = Object.keys(members).sort();
+    pids.forEach(function (p) {
+      var cl = childLayout[p], x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      members[p].forEach(function (r) {
+        var b = cl ? cl.foot[r.id] : footBBoxOf(solution.foot[r.id]); if (!b) return;
+        if (b.x < x0) x0 = b.x; if (b.y < y0) y0 = b.y; if (b.x + b.w > x1) x1 = b.x + b.w; if (b.y + b.h > y1) y1 = b.y + b.h;
       });
-      parentOf[cpid2] = parentPid;
-    }
+      bbox[p] = { x: r01(x0), y: r01(y0), w: r01(x1 - x0), h: r01(y1 - y0) };
+    });
+    if (bbox.manor) bbox.manor = rectR01(unionRect(bbox.manor, basementUnion()));   // enclose the basement band
 
-    // 4. the RECIPROCAL inter-plate ROAD GRAPH (manor is the hub; W/E share the mid
-    //    wall; observatory shares the NW corner with grounds-west). The DESCENT EDGE then
-    //    threads each child to the parent plate its gate face sits on — generically.
+    // 4. camera frame per plate (against the derived viewBox; K_MAX derived, §1.7)
+    var VB = { w: world.W, h: world.H }, frame = {};
+    pids.forEach(function (pp) {
+      var box = bbox[pp], cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+      var fw = Math.max(box.w * PLATE_PAD, PLATE_MIN_W), fh = Math.max(box.h * PLATE_PAD, PLATE_MIN_H);
+      var k = Math.min(VB.w / fw, VB.h / fh, world.K_MAX);
+      frame[pp] = { k: r01(k), tx: r01(VB.w / 2 - cx * k), ty: r01(VB.h / 2 - cy * k), cx: r01(cx), cy: r01(cy), fw: r01(fw), fh: r01(fh) };
+    });
+
+    // 5. the gate faces + descent edges (child ← the manor hub; the gate sits at the polar centre)
+    var gates = [], parentOf = {};
+    childPlates.forEach(function (cpid) {
+      var d = childDistrictOf[cpid], dc = world.districts[d], c = contracts[d];
+      gates.push({
+        district: d, kind: 'gate', toPlate: cpid,
+        box: { x: r01(dc.x - GATE_W / 2), y: r01(dc.y - GATE_H / 2), w: GATE_W, h: GATE_H },
+        accent: c.theme.hue, label: c.theme.label
+      });
+      parentOf[cpid] = 'manor';
+    });
+
+    // 6. the reciprocal inter-plate road graph (manor is the hub; children join via the gate edge)
     var adj = {};
-    function link(a, b) {
-      if (!members[a] || !members[b] || a === b) return;
-      (adj[a] = adj[a] || {})[b] = true;
-      (adj[b] = adj[b] || {})[a] = true;
-    }
-    for (var li = 0; li < pids.length; li++) {
-      if (pids[li] === 'manor') continue;
-      if (childWingOf[pids[li]]) continue;          // children join via the gate edge, not the manor hub
-      link('manor', pids[li]);
-    }
-    link('grounds-west', 'grounds-east');
-    link('observatory', 'grounds-west');
-    link('grounds-east', 'lowerworks');   // the Lower Works is the East Grounds' downstairs neighbour (#335)
-    // the descent edges: child ↔ the parent plate its gate face falls on (reciprocal).
-    for (var pcd in parentOf) link(pcd, parentOf[pcd]);
-    // emit a stable edge list (each undirected pair once, a<b)
+    function link(a, b) { if (!members[a] || !members[b] || a === b) return; (adj[a] = adj[a] || {})[b] = true; (adj[b] = adj[b] || {})[a] = true; }
+    pids.forEach(function (p) { if (p === 'manor' || childDistrictOf[p]) return; link('manor', p); });
+    childPlates.forEach(function (cpid) { link(cpid, parentOf[cpid]); });
     var edges = [];
     for (var a in adj) for (var b in adj[a]) if (a < b) edges.push([a, b]);
     edges.sort(function (e, f) { return e[0] < f[0] ? -1 : e[0] > f[0] ? 1 : (e[1] < f[1] ? -1 : 1); });
 
     return {
-      ids: pids,
-      members: members,    // plateId → [room,...]  (total + disjoint over live rooms, parent ∪ child)
-      roomPlate: roomPlate,// roomId → plateId
-      bbox: bbox,          // plateId → {x,y,w,h} (manor extended to enclose beneath; child from its relay foot)
-      frame: frame,        // plateId → {k,tx,ty,cx,cy,fw,fh}  the camera target
-      adj: adj,            // plateId → {neighbourId:true}
-      edges: edges,        // [[a,b],...] each undirected pair once (a<b), sorted
-      meta: PLATE_META,
-      beneath: beneathSlot(),
-      sealedStudy: sealedStudySlot(),
-      solution: solution,
-      // ── the fold (#369): empty/absent shapes when nothing detaches (byte-identical to pre-#369) ──
-      detached: detached,        // {wingSlug:true,...}
-      childPlates: childPlates,  // ['child:<wing>',...] sorted (subset of ids)
-      childLayout: childLayout,  // pid → {foot, sideById}  the child's own relay envelope
-      parentOf: parentOf,        // child pid → the parent plate its gate face sits on
-      gates: gates               // [{wing,kind,toPlate,box,accent,label},...] the synthetic gate faces
+      ids: pids, members: members, roomPlate: roomPlate, bbox: bbox, frame: frame,
+      adj: adj, edges: edges, world: solution.world, structures: solution.structures,
+      beneath: basementSlot(0), sealedStudy: basementSlot(1), solution: solution,
+      detached: detached, childPlates: childPlates, childLayout: childLayout, parentOf: parentOf, gates: gates
     };
   }
+  function rectR01(r) { return { x: r01(r.x), y: r01(r.y), w: r01(r.w), h: r01(r.h) }; }
 
-  /* Layout.relayPlate(rooms) → a plate-LOCAL re-lay: spread JUST this plate's rooms
-     into a generous open frame (a two-column outward fan over ~85% of FIELD height,
-     footprints in the centre band, labels fanning to the margins) so that NAME-ONLY
-     labels never collide. This is the construction the legibility twin scores with
-     {nameOnly:true} to prove each plate clears the floor ALONE. It returns a sol-like
-     {foot, footMeta} for ONLY these rooms PLUS a `relaySide` per room (the L/R fan).
-     It is a RingView/plate-LOCAL transform ONLY — NEVER written back onto the
-     canonical Layout.foot (else emit-mirror.cjs / sky.test.cjs would false-fail). */
-  var RELAY_VSPREAD = 0.85;  // fraction of FIELD height the column stack uses
-  function relayPlate(rooms) {
-    var n = rooms.length;
-    var band = SIZE_BAND[3];  // folly size — small footprints so the label leads
-    var half = Math.ceil(n / 2);
-    var fh = FIELD.h * RELAY_VSPREAD, fy = FIELD.y + (FIELD.h - fh) / 2;
-    var rowH = half > 0 ? fh / half : fh;
-    var cxL = FIELD.x + FIELD.w * 0.40, cxR = FIELD.x + FIELD.w * 0.60;
-    var foot = {}, footMeta = {}, sideById = {}, places = [];
-    for (var i = 0; i < n; i++) {
-      var r = rooms[i];
-      var col = i % 2, rr = Math.floor(i / 2);
-      var cy = fy + (rr + 0.5) * rowH;
-      var cx = col === 0 ? cxL : cxR;
-      foot[r.id] = { x: cx - band.w / 2, y: cy - band.h / 2, w: band.w, h: band.h };
-      footMeta[r.id] = { tier: r.tier, district: r.district, wing: r.wing || null };
-      var side = col === 0 ? 'left' : 'right';
-      sideById[r.id] = side;
-      // a places copy carrying relaySide (Legibility reads r.relaySide for the seat side)
-      var copy = {}; for (var k in r) copy[k] = r[k]; copy.relaySide = side;
-      places.push(copy);
-    }
-    return { foot: foot, footMeta: footMeta, graph: null, sideById: sideById, places: places };
+  /* ── §1.5 the live petition menu, interpolated by the relief error + the map process. ── */
+  function freeSlotsFor(contracts, tier, rhoEstimate) {
+    var world = worldFor(contracts);
+    var districts = Polar.tieredDistricts(contracts);
+    return Polar.freeSlots(districts, world.R, world.maxRho, tier, rhoEstimate != null ? rhoEstimate : 140, Contract.ROAD, Contract.LANES);
   }
-
-  /* the gated BENEATH slot (a reserved cellar slot at the manor south foundation) —
-     revealUndercroft asks for it by id. Returns {x,y,w,h} for the stair footprint. */
-  /* the BENEATH region now seats TWO gated ways down side by side. A locked POI is
-     centred in its OWN half — the Undercroft in the LEFT half (beneathSlot), the
-     Reliquary's sealed study in the RIGHT half (sealedStudySlot). Both are tier-3
-     footprints; the manor plate is extended to enclose the union of the two so
-     neither is ever stranded. locatedSlot(half) is the shared centring math. */
-  function locatedSlot(half /* 0 = left, 1 = right */) {
-    var reg = DISTRICTS.beneath.region;
-    var band = bandFor(3);
-    var halfW = reg.w / 2;
-    var w = Math.min(band.w * 0.5, halfW - 6), h = Math.min(band.h, reg.h);
-    var hx = reg.x + half * halfW;                    // this half's left edge
-    return { x: hx + (halfW - w) / 2, y: reg.y + (reg.h - h) / 2, w: w, h: h };
-  }
-  function beneathSlot() { return locatedSlot(0); }       // the Undercroft (left)
-  function sealedStudySlot() { return locatedSlot(1); }   // the Reliquary (right)
-  // the union bbox the manor plate must enclose to hold BOTH gated ways down.
-  function beneathUnion() {
-    var a = beneathSlot(), b = sealedStudySlot();
-    var x0 = Math.min(a.x, b.x), y0 = Math.min(a.y, b.y);
-    var x1 = Math.max(a.x + a.w, b.x + b.w), y1 = Math.max(a.y + a.h, b.y + b.h);
-    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
-  }
+  function freeSlots(tier, rhoEstimate) { return freeSlotsFor(Contract.CONTRACTS, tier, rhoEstimate); }
 
   return {
     solve: solve,
-    DISTRICTS: DISTRICTS,
-    WING_META: WING_META,
-    GROUNDS_WINGS: GROUNDS_WINGS,
-    SIZE_BAND: SIZE_BAND,
-    FIELD: FIELD,
+    plates: plates,
+    freeSlots: freeSlots,
+    relayPlate: relayPlate,
+    detachedWings: detachedWings,
+    basementSlot: basementSlot,
     beneathSlot: beneathSlot,
     sealedStudySlot: sealedStudySlot,
-    beneathUnion: beneathUnion,
-    bandFor: bandFor,
+    basementUnion: basementUnion,
     wingLabel: wingLabel,
     wingAccent: wingAccent,
-    plates: plates,
-    detachedWings: detachedWings,
-    relayPlate: relayPlate,
-    PLATE_META: PLATE_META,
-    assertGroundsWingsDisjoint: assertGroundsWingsDisjoint,
-    rectsOverlap: rectsOverlap
+    maxCapacityDetached: maxCapacityDetached,
+    rectsOverlap: rectsOverlap,
+    footCentreOf: footCentreOf,
+    footBBoxOf: footBBoxOf,
+    // the wired libraries, re-exported for consumers/tests (single source of truth)
+    CONTRACTS: Contract.CONTRACTS,
+    CLUSTER_META: Contract.CLUSTER_META,
+    ROAD: Contract.ROAD,
+    LANES: Contract.LANES,
+    FORMATIONS: Formations.FORMATIONS,
+    SIZE_BAND: Formations.SIZE_BAND,
+    RELAY_FIELD: RELAY_FIELD_DIM,
+    world: null   // populated on first solve for page reads; see below
   };
 })();
+
+/* attach the derived world eagerly so a page read (viewBox at build) needs no solve call. */
+if (typeof Layout !== 'undefined' && Layout && !Layout.world) {
+  try { Layout.world = Layout.solve([]).world; } catch (e) { /* an empty estate is still a valid world */ }
+}
 
 if (typeof module !== 'undefined' && module.exports) { module.exports = Layout; }
