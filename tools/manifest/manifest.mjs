@@ -277,15 +277,28 @@ function build(opts = {}) {
     pushEx(COMPANIONS[piece], { name: readName(piece), href: piece + '/index.html', kind: 'companion' });
     stake(piece, 'companion:' + COMPANIONS[piece]);
   }
-  // withins (§7.2)
+  // withins (§7.2). A within's parent is normally a room; but the gather (§2.6) can
+  // fold a within's parent into a room as an EXHIBIT (soap-film ↳ the-wrinkling bay ↳
+  // the Conservatory — the deliberate two-level depth of §7.4). Then the within rides
+  // to its parent's CONTAINING room and records the true discovery host in `withinOf`,
+  // so the nesting stays legible and soap-film still lands in a room's exhibit list
+  // (the register join is keyed on rooms).
   for (const piece of sorted(Object.keys(WITHINS))) {
     const w = WITHINS[piece];
     if (!existsSync(join(ROOT, piece))) die('within dir does not exist: ' + piece);
-    const room = roomByDir.get(w.parent);
-    if (!room) die('within parent "' + w.parent + '" is not a room (piece ' + piece + ')');
+    let hostDir = w.parent, withinOf = null;
+    if (!roomByDir.has(hostDir)) {
+      const containing = primaryOf.get(hostDir);   // the room the gathered parent folded into
+      if (!containing || !roomByDir.has(containing)) {
+        die('within parent "' + w.parent + '" is neither a room nor a gathered exhibit (piece ' + piece + ')');
+      }
+      withinOf = hostDir;   // the gathered bay the within is actually discovered inside
+      hostDir = containing;
+    }
     const ex = { name: readName(piece), href: piece + '/index.html', kind: 'within', gate: w.gate };
+    if (withinOf) ex.withinOf = withinOf;
     if (Object.prototype.hasOwnProperty.call(COMPANIONS, piece)) ex.companionOf = COMPANIONS[piece];
-    pushEx(w.parent, ex);
+    pushEx(hostDir, ex);
     stake(piece, 'within:' + w.parent);
   }
 

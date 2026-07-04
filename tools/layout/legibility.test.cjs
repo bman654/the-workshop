@@ -57,6 +57,25 @@ function crowdedSolution(n) {
 }
 function crowdedRepOf(n) { const c = crowdedSolution(n); return Leg.score(c.solution, c.places); }
 
+// a WIDE-SUB-LINE cluster: short room NAMES but a wide "PIECE · tag" sub-line, on a
+// MEDIUM grid where the names fit but the full labels' sub-line overflows into their
+// neighbours. This isolates the one thing name-only mode drops (the sub-line), so the
+// plate crowds at FULL yet reads LEGIBLE name-only — the load-bearing proof the LIVE
+// district plates no longer supply now the §2.6 gather has de-crowded every district
+// (a success, not a regression: the HARD gate below confirms every live plate is
+// legible even at full). Same construction discipline as CLEAN / crowdedSolution.
+function wideSublineSolution(n) {
+  const foot = {}, footMeta = {}, places = [];
+  const cx = 1400, cy = 1400, COLW = 120, ROWH = 70;
+  for (let i = 0; i < n; i++) {
+    const c = i % 3, r = Math.floor(i / 3);
+    foot['w' + i] = { x: cx + c * COLW, y: cy + r * ROWH, w: 44, h: 32 };
+    footMeta['w' + i] = { district: 'number', tier: 2 };
+    places.push({ id: 'w' + i, room: 'Rm' + i, piece: 'The Very Long Piece Name That Overflows', tag: 'a long descriptive tag here', district: 'number', tier: 2, order: i });
+  }
+  return { solution: { foot, footMeta, graph: null }, places };
+}
+
 console.log('=== legibility.test.cjs ===\n');
 
 /* ── CLAIM 1 + 2: the two controls straddle the threshold ──────────────────── */
@@ -226,15 +245,16 @@ ok('NEG-CONTROL: all ' + LIVE2.length + ' rooms on ONE plate (full labels) → C
   ncAll.overall.composite >= Leg.THRESHOLD,
   '[' + ncAll.overall.composite.toFixed(3) + ' ≥ ' + Leg.THRESHOLD + ']');
 
-// NEG-CONTROL 2: name-only is load-bearing — a plate where FULL fails but name-only passes.
-let loadBearing = false, lbId = null;
-for (const id of PP.ids) {
-  const f = scorePlate(PP.members[id], {});
-  const n = scorePlate(PP.members[id], { nameOnly: true });
-  if (f.overall.composite >= Leg.THRESHOLD && n.overall.composite < Leg.THRESHOLD) { loadBearing = true; lbId = lbId || id; }
-}
+// NEG-CONTROL 2: name-only is LOAD-BEARING — dropping the wide "PIECE · tag" sub-line
+// turns a CROWDED plate LEGIBLE. Measured on the controlled wide-sub-line cluster
+// (post-§2.6-gather EVERY live district plate is legible even at full — the HARD gate
+// above proves the estate; this proves the MECHANISM stays discriminating regardless).
+const ws = wideSublineSolution(8);
+const wsFull = Leg.score(ws.solution, ws.places, {}).overall.composite;
+const wsName = Leg.score(ws.solution, ws.places, { nameOnly: true }).overall.composite;
 ok('NEG-CONTROL: name-only is LOAD-BEARING (a plate reads CROWDED full / LEGIBLE name-only)',
-  loadBearing, lbId ? '[' + lbId + ']' : '');
+  wsFull >= Leg.THRESHOLD && wsName < Leg.THRESHOLD,
+  '[full=' + wsFull.toFixed(3) + ' ≥ ' + Leg.THRESHOLD + ' > name-only=' + wsName.toFixed(3) + ']');
 
 /* ── the ESTATE plate (district-STRUCTURE labels, 11) — ARMED at W1.3 (§9.1, round 4):
    the LOD wave draws ONE structure per district (box = the district hull, §5.1), so this

@@ -53,7 +53,7 @@ export const HUBS = [
   { hub: 'tone-mill',          firstClass: ['sib-link'] },
   { hub: 'aerodrome',          firstClass: ['sib'] },
   { hub: 'why-the-sky-is-blue',firstClass: ['chip'] },
-  { hub: 'conservatory',       firstClass: [NONE] },
+  { hub: 'conservatory',       firstClass: [NONE, 'bed'] },  // 'bed' = the-wrinkling gather bay (§2.6 gardens flip)
   { hub: 'reckoning',          firstClass: ['open-btn', NONE] },
   { hub: 'hours',              firstClass: [NONE], file: 'hours/the-hours.html' },
   { hub: 'cartouche',          firstClass: [NONE] },
@@ -62,6 +62,14 @@ export const HUBS = [
   { hub: 'clockwork',          firstClass: [NONE, 'xcard'] },
   { hub: 'sound-garden',       firstClass: [NONE] },
   { hub: 'cavern',             firstClass: ['bench'] },   // presents brachistochrone as a lab bench (../ link)
+  // ── §2.6 gather hosts (W2.8a flip): each now PRESENTS its gathered pieces in
+  //    its own first-class idiom (the retired PLACES rows become these exhibits) ──
+  { hub: 'glasshouse-range',   firstClass: ['bay'] },     // 4 glass bays → arctic-circle · weather-you-can-make · kirigami · the-aquarium
+  { hub: 'orbit-house',        firstClass: ['alcove'] },  // 3 alcoves → equal-area-sweep · two-bulges · einstein-ring (the .orrery-pit is a doorway, NOT gathered)
+  { hub: 'stellar-forge',      firstClass: ['card'] },    // breathing-star · parallax-baseline
+  { hub: 'first-light',        firstClass: ['baydoor'] }, // recombination (the .baydoor bay; NOT .chip, which also cross-links last-scattering/transit/stellar-forge)
+  { hub: 'vantage',            firstClass: ['lit'] },      // the-sightline (the "scenes you walk into" genre index; .xlink is a cross-reference)
+  { hub: 'lodestone-hall',     firstClass: [NONE] },       // iron-filings · bootstrap-bench (classless menu links); also absorbs the curie-dial stray as a real exhibit
 ];
 
 /* ── INTERNAL: hubs whose exhibits are INTERNAL sub-pages (not top-level dirs) ──

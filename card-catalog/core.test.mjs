@@ -265,7 +265,9 @@ section('(d2) EXHIBITS — the manifest join, the ↳via verdict, and the spoile
   }
 
   // THE SPOILER LAW — a WITHIN piece is a phantom until its own witness is earned.
-  // The 4 within-exhibits live on the-top / warren / reversing-room / the-wrinkling,
+  // The 4 within-exhibits live on the-top / warren / reversing-room / conservatory
+  // (soap-film's within rode from the-wrinkling into the Conservatory when the §2.6
+  // gather folded the-wrinkling into a Conservatory bay — see manifest `withinOf`),
   // each gated by its OWN ws:seen breadcrumb. Prove each is INVISIBLE to search under a
   // sealed store and RESOLVES its host room ONLY under a store carrying its gate key.
   const gatedExhibits = [];
