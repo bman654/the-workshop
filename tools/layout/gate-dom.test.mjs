@@ -51,6 +51,11 @@
      D8  — the KEYBOARD WALK visits EVERY plate in the §2.5 STRUCT_WALK order: each of the eleven
            nav elements (ten district reps + the fairground gate) is focusable (role=button,
            tabindex 0) and a REAL Enter enters it; aria-current tracks the entered district.
+     D9  — §3.3 STAR-CAUSALITY: a REAL hover on a star's invisible hit disc reveals the engraved
+           star card (an unlit star shows the spoiler HINT — no name, no link); the Survey tally
+           is a keyboard button that a REAL Enter opens into the grouped, keyboard-operable SKY
+           INDEX; and the unseen hidden star (starlight-bend) stays HINT-ONLY in the index (its
+           name never leaks before its ws:seen crumb — the Register's lock-parity, in the sky).
 
    Run:  node tools/layout/gate-dom.test.mjs   (exit 0 = all pass, exit 1 = a check failed,
          exit 2 = harness could not run — agent-browser missing / server / forge error).
@@ -364,6 +369,78 @@ async function main() {
       '[' + focusable + '/' + STRUCT_WALK.length + ' focusable, ' + enteredAll + '/' + STRUCT_WALK.length + ' entered' +
       (misses.length ? ', missed: ' + misses.join(',') : '') + ']');
 
+    // ════════════════════════════════════════════════════════════════════════════
+    //  D9 — §3.3 STAR-CAUSALITY: the star card reveals on a REAL hover, the Survey tally is a
+    //  keyboard button opening the sky index, and the hidden-star name-lock holds in the LIVE
+    //  DOM. A fresh headless origin has no ws:seen breadcrumbs, so every star is UNLIT here —
+    //  which is exactly the branch that must show a spoiler HINT and never a name/link.
+    // ════════════════════════════════════════════════════════════════════════════
+    goHome();
+
+    // read the star card's live state (shown? name? "what lights it" text? does it carry a link?)
+    const skycard = () => abEval(`(function(){
+      var c=document.getElementById('skycard');
+      var w=document.getElementById('sc-what');
+      var a=w?w.querySelector('a'):null;
+      return JSON.stringify({
+        shown: !!(c && c.classList.contains('show')),
+        name: (document.getElementById('sc-name')||{}).textContent ? document.getElementById('sc-name').textContent.trim() : '',
+        what: w ? w.textContent.trim() : '',
+        hasLink: !!a });
+    })()`);
+
+    // D9a — a REAL hover on a clear-margin star's invisible hit disc reveals the engraved card.
+    // Pick the first candidate whose disc is the TOPMOST element (a real hover there lands on it,
+    // not on a footprint or the ground) — the same house-lesson hit-test as the plinth/gate.
+    const STAR_CANDS = ['carnot', 'firmament', 'pin-barrel', 'orrery', 'stirling'];
+    let starId = null, spot = null;
+    for (const id of STAR_CANDS) {
+      const h = hitTest(`.sky-hit-dot[data-id="${id}"]`, 0.5, 0.5, '.sky-hit-dot');
+      if (h.found && h.inWant) { starId = id; spot = h; break; }   // h.x/h.y = the disc's screen centre
+    }
+    let card = null;
+    if (starId && spot) {
+      // a REAL CDP mouse move to the disc centre → the browser's OWN hit-test fires the native
+      // mouseenter (agent-browser `hover` proved to skip it — the same dispatchEvent-blind-spot
+      // house lesson: only a real pointer move exercises the hover path).
+      ab('mouse', 'move', String(spot.x), String(spot.y));
+      ab('wait', '450');
+      card = skycard();
+    }
+    check('D9a — a REAL hover on a star\'s invisible hit disc reveals the star card (an UNLIT star ⇒ the spoiler HINT: shown, no name, no link)',
+      !!starId && card && card.shown === true && card.what.length > 0 && card.hasLink === false && /unnamed/i.test(card.name),
+      '[star=' + starId + ', shown=' + (card && card.shown) + ', name="' + (card && card.name) + '", what="' + (card && card.what) + '", hasLink=' + (card && card.hasLink) + ']');
+
+    // D9b — the Survey tally is a KEYBOARD button: focus it + a REAL Enter opens the SKY INDEX,
+    // a grouped, populated, keyboard-operable list (the accessible surface, not ~65 star stops).
+    ab('focus', '#sky-tally-main');
+    ab('press', 'Enter');
+    ab('wait', '350');
+    const ixOpen = abEval(`(function(){
+      var ix=document.getElementById('skyindex');
+      return JSON.stringify({
+        shown: !!(ix && ix.classList.contains('show')),
+        rows: document.querySelectorAll('#sky-ix-list .skyix-star').length,
+        groups: document.querySelectorAll('#sky-ix-list .skyix-ghead').length,
+        focusInPanel: !!(document.activeElement && document.activeElement.closest && document.activeElement.closest('#skyindex')) });
+    })()`);
+    check('D9b — the Survey tally is a KEYBOARD button: focus + a REAL Enter opens the SKY INDEX (grouped, populated rows, focus moved into the panel)',
+      ixOpen.shown === true && ixOpen.rows >= 50 && ixOpen.groups >= 6 && ixOpen.focusInPanel === true,
+      '[shown=' + ixOpen.shown + ', rows=' + ixOpen.rows + ', groups=' + ixOpen.groups + ', focusInPanel=' + ixOpen.focusInPanel + ']');
+
+    // D9c — HIDDEN-STAR LOCK-PARITY in the live DOM: the unseen hidden star (starlight-bend)
+    // appears in the index as a HINT ONLY — its name never leaks before its ws:seen crumb.
+    const hidden = abEval(`(function(){
+      var b=document.querySelector('#sky-ix-list .skyix-star[data-id="starlight-bend"]');
+      if(!b) return JSON.stringify({found:false});
+      var txt=(b.textContent||'').trim();
+      return JSON.stringify({ found:true, hintOnly: !!b.querySelector('.sx-hint'),
+        leaksName: /Light That Falls Around a Star/.test(txt), text: txt });
+    })()`);
+    check('D9c — HIDDEN lock-parity (live DOM): the unseen hidden star (starlight-bend) is HINT-ONLY in the index — its name never leaks',
+      hidden.found === true && hidden.hintOnly === true && hidden.leaksName === false,
+      '[found=' + hidden.found + ', hintOnly=' + hidden.hintOnly + ', leaksName=' + hidden.leaksName + ', text="' + hidden.text + '"]');
+
   } finally {
     // 4. TEARDOWN — close exactly OUR session + kill exactly OUR server child (never a broad pkill;
     //    this laptop also runs the maker's own servers — CLEANUP GUARDRAIL).
@@ -373,7 +450,7 @@ async function main() {
 
   console.log('');
   if (fail === 0) {
-    console.log('PASS — the estate platewalk is REAL in the live DOM: the estate tier rests on the structures, a REAL click / keyboard Enter on a district structure descends to its plate, the fairground gate catches a REAL negative-space click, Esc + the depth ribbon + the ⌂ home button all ascend, the LOD crossfade strands no orphan labels at either tier, and the keyboard walk reaches every plate — none of which the pure-Node twins can see.');
+    console.log('PASS — the estate platewalk is REAL in the live DOM: the estate tier rests on the structures, a REAL click / keyboard Enter on a district structure descends to its plate, the fairground gate catches a REAL negative-space click, Esc + the depth ribbon + the ⌂ home button all ascend, the LOD crossfade strands no orphan labels at either tier, the keyboard walk reaches every plate, and (§3.3) a REAL hover reveals the star card while the tally-button keyboard-opens the sky index with the hidden-star name-lock intact — none of which the pure-Node twins can see.');
     process.exit(exitCode);
   } else {
     console.log('FAIL — ' + fail + ' live-DOM check(s) failed: the platewalk is NOT wired as the rendered page claims. The headless twins cannot see this — that is why this gate exists.');

@@ -283,6 +283,91 @@
   Sky.CATALOG = CATALOG;
   Sky.WINGS = WINGS;
   Sky.FEATS = FEATS;
+  Sky.GROUPS = SKY_GROUPS;
+  Sky.HINTS = SKY_HINTS;
+
+  /* ── STAR-CAUSALITY (§3.3) — the pure, DOM-free half the card layer + the tests share ──
+     Every catalog star belongs to exactly ONE group (a wing or a feat-group; sky.test's
+     BIJECTION proves it). GROUP_OF resolves a star id → its group record so a card can
+     name the group and count how many of its lights are kindled. Built once, iterated in
+     WINGS-then-FEATS declaration order (deterministic). */
+  var GROUP_OF = {};
+  (function () {
+    var i, m;
+    for (i = 0; i < WINGS.length; i++) for (m = 0; m < WINGS[i].members.length; m++) GROUP_OF[WINGS[i].members[m]] = WINGS[i];
+    for (i = 0; i < FEATS.length; i++) for (m = 0; m < FEATS[i].members.length; m++) GROUP_OF[FEATS[i].members[m]] = FEATS[i];
+  })();
+  Sky.groupOf = function (id) { return GROUP_OF[id] || null; };
+
+  /* house voice for the star-card + sky-index copy: spelled numbers, never numerals
+     shorthand (§3.3 / §4.6 leak-watch). Falls back to the numeral above the table. */
+  var NUM_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight',
+                   'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen'];
+  Sky.numberWord = function (n) { return (n >= 0 && n < NUM_WORDS.length) ? NUM_WORDS[n] : String(n); };
+
+  Sky.SKYLIT = 'ws:flag:skylit-';   // the per-star first-light flag prefix (§3.3)
+
+  /* Sky.kindlePlan(state, store) — PURE. The lit stars that have NEVER been kindled on
+     this origin (their `ws:flag:skylit-<id>` flag is absent), returned BRIGHTEST-FIRST
+     (mag ascending) with a stable id tiebreak — the order the DOM layer staggers the
+     first-light bloom in (120ms apart), and exactly the set whose flags renderInto sets
+     after (whether or not it animated — reduced-motion still arms them). Never mutates. */
+  Sky.kindlePlan = function (state, store) {
+    var lit = (state && state.stars ? state.stars : []).slice().sort(function (a, b) {
+      if (a.mag !== b.mag) return a.mag - b.mag;                 // mag 1 (a wing's bright lead) first
+      return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);           // deterministic tiebreak
+    });
+    var fresh = [];
+    for (var i = 0; i < lit.length; i++) {
+      if (lsGet(store, Sky.SKYLIT + lit[i].id) == null) fresh.push(lit[i].id);
+    }
+    return fresh;
+  };
+
+  /* the spoiler-light HINT for a star: a per-star line if the manifest carried one, else
+     its group's one-line myth, else a generic "unlit corner". Never a name, never a link. */
+  function hintFor(id) {
+    if (SKY_HINTS[id]) return SKY_HINTS[id];
+    var grp = GROUP_OF[id];
+    if (grp && SKY_HINTS[grp.id]) return SKY_HINTS[grp.id];
+    if (grp && grp.myth) return grp.myth;
+    return 'an unlit corner of the estate — a room you have yet to enter';
+  }
+
+  /* Sky.cardModel(id, visited, store) — PURE. The render-agnostic facts the star card AND
+     the sky-index both display (single source, so the two can never drift). `visited` is a
+     truthy-map of lit ids (Sky.visitedFromStore); `store` (optional) is consulted ONLY for
+     the hidden-star lock: a `hidden:true` star reveals its name+link solely once its own
+     `ws:seen:<id>` breadcrumb exists — before that its card is hint-only, the same discipline
+     the Register uses (§3.3 / §4.4). A card NEVER reads PLACES; names come from STAR_META.
+       { id, lit, hidden, revealed, name?, href?, hint?, group:{ id,name,total,lit,complete } } */
+  Sky.cardModel = function (id, visited, store) {
+    visited = visited || {};
+    var meta = STAR_META[id] || null;
+    var lit = !!visited[id];
+    var hidden = !!(meta && meta.hidden);
+    // reveal the name/link when lit — but a hidden star gates that on its OWN ws:seen crumb.
+    var revealed = hidden ? (store && store.has ? !!store.has('ws:seen:' + id) : lit) : lit;
+    var grp = GROUP_OF[id];
+    var total = grp ? grp.members.length : 0, litCount = 0;
+    if (grp) for (var i = 0; i < grp.members.length; i++) if (visited[grp.members[i]]) litCount++;
+    var out = {
+      id: id, lit: lit, hidden: hidden, revealed: revealed,
+      group: grp ? { id: grp.id, name: grp.name, total: total, lit: litCount, complete: total > 0 && litCount === total } : null
+    };
+    if (revealed && meta) { out.name = meta.name; if (meta.href) out.href = meta.href; }
+    else out.hint = hintFor(id);
+    return out;
+  };
+
+  /* the group-progress line in house voice — "three of its five lights kindled", never a
+     numeral shorthand; "all … charted" once complete; a lone light stays singular. */
+  Sky.progressLine = function (group) {
+    if (!group) return '';
+    var w = Sky.numberWord, unit = group.total === 1 ? 'light' : 'lights';
+    if (group.complete) return 'all ' + w(group.total) + ' ' + unit + ' kindled — charted';
+    return w(group.lit) + ' of its ' + w(group.total) + ' ' + unit + ' kindled';
+  };
 
   /* ── PURE CORE ──────────────────────────────────────────────────────────────
      Sky.state(visited, catalog, wings) — deterministic, ORDER-INDEPENDENT,
@@ -430,13 +515,40 @@
     var reduce = false;
     try { reduce = root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
 
-    var st = Sky.state(Sky.visitedFromStore(store), CATALOG, WINGS);
+    var vmap = Sky.visitedFromStore(store);
+    var st = Sky.state(vmap, CATALOG, WINGS);
+
+    // ── FIRST-LIGHT plan (§3.3): the lit stars never yet kindled on this origin, brightest
+    //    first. Their `.kindling` bloom is staggered 120ms apart; their flags are SET after
+    //    the loop (under reduced-motion we skip the bloom but STILL arm the flags). ──
+    var fresh = Sky.kindlePlan(st, store);
+    var kindleOrder = {};
+    for (var ki = 0; ki < fresh.length; ki++) kindleOrder[fresh[ki]] = ki;
+
+    // ── ASTERISM FIRST-COMPLETION plan (§3.3): a wing charted for the FIRST time this render
+    //    (complete + its `-named` flag still absent) drives, before the name fades in, a
+    //    member-by-member brighten (240ms apart, members order) then a line-by-line ink. We
+    //    read the flags here and set them in the name loop below (one flag, one firing). ──
+    var firstNamed = {};               // wingId → { order:{id→idx}, count }
+    for (var ai = 0; ai < st.asterisms.length; ai++) {
+      var a0 = st.asterisms[ai];
+      if (!a0.complete) continue;
+      if (lsGet(store, 'ws:flag:sky-' + a0.id + '-named') != null) continue;
+      var ord = {};
+      for (var mi = 0; mi < a0.members.length; mi++) ord[a0.members[mi]] = mi;
+      firstNamed[a0.id] = { order: ord, count: a0.members.length };
+    }
 
     // remove a prior render (idempotent re-render)
     var old = sheet.querySelector('g.sky');
     if (old && old.parentNode) old.parentNode.removeChild(old);
 
-    var g = svg('g', { 'class': 'sky', 'aria-hidden': 'true' });
+    // The sky <g> is NOT blanket aria-hidden: it now carries ONE actionable, announced control
+    // (the Survey tally button that opens the accessible sky index). Its decorative parts — the
+    // bare star/line/leader shapes (presentational SVG, not announced), the hit discs, the
+    // sub-tallies, and the engraved names — are individually aria-hidden so the tally-button is
+    // the only thing the a11y tree sees here (the stars themselves would be ~65 hostile stops).
+    var g = svg('g', { 'class': 'sky' });
 
     // ── asterism lines (under the stars) ──
     var i, j;
@@ -446,10 +558,16 @@
       for (j = 0; j < ln.points.length; j++) {
         d += (j === 0 ? 'M' : 'L') + ln.points[j][0] + ' ' + ln.points[j][1] + ' ';
       }
+      var inkFirst = ln.complete && firstNamed[ln.wing] && !reduce;
       var pl = svg('path', {
-        'class': 'asterism-line' + (ln.complete ? ' complete' : ''),
+        'class': 'asterism-line' + (ln.complete ? ' complete' : '') + (inkFirst ? ' inking' : ''),
         d: d.trim(), 'data-wing': ln.wing
       });
+      if (inkFirst) {
+        // draw the figure line-by-line AFTER its members have brightened (count·240ms).
+        pl.setAttribute('pathLength', '1');
+        pl.style.animationDelay = (firstNamed[ln.wing].count * 240) / 1000 + 's';
+      }
       g.appendChild(pl);
     }
 
@@ -463,19 +581,33 @@
       for (j = 0; j < mm.length; j++) chartedIds[mm[j]] = true;
     }
 
+    // when a one-shot bloom/brighten ends, drop its class so the steady twinkle resumes at a
+    // staggered phase (never a competing infinite+one-shot animation on the same element).
+    function settleAfterAnim(star, twinkleDelay) {
+      star.addEventListener('animationend', function () {
+        star.classList.remove('kindling'); star.classList.remove('brighten-in');
+        star.style.animationDelay = twinkleDelay;
+      }, { once: true });
+    }
+
     // ── stars (twinkling circles; static under reduced-motion) ──
     for (i = 0; i < st.stars.length; i++) {
       var s = st.stars[i];
       var charted = !!chartedIds[s.id];
       var rad = (s.mag === 1 ? 2.6 : (s.mag === 2 ? 2.0 : 1.6)) + (charted ? 0.8 : 0);
-      var star = svg('circle', {
-        cx: s.x, cy: s.y, r: rad,
-        'class': 'sky-star mag' + s.mag + (charted ? ' charted' : ''), 'data-id': s.id
-      });
-      if (!reduce) {
-        // stagger the twinkle so the field shimmers rather than pulsing in unison
-        star.style.animationDelay = ((s.x * 7 + s.y * 13) % 4000) / 1000 + 's';
-      }
+      // first-light bloom (this star has never kindled) vs first-completion brighten (an
+      // already-lit member of a wing charting for the first time this render). The freshly-lit
+      // completing member is the one that kindles; its already-lit siblings brighten in turn.
+      var fnWing = charted ? firstNamed[GROUP_OF[s.id] ? GROUP_OF[s.id].id : ''] : null;
+      var kindling = !reduce && kindleOrder[s.id] != null;
+      var brightenIn = !reduce && !kindling && !!fnWing;
+      var cls = 'sky-star mag' + s.mag + (charted ? ' charted' : '') +
+                (kindling ? ' kindling' : '') + (brightenIn ? ' brighten-in' : '');
+      var star = svg('circle', { cx: s.x, cy: s.y, r: rad, 'class': cls, 'data-id': s.id });
+      var twinkleDelay = ((s.x * 7 + s.y * 13) % 4000) / 1000 + 's';
+      if (kindling) { star.style.animationDelay = (kindleOrder[s.id] * 120) / 1000 + 's'; settleAfterAnim(star, twinkleDelay); }
+      else if (brightenIn) { star.style.animationDelay = (fnWing.order[s.id] * 240) / 1000 + 's'; settleAfterAnim(star, twinkleDelay); }
+      else if (!reduce) { star.style.animationDelay = twinkleDelay; }   // stagger the shimmer
       g.appendChild(star);
     }
 
@@ -487,15 +619,36 @@
     for (i = 0; i < st.asterisms.length; i++) {
       var a = st.asterisms[i];
       if (!a.complete) continue;
-      var flagK = 'ws:flag:sky-' + a.id + '-named';
-      var firstTime = lsGet(store, flagK) == null;
+      var firstTime = !!firstNamed[a.id];     // single source with the brighten/ink plan above
       named.push({ ast: a, firstTime: firstTime });
-      if (firstTime) lsSet(flagK, '1');
+      if (firstTime) lsSet('ws:flag:sky-' + a.id + '-named', '1');   // one flag, one firing
     }
 
-    // expose what was computed so the map's label pass can place the name boxes
+    // ── FIRST-LIGHT flags: arm every freshly-kindled star's `skylit-<id>` flag now that it
+    //    has been drawn (whether or not it animated — reduced-motion still monotonically
+    //    arms it, so the bloom never replays). Idempotent; the Undercroft reset re-arms it. ──
+    for (i = 0; i < fresh.length; i++) lsSet(Sky.SKYLIT + fresh[i], '1');
+
+    // ── the STAR-CARD hit layer (§3.3): an invisible disc over EVERY catalog star (lit AND
+    //    unlit), pointer-events:all so a hover/tap reveals its card — while the painted sky
+    //    above stays pointer-events:none. aria-hidden rides the whole sky <g>: ~65 tab stops
+    //    on stars would be hostile, so the keyboard surface is the SKY INDEX panel, not these
+    //    discs (each is tabindex -1). The page wires the hover/click handlers off `data-id`. ──
+    var hit = svg('g', { 'class': 'sky-hit' });
+    var catIds = Object.keys(CATALOG);           // stable string-key insertion order (deterministic)
+    for (i = 0; i < catIds.length; i++) {
+      var cc = CATALOG[catIds[i]];
+      hit.appendChild(svg('circle', {
+        cx: cc.x, cy: cc.y, r: 10, 'class': 'sky-hit-dot', 'data-id': catIds[i], tabindex: '-1'
+      }));
+    }
+    g.appendChild(hit);
+
+    // expose what was computed so the map's label pass can place the name boxes + the card
+    // layer can read the visited set without re-deriving it (single source).
     g.__skyNamed = named;
     g.__skyState = st;
+    g.__skyVisited = vmap;
 
     // ── the margin tally: "Survey of Heaven — N/6 skies charted". The denominator is
     //    the SIX companion-wings only; EVERY feat-group (the Optician + the Automaton +
@@ -513,7 +666,10 @@
       if (wingIds[ai.id] && ai.complete) charted++;
     }
     var tally = svg('text', {
-      x: 1414, y: 862, 'text-anchor': 'end', 'class': 'sky-tally'
+      x: 1414, y: 862, 'text-anchor': 'end', 'class': 'sky-tally',
+      id: 'sky-tally-main', role: 'button', tabindex: '0',
+      'aria-label': 'The Survey of Heaven — ' + Sky.numberWord(charted) + ' of ' +
+                    Sky.numberWord(wingTotal) + ' skies charted; open the sky index'
     });
     tally.textContent = 'Survey of Heaven — ' + charted + '/' + wingTotal + ' skies charted';
     g.appendChild(tally);
@@ -545,7 +701,8 @@
       }
       if (!fast || !fast.complete) continue;             // honest: only when truly charted
       var ftally = svg('text', {
-        x: 1414, y: subY, 'text-anchor': 'end', 'class': 'sky-tally ' + meta.cls
+        x: 1414, y: subY, 'text-anchor': 'end', 'class': 'sky-tally ' + meta.cls,
+        'aria-hidden': 'true'
       });
       ftally.textContent = meta.text;
       g.appendChild(ftally);

@@ -510,6 +510,79 @@ WINGS.forEach(w => w.members.forEach(m => ALL_WING_MEMBERS.push(m)));
   eq(WINGS.length, 6, 'BIJECTION: still exactly six wings after the reshape');
 })();
 
+/* ── (6) STAR-CAUSALITY (§3.3) — the flag semantics + the card model + the hidden-star
+       lock-parity, all proved on the PURE core the page and this test share. ──────────── */
+(function () {
+  // a minimal ws-store double: { ok, all, has(k), get(k) } — the shape Sky.* consumes.
+  function store(map) {
+    map = map || {};
+    return { ok: true, all: map,
+      has: function (k) { return Object.prototype.hasOwnProperty.call(map, k) && map[k] != null; },
+      get: function (k) { return this.has(k) ? map[k] : null; } };
+  }
+  const litSet = { compositor: 1, blazon: 1, firmament: 1 };   // two mag-1 (compositor/firmament) + one mag-2 (blazon)
+  const st = Sky.state(litSet, CATALOG, WINGS);
+
+  // ── kindlePlan: FIRST-LIGHT semantics ──
+  const freshAll = Sky.kindlePlan(st, store({}));
+  eq(freshAll.length, 3, 'KINDLE: with no flags every lit star is fresh (kindles once)');
+  ok(freshAll[0] === 'compositor' && freshAll[1] === 'firmament' && freshAll[2] === 'blazon',
+     'KINDLE: fresh stars are BRIGHTEST-FIRST (mag asc), id-sorted within a magnitude');
+  const freshSome = Sky.kindlePlan(st, store({ 'ws:flag:skylit-compositor': '1', 'ws:flag:skylit-firmament': '1' }));
+  ok(freshSome.length === 1 && freshSome[0] === 'blazon',
+     'KINDLE: an already-kindled star (its skylit-<id> flag set) is excluded — the bloom never replays');
+  eq(Sky.kindlePlan(Sky.state({}, CATALOG, WINGS), store({})).length, 0,
+     'KINDLE: nothing lit ⇒ nothing to kindle');
+  eq(Sky.SKYLIT, 'ws:flag:skylit-', 'KINDLE: the first-light flag prefix is ws:flag:skylit-');
+
+  // ── cardModel: a LIT, non-hidden star reads name + link + honest group progress ──
+  const cLit = Sky.cardModel('firmament', litSet, store({}));
+  ok(cLit.lit === true && cLit.revealed === true && cLit.name === 'The Observatory'
+     && cLit.href === 'firmament/index.html' && cLit.hint === undefined,
+     'CARD: a lit star shows its name + href (kindled by …), never a hint');
+  ok(cLit.group && cLit.group.id === 'celestial' && cLit.group.total === 2 && cLit.group.lit === 1
+     && cLit.group.complete === false,
+     'CARD: the group progress counts only the lit members (one of two here)');
+
+  // ── cardModel: an UNLIT star shows the spoiler-light HINT ONLY — never a name, never a link ──
+  const cUnlit = Sky.cardModel('orrery', litSet, store({}));
+  ok(cUnlit.lit === false && cUnlit.revealed === false && cUnlit.name === undefined
+     && cUnlit.href === undefined && typeof cUnlit.hint === 'string' && cUnlit.hint.length > 0,
+     'CARD: an unlit star is hint-only (no name, no href)');
+
+  // ── HIDDEN-STAR LOCK-PARITY (§3.3 / §4.4): starlight-bend reveals name+link ONLY once its
+  //    OWN ws:seen crumb exists — not merely by sitting in the visited set. ──
+  const hMeta = Sky.STAR_META['starlight-bend'];
+  ok(hMeta && hMeta.hidden === true, 'HIDDEN: starlight-bend carries hidden:true in STAR_META');
+  const hDark = Sky.cardModel('starlight-bend', {}, store({}));
+  ok(hDark.hidden === true && hDark.revealed === false && hDark.name === undefined && hDark.href === undefined
+     && typeof hDark.hint === 'string',
+     'HIDDEN: an unseen hidden star is hint-only (no name, no link) — the same lock the Register uses');
+  const hVisitedNotSeen = Sky.cardModel('starlight-bend', { 'starlight-bend': 1 }, store({}));
+  ok(hVisitedNotSeen.revealed === false && hVisitedNotSeen.name === undefined,
+     'HIDDEN: a hidden star in the visited set but WITHOUT its ws:seen crumb stays LOCKED (lock keys on ws:seen, not lit)');
+  const hSeen = Sky.cardModel('starlight-bend', { 'starlight-bend': 1 }, store({ 'ws:seen:starlight-bend': '1' }));
+  ok(hSeen.revealed === true && hSeen.name === 'The Light That Falls Around a Star'
+     && hSeen.href === 'starlight-bend/index.html',
+     'HIDDEN: once ws:seen:starlight-bend exists the card reveals name + link (lock lifts)');
+
+  // ── house voice: the progress line spells its numbers, never a numeral shorthand ──
+  const pl1 = Sky.progressLine(cLit.group);
+  ok(/one of its two lights kindled/.test(pl1) && !/[0-9]/.test(pl1),
+     'HOUSE VOICE: partial progress reads "one of its two lights kindled" — no numerals');
+  const full = Sky.cardModel('firmament', { firmament: 1, orrery: 1 }, store({})).group;
+  ok(/^all two lights kindled/.test(Sky.progressLine(full)) && !/[0-9]/.test(Sky.progressLine(full)),
+     'HOUSE VOICE: a complete group reads "all two lights kindled — charted" — no numerals');
+  ok(Sky.numberWord(0) === 'zero' && Sky.numberWord(9) === 'nine' && Sky.numberWord(12) === 'twelve',
+     'HOUSE VOICE: numberWord spells 0..12');
+
+  // ── groupOf: every wing/feat member resolves to its group; a lone field star is null ──
+  ok(Sky.groupOf('orrery') && Sky.groupOf('orrery').id === 'celestial'
+     && Sky.groupOf('feat-rainbow') && Sky.groupOf('feat-rainbow').id === 'feats'
+     && Sky.groupOf('orbit-house') === null,
+     'GROUPS: groupOf resolves a wing member, a feat member, and returns null for a lone field star');
+})();
+
 /* ── report ─────────────────────────────────────────────────────────────────── */
 const total = pass + fail;
 if (fail) {
