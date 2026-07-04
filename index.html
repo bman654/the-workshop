@@ -283,6 +283,42 @@
   #viewport #pois .poi{ transition:opacity .5s ease; }
   @media (prefers-reduced-motion:reduce){ #structures, #viewport #pois .poi{ transition:none; } }
 
+  /* ════ §5.2 THE DISTRICT ART — brass-on-ink engraving grammar for the estate-tier
+     district reps (window.DistrictArt), mirroring the .child-scene hand under a
+     .district-rep scope. The monogram plinth (.struct-*) styling lives above; these
+     classes serve the FOUNDRY-forged bespoke scenes (W3.3) — token strokes + accent
+     fills, calm at rest, an .anim group running only when its rep is hovered / focused /
+     given the .awake liveness hook; reduced motion holds the rich static frame. ════ */
+  .district-rep .eng{ stroke:var(--brass); stroke-width:1; fill:none;
+    stroke-linejoin:round; stroke-linecap:round; transition:stroke .35s ease; }
+  .district-rep .eng-fine{ stroke:var(--brass); stroke-width:.6; fill:none; opacity:.5;
+    stroke-linecap:round; transition:stroke .35s ease, opacity .35s ease; }
+  .district-rep .eng-hatch{ stroke:var(--brass); fill:none;
+    transition:opacity .35s ease, stroke .35s ease; }
+  .district-rep .eng-accent{ stroke:var(--c); stroke-width:1; fill:none; stroke-linecap:round;
+    transition:stroke .35s ease; }
+  /* .fillp / .fillp-ink MUST follow .eng so `class="eng fillp"` takes the fill */
+  .district-rep .fillp{ fill:color-mix(in srgb, var(--c) 13%, var(--paper)); transition:fill .35s ease; }
+  .district-rep .fillp-ink{ fill:var(--paper); transition:fill .35s ease; }
+  .district-rep .eng, .district-rep .eng-fine, .district-rep .eng-hatch,
+  .district-rep .eng-accent{ vector-effect:non-scaling-stroke; }
+  /* KINDLE on attention (hover / focus / the .awake liveness hook) */
+  .district-rep:hover .eng, .district-rep:focus-visible .eng, .district-rep.awake .eng{ stroke:var(--brass-bright); }
+  .district-rep:hover .eng-hatch, .district-rep:focus-visible .eng-hatch, .district-rep.awake .eng-hatch{ stroke:var(--brass-bright); }
+  .district-rep:hover .eng-fine, .district-rep:focus-visible .eng-fine, .district-rep.awake .eng-fine{ opacity:.8; }
+  .district-rep:hover .fillp, .district-rep:focus-visible .fillp, .district-rep.awake .fillp{ fill:color-mix(in srgb, var(--c) 26%, var(--paper-lit)); }
+  /* MOTION — present but PAUSED at rest; RUNS only on attention (never rAF churn) */
+  .district-rep .anim{ animation-iteration-count:infinite; animation-timing-function:linear;
+    animation-play-state:paused; transform-box:fill-box; transform-origin:center; }
+  .district-rep:hover .anim, .district-rep:focus-visible .anim, .district-rep.awake .anim{ animation-play-state:running; }
+  /* reduced motion (OS pref OR the shared .fair-reduce page/test mirror) → static, no loop */
+  @media (prefers-reduced-motion:reduce){
+    .district-rep:hover .anim, .district-rep:focus-visible .anim, .district-rep.awake .anim{ animation-play-state:paused; }
+    .district-rep .eng,.district-rep .eng-fine,.district-rep .eng-hatch,.district-rep .eng-accent,
+    .district-rep .fillp,.district-rep .fillp-ink{ transition:none; }
+  }
+  .fair-reduce .district-rep .anim{ animation-play-state:paused !important; }
+
   /* §4.6 duty 3 — the LOCATION LEDE: a fixed top-left live region fed by the platewalk
      (replaces the retired #platebar wayfinder). Small-caps keeps the lowercase lede soft
      and the district name in full caps (the copy's own hierarchy). */
@@ -4075,7 +4111,7 @@ var Layout = (function () {
   function buildStructures(solution, memberCount) {
     solution.districtRects.forEach(function (dr) {
       solution.structures.push({
-        district: dr.district, label: dr.label,
+        district: dr.district, label: dr.label, hue: dr.hue,
         box: { x: r01(dr.x), y: r01(dr.y), w: r01(dr.w), h: r01(dr.h) },
         tallies: { rooms: memberCount[dr.district] || 0, provisional: true }
       });
@@ -6923,6 +6959,165 @@ return {
 
 <script>
 /* ════════════════════════════════════════════════════════════════════════════
+   §5.2 THE DISTRICT ART — the estate-tier forged reps (the #411 gate idiom promoted
+   estate-wide, inlined at build time). Installs `window.DistrictArt = { drawDistrict, … }` —
+   the engraved district STRUCTURE the fit-view LOD prefers over its inline monogram
+   placeholder. ABSENT of bespoke scenes until the foundry forges them (W3.3); while a scene
+   is missing the module's own MONOGRAM PLINTH carries the structure (never blank), and if the
+   whole module is absent the inline drawDistrictPlaceholder tint-hull carries it. The API
+   contract lives in tools/district-art/. ════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════════════
+   district-art.js — §5.2 THE DISTRICT ART, the estate-tier forged reps (the #411
+   fairground-gate idiom promoted estate-wide).
+
+   This module installs `window.DistrictArt`, the art the estate-tier LOD looks for when
+   it draws each district's STRUCTURE (the engraved building the fit-view reads as a place,
+   the visible half of the "buildings-with-souls" cure). It mirrors GateArt's proven
+   architecture exactly (a registry of bespoke scenes + a never-blank procedural fallback +
+   a self-contained draw entry), so the rich foundry-forged reps are a pure drop-in and the
+   page is fully testable WITHOUT them.
+
+   ── THE THREE-TIER FALLBACK (§5.2) ──
+     1. a BESPOKE SCENE  — districtScenes[<districtId>] (foundry-forged; empty until W3.3).
+     2. the MONOGRAM PLINTH — this module's own procedural never-blank fallback: an engraved
+        district initial on a tiered plinth + a faint hull etch. Drawn whenever no scene is
+        registered (or a scene throws). NEVER blank.
+     3. a PLAIN TINT HULL — the PAGE's inline drawDistrictPlaceholder, used only if this whole
+        module is absent or drawDistrict throws outright (the same drop-in guarantee gate-art
+        gives drawFace).
+
+   ── THE API (append SVG into the given <g>; SVG namespace; viewBox units) ──
+
+     window.DistrictArt.drawDistrict(g, district, box, accent) → {kind, label}
+       g        — an SVG <g class="district-rep"> already in the DOM (in #structures); append
+                  into it. The page sets `--c:<accent>` on the group so `.eng-accent`/`.fillp`
+                  resolve the district accent; the module does NOT set the group transform.
+       district — { id, label, accent } — the district being drawn (id keys the registry).
+       box      — { x, y, w, h, cx, cy } the DRAWN (display-clamped) structure box in viewBox
+                  units (~[110,260]px). A scene fills the box; leave the FOOT clear — the PAGE
+                  draws the depth tally there (§5.5, as it draws the "15 AMUSEMENTS" teaser).
+       accent   — the district accent hex (threaded as `--c` by the page; scenes may re-use it).
+       RETURNS  — { kind:'scene'|'monogram', label } — the liveness handle the page mirrors
+                  onto the group as data-district-art. On a registered HIT: draw the scene,
+                  flush its @keyframes, {kind:'scene'}. On a MISS or a THROWN scene: clear any
+                  partial art and draw the monogram plinth → {kind:'monogram'}.
+
+   Art direction: the estate's brass-stroke-on-ink hand (brass #c9a24a strokes, accent-tinted
+   paper fills) at an ESTATE register — calm at rest, an `.anim` group runs only when its
+   `.district-rep` is hovered / focused / given the `.awake` liveness hook; reduced motion holds
+   the rich static frame. Scenes are built to tools/district-art/art-specs/ (W3.3).
+   ════════════════════════════════════════════════════════════════════════════ */
+(function () {
+  var SVGNS = "http://www.w3.org/2000/svg";
+  var BRASS = "#c9a24a";
+  // a tiny local element factory (this module runs in page scope but is SELF-CONTAINED — it
+  // does NOT depend on the page's `el`/`roundRectPath`/`r01`, so the placeholder/forged swap
+  // is clean and the module tests headless without the page).
+  function E(n, a) {
+    var e = document.createElementNS(SVGNS, n);
+    for (var k in a) if (a[k] != null) e.setAttribute(k, a[k]);
+    return e;
+  }
+  function n(v) { return Math.round(v * 100) / 100; }   // keep path data tidy
+  function roundRect(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    return "M" + n(x + r) + " " + n(y) + " H" + n(x + w - r) +
+      " A" + n(r) + " " + n(r) + " 0 0 1 " + n(x + w) + " " + n(y + r) + " V" + n(y + h - r) +
+      " A" + n(r) + " " + n(r) + " 0 0 1 " + n(x + w - r) + " " + n(y + h) + " H" + n(x + r) +
+      " A" + n(r) + " " + n(r) + " 0 0 1 " + n(x) + " " + n(y + h - r) + " V" + n(y + r) +
+      " A" + n(r) + " " + n(r) + " 0 0 1 " + n(x + r) + " " + n(y) + " Z";
+  }
+
+  // ── THE ANIMATION GRAMMAR (mirrors gate-art.js) ──────────────────────────────
+  // A scene's motion is a generated-to-match @keyframes injected once per build into a shared
+  // style tag, and is CALM AT REST — the `.district-rep .anim` CSS holds play-state paused
+  // until the rep wakes. Scenes push rules while they draw; drawDistrict flushes them on a hit.
+  var _kf = [];               // rules collected while the current scene draws
+  var _kfStyle = null;
+  function kfSheet() {
+    if (!_kfStyle || !_kfStyle.isConnected) {
+      _kfStyle = document.createElement("style");
+      _kfStyle.setAttribute("data-district-art-kf", "");
+      (document.head || document.documentElement).appendChild(_kfStyle);
+    }
+    return _kfStyle;
+  }
+  function flushKF() { if (_kf.length) { kfSheet().textContent += "\n" + _kf.join("\n"); _kf.length = 0; } }
+  // the standard KF verbs a scene binds to an `.anim` group (name is the scene's to choose):
+  function spinKF(name, dir) { _kf.push("@keyframes " + name + "{from{transform:rotate(0)}to{transform:rotate(" + (dir < 0 ? -360 : 360) + "deg)}}"); return name; }
+  function bobKF(name, ax, ay) { _kf.push("@keyframes " + name + "{0%,100%{transform:translate(0,0)}50%{transform:translate(" + n(ax) + "px," + n(ay) + "px)}}"); return name; }
+  function swayKF(name, deg) { _kf.push("@keyframes " + name + "{0%,100%{transform:rotate(" + n(-deg) + "deg)}50%{transform:rotate(" + n(deg) + "deg)}}"); return name; }
+  function flowKF(name, d) { _kf.push("@keyframes " + name + "{from{stroke-dashoffset:0}to{stroke-dashoffset:" + n(-d) + "}}"); return name; }
+  // helper: an `.anim` <g> bound to a keyframes name (longhands so the `.anim` class's
+  // paused-at-rest / infinite / linear still apply — never a shorthand that would override).
+  function animGroup(name, dur, extra) {
+    return E("g", { "class": "anim", style: "animation-name:" + name + ";animation-duration:" + dur + "s" + (extra ? (";" + extra) : "") });
+  }
+
+  // ── TIER 2: THE MONOGRAM PLINTH (the module's own never-blank fallback) ───────
+  // Procedural: a tiered plinth + inner rule, an engraved district INITIAL, and a faint hull
+  // etch (a low ground-line beneath the letter). Uses the SAME classes the page has always
+  // styled (.struct-plinth/.struct-plinth-inner/.struct-mono) so the promoted monogram is
+  // pixel-identical to the placeholder T1.3 shipped; the hull etch is a light .eng-fine add.
+  // The FOOT is left clear — the page seats the depth tally there.
+  function initialOf(district) {
+    var s = (district && (district.label || district.id)) || "";
+    return s.replace(/^THE\s+/i, "").charAt(0).toUpperCase() || "·";
+  }
+  function drawMonogram(g, district, box, accent) {
+    var x = box.x, y = box.y, w = box.w, h = box.h;
+    var cx = (box.cx != null) ? box.cx : x + w / 2;
+    var cy = (box.cy != null) ? box.cy : y + h / 2;
+    g.appendChild(E("path", { d: roundRect(x, y, w, h, 10), "class": "struct-plinth" }));
+    g.appendChild(E("path", { d: roundRect(x + 7, y + 7, w - 14, h - 14, 7), "class": "struct-plinth-inner" }));
+    // a faint engraved hull etch — a ground line the initial rests on (the §5.2 "hull etch").
+    var gy = n(y + h * 0.62);
+    g.appendChild(E("line", { x1: n(x + w * 0.24), y1: gy, x2: n(x + w * 0.76), y2: gy, "class": "eng-fine" }));
+    var t = E("text", { x: n(cx), y: n(cy - 6), "text-anchor": "middle", "class": "struct-mono" });
+    t.textContent = initialOf(district);
+    g.appendChild(t);
+    return { kind: "monogram", label: initialOf(district) + " monogram" };
+  }
+
+  // ── THE REGISTRY (foundry-filled at W3.3; empty here → every district monograms) ──
+  var districtScenes = {};
+  function resolveScene(district) {
+    return (district && districtScenes[district.id]) || null;
+  }
+
+  // ── drawDistrict — the hook the estate-tier LOD calls per district structure ──
+  function drawDistrict(g, district, box, accent) {
+    _kf = [];
+    accent = accent || (district && district.accent) || BRASS;
+    var fn = resolveScene(district);
+    if (fn) {
+      try {
+        var r = fn(g, district, box, accent);
+        flushKF();
+        return { kind: "scene", label: (r && r.label) || fn.name };
+      } catch (err) {
+        _kf = [];
+        while (g.firstChild) g.removeChild(g.firstChild);   // never a cluttered half-scene
+        if (typeof console !== "undefined" && console.warn)
+          console.warn("[DistrictArt] scene threw for " + (district && district.id) + ":", err && err.message);
+      }
+    }
+    return drawMonogram(g, district, box, accent);
+  }
+
+  window.DistrictArt = window.DistrictArt || {};
+  window.DistrictArt.drawDistrict = drawDistrict;
+  window.DistrictArt.drawMonogram = drawMonogram;
+  window.DistrictArt.districtScenes = districtScenes;
+  window.DistrictArt.resolveScene = resolveScene;
+  // the animation grammar verbs — exposed so a scene authored as a registered stub (or the
+  // liveness twin) can generate a real @keyframes without reaching into the module internals.
+  window.DistrictArt.anim = { spinKF: spinKF, bobKF: bobKF, swayKF: swayKF, flowKF: flowKF, group: animGroup, flush: flushKF };
+})();
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
    THE PLACES TABLE — the single DECLARATIVE data array that drives the whole plan.
 
    A room DECLARES INTENT — never a pixel. The Layout engine (inlined above) DERIVES
@@ -7813,6 +8008,22 @@ function drawChildScenePlaceholder(g, poi, box, accent){
   t.textContent=(poi&&poi.glyph)||"◇";
   g.appendChild(t);
   return { kind:"emoji", label:"emoji-tile fallback" };
+}
+/* §5.2 the DISTRICT-ART tier-3 placeholder — the plain TINT HULL the estate-tier structure
+   falls back to when window.DistrictArt is ABSENT (or drawDistrict throws outright): a soft
+   accent-tinted plinth + the district initial, so a rep is NEVER blank even without the
+   forged art (the same drop-in guarantee drawGateFacePlaceholder gives the gate). The rich art
+   installs at window.DistrictArt.drawDistrict(g, district, box, accent) — this placeholder
+   defines that exact API + {kind} return. */
+function drawDistrictPlaceholder(g, district, box, accent){
+  const x=box.x, y=box.y, w=box.w, h=box.h;
+  const cx=(box.cx!=null)?box.cx:x+w/2, cy=(box.cy!=null)?box.cy:y+h/2;
+  g.appendChild(el("rect",{ x, y, width:w, height:h, rx:10, class:"struct-plinth",
+    fill:`color-mix(in srgb, ${accent||"#c9a24a"} 7%, rgba(11,14,22,.5))` }));
+  const t=el("text",{ x:cx, y:r01(cy-6), "text-anchor":"middle", class:"struct-mono" });
+  t.textContent=((district&&(district.label||district.id))||"").replace(/^THE /,"").charAt(0).toUpperCase()||"·";
+  g.appendChild(t);
+  return { kind:"monogram", label:"tint-hull placeholder" };
 }
 function drawCoaster(g, r){ // side-view coaster: a hoist tower, a dip, a vertical LOOP, a run-out — the ride's own content
   const {x,y,w,h} = r; drawSlab(g,x,y,w,h,2);
@@ -9717,7 +9928,10 @@ function drawStructures(){
   STRUCT_WALK.forEach(dist=>{
     const s = byDistrict[dist]; if(!s || dist==="fairground") return;
     const b = structDisplayBox(s.box);
-    const g = el("g",{ class:"district-rep", "data-district":dist,
+    const accent = s.hue || "#c9a24a";
+    // --c threads the district accent to the DistrictArt scene grammar (.eng-accent/.fillp),
+    // exactly as .poi/.gate-face do for their scenes; the monogram fallback ignores it.
+    const g = el("g",{ class:"district-rep", "data-district":dist, style:`--c:${accent}`,
       role:"button", tabindex:"0", "aria-label": s.label + " — enter" });
     if(STRUCT_SKIP.has(dist)){
       // manor / approach: a transparent focusable nav-pad over the hull (the massing / gate
@@ -9725,12 +9939,17 @@ function drawStructures(){
       g.classList.add("nav-pad-rep");
       g.appendChild(el("rect",{ x:b.x, y:b.y, width:b.w, height:b.h, rx:10, class:"nav-pad" }));
     } else {
-      // a tiered monogram plinth (never blank — the three-tier fallback's middle tier).
-      g.appendChild(el("path",{ d:roundRectPath(b.x, b.y, b.w, b.h, 10), class:"struct-plinth" }));
-      g.appendChild(el("path",{ d:roundRectPath(b.x+7, b.y+7, b.w-14, b.h-14, 7), class:"struct-plinth-inner" }));
-      const mono = el("text",{ x:b.cx, y:r01(b.cy - 6), "text-anchor":"middle", class:"struct-mono" });
-      mono.textContent = s.label.replace(/^THE /,"").charAt(0);
-      g.appendChild(mono);
+      // §5.2 the engraved district STRUCTURE: prefer the FORGED DistrictArt scene, else its
+      // procedural MONOGRAM PLINTH (the module's never-blank tier-2 fallback), else the page's
+      // plain-tint placeholder (tier 3 — module absent / a total throw). The returned {kind} is
+      // the liveness handle mirrored onto data-district-art (twin: __districtArtLiveness).
+      const drawDist = (window.DistrictArt && DistrictArt.drawDistrict) ? DistrictArt.drawDistrict : drawDistrictPlaceholder;
+      let dres;
+      try{ dres = drawDist(g, { id:dist, label:s.label, accent }, b, accent); }
+      catch(_){ while(g.firstChild) g.removeChild(g.firstChild); dres = drawDistrictPlaceholder(g, { id:dist, label:s.label, accent }, b, accent); }
+      g.dataset.districtArt = (dres && dres.kind) || "monogram";   // 'scene' | 'monogram'
+      // the depth tally is PAGE-drawn (§5.5 — art never bakes a number; the page draws it as it
+      // draws the fairground's "15 AMUSEMENTS" teaser), seated at the structure foot.
       const tal = el("text",{ x:b.cx, y:r01(b.y + b.h - 12), "text-anchor":"middle", class:"struct-tally" });
       const tstr = structTally(dist);
       tal.textContent = tstr;
@@ -10315,6 +10534,114 @@ try{ requestAnimationFrame(function(){ try{
   const r = window.__fairgroundLiveness();
   console.log("[fairground-liveness] "+(r.pass?"PASS":"FAIL")+"\n"+r.results.map(x=> (x[1]?"  ✓ ":"  ✗ ")+x[0]).join("\n"));
 }catch(e){ console.warn("[fairground-liveness] threw", e); } }); }catch(_){}
+
+/* ── §5.2 THE DISTRICT-ART LIVENESS TWIN (the delight-register rule for the estate-tier reps).
+   The district structures are a DELIGHT with a PAYOFF (an engraved building that KINDLES to
+   life on attention), so it owes a check that the payoff FIRES on the rep's OWN real entry —
+   the fairground liveness twin is the template. It (a) reads the BUILT DOM and asserts every
+   drawn district rep renders a registered SCENE or an honest MONOGRAM (data-district-art), never
+   blank; (b) waking a rep flips its scene animation to running AND the scene MUTATES; (c)
+   reduced-motion holds the static frame; (d) a THROWING scene AND an unregistered district both
+   fall back to the monogram plinth, never blank. Because W3.1 ships NO bespoke scenes yet (all
+   districts monogram), (b)/(c) exercise the REAL animation grammar via a synthetic registered
+   scene drawn into a connected .district-rep — the same technique the fairground twin uses for
+   its miss/throw checks. Call window.__districtArtLiveness() → {pass, results}; auto-runs once,
+   rAF-deferred, into window.__districtArtLiveness.result + the console. ── */
+window.__districtArtLiveness = function(){
+  const R = [], ok = (name, cond)=> R.push([name, !!cond]);
+  const D = window.DistrictArt;
+  ok("DistrictArt.drawDistrict is installed", D && typeof D.drawDistrict === "function");
+
+  // (a) every DRAWN district rep resolved to a registered scene OR an honest monogram, read
+  //     straight off the built DOM (data-district-art is the liveness handle). The manor/approach
+  //     nav-pads + the fairground gate face carry their own art and are excluded (no attr).
+  const reps = structuresG ? Array.prototype.slice.call(structuresG.querySelectorAll(".district-rep[data-district-art]")) : [];
+  let good = 0, bad = [];
+  reps.forEach(rep=>{
+    const kind = rep.dataset.districtArt;
+    if((kind==="scene"||kind==="monogram") && rep.childNodes.length>0) good++; else bad.push((rep.dataset.district||"?")+":"+kind);
+  });
+  ok("all "+reps.length+" district reps render a scene or honest monogram ("+good+"/"+reps.length+
+     (bad.length?"; bad "+bad.join(","):"")+")", reps.length>0 && bad.length===0);
+
+  // (b)+(c) a synthetic registered SCENE wakes + mutates on attention; reduced-motion holds.
+  let restPaused = false, playRunning = false, mutated = false, reducedHeld = false, sceneKind = false;
+  if(D && D.drawDistrict && D.anim && structuresG){
+    const SVGNS = "http://www.w3.org/2000/svg";
+    // a synthetic scene: a rotating engraved tick with a REAL @keyframes (via the module KF).
+    D.districtScenes.__live__ = function(g, district, box, accent){
+      const name = D.anim.spinKF("da-live-spin", 1);
+      const grp = D.anim.group(name, 2);                       // the .anim group (paused at rest)
+      const cx = box.x + box.w/2;
+      const ln = document.createElementNS(SVGNS, "line");
+      ln.setAttribute("x1", cx); ln.setAttribute("y1", box.y + box.h*0.2);
+      ln.setAttribute("x2", cx); ln.setAttribute("y2", box.y + box.h*0.8);
+      ln.setAttribute("class", "eng");
+      grp.appendChild(ln); g.appendChild(grp);
+      return { label: "live spin" };
+    };
+    const host = document.createElementNS(SVGNS, "g");
+    host.setAttribute("class", "district-rep"); host.style.opacity = "0";   // rendered but invisible
+    const sg = document.createElementNS(SVGNS, "g");
+    const res = D.drawDistrict(sg, { id:"__live__", label:"THE LIVE", accent:"#37f7e0" }, { x:0, y:0, w:160, h:160 }, "#37f7e0");
+    sceneKind = res && res.kind === "scene";
+    host.appendChild(sg); structuresG.appendChild(host);
+    const anim = sg.querySelector(".anim");
+    if(anim){
+      getComputedStyle(anim).transform;                        // force a style/anim flush
+      restPaused = getComputedStyle(anim).animationPlayState === "paused";
+      host.classList.add("awake");                             // the real hover/focus path
+      playRunning = getComputedStyle(anim).animationPlayState === "running";
+      const list = (anim.getAnimations && anim.getAnimations()) || [];
+      if(list.length){
+        const an = list[0]; try{ an.pause(); }catch(_){}
+        const dur = (an.effect && an.effect.getComputedTiming && an.effect.getComputedTiming().duration) || 2000;
+        an.currentTime = 0;         const t0 = getComputedStyle(anim).transform;
+        an.currentTime = dur * 0.3; const t1 = getComputedStyle(anim).transform;
+        mutated = (t0 !== t1) && t0 !== "none" && t1 !== "none";
+        try{ an.play(); }catch(_){}
+      }
+      host.classList.remove("awake");
+      // (c) reduced-motion (the shared .fair-reduce page/test mirror) holds under wake.
+      document.documentElement.classList.add("fair-reduce");
+      host.classList.add("awake");
+      reducedHeld = getComputedStyle(anim).animationPlayState === "paused";
+      host.classList.remove("awake");
+      document.documentElement.classList.remove("fair-reduce");
+    }
+    structuresG.removeChild(host);
+    delete D.districtScenes.__live__;
+  }
+  ok("a registered scene draws (kind:'scene')", sceneKind);
+  ok("rest state is calm (scene animation paused before wake)", restPaused);
+  ok("waking a district rep flips its animation-play-state to running", playRunning);
+  ok("the woken scene MUTATES along its real path (the tick spins) — the payoff FIRES", mutated);
+  ok("reduced-motion holds the static frame under wake (no animation loop)", reducedHeld);
+
+  // (d) a THROWING scene AND an un-registered district both fall back to the monogram, never blank.
+  if(D && D.drawDistrict){
+    const SVGNS = "http://www.w3.org/2000/svg";
+    const g1 = document.createElementNS(SVGNS, "g");
+    const r1 = D.drawDistrict(g1, { id:"__unregistered__", label:"THE VOID", accent:"#fff" }, { x:0, y:0, w:160, h:160 }, "#fff");
+    ok("un-registered district → monogram fallback (never blank)", r1 && r1.kind==="monogram" && g1.childNodes.length>0);
+    D.districtScenes.__boom__ = function(){ throw new Error("scene boom"); };
+    const g2 = document.createElementNS(SVGNS, "g");
+    const _warn = console.warn; console.warn = function(){};   // silence the INTENDED throw's diagnostic
+    const r2 = D.drawDistrict(g2, { id:"__boom__", label:"THE BOOM", accent:"#fff" }, { x:0, y:0, w:160, h:160 }, "#fff");
+    console.warn = _warn;
+    delete D.districtScenes.__boom__;
+    ok("a throwing scene → monogram fallback (never blank)", r2 && r2.kind==="monogram" && g2.childNodes.length>0);
+  }
+
+  const pass = R.every(x=> x[1]);
+  const out = { pass, results: R };
+  window.__districtArtLiveness.result = out;
+  return out;
+};
+try{ requestAnimationFrame(function(){ try{
+  const r = window.__districtArtLiveness();
+  console.log("[district-art-liveness] "+(r.pass?"PASS":"FAIL")+"\n"+r.results.map(x=> (x[1]?"  ✓ ":"  ✗ ")+x[0]).join("\n"));
+}catch(e){ console.warn("[district-art-liveness] threw", e); } }); }catch(_){}
 
 /* ════════════════════════════════════════════════════════════════════════════
    THE HOURS — the front door's day/light LAYER (the grounds swing, cycle #71).

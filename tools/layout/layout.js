@@ -242,7 +242,7 @@ var Layout = (function () {
   function buildStructures(solution, memberCount) {
     solution.districtRects.forEach(function (dr) {
       solution.structures.push({
-        district: dr.district, label: dr.label,
+        district: dr.district, label: dr.label, hue: dr.hue,
         box: { x: r01(dr.x), y: r01(dr.y), w: r01(dr.w), h: r01(dr.h) },
         tallies: { rooms: memberCount[dr.district] || 0, provisional: true }
       });
