@@ -10,7 +10,16 @@
    rOff (hash01(id)*70). derive-sky.mjs consumes this + the live solve to hang every
    figure on the DERIVED ring and emit the {id:{x,y,mag}} slab. This file is the
    authoring source; derive-sky is the geometry. All numbers are 0.1-rounded (theta 1 deg).
-   Every |R| >= 0.988 (no degenerate bearing). Source: sky.js @ W1.3 (65 stars). */
+   Every |R| >= 0.988 (no degenerate bearing). Source: sky.js @ W1.3 (65 stars).
+   Plus 3 NET-NEW field stars with NO migration antecedent (T2.6d, §2.6 round 9):
+   glasshouse-range, orbit-house, estate-gate — the three rooms that post-date the W1.4
+   catalog migration. Each takes a HAND-AUTHORED theta at its district bearing (gardens
+   217°, observatory 307°, the gate at the road's 180°) — the only star positions that are
+   neither migrated nor formula-derived. glasshouse-range/orbit-house keep the field-star
+   depth stagger (rOff = hash01(id)*70); the GATE star's rOff is hand-pushed to clear the
+   card-catalog road-tip footprint (which is seated ALONG the road BEYOND R_sky, so the
+   default 31.5 collides — §4.2's "lantern over the gate" hangs it just past the gatehouse).
+   All three then ride the same §3.1 de-confliction pass + per-star clearance asserts. */
 
 export const GROUPS = {
   "automaton": { theta: 319, rOff: 20, lane: null, hang: 0 },  // |R| 1
@@ -86,8 +95,11 @@ export const STARS = {
   "arcade": { group: null, theta: 76, rOff: 21.1, mag: 1 },
   "benford-mill": { group: null, theta: 202, rOff: 18.1, mag: 2 },
   "collisions": { group: null, theta: 108, rOff: 46.5, mag: 1 },
+  "estate-gate": { group: null, theta: 180, rOff: 120, mag: 1 },  // NET-NEW (T2.6d): the gate at the road's 180°; rOff hand-pushed past the card-catalog road-tip foot
+  "glasshouse-range": { group: null, theta: 217, rOff: 63.8, mag: 1 },  // NET-NEW (T2.6d): gardens bearing 217°
   "gnomon": { group: null, theta: 70, rOff: 45.7, mag: 1 },
   "museum": { group: null, theta: 67, rOff: 49.4, mag: 1 },
+  "orbit-house": { group: null, theta: 307, rOff: 34.5, mag: 1 },  // NET-NEW (T2.6d): observatory bearing 307°
   "sound-garden": { group: null, theta: 95, rOff: 49.9, mag: 2 },
   "the-barrel-house": { group: null, theta: 258, rOff: 7, mag: 1 },
   "the-drawing-room": { group: null, theta: 217, rOff: 29, mag: 1 },
@@ -125,8 +137,11 @@ export const HINTS = {
   "arcade": "an unvisited hall of THE FAIRGROUND",
   "benford-mill": "an unvisited hall of THE NUMBER GARDEN",
   "collisions": "an unvisited hall of THE NUMBER GARDEN",
+  "estate-gate": "the lantern over the estate's front gate",
+  "glasshouse-range": "an unvisited hall of THE GLASSHOUSE GARDENS",
   "gnomon": "an unvisited hall of THE PROMENADES",
   "museum": "an unvisited hall of THE MANOR HOUSE",
+  "orbit-house": "an unvisited hall of THE OBSERVATORY RISE",
   "sound-garden": "an unvisited hall of THE MANOR HOUSE",
   "the-barrel-house": "an unvisited hall of THE MANOR HOUSE",
   "the-drawing-room": "an unvisited hall of THE NUMBER GARDEN",
