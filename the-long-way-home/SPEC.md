@@ -76,16 +76,17 @@ Result: `stations content-fidelity: 165/165 PASS`.
 
 ## Integration
 
-- New top-level `the-long-way-home/`; one PLACES entry on the front door:
-  `{ district:'grounds', tier:1, wing:'processions', footprint:'procession-band' }`.
-- New GROUNDS wing **`processions`** ("THE PROCESSIONAL GROUND") in `tools/layout/layout.js`
-  (`GROUNDS_WINGS` sub-region `{x:568,y:150,w:222,h:158}` + `WING_META`), seated in the open
-  upper-central court north of the manor; finalized via the live `Layout.solve` (footprint
-  x595 y171 168×116, star-clear, disjoint from every neighbour).
+- New top-level `the-long-way-home/`; one PLACES entry on the front door DECLARES its place —
+  `{ district:'promenades', tier:1, wing:'processions', footprint:'procession-band' }` — and
+  never a pixel: the polar contract (`tools/layout/`) derives every coordinate from the deed.
+- Its wing **`processions`** ("THE PROCESSIONAL GROUND") is a cluster of the `promenades`
+  district on the wheel; the live `Layout.solve` seats the footprint star-clear and disjoint
+  from every neighbour.
 - A bespoke `procession-band` footprint draw-key (a tilted edge-on ring dipping below a
   horizon, 12 station ticks, two gate uprights).
-- Catalog star `the-long-way-home` at `(215, 448)` — a wayfarer's star in the west margin
-  beside its companion the Orrery (the firmament it is charted on).
+- Catalog star `the-long-way-home` — a wayfarer's star in the west margin beside its
+  companion the Orrery (the firmament it is charted on); the sky slab is emitted from the
+  polar catalog (`tools/sky/`).
 
 ## Anti-graph guard
 

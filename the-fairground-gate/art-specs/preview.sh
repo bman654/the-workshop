@@ -63,18 +63,16 @@ agent-browser --session "$SESSION" wait 900 >/dev/null
 agent-browser --session "$SESSION" eval --stdin >/dev/null <<'EVALEOF'
 (function(){
   var GA = window.GateArt || {};
-  var bar = document.getElementById("platebar");
-  function tour(to){ var d=Array.prototype.slice.call(bar.querySelectorAll(".door")).find(function(x){return x.dataset.to===to;}); if(d) d.click(); }
+  // v2 polar map: the fairground descends straight through its own gate FACE — the retired
+  // brass platebar (and its grounds-east "door") is gone, so drive the face directly.
   if (GA.drawMidway) {
-    // descended state: tour grounds-east (lights the gate), then descend into the child.
-    tour("grounds-east");
+    // descended state: click the gate face to drop into the child midway.
     var gate=document.querySelector(".gate-face");
     if(gate) gate.dispatchEvent(new MouseEvent("click",{bubbles:true}));
   } else {
     // front-door state: drop to free-explore so the gate face is lit + central.
     var vp=document.getElementById("viewport");
     vp.dispatchEvent(new WheelEvent("wheel",{deltaY:1,bubbles:true}));
-    tour("grounds-east");   // frame the east grounds where the gate sits
   }
   return "staged";
 })()

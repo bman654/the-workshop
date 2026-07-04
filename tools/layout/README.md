@@ -83,6 +83,7 @@ node tools/forge/forge.mjs --check --all # every forged page current
 node tools/forge/forge.mjs --audit-seen  # the ws:seen breadcrumbs
 node tools/manifest/manifest.mjs --check # the estate manifest: completeness · no double-claim · count floors · not stale
 node tools/manifest/manifest.test.mjs    # the manifest gate's own neg-controls (a planted unclaimed dir FAILS loud)
+bash tools/layout/doc-drift.sh           # the DOC-DRIFT twin: anchored v1→v2 stale-vocabulary sweep (prose has no other gate; excludes CHANGELOG/worklog/ledger/tabularium)
 ```
 
 Each test prints its own pass count — no counts are hard-coded here, so nothing drifts.

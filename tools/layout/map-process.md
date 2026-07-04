@@ -317,8 +317,8 @@ home). Score each proposal 1–5 on each axis; be discriminating.
      one dot, exactly what the Gate refuses to draw). Before founding a new group, feed a group
      that stands on a single star. **READ the live sky for which groups those are** — the
      catalog / the manifest at ship — never a transcribed roster: a hard-coded list drifts the
-     moment the sky grows (the classic single-star groups have since gained second members, and
-     the gather completes several within one room). Reward a star that completes/grows a
+     moment the sky grows (groups that once stood on a single star have since gained second
+     members, and the gather completes several within one room). Reward a star that completes/grows a
      constellation; penalize a perfunctory tie, a tie that touches the frozen capstone, or a
      fresh one-member group.
 
