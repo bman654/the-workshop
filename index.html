@@ -10692,43 +10692,45 @@ function labelGap(r){
    midpoint (out in the dark margin, beside its stars). */
 const SKY_LABELS = new Map();   // wingId → { group, anchor:{x,y}, prefer, firstTime }
 
-/* Curated BERTHS for the engraved asterism names: a roomy dark-margin anchor near
-   each wing's stars + an inward side preference (toward the open plate, away from
-   the frame). Each name is then tied to its constellation by a faint leader to the
-   nearest charted star (added 2026-06-13 — proximity + shared brass ALONE read as
-   "a label and a line both pointing at nothing", which fooled even the site's owner
-   into reporting a bug; the leader makes the named sky legible as one unit, matching
-   the leader every POI label already draws). The SAME solver keeps every name clear
-   of POI labels, footprints, and furniture; the solver still adapts the exact side. */
-const SKY_BERTH = {
-  celestial: { x:130, y:470, prefer:['bottom','se','right'] },  // left band, below the tower
-  letters:   { x:455, y:104, prefer:['top','left','bottom'] },  // top band, left of the manor
-  design:    { x:990, y:104, prefer:['top','right','bottom'] }, // top band, right of the manor
-  realm:     { x:120, y:560, prefer:['bottom','se','right'] },  // left band, below the map room
-  garden:    { x:560, y:806, prefer:['bottom','right','top'] }, // bottom band, right of the cartouche
-  labyrinth: { x:1316,y:500, prefer:['bottom','se','right'] },  // right band, above the maze
-  // the feats constellation (bonus): the lens sits in the west grounds left margin
-  // beside the Hall of Mirrors; its name berths to the RIGHT of the lens's lower apex,
-  // out toward the open plate (clear of the Hall footprint and the cartouche).
-  feats:     { x:118, y:650, prefer:['right','se','bottom'] },
-  // the two orphaned-wing reward asterisms: the Automaton stands in the north grounds,
-  // the Furnace rises in the far-right margin. Both name-boxes are PINNED (their box
-  // top-left is fixed) at hand-verified star-clear voids — the right margin is too
-  // crowded for a free solve to reliably find a 137–152px slot, and a free solve of two
-  // extra names perturbs the six wings' placement (it dropped a sibling name onto its
-  // own star). Pinned, they never move and never disturb the wings; DOM-truth verified
-  // 0 overlaps in every state. The `pin` is the box's TOP-LEFT corner; `anchor`/`prefer`
-  // pick the text alignment + the leader side the box flips toward its stars.
-  automaton: { x:322, y:92,  prefer:['right','se','ne'], pin:{ x:173, y:58 } },  // void left of the figure (right of the compass)
-  furnace:   { x:1300,y:760, prefer:['right','se','ne'], pin:{ x:1140, y:480 } }, // center-right void above the daedalus footprint
-  // The Reckoner — its two stars (differential-gear 1180,700 + ball-and-disk 1180,768) sit in
-  // the crowded lower-right where the bottom sub-tally stack also lives, so a free solve cannot
-  // seat the engraved name (it falls back to the star-pair centroid and lands ON the tallies —
-  // the automaton/furnace case). PINNED at a hand-verified void just below the lower star (its
-  // box top-left), clear of every POI label, footprint, tally line, and star; the leader rises
-  // to the ball-and-disk star. DOM-truth verified 0 overlaps (camera-stable getCTM measure).
-  reckoner:  { x:1240, y:760, prefer:['top','ne','right'], pin:{ x:1138, y:729 } }
+/* The margin BERTH for each engraved asterism name is DERIVED, not hand-pinned
+   (rebuilt 2026-07-04). The polar reorg (§3.1) hangs every asterism's stars OUT on
+   the sky ring in the dark margin, keyed by a compass bearing about the SOLVED world
+   centre — so a name's home is simply: seat the box just OUTSIDE its own figure (the
+   side facing away from the plate) and let a faint leader tie it back to the nearest
+   star. We anchor at the member star FURTHEST from the world centre (the outer edge
+   of the figure) and hand the solver the 8 candidate sides RANKED by how nearly each
+   faces outward (radially away from centre); it then picks the outward-most side that
+   clears the fixed POI labels, footprints, furniture, and its sibling names, falling
+   back tangentially where the frame runs tight. The leader (added 2026-06-13 —
+   proximity + shared brass ALONE read as "a label and a line both pointing at
+   nothing", which fooled even the site's owner into reporting a bug) makes the named
+   sky legible as one unit, matching the leader every POI label draws.
+
+   This is FULLY self-healing: it re-derives from Sky.CATALOG + LAYOUT.world on every
+   render, so a layout change can never again strand a name in a dead coordinate space
+   — the bug this replaced: hand-pinned berths left behind in the retired 1440×900
+   space put every name up in the top-left of the 3100² world, each trailing a leader
+   clear across the whole plate to its actual, relocated stars. */
+const SKY_SIDE_VEC = {   // unit vector each solver side pushes the box (screen y-down)
+  right:[1,0], left:[-1,0], top:[0,-1], bottom:[0,1],
+  ne:[0.7071,-0.7071], nw:[-0.7071,-0.7071], se:[0.7071,0.7071], sw:[-0.7071,0.7071]
 };
+function skyBerthFor(stars){
+  // outward radial about the solved world centre (pure geometry — no compass literal)
+  const c = (typeof LAYOUT!=="undefined" && LAYOUT.world && LAYOUT.world.centre) || { x:1550, y:1550 };
+  let sx=0, sy=0; stars.forEach(s=>{ sx+=s.x; sy+=s.y; });
+  const mid = { x:sx/stars.length, y:sy/stars.length };
+  let ux = mid.x - c.x, uy = mid.y - c.y; const ul = Math.hypot(ux,uy) || 1; ux/=ul; uy/=ul;
+  // seat the box beyond the member star FURTHEST from centre (the figure's outer edge)
+  let outer = stars[0], outerD = -1;
+  stars.forEach(s=>{ const d=(s.x-c.x)*(s.x-c.x)+(s.y-c.y)*(s.y-c.y); if(d>outerD){ outerD=d; outer=s; } });
+  // rank all 8 sides by how nearly they face outward; the solver honours this order
+  const prefer = Object.keys(SKY_SIDE_VEC)
+    .map(s=>({ s, dot: SKY_SIDE_VEC[s][0]*ux + SKY_SIDE_VEC[s][1]*uy }))
+    .sort((a,b)=> b.dot - a.dot)
+    .map(o=> o.s);
+  return { anchor:{ x:outer.x, y:outer.y }, prefer };
+}
 
 /* (re)build the engraved-name groups for the currently-charted asterisms from the
    sky <g> the module produced (it carries __skyNamed + __skyState). Returns the
@@ -10738,19 +10740,15 @@ function buildSkyNames(skyG){
   if(!skyG || !skyG.__skyNamed || !skyG.__skyState) return skyG || null;
   const named = skyG.__skyNamed;          // [{ ast, firstTime }]
   named.forEach(({ ast, firstTime })=>{
-    // anchor: this wing's curated margin berth (fallback: the star-pair midpoint)
-    const berth = SKY_BERTH[ast.id];
-    let anchor, prefer, pin = null;
-    if(berth){ anchor = { x:berth.x, y:berth.y }; prefer = berth.prefer; pin = berth.pin || null; }
-    else {
-      let sx=0, sy=0, n=0;
-      ast.members.forEach(mid=>{ const c = Sky.CATALOG[mid]; if(c){ sx+=c.x; sy+=c.y; n++; } });
-      if(!n) return;
-      anchor = { x:sx/n, y:sy/n };
-    }
-    // this wing's lit member-star coords — the leader ties the name to the nearest one
+    // this wing's lit member-star coords — drives BOTH the derived berth (below) AND
+    // the leader that ties the name to the nearest one.
     const stars = ast.members.map(mid=> Sky.CATALOG[mid]).filter(Boolean)
                              .map(c=> ({ x:c.x, y:c.y }));
+    if(!stars.length) return;
+    // berth: seat the box just outside the figure, on the side facing off-plate — all
+    // derived from the live star geometry + the solved world centre (never a literal).
+    const berth = skyBerthFor(stars);
+    const anchor = berth.anchor, prefer = berth.prefer, pin = null;
     // a faint tie-line from the name to its constellation (drawn UNDER the name text)
     const leader = el("path",{ class:"an-leader" });
     skyG.appendChild(leader);
@@ -10872,19 +10870,18 @@ function placeLabels(){
       const bb = info.group.getBBox();
       const w = bb.width + 2*LABEL_PAD, h = bb.height + 2*LABEL_PAD;
       skyEntries.push({ wingId, parts:info, w, h });
-      const f = { id:"sky:"+wingId, anchor:info.anchor, label:{ w, h }, gap:14 };
+      // gap 20: seat the box a touch off its outer star so the tie-leader actually
+      // draws (applySkyName suppresses a leader under ~14px as a proximity stub).
+      const f = { id:"sky:"+wingId, anchor:info.anchor, label:{ w, h }, gap:20 };
       if(info.prefer) f.prefer = info.prefer;
-      // a PINNED name (the Automaton / the Furnace): fix the box top-left so it never
-      // moves and never perturbs the six wings' free solve. Side 'se' ⇒ start-anchored
-      // text (the name reads left→right, its leader runs right toward the figure stars).
-      if(info.pin) f.pin = { x:info.pin.x, y:info.pin.y, side:"se" };
+      if(info.pin) f.pin = { x:info.pin.x, y:info.pin.y, side:"se" };   // (no longer used — berths are derived)
       skyFeatures.push(f);
     });
-    // obstacles for the names = footprints + furniture + every solved POI label. The two
-    // new orphaned-wing names (the Automaton / the Furnace) are PINNED at verified
-    // star-clear voids, so they neither move nor perturb the six wings' free solve (which
-    // stays byte-identical to baseline). The free wing-names route around the fixed POI
-    // labels exactly as before.
+    // obstacles for the names = footprints + furniture + every solved POI label. Every
+    // name now free-solves around those fixed rects (and around its sibling names), each
+    // strongly preferring the outward-radial side of its own figure — so they scatter to
+    // their stars around the ring instead of stacking in one corner. The POI layout in
+    // pass 1 is untouched, so it stays byte-identical to baseline regardless of sky state.
     const skyObstacles = obstacles.concat(poiLabelRects);
     const skySpec = { bounds:LABEL_BOUNDS, features:skyFeatures, obstacles:skyObstacles, seed:LABEL_SEED };
     let skyRes = LabelPlacer.solve(Object.assign({ positions:8 }, skySpec));
