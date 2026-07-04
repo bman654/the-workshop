@@ -1974,11 +1974,15 @@
     lsSet('ws:flag:sky-bootstrap', '1');
   };
 
-  /* ── Sky.renderInto(sheet, PLACES, store) ────────────────────────────────────
+  /* ── Sky.renderInto(sheet, PLACES, store, world) ─────────────────────────────
      Draw a `<g class="sky">` as the FIRST child of #sheet (stars sit "in the
      paper", behind the grid/footprints). PLACES is accepted for parity with the
-     map's render signature (the sky reads from the ws: store, not PLACES). */
-  Sky.renderInto = function (sheet, PLACES, store) {
+     map's render signature (the sky reads from the ws: store, not PLACES). `world`
+     is the solved §1.7 extent (`Layout.world` — W/H/viewBox); the Survey tally is
+     anchored to the WORLD-DERIVED SE dark margin from it (the retired 1440×900
+     corner is dead). Omitting `world` falls back to that old corner (harmless for
+     any DOM render that hands us no world). */
+  Sky.renderInto = function (sheet, PLACES, store, world) {
     if (!root || !root.document || !sheet) return null;
     if (!store) { try { store = root.WS && root.WS.store(); } catch (e) { store = null; } }
     if (!store || !store.ok) return null;   // storage off → no sky (degrade to nothing)
@@ -2136,21 +2140,40 @@
       if (featGroupIds[ai.id]) continue;                 // a feat-group never counts toward /6
       if (wingIds[ai.id] && ai.complete) charted++;
     }
+    // ── §1.7/§4.1 SE-MARGIN anchor (WORLD-DERIVED). The frozen 1440×900 corner
+    //    x1414/y862 died with the polar reorg — on the 3100² world it now falls at
+    //    upper-CENTRE, over live plate content (T3.6). Re-anchor from the solved
+    //    world extent: right-anchor at the frame inset `W−26` (the corner-furniture
+    //    convention, same as the retired 1414 = 1440−26) and seat the main baseline
+    //    just ABOVE the SE scale-bar furniture — the scale bar baseline is `H−96`
+    //    with a keep-out top at `H−120` (§1.7 furniturePlan), so `H−140` clears it
+    //    by 20px; the feat sub-tallies stack UP from here (−14/line), further clear.
+    //    These are EDGE-RELATIVE offsets (exactly what furniturePlan itself uses),
+    //    not world literals → determinism (invariant 1) holds; emit rounds to 0.1. ──
+    var r01 = function (v) { return Math.round(v * 10) / 10; };
+    var tallyX = world ? r01(world.W - 26) : 1414;
+    var tallyY = world ? r01(world.H - 140) : 862;
+    // The tally + its sub-tallies live in their OWN group so the page can lift the whole
+    // block above the decorative `.worldfill` grids (which paint over the in-the-paper sky
+    // and would otherwise swallow a pointer) — the SAME relocation `.sky-hit` gets, so the
+    // Survey button is reachable by a real click, not just by keyboard. Painted here in the
+    // sky <g>; wireSkyCards re-parents it just below the interactive plan.
+    var tallyLayer = svg('g', { 'class': 'sky-tally-layer' });
     var tally = svg('text', {
-      x: 1414, y: 862, 'text-anchor': 'end', 'class': 'sky-tally',
+      x: tallyX, y: tallyY, 'text-anchor': 'end', 'class': 'sky-tally',
       id: 'sky-tally-main', role: 'button', tabindex: '0',
       'aria-label': 'The Survey of Heaven — ' + Sky.numberWord(charted) + ' of ' +
                     Sky.numberWord(wingTotal) + ' skies charted; open the sky index'
     });
     tally.textContent = 'Survey of Heaven — ' + charted + '/' + wingTotal + ' skies charted';
-    g.appendChild(tally);
+    tallyLayer.appendChild(tally);
 
     // ── the feat-group sub-tallies: each COMPLETED feat-group earns one right-anchored
-    //    brass line, stacking UP from the main tally (y862) at -14px per line, tinted by
+    //    brass line, stacking UP from the main tally (tallyY) at -14px per line, tinted by
     //    its class. Data-driven off st.asterisms so adding a feat-group needs no edit
     //    here — only an entry in SUBTALLY. A line is emitted ONLY when genuinely
     //    complete (honest). Stack order follows FEATS array order:
-    //      Optician  (y848) · Automaton (y834) · Furnace (y820). ──
+    //      Optician (tallyY−14) · Automaton (−28) · Furnace (−42) … climbing the SE margin. ──
     var SUBTALLY = {
       feats:     { text: 'Feats of Light — the Optician charted',        cls: 'sky-tally-feats' },
       automaton: { text: "The Maker's Wing — the Automaton charted",     cls: 'sky-tally-automaton' },
@@ -2161,7 +2184,7 @@
       coilwright:{ text: 'Electromagnetism — the Coilwright charted',     cls: 'sky-tally-coilwright' },
       sirenist:  { text: 'Kinetics & Sound — the Sirenist charted',       cls: 'sky-tally-sirenist' }
     };
-    var subY = 848;
+    var subY = r01(tallyY - 14);
     for (i = 0; i < FEATS.length; i++) {
       var fg = FEATS[i];
       var meta = SUBTALLY[fg.id];
@@ -2172,13 +2195,14 @@
       }
       if (!fast || !fast.complete) continue;             // honest: only when truly charted
       var ftally = svg('text', {
-        x: 1414, y: subY, 'text-anchor': 'end', 'class': 'sky-tally ' + meta.cls,
+        x: tallyX, y: subY, 'text-anchor': 'end', 'class': 'sky-tally ' + meta.cls,
         'aria-hidden': 'true'
       });
       ftally.textContent = meta.text;
-      g.appendChild(ftally);
+      tallyLayer.appendChild(ftally);
       subY -= 14;
     }
+    g.appendChild(tallyLayer);
 
     // ── capstone: when ALL SIX WINGS are complete, set the firmament-survey flag once
     //    and add a faint all-skies glow band. This is the ORIGINAL capstone, unaffected
