@@ -37,21 +37,23 @@ function bbox(id){
 // gardens, observatory, opticks, promenades, number, works, approach, cavern,
 // outbuilding + the basement slot. (fairground is a DETACHED gate — no room foot to
 // mirror.) Keep in lockstep with sky.test.cjs's FOOTPRINTS block.
+// W2.8 GATHERED off the map — no live PLACES footprint — so retired from the mirror
+// in T6.1b: the-sightline (observatory), refraction-run (opticks), hexapawn (number).
+// number's seat is held by numbers-room (its remaining footed anchor) so the wheel
+// stays spanning; observatory/opticks still ride firmament/hall-of-mirrors.
 const MIRROR_IDS = ['verse','compositor','cartographer','sound-garden','threshold',
-  'strange-garden','firmament','the-sightline','hall-of-mirrors','refraction-run',
-  'gnomon','holonomy','hexapawn','lodestone-hall','card-catalog','estate-gate',
+  'strange-garden','firmament','hall-of-mirrors',
+  'gnomon','holonomy','numbers-room','lodestone-hall','card-catalog','estate-gate',
   'physics-lab','workbench','undercroft'];
 
 function starHit(s,b){ return s.x+STAR_PAD>b.x && s.x-STAR_PAD<b.x+b.w && s.y+STAR_PAD>b.y && s.y-STAR_PAD<b.y+b.h; }
 
 const notes = {
   firmament: '  // observatory tower r→bbox',
-  'the-sightline': '  // observatory — the vantages wing',
   'hall-of-mirrors': '  // opticks — the Hall the feat-stars ring beside',
-  'refraction-run': '  // opticks — The Photon\'s Errand fly-through',
   gnomon: '  // promenades — The Hours sundial',
   holonomy: '  // promenades — Curved Country',
-  hexapawn: '  // number — the solved-games cabinet',
+  'numbers-room': '  // number — the Numbers Room',
   'lodestone-hall': '  // works — electromagnetism',
   'card-catalog': '  // approach — the gatehouse register',
   'estate-gate': '  // approach — the gate lodge',

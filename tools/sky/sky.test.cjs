@@ -67,25 +67,23 @@ const VIEWBOX = { x: 0, y: 0, w: 3100, h: 3100 };
    and updated in LOCKSTEP whenever a room's declaration changes — keep it in sync or
    this test false-fails. Every generated box is verified star-clear. */
 const FOOTPRINTS = [
-  { id: 'verse',            x: 1644,  y: 1484,  w: 37,   h: 26 },
-  { id: 'compositor',       x: 1598,  y: 1519,  w: 37,   h: 26 },
-  { id: 'cartographer',     x: 1417,  y: 1553,  w: 37,   h: 26 },
-  { id: 'sound-garden',     x: 1508,  y: 1484,  w: 37,   h: 26 },
-  { id: 'threshold',        x: 1644,  y: 1519,  w: 37,   h: 26 },
-  { id: 'strange-garden',   x: 1248,  y: 1794,  w: 48,   h: 48 },
-  { id: 'firmament',        x: 1222,  y: 1342,  w: 35,   h: 35 },  // observatory tower r→bbox
-  { id: 'the-sightline',    x: 1303,  y: 1260,  w: 35,   h: 35 },  // observatory — the vantages wing
-  { id: 'hall-of-mirrors',  x: 659,   y: 1492,  w: 52,   h: 52 },  // opticks — the Hall the feat-stars ring beside
-  { id: 'refraction-run',   x: 787,   y: 1492,  w: 52,   h: 52 },  // opticks — The Photon's Errand fly-through
-  { id: 'gnomon',           x: 1423,  y: 744,  w: 60,   h: 60 },  // promenades — The Hours sundial
-  { id: 'holonomy',         x: 1484,  y: 710,  w: 60,   h: 60 },  // promenades — Curved Country
-  { id: 'hexapawn',         x: 1093,  y: 2263,  w: 35,   h: 25 },  // number — the solved-games cabinet
-  { id: 'lodestone-hall',   x: 1820,  y: 1687,  w: 53,   h: 53 },  // works — electromagnetism
+  { id: 'verse',            x: 1417,  y: 1533,  w: 46,   h: 33 },
+  { id: 'compositor',       x: 1471,  y: 1533,  w: 46,   h: 33 },
+  { id: 'cartographer',     x: 1580,  y: 1533,  w: 46,   h: 33 },
+  { id: 'sound-garden',     x: 1526,  y: 1492,  w: 46,   h: 33 },
+  { id: 'threshold',        x: 1526,  y: 1533,  w: 46,   h: 33 },
+  { id: 'strange-garden',   x: 1328,  y: 1800,  w: 80,   h: 80 },
+  { id: 'firmament',        x: 1222,  y: 1181,  w: 71,   h: 71 },  // observatory tower r→bbox
+  { id: 'hall-of-mirrors',  x: 720,   y: 1488,  w: 56,   h: 56 },  // opticks — the Hall the feat-stars ring beside
+  { id: 'gnomon',           x: 1423,  y: 727,  w: 79,   h: 79 },  // promenades — The Hours sundial
+  { id: 'holonomy',         x: 1510,  y: 706,  w: 79,   h: 79 },  // promenades — Curved Country
+  { id: 'numbers-room',     x: 1072,  y: 2247,  w: 103,  h: 73 },  // number — the Numbers Room
+  { id: 'lodestone-hall',   x: 1843,  y: 1687,  w: 80,   h: 80 },  // works — electromagnetism
   { id: 'card-catalog',     x: 1516,  y: 2805,  w: 92,   h: 64 },  // approach — the gatehouse register
   { id: 'estate-gate',      x: 1490,  y: 2715,  w: 92,   h: 64 },  // approach — the gate lodge
   { id: 'physics-lab',      x: 2190,  y: 2323,  w: 106,  h: 106 },  // cavern — the physics grotto
   { id: 'workbench',        x: 740,   y: 2262,  w: 96,   h: 96 },  // outbuilding — the shed
-  { id: 'undercroft',       x: 1446,  y: 1604,  w: 64,   h: 45 }  // manor basement (beneathSlot)
+  { id: 'undercroft',       x: 1446,  y: 1604,  w: 64,   h: 45 },  // manor basement (beneathSlot)
 ];
 /* FURNITURE dropped as a hand-maintained obstacle (§3.1 steer 7 — "solver-owned,
    one mirror re-derivation then clear by construction"): the corner chrome (compass
