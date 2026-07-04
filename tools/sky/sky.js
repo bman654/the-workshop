@@ -137,7 +137,7 @@
     "singing-plate": {"name":"The Singing Plate","href":"singing-plate/index.html"},
     "hexapawn": {"name":"The Matchbox That Learns","href":"hexapawn/index.html"},
     "the-long-chain": {"name":"The Long Chain","href":"the-long-chain/index.html"},
-    "holonomy": {"name":"The Holonomy Walk","href":"holonomy/index.html"},
+    "holonomy": {"name":"Curved Country","href":"holonomy/index.html"},
     "unrolled-cone": {"name":"The Unrolled Cone","href":"unrolled-cone/index.html"},
     "belief-beam": {"name":"The Belief Beam","href":"belief-beam/index.html"},
     "likelihood-sluice": {"name":"The Likelihood Sluice","href":"likelihood-sluice/index.html"},

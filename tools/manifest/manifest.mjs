@@ -255,15 +255,32 @@ function build(opts = {}) {
   for (const d of roomDirs) claimBy.set(d, ['room']);
   const stake = (dir, chan) => { if (!claimBy.has(dir)) claimBy.set(dir, []); claimBy.get(dir).push(chan); claimed.add(dir); };
 
-  // top-level-dir exhibits (the 117 universe pieces)
+  // top-level-dir exhibits (the 117 universe pieces). A piece's primary hub can itself be a
+  // GATHERED piece — a hub whose PLACES row the §2.6 gather retired (cutting-gears' hub
+  // `cartouche` folded into The Drawing Room; last-scattering's hub `why-the-sky-is-blue`
+  // folded into The Hall of Mirrors). Then the exhibit rides to its hub's CONTAINING room and
+  // records the intermediate presenter in `hostedVia`, so the deliberate two-level nesting
+  // (§7.4) stays legible and the room-keyed register join still finds it — the same ride-up
+  // the withins below use when their parent is gathered.
   for (const p of universe) {
-    const hubDir = primaryOf.get(p);
+    let hubDir = primaryOf.get(p);
     if (!hubDir) continue;
     if (!existsSync(join(ROOT, p))) die('exhibit dir does not exist on disk: ' + p);
+    let hostedVia = null;
+    if (!roomByDir.has(hubDir)) {
+      const containing = primaryOf.get(hubDir);   // the room the gathered hub folded into
+      if (!containing || !roomByDir.has(containing)) {
+        die('exhibit "' + p + '" primary hub "' + hubDir + '" is neither a room nor a gathered exhibit');
+      }
+      hostedVia = hubDir;
+      hubDir = containing;
+    }
     const kind = hubDir === 'workbench' ? 'instrument'
       : Object.prototype.hasOwnProperty.call(STRAYS, p) && fcHubsOf(p).filter((h) => h !== 'workbench').length === 0 ? 'stray'
         : 'exhibit';
-    pushEx(hubDir, { name: readName(p), href: p + '/index.html', kind });
+    const ex = { name: readName(p), href: p + '/index.html', kind };
+    if (hostedVia) ex.hostedVia = hostedVia;
+    pushEx(hubDir, ex);
     stake(p, 'exhibit:' + hubDir);
   }
   // internal-page exhibits (not top-level dirs — pieces count only)

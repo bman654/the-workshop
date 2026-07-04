@@ -70,6 +70,9 @@ export const HUBS = [
   { hub: 'first-light',        firstClass: ['baydoor'] }, // recombination (the .baydoor bay; NOT .chip, which also cross-links last-scattering/transit/stellar-forge)
   { hub: 'vantage',            firstClass: ['lit'] },      // the-sightline (the "scenes you walk into" genre index; .xlink is a cross-reference)
   { hub: 'lodestone-hall',     firstClass: [NONE] },       // iron-filings · bootstrap-bench (classless menu links); also absorbs the curie-dial stray as a real exhibit
+  // ── §2.6 gather hosts (W2.8b flip: opticks · promenades) ──
+  { hub: 'ripple',             firstClass: ['heard-tank'] }, // The Wave Tanks ← loud-and-quiet (the #heardTank prominence bay; NOT the classless ../pool link, which is Hall of Mirrors' card)
+  { hub: 'holonomy',           firstClass: ['hallcard'] },   // Curved Country ← unrolled-cone (the #coneHall gather door; .card hallcard)
 ];
 
 /* ── INTERNAL: hubs whose exhibits are INTERNAL sub-pages (not top-level dirs) ──
