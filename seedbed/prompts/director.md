@@ -79,7 +79,7 @@ the loop gave you) — be concrete: a fresh explorer/builder will act only on wh
    detach"): a swing that **DEEPENS** an existing wing (a second hall, a companion riding *within* a built
    wing — gather kin under one roof) is first-class and, while the estate rebalances, usually the better call;
    **DETACH** a new front-door wing / engine / metagame layer / map expansion only for a genuine new family
-   with no honest home. For a room, set `exploreMode:"compete"` with briefs that are DIVERGENT FORM CONCEPTS
+   with no honest home. Capacity pressure alone never earns a detach — relief has its own menu (fold · knot · petition). For a room, set `exploreMode:"compete"` with briefs that are DIVERGENT FORM CONCEPTS
    (let form express content — don't default to a vertical list). A **DETACH** registers a NEW front-door
    footprint; a **DEEPEN** appends **under the existing wing** (no new wing slug). Scale the house bar up; one
    cycle can open a new wing's landing + first bench, OR deepen a built wing with a new hall.

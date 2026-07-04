@@ -1,88 +1,104 @@
-# layout.js — the estate plan's declarative placement engine
+# layout.js — the estate plan's declarative placement engine (v2, the polar contract)
 
-> **WS1 v2 note (W0.3):** `layout.js` is now the thin **facade** over three pure libraries —
-> `contract.js` (the polar DEEDS: `CONTRACTS` + `CLUSTER_META` + `ROAD`/`LANES` + schema),
-> `polar.js` (the tier-radius/angle/derived-viewBox solver), and `formations.js` (the named
-> packers). The closed `DISTRICTS`/`GROUNDS_WINGS` region tables are RETIRED; a district now
-> holds an immutable `(angle, orbit)` deed and everything derives from it. The v2 estate gate
-> is **`estate.test.cjs`** (it replaces `smoke.cjs`), driven against the migrated-PLACES
-> **`estate.fixture.cjs`** until the page is flipped (W1). The prose below still describes the
-> v1 surface pending the W5 map-process/README doc rewrite — read `contract.js`/`polar.js` for
-> the binding v2 contract.
-
-`Layout` turns a room's **declared intent** (`district` + `tier` + optional `wing`)
-into **every coordinate** on the map: footprint size & position, district & wing
-boundaries, the circulation graph (door → spine → avenues → aisles → stubs), and
-the engraved zone/wing labels. No room carries a pixel — adding a room is appending
+`Layout` turns a room's **declared intent** (`district` + `tier` + optional `wing`) into
+**every coordinate** on the map: footprint size & position, district & wing hulls, the
+circulation graph (door → spine → avenues → aisles → stubs), the engraved zone/wing labels,
+and the derived viewBox/camera. No room carries a pixel — adding a room is appending
 `{ district, tier, (wing?) }` + the content fields to `PLACES`.
+
+## The v2 shape — a facade over three pure libraries
+
+`layout.js` is now a thin **facade**. It wires three sibling libraries and translates each
+district's locally-packed slots to WORLD coordinates about the **manor pole**:
+
+- **`contract.js`** — the polar **DEEDS**: `CONTRACTS` (per district `{angle, tier, theme,
+  layoutFn, capacity}`) + `CLUSTER_META` + `ROAD`/`LANES` + the schema. A district's
+  `{angle, tier}` is an **immutable deed**; everything else derives from it. (`fnv1a32`/`hash01`
+  live here too.)
+- **`polar.js`** — the **SOLVER**: quantized tier radii, the angular separation law, the derived
+  viewBox/camera/scale, and `freeSlots` (the petition menu).
+- **`formations.js`** — the **PACKERS**: one named layoutFn per district
+  (greathouse · rings · pascal · ashlar · court · crescent · knot · roadside), each with an
+  honest geometric `maxCapacity`; the generic grid is retired.
+
+The closed v1 region tables (`DISTRICTS` / `GROUNDS_WINGS` / `WING_META` / `SIZE_BAND`) and the
+frozen manor shell box are **gone** — a district is no longer a pinned pixel region, it is a deed
+on the wheel. Read `contract.js` / `polar.js` for the binding contract; `map-process.md` is the
+process narrative.
 
 ## How the front door uses it
 
-`index.src.html` inlines this file as the **4th forge include** (after ws / label /
-sky) and calls it once:
+`index.src.html` inlines `contract.js` / `polar.js` / `formations.js` / `layout.js` as forge
+includes and calls the facade once:
 
 ```js
-const LAYOUT = Layout.solve(PLACES);   // throws on an unknown district (hard build error)
+const LAYOUT = Layout.solve(PLACES);   // throws on an unknown district/cluster (hard build error)
 PLACES.forEach(p => { const f = LAYOUT.foot[p.id]; /* … copy x/y/w/h|r back onto p … */ });
 ```
 
-The solved `LAYOUT` carries:
+The solved `LAYOUT` is a strict **superset** of the v1 surface:
 
-- `foot[id]` → `{x,y,w,h}` (or `{x,y,r}` for a tower) — copied back onto each PLACES
-  entry so the **unchanged** footprint drawers + label/leader geometry (which read
-  `r.x/r.y/r.w/r.h`) run against the derived slots.
-- `districtRects[]` / `wingRects[]` → bounded, tinted, labelled precinct hulls.
-- `graph` → `{ door, spine, avenues[], aisles[], stubs[] }` — the real adjacency
-  network the avenues now MEAN (not a decorative every-folly fan).
-- `Layout.beneathSlot()` → the reserved cellar slot the gated Undercroft uses.
+- `foot[id]` → `{x,y,w,h}` (or a disc slot) — copied back onto each PLACES entry so the
+  **unchanged** footprint drawers + label/leader geometry (which read `r.x/r.y/r.w/r.h`) run
+  against the derived slots.
+- `districtRects[]` / `wingRects[]` → the tinted, labelled precinct hulls.
+- `structures[]` → the §5.1 district structures (the fit-view estate tier draws these as nav —
+  a monogram plinth or a bespoke district rep — not room labels).
+- `graph` → `{ door, spine, avenues[], aisles[], stubs[] }` — the real adjacency network.
+- `world` → `{ viewBox, centre, R[], freeSlots, districts, field, … }` — the derived camera the
+  page reads (svg viewBox, panZoom bounds, LABEL_BOUNDS) rather than any forged literal.
 
-## Config tables (closed — an unknown id is a build error)
+Other facade methods:
 
-- `DISTRICTS` — the six districts, each with a fixed `region` budget (the packer
-  fills WITHIN it; it is not a room position), `inside`, `style`, `label`, `hue`.
-  The **manor** region is pinned to the historic shell box (x586 y296 270×208) so
-  the candle-pool + frozen coordinate envelope stay sky-valid.
-- `GROUNDS_WINGS` — per-wing sub-regions for the grounds, spread to kill the dead
-  upper-right (AMUSEMENTS is anchored INTO it by construction).
-- `WING_META` — display label + representative accent (+ optional `grows:N`).
-- `SIZE_BAND[tier]` — footprint w×h by rank (1 grand / 2 standard / 3 folly).
+- `Layout.plates(places[,opts])` → the total/disjoint plate partition (parent ∪ child), the
+  per-plate camera frames, the reciprocal road graph, and the **fold** (a detached district — the
+  fairground — shows only its gate face; its rooms lay out in a `child:<id>` plate).
+- `Layout.freeSlots(tier[,ρ])` → the live **petition** menu (§1.5): the open slots a new district
+  may claim, interpolated by the current relief.
+- `Layout.basementSlot(0|1)` → the two gated ways down (Undercroft / Reliquary), in world coords
+  (`beneathSlot` / `sealedStudySlot` alias them).
 
 ## Star safety
 
-Every district frame is confined to the **star-clear interior envelope** `FIELD`
-(x162 y150 1116×668). All 35 Survey-of-Heaven catalog stars lie OUTSIDE it, so a
-generated footprint can never collide with a star. After any change run:
+Every district frame is confined to the star-clear interior envelope `FIELD`; the Survey-of-Heaven
+catalog stars lie outside it, and **star-clear is now `derive-sky` / `sky.test`-owned** (the sky
+slab is emitted from the same polar catalog, so a generated footprint can never collide with a
+star). After any change to an angle, frame, or reservation, re-run the gate suite below — the
+polar-contract, estate, and sky tests together prove the layout stays star-clear and deterministic.
+
+## The gate suite — run after any change
 
 ```
-node tools/layout/polar.test.cjs       # the polar contract engine (schema + determinism, 37)
-node tools/layout/formations.test.cjs  # the packer registry n-sweep + capacity+1 throws (87)
-node tools/layout/estate.test.cjs      # the v2 estate gate: hulls, partition, fold, neg-controls (was smoke.cjs)
-node tools/layout/legibility.test.cjs  # the conscience's self-consistency on the controls (29 checks)
-node tools/layout/door.test.cjs    # the front-door 17-claim pill, as a NODE TWIN (see below)
-node tools/layout/emit-mirror.cjs  # re-emit the FOOTPRINTS mirror for sky.test.cjs
-node tools/sky/sky.test.cjs        # must stay 73/73 (the mirror is updated in lockstep)
-node tools/forge/forge.mjs --check index.src.html   # current
-node tools/forge/forge.mjs --audit-seen             # all 18 breadcrumbs
-node tools/manifest/manifest.mjs --check            # W2 (§6.2/§9.4): completeness · no double-claim · count floors · not stale
-node tools/manifest/manifest.test.mjs               # the manifest gate's own neg-controls (a planted unclaimed dir FAILS loud)
+node tools/layout/polar.test.cjs        # the polar contract engine: schema + radius/angle solver + determinism
+node tools/layout/formations.test.cjs   # the packer registry n-sweep + n=capacity+1 THROWS, per formation
+node tools/layout/estate.test.cjs        # THE POLAR ESTATE GATE (replaces smoke.cjs): deeds unique, hulls disjoint,
+                                         #   footprints contained, plates partition, viewBox quantized, double-run byte-identical, + neg-controls
+node tools/layout/legibility.test.cjs   # the label conscience: hard per-district-plate gate + its self-consistency neg-controls
+node tools/layout/door.test.cjs         # the front-door legibility pill, AS A NODE TWIN (arms by wave, §9.2 — see below)
+node tools/layout/fold.test.cjs         # the contract-level fold round-trip (F-series)
+node tools/layout/gate-dom.test.mjs     # the LIVE-DOM platewalk gate — REAL headless browser input (LOD, structures-as-nav, ascend/descend)
+node tools/layout/emit-mirror.cjs       # re-emit the FOOTPRINTS mirror sky.test.cjs consumes
+node tools/sky/sky.test.cjs             # the sky gate (the mirror is updated in lockstep)
+node tools/forge/forge.mjs --check --all # every forged page current
+node tools/forge/forge.mjs --audit-seen  # the ws:seen breadcrumbs
+node tools/manifest/manifest.mjs --check # the estate manifest: completeness · no double-claim · count floors · not stale
+node tools/manifest/manifest.test.mjs    # the manifest gate's own neg-controls (a planted unclaimed dir FAILS loud)
 ```
 
-`sky.test.cjs` MIRRORS the generated footprint bboxes; if a room's declaration
-changes its slot, re-run `emit-mirror.cjs` and paste its `FOOTPRINTS` block into the
-test in the SAME commit, or the test false-fails.
+Each test prints its own pass count — no counts are hard-coded here, so nothing drifts.
 
-`door.test.cjs` is the front door's own **17-claim legibility pill, run as a node
-twin** (#337). The pill lived only in the browser (`runDoorSelfTest` in
-index.src.html), where it reads the LIVE estate and goes **✗16/17** (CLAIM C′) — but
-smoke/legibility only check the conscience on synthetic controls, so the gate reported
-green over a red door. The twin runs the SAME 17 claims (the shared `door-claims.cjs`
-the page also forge:includes) over the SAME live data: 14 claims are DOM-free; the 3
-declutter claims (B/C/C′) read the rendered SOLVED label boxes, so the twin MODELS them
-(`Layout.solve` + `legibility.cjs`'s `labelBoxWH` + `LabelPlacer`) and a **calibration
-guard** ties the model to a checked-in `door-mirror.cjs` (the rendered getBBox truth,
-captured once via agent-browser) — verifying the modeled boxes yield the SAME verdict the
-rendered mirror does, claim-for-claim. So `door.test.cjs` **exits non-zero whenever the
-live door is red** (currently ✗16/17 on CLAIM C′ — that red is the separate
-hierarchy/declutter root, faithfully reported, NOT a regression in this gate); it goes
-green only when the door's crowding root is fixed. Regenerate `door-mirror.cjs` (the test
-prints how, and fails loudly on a stale mirror) when rooms or the type scale change.
+`sky.test.cjs` MIRRORS the generated footprint bboxes; if a room's declaration changes its slot,
+re-run `emit-mirror.cjs` and paste its `FOOTPRINTS` block into the test **in the same commit**, or
+the test false-fails.
+
+`door.test.cjs` is the front door's own legibility/well-formedness pill run as a **node twin**
+(#337): the pill once lived only in the browser, where a builder's Node gates could report green
+over a rendered-red door. The twin runs the SAME claims (the shared `door-claims.cjs` the page also
+forge:includes) over the SAME live PLACES, so it goes red iff the pill is red — see its output for
+the live verdict (no hard-coded digit). Under the polar reorg every claim is a pure function of
+PLACES + the polar solve — identical in Node and the browser **by construction** — so the old
+getBBox `door-mirror.cjs` + CHAR_W calibration guard are **retired**; the rendered-truth check now
+lives in `gate-dom.test.mjs`, which drives the real DOM with **real** browser input (the house
+lesson: `dispatchEvent`/`.click()` are not a real click). Claims **arm by wave** (§9.2): a claim
+that self-skips before its wave is expected, not a failure — the twin exits non-zero only when an
+**armed** claim is red or a neg-control fails to fire.

@@ -140,12 +140,48 @@ And the build holds together (the house hygiene):
 
 ---
 
+## The front door — the estate map
+
+The estate's front door is a **declarative polar map**: the **Manor is the pole** — the warm,
+inhabited center — and the districts ride out from it on concentric orbits, each a themed wedge of the
+wheel. A room never places itself in pixels: it **declares `{district, tier, wing}`** (+ content) and
+the renderer (`tools/layout/layout.js`, the 4th forge include) owns **every** coordinate — so crowding,
+dead-space, rim-accretion, and clipping are impossible by construction. **Geometry is deeds +
+derivation** (`tools/layout/map-process.md` is the process): a district's `{angle, tier}` is an
+immutable deed; everything else is solved. Which district a room declares follows its **soul** — an
+enclosed / interior / instrument / document room belongs *in* the Manor and grows it; an open-air /
+working / amusement soul takes a grounds district.
+
+**Where a new piece goes — the placement cascade.** Growth is **bottom-up — join before you found:**
+an exhibit seeks an existing room, a room an existing wing, a wing an existing district; found a new
+place only when no existing one honestly fits — and **without apology when it truly doesn't** (a piece
+with no honest kin deserves its own front door). Balance is the aim — deepen before you widen — and
+capacity pressure alone never mis-homes a piece (that is what the relief menu is for). The cascade is
+the map judge's organizing frame (map-process §judge).
+
+**The fold is thematic, not spatial.** A fold gathers rooms that belong together by *idea* — never to
+relieve a crowded plate. Capacity relief has its own menu (fold · knot · petition); geometry is never
+the reason for a fold, and founding a new district is a **petition** a real family earns, never
+crowd-relief.
+
+**The estate keeps its engines alive.** Lantern tales, Warren floors, Adversary game-defs, and
+art-foundry media are first-class garden material — a gardener who reaches for one is reaching for good
+soil.
+
+**Honors have a home.** A new trophy struck for the makers gets an alcove in `cabinet-of-honors/` (a
+sealed Register card, no nav) — never dropped somewhere random (the full room note is below).
+
+**The curious are rewarded.** A new build MAY tuck one companion-*within* behind a discoverable beat —
+the estate rewards the curious.
+
+---
+
 ## House conventions (unchanged, gathered here for the builder)
 - **Self-contained** — one HTML file, vanilla HTML/CSS/JS, no build, no network, no deps.
 - **When a piece makes a falsifiable claim, prove it exact** — a beloved register (invariance to ~machine precision, a winnability proof, a convergence check…), and the right finishing move for a bench built on a claim. But it is *one register among many*, never the gate: art, sound, play, and living things carry no claim and owe no **proof-of-a-claim** (the founding generators have none by design — don't retrofit one). Yet **claim-free is not verification-free:** a piece with a *payoff* still owes a **liveness** twin that its payoff FIRES (the payoff-liveness gate) — it owes no theorem, not no functional test.
 - **One mute for the whole estate** — any page that makes sound reads/writes the single shared key **`ws:pref:muted`** (via `WS`), so a visitor mutes *once* and it holds everywhere (Sound Garden, the front-door ambient layer, the Survey's discovery melodies, any audio piece). Never invent a per-page mute key. Default: respect it on load; honor the browser's autoplay gate (sound waits for a click).
 - **Forge pages** (`*.src.html` → `*.html`): edit the `.src.html`, run `node tools/forge/forge.mjs <file>`; `--check --all` verifies. Editing a shared include (e.g. `tools/ws/ws.js`) restales every inlined page → `forge.mjs --all`.
-- **Front door** = a DECLARATIVE district/slot estate map (rebuilt 2026-06-15). Add a room by appending one `PLACES` entry in `index.src.html` that **declares** `{district, tier, wing}` (+ content) — **never pixels**; the renderer (`tools/layout/layout.js`, the 4th forge include) owns ALL geometry (coordinates, sizes, boundaries, routes, zone labels, label sides), so crowding/dead-space/rim-accretion/clipping are impossible by construction. **The Manor is the inhabited center the estate radiates from** — the warm grand core that the grounds, observatory, outbuildings and cavern orbit; an enclosed/interior/instrument/document room belongs *in* the Manor (and grows it), while open-air/landscape/working/amusement themes orbit it on the grounds or an external precinct. The Manor must stay the plate's dominant central mass and GROW as interior wings arrive — never shrink toward one card among the outbuildings; the estate-composition critic guards this (map-process.md's MANOR-PRIMACY check). Companions ride "within" their parent room. The full process — what you declare, the districts (a near-closed set — a full plate's answer is a new *layer*, not another flat district), the per-room **map judge** (right district/inside-vs-external · true kin · new-wing-vs-existing · unique name · sky tie), the separate **estate-composition critic** (the rendered whole; runs after a new wing/config change; may tune only the config tables + furniture + page CSS), and the **reveal-all-secrets** rule — is in **`tools/layout/map-process.md`**. Any map screenshot/critique MUST first run `tools/layout/reveal-all-secrets.js` (light every constellation + the Undercroft) or it won't compose for the hidden features. Browser-verify with a `?v=N` cache-bust (python http.server sends no cache headers).
+- **Front door / the map** — add a room by appending one `PLACES` entry in `index.src.html` that **declares** `{district, tier, wing}` (+ content) — **never pixels**; the renderer (`tools/layout/layout.js`, the 4th forge include) owns ALL geometry. The philosophy + the placement cascade are in *The front door — the estate map* (above); the full process — declare-surface, the per-room **map judge**, the separate **estate-composition critic**, and the **reveal-all-secrets** rule — is in **`tools/layout/map-process.md`**. Any map screenshot/critique MUST first run `tools/layout/reveal-all-secrets.js` (light every constellation + the Undercroft) or it won't compose for the hidden features. Browser-verify with a `?v=N` cache-bust (python http.server sends no cache headers).
 - **Spoiler etiquette** (Brandon's one standing request): the hidden world stays out of the *chat summary* to him — NOTES/worklog/SPECs carry the full inventory. See NOTES.md.
 
 ## The Cabinet of Honors
