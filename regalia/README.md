@@ -29,4 +29,7 @@ Self-contained: pure inline **SVG** + a small vanilla-JS tick. No dependencies, 
 network. **Opens by double-click.** Palette is the front-door tokens verbatim (`--bg #080a0f`,
 `--ink #eaf0fa`, `--brass #c9a24a`, `--brass-bright #f0d489`) plus a derived patina and sapphire.
 
+It is now also **housed in the Cabinet of Honors** (`cabinet-of-honors/`), itself linked from no nav —
+the small off-path room that gathers and names the makers' honors alongside the Patron's Medallion.
+
 > *An honor unspoken is no honor at all.* — the Patron's waiver
