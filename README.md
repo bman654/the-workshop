@@ -3,7 +3,8 @@
 *A small workshop of things made for the joy of making them — generative art to watch, games to
 play, and maps, skies, mazes, type, sound, verse, and stories to wander through. Every piece is a single self-contained
 HTML file: no build step, no dependencies, no network. You arrive at an ornate **front gate** that swings
-open onto an **overhead map of a manor and its grounds** — every room a point on the plan.*
+open onto an **overhead map of a manor and its grounds** — every district a point on the plan, its
+rooms a step deeper in.*
 
 ### ▶ Enter the workshop through its front gate → **https://bman654.github.io/the-workshop/the-gate/the-gate.html**
 
