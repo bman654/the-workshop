@@ -10,7 +10,9 @@
    page is fully testable WITHOUT them.
 
    ── THE THREE-TIER FALLBACK (§5.2) ──
-     1. a BESPOKE SCENE  — districtScenes[<districtId>] (foundry-forged; empty until W3.3).
+     1. a BESPOKE SCENE  — districtScenes[<districtId>]. At T3.2 (foundry PREP) the 8 district
+        reps are registered as STUBS that provisionally draw the monogram (§5.3); the ART FOUNDRY
+        forges each bespoke scene into its stub body at T3.3 (siblings byte-identical).
      2. the MONOGRAM PLINTH — this module's own procedural never-blank fallback: an engraved
         district initial on a tiered plinth + a faint hull etch. Drawn whenever no scene is
         registered (or a scene throws). NEVER blank.
@@ -30,9 +32,11 @@
                   draws the depth tally there (§5.5, as it draws the "15 AMUSEMENTS" teaser).
        accent   — the district accent hex (threaded as `--c` by the page; scenes may re-use it).
        RETURNS  — { kind:'scene'|'monogram', label } — the liveness handle the page mirrors
-                  onto the group as data-district-art. On a registered HIT: draw the scene,
-                  flush its @keyframes, {kind:'scene'}. On a MISS or a THROWN scene: clear any
-                  partial art and draw the monogram plinth → {kind:'monogram'}.
+                  onto the group as data-district-art. On a registered HIT: draw the scene, flush
+                  its @keyframes, and report the scene's OWN returned kind (default 'scene'; a T3.2
+                  provisional stub draws + returns the monogram, so it reports 'monogram'
+                  truthfully). On a MISS or a THROWN scene: clear any partial art and draw the
+                  monogram plinth → {kind:'monogram'}.
 
    Art direction: the estate's brass-stroke-on-ink hand (brass #c9a24a strokes, accent-tinted
    paper fills) at an ESTATE register — calm at rest, an `.anim` group runs only when its
@@ -111,8 +115,55 @@
     return { kind: "monogram", label: initialOf(district) + " monogram" };
   }
 
-  // ── THE REGISTRY (foundry-filled at W3.3; empty here → every district monograms) ──
+  // ── THE REGISTRY (§5.3) ──────────────────────────────────────────────────────
+  // Keyed by districtId → the scene draw fn. At T3.2 (foundry PREP) it holds the 8
+  // district-rep STUBS below (the deterministic "registry entry + stub fn" wiring of §5.3,
+  // the rep-spec 3-edit pattern adapted to this module). Each stub PROVISIONALLY draws the
+  // honest MONOGRAM PLINTH — so the page is never blank and reads exactly as it did before,
+  // and `data-district-art` truthfully reports "monogram" — until the ART FOUNDRY forges the
+  // bespoke scene into that ONE function body at T3.3 (every sibling stays byte-identical, the
+  // proven foundry operation). manor / fairground / gatehouse / gate-lodge are NOT district
+  // structures (the page draws their own bespoke art), so they are not registered here.
   var districtScenes = {};
+
+  // ── THE 8 DISTRICT-REP STUBS (T3.2 scaffold — foundry-elevated at T3.3) ──────
+  // The foundry batch forges each asset by replacing ONLY the matching drawRep* body with the
+  // §5.3 scene; the stub's provisional body is the never-blank monogram, so any un-forged rep
+  // still reads. A forged scene returns { label } (or { kind:'scene', label }); drawDistrict
+  // reports the returned kind, so these stubs honestly read 'monogram' until then.
+  function drawRepWorks(g, district, box, accent) {        // rep-works — the working yard (§5.3)
+    return drawMonogram(g, district, box, accent);
+  }
+  function drawRepGardens(g, district, box, accent) {       // rep-gardens — the glasshouse range (§5.3)
+    return drawMonogram(g, district, box, accent);
+  }
+  function drawRepObservatory(g, district, box, accent) {   // rep-observatory — the rise + dome (§5.3)
+    return drawMonogram(g, district, box, accent);
+  }
+  function drawRepPromenades(g, district, box, accent) {    // rep-promenades — the crescent walk (§5.3)
+    return drawMonogram(g, district, box, accent);
+  }
+  function drawRepNumber(g, district, box, accent) {        // rep-number — the terraced Pascal garden (§5.3)
+    return drawMonogram(g, district, box, accent);
+  }
+  function drawRepOpticks(g, district, box, accent) {       // rep-opticks — the light court (§5.3)
+    return drawMonogram(g, district, box, accent);
+  }
+  function drawRepCavern(g, district, box, accent) {        // rep-cavern — the cave mouth + adit (§5.3)
+    return drawMonogram(g, district, box, accent);
+  }
+  function drawRepOutbuilding(g, district, box, accent) {   // rep-outbuilding — the maker's shed (§5.3)
+    return drawMonogram(g, district, box, accent);
+  }
+  districtScenes["works"] = drawRepWorks;
+  districtScenes["gardens"] = drawRepGardens;
+  districtScenes["observatory"] = drawRepObservatory;
+  districtScenes["promenades"] = drawRepPromenades;
+  districtScenes["number"] = drawRepNumber;
+  districtScenes["opticks"] = drawRepOpticks;
+  districtScenes["cavern"] = drawRepCavern;
+  districtScenes["outbuilding"] = drawRepOutbuilding;
+
   function resolveScene(district) {
     return (district && districtScenes[district.id]) || null;
   }
@@ -126,7 +177,10 @@
       try {
         var r = fn(g, district, box, accent);
         flushKF();
-        return { kind: "scene", label: (r && r.label) || fn.name };
+        // Honor the scene's OWN returned kind (default 'scene' when it returns just a label).
+        // A T3.2 provisional stub returns drawMonogram's { kind:'monogram' }, so data-district-art
+        // reads 'monogram' truthfully; a foundry-forged scene returns 'scene' (or a bare label).
+        return { kind: (r && r.kind) || "scene", label: (r && r.label) || fn.name };
       } catch (err) {
         _kf = [];
         while (g.firstChild) g.removeChild(g.firstChild);   // never a cluttered half-scene
