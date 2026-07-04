@@ -292,6 +292,46 @@ ok('NEG-CONTROL: the same structure labels crammed into one cluster → CROWDED 
   estNC.overall.composite >= Leg.THRESHOLD,
   '[' + estNC.overall.composite.toFixed(3) + ' ≥ ' + Leg.THRESHOLD + ']');
 
+/* ── WING-CAPTION COLLISION GATE (T6.2b / F2 — the conscience the plate composite missed)
+   The engraved WING captions (#winglabels, `.wing-label`) are a SECOND label layer the
+   per-plate composite above never scored — so the Manor's overprinting wing band (7 mutual
+   collisions) slipped past every gate. This check reproduces the page's own caption geometry
+   (index.src.html drawZoneLabels): each caption is anchored `start` at (wing.x+8, wing.y−3)
+   in the `.wing-label` face — 600 8px mono, letter-spacing .18em → a CONSERVATIVE per-char
+   advance of 6.5px (over-reserves vs the real ~6.24). A district that SUPPRESSES its band
+   (drawZoneLabels' `observatory || manor` early-return) draws nothing, so it cannot collide;
+   every OTHER district must draw its band collision-free. Kept in lockstep with drawZoneLabels
+   by the same-substring cross-reference — if a new district's band is added there, add it here. */
+console.log('\nWing-caption collision gate (§5.1 / T6.2b — the second label layer):');
+const FULL2 = eval('(' + src2.slice(a2 + 'const PLACES = '.length, b2 + 2) + ')');   // unfiltered — mirror the page's Layout.solve(PLACES)
+const WINGCAP_SUPPRESSED = new Set(['observatory', 'manor']);   // == drawZoneLabels' early-return set
+const WCAP_ADV = 6.5;                                            // conservative .wing-label per-char advance (px)
+function wingCapBox(w) { const x0 = w.x + 8; return { x0, x1: x0 + w.label.length * WCAP_ADV, y0: w.y - 11, y1: w.y - 1 }; }
+function wcapHit(p, q) { return p.x0 < q.x1 && q.x0 < p.x1 && p.y0 < q.y1 && q.y0 < p.y1; }
+function wingCollisionsIn(rects) {
+  const b = rects.map(wingCapBox); let c = 0;
+  for (let i = 0; i < b.length; i++) for (let j = i + 1; j < b.length; j++) if (wcapHit(b[i], b[j])) c++;
+  return c;
+}
+const WR = Layout.solve(FULL2).wingRects;
+const wByD = {}; WR.forEach(w => { (wByD[w.district] = wByD[w.district] || []).push(w); });
+let drawnClean = true; const worstWing = { d: null, c: 0 };
+for (const d of Object.keys(wByD).sort()) {
+  if (WINGCAP_SUPPRESSED.has(d)) continue;           // band suppressed → draws nothing, cannot collide
+  const c = wingCollisionsIn(wByD[d]);
+  if (c > 0) drawnClean = false;
+  if (c > worstWing.c) { worstWing.d = d; worstWing.c = c; }
+}
+ok('every DRAWN district engraves its wing captions collision-free (the second label layer)',
+  drawnClean, '[worst drawn: ' + (worstWing.d || 'none') + ' = ' + worstWing.c + ' collisions]');
+
+// NEG-CONTROL / teeth: the MANOR band WOULD overprint if it were drawn — this is exactly why
+// drawZoneLabels suppresses it (F2). Proves the gate discriminates, and pins the manor's
+// suppression as load-bearing (not gratuitous): drop the manor early-return and this fails.
+const manorWingCollisions = wingCollisionsIn((wByD.manor || []));
+ok('NEG-CONTROL: the Manor wing band WOULD collide if drawn (why drawZoneLabels suppresses it)',
+  manorWingCollisions > 0, '[manor = ' + manorWingCollisions + ' mutual collisions if drawn]');
+
 // reciprocal + connected road graph
 let recip2 = true;
 for (const a in PP.adj) for (const c in PP.adj[a]) if (!(PP.adj[c] && PP.adj[c][a])) recip2 = false;
