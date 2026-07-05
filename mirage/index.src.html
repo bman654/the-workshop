@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<!-- The Mirage — "the road remembers being wet." A first-person desert highway: the air just
+     above the baking asphalt is hot and THIN, its refractive index DIPS near the ground, so a
+     grazing ray bends UP before it touches the tar and arrives from below the horizon. You see
+     a pool of sky on the road — false water that was never there — and the distant car smears
+     into an inverted twin. Drag the HEAT slider and watch the wet road appear; drag it to zero
+     and the puddle VANISHES — proof the mirage IS the gradient, not the renderer.
+     The CORE slice between the sentinels below is byte-identical to core.mjs (the Node twin
+     greps both and asserts IDENTICAL), so the painting can never drift from its proof. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Mirage · the road remembers being wet</title>
+<style>
+  :root{
+    --panel-bg: rgba(16,12,8,0.88);
+    --panel-edge: rgba(201,162,74,0.30);
+    --ink: #efe7d6;
+    --ink-dim: #b6a585;
+    --accent: #c9a24a;
+    --accent-bright: #f4e6bf;
+    --accent-soft: rgba(201,162,74,0.14);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --bg: #0a0906;
+    --steel: #7fa8c8;        /* the false-water blue */
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-ui); overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar (Hall chrome) ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none; gap:14px;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .navwrap{ display:flex; gap:18px; align-items:center; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0;
+    background:linear-gradient(92deg,#f4e6bf,#c9a24a 60%,#9c7a2e);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:var(--accent); }
+  .brand .seedtag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; text-transform:uppercase; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 11px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; cursor:pointer; user-select:none; }
+  .selftest.ok{ color:#9bd7a3; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; background:#0a0906; }
+  #scene{ display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:none; }
+  /* the HEAT thermometer rides the right edge of the scene */
+  #heatrail{ position:absolute; right:18px; top:0; bottom:0; width:62px; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; pointer-events:none; z-index:8; }
+  #thermo{ position:relative; width:18px; height:62%; min-height:200px; border-radius:12px;
+    background:linear-gradient(180deg,#f0902e 0%, #e8b24a 30%, #8a93b8 72%, #4b5e8a 100%);
+    box-shadow:0 0 0 1px rgba(0,0,0,0.5), inset 0 0 8px rgba(0,0,0,0.35);
+    pointer-events:auto; cursor:ns-resize; touch-action:none; }
+  #thermo .bulb{ position:absolute; left:50%; bottom:-13px; transform:translateX(-50%);
+    width:26px; height:26px; border-radius:50%; background:radial-gradient(circle at 40% 35%, #ff9a3c, #c0531a);
+    box-shadow:0 0 10px rgba(255,140,50,0.5), 0 0 0 1px rgba(0,0,0,0.4); }
+  #thermo .grab{ position:absolute; left:50%; width:30px; height:14px; transform:translate(-50%,-50%);
+    border-radius:8px; background:#f6ecd2; border:2px solid #8a6a22; box-shadow:0 2px 6px rgba(0,0,0,.6); cursor:ns-resize; }
+  #thermo .ticks{ position:absolute; left:24px; top:0; bottom:0; width:46px; }
+  .heatlbl{ position:absolute; right:0; font:600 9px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.12em;
+    text-transform:uppercase; white-space:nowrap; }
+  .heatlbl.hot{ top:-2px; color:#f0a850; } .heatlbl.cool{ bottom:-2px; color:#8fa8d0; }
+  #hud{ position:absolute; left:24px; bottom:16px;
+    font:11px/1.45 var(--font-mono); color:var(--ink-dim); background:rgba(8,6,3,0.62);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:8px 13px; letter-spacing:.3px;
+    pointer-events:none; max-width:60%; transition:opacity .3s; }
+  #hud b{ color:var(--accent-bright); } #hud .water{ color:#9fc4e6; font-weight:700; }
+  #hud .num{ color:#f4e6bf; font-weight:700; font-variant-numeric:tabular-nums; }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:318px; flex:0 0 318px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(11px) saturate(120%); -webkit-backdrop-filter: blur(11px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:58px 16px 26px; box-shadow:-18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.62; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  #panel .lede .hot{ color:#f0a850; font-weight:600; } #panel .lede .wet{ color:#9fc4e6; font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 10px; border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+  .readout{ display:grid; grid-template-columns:1fr auto; gap:6px 10px; font:11.5px/1.35 var(--font-mono);
+    color:var(--ink-dim); letter-spacing:.2px; margin-top:4px; }
+  .readout .k{ color:var(--ink-dim); }
+  .readout .v{ color:var(--accent); text-align:right; font-variant-numeric:tabular-nums; }
+  .readout .v.big{ font-size:14px; font-weight:700; color:#9fc4e6; }
+  .readout .v.none{ color:var(--ink-dim); font-weight:400; }
+  .btnrow{ display:flex; gap:8px; margin:12px 0 2px; flex-wrap:wrap; }
+  .btn{ flex:1; min-width:120px; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s; font-family:var(--font-ui); }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.on{ background:rgba(201,162,74,0.22); border-color:var(--accent); color:var(--accent-bright); }
+  .hint{ font:10.5px/1.62 var(--font-mono); color:var(--ink-dim); opacity:.9; letter-spacing:.2px; margin:18px 0 4px;
+    border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+
+  /* cross-link teasers (Hall idiom) */
+  .xteaser{ display:block; text-decoration:none; border:1px solid var(--panel-edge); border-radius:9px;
+    padding:9px 11px; background:rgba(201,162,74,0.05); transition:.18s; margin-top:8px; }
+  .xteaser:hover{ border-color:var(--accent); background:rgba(201,162,74,0.11); }
+  .xk{ display:block; font:600 10px/1.3 var(--font-mono); color:var(--accent); letter-spacing:.04em; margin-bottom:3px; }
+  .xt{ display:block; font:10px/1.5 var(--font-mono); color:var(--ink-dim); }
+  .xt b{ color:var(--ink); }
+
+  /* ---- narrow / mobile: stack the scene above the panel ---- */
+  @media (max-width: 720px){
+    body{ overflow:auto; }
+    #wrap{ position:static; inset:auto; flex-direction:column; min-height:100vh; }
+    #stage{ flex:none; width:100%; height:56vh; min-height:330px; }
+    #panel{ width:100%; flex:none; height:auto; border-left:none; border-top:1px solid var(--panel-edge);
+      box-shadow:none; padding:18px 16px 40px; overflow-y:visible; }
+    .topbar{ position:absolute; left:0; right:0; flex-wrap:wrap; gap:8px; padding:10px 14px 0; }
+    .topbar .brand{ order:3; flex-basis:100%; }
+    .topbar .navwrap{ flex-wrap:wrap; gap:10px; }
+    .brand h1{ font-size:18px; }
+    #heatrail{ right:8px; width:50px; }
+    #hud{ max-width:78%; }
+  }
+  @media (prefers-reduced-motion: reduce){ *{ scroll-behavior:auto !important; } }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="navwrap">
+      <a class="back" href="../index.html">&larr; The Orrery Estate</a>
+      <a class="back" href="../hall-of-mirrors/index.html">&uarr; The Hall of Mirrors</a>
+    </div>
+    <div class="brand">
+      <h1>The Mirage</h1>
+      <span class="seedtag">atmospheric refraction &middot; the curving ray</span>
+    </div>
+    <div class="navwrap" style="gap:10px">
+      <div class="selftest" id="selftest" title="The bench proves its own claim — click to expand.">checking&hellip;</div>
+    </div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="scene" role="img"
+        aria-label="a first-person desert highway; drag the heat slider to make false water pool on the road"></canvas>
+      <div id="heatrail">
+        <div id="thermo" tabindex="0" role="slider" aria-label="heat — drag up to make the wet road appear"
+             aria-valuemin="0" aria-valuemax="100" aria-valuenow="32" aria-orientation="vertical">
+          <span class="heatlbl hot">furnace</span>
+          <span class="heatlbl cool">cool</span>
+          <div class="grab" id="thermoGrab"></div>
+          <div class="bulb"></div>
+        </div>
+      </div>
+      <div id="hud"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">Look straight down a desert highway at noon. The air skimming the
+        <span class="hot">scorching asphalt</span> is hot and thin — its refractive index
+        <b>dips</b> near the road — so a ray grazing toward the tar <b>bends upward</b> before it
+        touches and reaches your eye from <b>below</b> the true horizon. You see a pool of sky lying
+        on the road: <span class="wet">false water</span> that was never there, with the far car
+        smeared into an inverted twin. <b>Drag the thermometer up</b> and watch the wet road that
+        was never there bloom and creep toward you. Drag it to the bottom and it <b>vanishes</b>.</p>
+
+      <div class="sect">What you're seeing</div>
+      <div class="readout" id="readout"></div>
+
+      <div class="sect">The two mirages</div>
+      <div class="btnrow">
+        <button class="btn" id="btnLayers">layers: hot-below (puddle)</button>
+      </div>
+      <div class="btnrow">
+        <button class="btn" id="btnRays">show the bending rays</button>
+      </div>
+
+      <div class="hint" id="theHint">
+        Drag <b>HEAT to zero</b> and every ray goes dead straight: the puddle and the flipped car
+        vanish and the readout shows no false water. The mirage is <b>provably the gradient</b>, not
+        a trick of the renderer. The wet-road distance the page prints is the certified
+        turning-condition number — the same n(y)·cosθ that the self-test holds to a millionth.
+      </div>
+
+      <div class="sect">Companions</div>
+      <a class="xteaser" href="../lifeguards-run/index.html">
+        <span class="xk">↔ The Lifeguard's Run · where the bend comes from</span>
+        <span class="xt">there you find the least-time crossing by hand and watch Snell's law <b>sinθ₁/v₁ = sinθ₂/v₂</b> crystallize. Here the same law, applied to air whose index changes continuously, <b>curves</b> the ray — the puddle is Snell, integrated.</span>
+      </a>
+      <a class="xteaser" href="../why-the-sky-is-blue/index.html">
+        <span class="xk">↔ Why the Sky is Blue · the other thing the air does to light</span>
+        <span class="xt">the bleached desert sky here is scattered light; there you watch the scattering that paints it. Two halves of "what the atmosphere does to a sunbeam."</span>
+      </a>
+      <a class="xteaser" href="../rainbow/index.html">
+        <span class="xk">↔ The Rainbow · refraction that paints a bow</span>
+        <span class="xt">the same bending of light, twice inside a raindrop, sets the 42° arc. Refraction is the estate's quiet engine — here it pools water that isn't there.</span>
+      </a>
+    </aside>
+  </div>
+
+<script type="module">
+"use strict";
+
+// ===== MIRAGE CORE (byte-identical to core.mjs) =====
+const NEAR1 = 1.0;   // index floor reference (air ≈ 1); the model works in (n-1)-scaled units inflated for visibility.
+
+// nOf(y,p): refractive index at height y. The hot layer near the road (small y) has a LOWER
+// index; it decays with altitude over scale height H. 'superior' flips the sign (cold dense
+// layer near the ground, warm light air above ⇒ index INCREASES upward more steeply).
+function nOf(y, p){
+  if (p.profile === 'linear') return p.a * y + p.b;        // test-only ground-truth fixture
+  const sign = (p.profile === 'superior') ? -1 : 1;        // inferior dips near ground; superior humps
+  return p.n0 - sign * p.dndyScale * Math.exp(-y / p.H);
+}
+
+// gradOf(y,p): dn/dy, the ANALYTIC derivative of nOf (never a finite difference).
+//   inferior: n = n0 - s·e^{-y/H}  ⇒  dn/dy = (s/H)·e^{-y/H}  (index RISES with height: ray bends up)
+function gradOf(y, p){
+  if (p.profile === 'linear') return p.a;
+  const sign = (p.profile === 'superior') ? -1 : 1;
+  return sign * (p.dndyScale / p.H) * Math.exp(-y / p.H);
+}
+
+// nMinRoad(p): the index AT the road (y=0) — the extreme of the layer. For the inferior
+// profile this is the MINIMUM index (n0 - dndyScale); a grazing ray turns when xi reaches it.
+function nMinRoad(p){ return nOf(0, p); }
+
+// invariant(y,theta,p): xi = n(y)·cos(theta). Conserved along a ray to integration error.
+function invariant(y, theta, p){ return nOf(y, p) * Math.cos(theta); }
+
+// rayDeriv(state,p): the eikonal ray ODE in arc length s. With theta measured below the
+// horizontal and the medium stratified in y, the ray-equation reduces to
+//   dx/ds = cos(theta),  dy/ds = -sin(theta),   dtheta/ds = -(1/n)·(dn/dy)·cos(theta)
+// (dy/ds = -sin(theta): theta>0 means descending toward the road. The bending term turns the
+// ray toward HIGHER index, exactly Snell in the continuum.) Returns [dx,dy,dtheta].
+function rayDeriv(st, p){
+  const ct = Math.cos(st.theta), s_t = Math.sin(st.theta);
+  const n = nOf(st.y, p), g = gradOf(st.y, p);
+  return { dx: ct, dy: -s_t, dtheta: -(g / n) * ct };
+}
+
+// marchRay(theta0,p): RK4 integrate the ray launched from the eye (x=0, y=eyeY) looking DOWN
+// at depression theta0. Returns { pts:[{x,y,theta,s,xi}], turned:bool, yStar, xStar }.
+// NUMERICAL CARE-POINT: at a turning point the ray goes horizontal (theta→0 from below, i.e.
+// dy/ds→0) and a fixed-step RK4 can step THROUGH it. We DETECT the turn as the sign change of
+// dy/ds (sin(theta) crossing 0 / theta crossing 0) and BISECT in s to land the turning state
+// exactly on n(y)=xi, then reflect and continue. The marcher also caps step count so a
+// degenerate input can never spin forever.
+function marchRay(theta0, p){
+  const step = (p.step && p.step > 0) ? p.step : 0.5;
+  const MAXSTEP = 200000;
+  let st = { x: 0, y: p.eyeY, theta: theta0, s: 0 };
+  const xi0 = invariant(st.y, st.theta, p);
+  const pts = [{ x: st.x, y: st.y, theta: st.theta, s: 0, xi: xi0 }];
+  let turned = false, yStar = null, xStar = null;
+  // integrate while above the road and below a sky ceiling, capped.
+  for (let i = 0; i < MAXSTEP; i++){
+    const prev = st;
+    const next = rk4(st, step, p);
+    // turning-point event: sin(theta) (= -dy/ds) changed sign across the step → ray went horizontal.
+    if (!turned && Math.sin(prev.theta) > 0 && Math.sin(next.theta) <= 0){
+      const tp = bisectTurn(prev, step, p);     // refine the s where theta=0
+      turned = true; yStar = tp.y; xStar = tp.x;
+      pts.push({ x: tp.x, y: tp.y, theta: 0, s: tp.s, xi: invariant(tp.y, 0, p) });
+      st = tp;                                  // continue the ascending leg from the exact turn
+      continue;
+    }
+    st = next;
+    pts.push({ x: st.x, y: st.y, theta: st.theta, s: st.s, xi: invariant(st.y, st.theta, p) });
+    // stop conditions: ray hit the road (y<=0 going down) or climbed past a generous ceiling.
+    if (st.y <= 0 && Math.sin(st.theta) > 0) break;        // descended into the tar (no mirage)
+    if (st.y > p.eyeY + 50 * Math.max(1, p.H)) break;      // escaped to sky
+    if (turned && st.y >= p.eyeY) break;                   // climbed back to eye level (image arrives)
+  }
+  return { pts, turned, yStar, xStar, xi0 };
+}
+
+// rk4(st,h,p): one classical Runge–Kutta-4 step of the ray ODE in arc length.
+function rk4(st, h, p){
+  const k1 = rayDeriv(st, p);
+  const s2 = { x: st.x + 0.5 * h * k1.dx, y: st.y + 0.5 * h * k1.dy, theta: st.theta + 0.5 * h * k1.dtheta };
+  const k2 = rayDeriv(s2, p);
+  const s3 = { x: st.x + 0.5 * h * k2.dx, y: st.y + 0.5 * h * k2.dy, theta: st.theta + 0.5 * h * k2.dtheta };
+  const k3 = rayDeriv(s3, p);
+  const s4 = { x: st.x + h * k3.dx, y: st.y + h * k3.dy, theta: st.theta + h * k3.dtheta };
+  const k4 = rayDeriv(s4, p);
+  return {
+    x: st.x + (h / 6) * (k1.dx + 2 * k2.dx + 2 * k3.dx + k4.dx),
+    y: st.y + (h / 6) * (k1.dy + 2 * k2.dy + 2 * k3.dy + k4.dy),
+    theta: st.theta + (h / 6) * (k1.dtheta + 2 * k2.dtheta + 2 * k3.dtheta + k4.dtheta),
+    s: st.s + h,
+  };
+}
+
+// bisectTurn(prev,h,p): given the step that straddled theta=0, bisect the sub-step in s to
+// land the state where sin(theta)=0 to machine precision (the turning point). RK4 from prev
+// by a fraction of h; root-find that fraction on sin(theta(f)).
+function bisectTurn(prev, h, p){
+  let lo = 0, hi = h;
+  const thetaAt = (f) => rk4(prev, f, p).theta;
+  // sin(theta) is monotone-ish through the crossing; bisect on theta itself (crosses 0).
+  let mid = 0.5 * h;
+  for (let i = 0; i < 80; i++){
+    mid = 0.5 * (lo + hi);
+    const th = thetaAt(mid);
+    if (th > 0) lo = mid; else hi = mid;       // theta descends through 0
+    if (hi - lo < 1e-12) break;
+  }
+  const r = rk4(prev, mid, p);
+  r.theta = 0;                                  // pin it exactly horizontal at the turn
+  return r;
+}
+
+// turningPoint(theta0,p): the height y* where a ray launched at depression theta0 goes
+// horizontal — solved INDEPENDENTLY of the marcher by bisection on n(y) = xi over the descent
+// leg (xi = n(eyeY)·cos(theta0)). Returns {yStar, found}. found=false when the ray reaches the
+// road before turning (xi < n_min(road)) or the medium is uniform (no solution).
+function turningPoint(theta0, p){
+  const xi = invariant(p.eyeY, theta0, p);
+  // We need n(y*) = xi with 0 <= y* <= eyeY (the ray turns BELOW the eye on its way down).
+  // For the inferior profile n increases with y, so n(y)=xi has a root iff n(0) <= xi <= n(eyeY).
+  const nRoad = nOf(0, p), nEye = nOf(p.eyeY, p);
+  // The turn exists only if xi lies between the road index and the eye index AND the ray
+  // actually descends into the region where n drops to xi. Bracket [0, eyeY] on f(y)=n(y)-xi.
+  const f = (y) => nOf(y, p) - xi;
+  const fRoad = f(0), fEye = f(p.eyeY);
+  if (fRoad === 0) return { yStar: 0, found: true };
+  if (fRoad * fEye > 0) return { yStar: null, found: false };   // no sign change ⇒ no turn in [0,eyeY]
+  let lo = 0, hi = p.eyeY, flo = fRoad;
+  for (let i = 0; i < 200; i++){
+    const mid = 0.5 * (lo + hi);
+    const fm = f(mid);
+    if (fm === 0){ lo = hi = mid; break; }
+    if ((fm < 0) === (flo < 0)){ lo = mid; flo = fm; } else { hi = mid; }
+    if (hi - lo < 1e-14) break;
+  }
+  return { yStar: 0.5 * (lo + hi), found: true };
+}
+
+// criticalAngle(p): the depression theta_c at which a ray launched from the eye JUST grazes
+// the road — n(eyeY)·cos(theta_c) = n_min(road). Rays with theta0 < theta_c (shallower, more
+// horizontal) turn ABOVE the road (mirage); steeper rays reach the tar. Returns radians, or
+// null if even a horizontal ray (theta0=0) cannot turn (no inferior gradient).
+function criticalAngle(p){
+  const nEye = nOf(p.eyeY, p), nRoad = nMinRoad(p);
+  const c = nRoad / nEye;                        // cos(theta_c)
+  if (!(c >= -1 && c <= 1)) return null;
+  if (c >= 1) return 0;                          // only a perfectly horizontal ray grazes (no dip)
+  return Math.acos(c);
+}
+
+// classifyProfile(p): 'inferior' | 'superior' | 'none' from the SIGN of dn/dy ALONE — never
+// from the rendered image. Inferior (hot-below) has dn/dy>0 near the ground (index rises with
+// height ⇒ rays bend UP ⇒ inverted puddle). Superior has dn/dy<0 (rays bend DOWN ⇒ looming).
+function classifyProfile(p){
+  const g = gradOf(0.1 * Math.max(1, p.H), p);   // sample just above the road
+  if (Math.abs(g) < 1e-12) return 'none';
+  return g > 0 ? 'inferior' : 'superior';
+}
+
+// puddleHorizon(p): the apparent distance to the FALSE-WATER edge the page prints — the
+// nearest ground distance at which the eye's downward rays start turning instead of hitting
+// the road. Geometrically it is the horizontal range x at which a ray launched at the
+// CRITICAL depression turns: rays shallower than theta_c form the mirror; the steepest
+// mirage-forming ray (theta = theta_c) marks the NEAR edge of the false water. Returns the
+// ground distance (m) to that edge, or null when no turn exists (uniform air / superior with
+// no inferior dip ⇒ no puddle). This number IS the certified turning-condition quantity.
+function puddleHorizon(p){
+  const thetaC = criticalAngle(p);
+  if (thetaC == null || thetaC <= 0) return null;       // no inferior dip ⇒ no false water
+  if (p.profile === 'superior') return null;            // looming, not a puddle
+  // March the just-grazing ray; its turning x is the near edge of the pooled sky.
+  const r = marchRay(thetaC * 0.999, p);                // a hair inside the critical cone so it turns
+  if (!r.turned || r.xStar == null) return null;
+  return r.xStar;
+}
+
+// witness(): the canonical desert-road params the page + the test both boot to. A 1.6 m eye
+// looking just below horizontal down a road whose surface air is hot (index dips by ~6e-3 in
+// the scaled model so the bending is visible), scale height ~2 m.
+function witness(){
+  return { profile: 'inferior', dndyScale: 6e-3, n0: 1.0, H: 2.0, eyeY: 1.6, theta0: 0.004, step: 0.25 };
+}
+
+// runSelfTest(): prove the claims numerically. Returns {ok,passed,total,checks}, each check
+// {name,pass,info}. The page's pill and the Node twin both call THIS.
+function runSelfTest(){
+  const checks = [];
+  const ck = (name, pass, info) => checks.push({ name, pass, info });
+
+  // A battery of inferior desert profiles (varied dip, scale height, eye height, depression).
+  const fan = [
+    witness(),
+    { profile: 'inferior', dndyScale: 4e-3, n0: 1.0, H: 1.5, eyeY: 1.2, theta0: 0.003, step: 0.25 },
+    { profile: 'inferior', dndyScale: 9e-3, n0: 1.0, H: 3.0, eyeY: 2.0, theta0: 0.005, step: 0.2 },
+    { profile: 'inferior', dndyScale: 7e-3, n0: 1.0, H: 2.5, eyeY: 1.8, theta0: 0.0035, step: 0.25 },
+  ];
+
+  // (1) EIKONAL INVARIANT CONSERVED — along every marched ray, max relative drift of
+  // xi=n(y)·cos(theta) below 1e-6. This is Snell in the continuum limit: the integrator's
+  // honesty certificate, proven not asserted.
+  {
+    let worst = 0;
+    for (const p of fan){
+      // launch a hair inside the critical cone so the ray turns (a true grazing mirage ray).
+      const tc = criticalAngle(p);
+      const r = marchRay((tc != null ? tc * 0.998 : p.theta0), p);
+      for (const q of r.pts){
+        worst = Math.max(worst, Math.abs(q.xi - r.xi0) / Math.abs(r.xi0));
+      }
+    }
+    ck('1 · eikonal invariant: max |ξ(s)−ξ(0)|/ξ(0) < 1e-6 along every ray (continuum Snell)',
+       worst < 1e-6, 'maxDrift=' + worst.toExponential(2));
+  }
+
+  // (2) TURNING POINT AT EXACT HEIGHT — the marched turn height matches the INDEPENDENT
+  // bisection solution of n(y*)=n0·cos(theta0) to <1e-6, and the ray is horizontal there.
+  {
+    let worst = 0, horizontalOk = true, allTurned = true;
+    for (const p of fan){
+      const tc = criticalAngle(p);
+      const th = (tc != null ? tc * 0.998 : p.theta0);
+      const r = marchRay(th, p);
+      const ind = turningPoint(th, p);
+      if (!r.turned || !ind.found){ allTurned = false; continue; }
+      worst = Math.max(worst, Math.abs(r.yStar - ind.yStar));
+      // at the marched turn the invariant equals n(yStar) (cos0=1) — i.e. it went horizontal.
+      if (Math.abs(invariant(p.eyeY, th, p) - nOf(r.yStar, p)) > 1e-6) horizontalOk = false;
+    }
+    ck('2 · turning point: marched y* === independent bisection of n(y*)=n₀cosθ₀ (<1e-6), horizontal there',
+       allTurned && worst < 1e-6 && horizontalOk,
+       'maxΔy*=' + worst.toExponential(2) + ' turned=' + allTurned + ' horiz=' + horizontalOk);
+  }
+
+  // (3) [B-GRAFT] CRITICAL GRAZING ANGLE — a threshold theta_c with n(eyeY)·cos(theta_c)=
+  // n_min(road): rays SHALLOWER than theta_c (more horizontal) turn (y* found); rays STEEPER
+  // reach the road (no turn before ground). A clean physical pos/neg pair beyond the sign test.
+  {
+    let pairOk = true;
+    for (const p of fan){
+      const tc = criticalAngle(p);
+      if (tc == null){ pairOk = false; continue; }
+      const shallow = turningPoint(tc * 0.95, p);     // more horizontal than critical ⇒ turns
+      const steep   = turningPoint(tc * 1.10, p);     // steeper than critical ⇒ hits the road
+      if (!(shallow.found === true && steep.found === false)) pairOk = false;
+    }
+    ck('3 · critical grazing angle θc: shallower-than-θc rays turn, steeper-than-θc reach the road',
+       pairOk, 'pair(±θc)=' + pairOk);
+  }
+
+  // (4) PUDDLE EDGE = TURNING CONDITION — the false-water distance the page prints equals an
+  // INDEPENDENT closed-form from the same turning condition to <1e-6. One number, two uses.
+  // Independent oracle: the just-grazing ray (theta=theta_c) turns at y*≈0 (n(0)=xi), and its
+  // horizontal range to the turn, computed by a fine re-march at half the step, must agree.
+  {
+    let worst = 0, allNum = true;
+    for (const p of fan){
+      const edge = puddleHorizon(p);
+      const tc = criticalAngle(p);
+      if (edge == null || tc == null){ allNum = false; continue; }
+      const fine = marchRay(tc * 0.999, Object.assign({}, p, { step: p.step * 0.5 }));
+      if (!fine.turned || fine.xStar == null){ allNum = false; continue; }
+      worst = Math.max(worst, Math.abs(edge - fine.xStar) / Math.max(1, Math.abs(edge)));
+    }
+    ck('4 · puddle edge = turning condition: page distance === independent re-march (<1e-6 rel)',
+       allNum && worst < 1e-6, 'maxRel=' + worst.toExponential(2) + ' allNum=' + allNum);
+  }
+
+  // (5) NEG-CONTROL (no gradient) — dndyScale=0 ⇒ uniform air ⇒ every ray dead straight,
+  // turningPoint found:false for ALL launch angles, classifyProfile='none', puddleHorizon null.
+  // Tested on a NON-symmetric fan so it isn't passing by accident.
+  {
+    const flat = { profile: 'inferior', dndyScale: 0, n0: 1.0, H: 2.0, eyeY: 1.6, theta0: 0.004, step: 0.25 };
+    let maxCurv = 0, anyTurn = false;
+    for (const th of [0.0007, 0.0019, 0.004, 0.0073, 0.011]){    // non-symmetric angles
+      const r = marchRay(th, flat);
+      for (const q of r.pts) maxCurv = Math.max(maxCurv, Math.abs(q.theta - th));   // theta never changes
+      if (turningPoint(th, flat).found) anyTurn = true;
+    }
+    const cls = classifyProfile(flat), pud = puddleHorizon(flat);
+    ck('5 · neg-control (dndyScale=0): rays straight (Δθ=0), no turns, classify="none", puddle=null',
+       maxCurv < 1e-12 && !anyTurn && cls === 'none' && pud === null,
+       'maxΔθ=' + maxCurv.toExponential(2) + ' anyTurn=' + anyTurn + ' cls=' + cls + ' puddle=' + pud);
+  }
+
+  // (6) SIGN CLASSIFIER (the two-mirage pair) — an inferior profile turns the grazing ray UP
+  // (yStar above the road, the ray climbs back), a superior profile bends it DOWN; classify
+  // distinguishes them from dn/dy SIGN alone across a battery, matching the rendered direction.
+  {
+    let ok = true;
+    for (const base of fan){
+      const inf = Object.assign({}, base, { profile: 'inferior' });
+      const sup = Object.assign({}, base, { profile: 'superior' });
+      if (classifyProfile(inf) !== 'inferior') ok = false;
+      if (classifyProfile(sup) !== 'superior') ok = false;
+      // inferior: dn/dy>0 near ground (ray bends up); superior: dn/dy<0 (bends down).
+      if (!(gradOf(0.1, inf) > 0 && gradOf(0.1, sup) < 0)) ok = false;
+    }
+    ck('6 · sign classifier: inferior (dn/dy>0, bends up) vs superior (dn/dy<0, bends down) from sign alone',
+       ok, 'pairs=' + ok);
+  }
+
+  // (7) [B-GRAFT] INDEPENDENT CLOSED-FORM ORACLE — at a LINEAR profile n(y)=a·y+b (a special
+  // case the exponential profile never boots), the turning height has a HAND-derivable closed
+  // form: n0·cosθ0 = a·y*+b ⇒ y* = (n(eyeY)·cosθ0 − b)/a. The marcher's turn height must match
+  // this analytic y* to <1e-7. A ground-truth the marcher cannot cheat.
+  {
+    let worst = 0, allTurned = true;
+    const lin = [
+      { profile: 'linear', a: 2e-3, b: 1.0, eyeY: 1.6, theta0: 0.05, step: 0.1 },
+      { profile: 'linear', a: 3e-3, b: 1.0, eyeY: 2.0, theta0: 0.06, step: 0.1 },
+      { profile: 'linear', a: 1.5e-3, b: 1.0, eyeY: 1.2, theta0: 0.04, step: 0.1 },
+    ];
+    for (const p of lin){
+      const xi = invariant(p.eyeY, p.theta0, p);          // n(eyeY)·cos(theta0)
+      const yAnalytic = (xi - p.b) / p.a;                 // closed form: n(y*)=xi ⇒ y*=(xi−b)/a
+      const r = marchRay(p.theta0, p);
+      if (!r.turned || r.yStar == null){ allTurned = false; continue; }
+      worst = Math.max(worst, Math.abs(r.yStar - yAnalytic));
+    }
+    ck('7 · closed-form oracle (linear n=a·y+b): marched y* === (n₀cosθ₀−b)/a (<1e-7)',
+       allTurned && worst < 1e-7, 'maxΔ=' + worst.toExponential(2) + ' turned=' + allTurned);
+  }
+
+  // (8) DOMAIN GUARDS — degenerate inputs keep the printed numbers FINITE (no NaN/Inf reaches
+  // the canvas) and the marcher caps its step count.
+  {
+    const odd = [
+      { profile: 'inferior', dndyScale: 6e-3, n0: 1.0, H: 2.0, eyeY: 0, theta0: 0.004, step: 0.25 },     // eye at the road
+      { profile: 'inferior', dndyScale: 6e-3, n0: 1.0, H: 2.0, eyeY: 1.6, theta0: 0, step: 0.25 },       // horizontal launch
+      { profile: 'inferior', dndyScale: 6e-3, n0: 1.0, H: 2.0, eyeY: 1.6, theta0: Math.PI / 2, step: 0.25 }, // straight down
+      { profile: 'inferior', dndyScale: 6e-3, n0: 1.0, H: 0.05, eyeY: 1.6, theta0: 0.004, step: 0.25 },  // razor-thin layer
+    ];
+    let finite = true, capped = true;
+    for (const p of odd){
+      const r = marchRay(p.theta0, p);
+      if (r.pts.length >= 200000) capped = false;          // must terminate well under the cap
+      for (const q of r.pts){
+        if (!Number.isFinite(q.x) || !Number.isFinite(q.y) || !Number.isFinite(q.theta)) finite = false;
+      }
+      const ph = puddleHorizon(p);
+      if (!(ph === null || Number.isFinite(ph))) finite = false;
+      const tp = turningPoint(p.theta0, p);
+      if (!(tp.yStar === null || Number.isFinite(tp.yStar))) finite = false;
+    }
+    ck('8 · domain guards: degenerate inputs stay FINITE (no NaN/Inf to canvas); marcher caps steps',
+       finite && capped, 'finite=' + finite + ' capped=' + capped);
+  }
+
+  const passed = checks.filter(c => c.pass).length;
+  return { ok: passed === checks.length, passed, total: checks.length, checks };
+}
+// ===== END MIRAGE CORE =====
+
+// ════════════════════════════════════════════════════════════════════════════
+//  THE PAINTING — consumes ONLY the core functions above; never reimplements the
+//  physics. The renderer reads the SAME marched rays the test certifies (the
+//  puddle-edge distance, the turning height, the ray polylines) in PHYSICAL
+//  coordinates, and does the world→screen projection HERE, never in the certified
+//  slice. So "what you see" and "what's proven" are one object.
+// ════════════════════════════════════════════════════════════════════════════
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// world params (the contract). HEAT drives dndyScale. The page ships ONLY the
+// exponential desert profile; 'linear' is a test-only fixture and never boots here.
+const state = {
+  heat: 0.32,                 // 0..1 thermometer position
+  profile: 'inferior',        // 'inferior' (puddle) | 'superior' (looming)
+  showRays: false,
+  n0: 1.0, H: 2.0, eyeY: 1.6, // fixed scene geometry
+};
+
+// HEAT (0..1) → dndyScale. A gentle floor keeps a sliver of shimmer; the top bakes hard.
+function heatToScale(h){ return 0.020 * h * h; }     // quadratic: cool stays nearly dry, hot blooms fast
+function params(){
+  return {
+    profile: state.profile,
+    dndyScale: heatToScale(state.heat),
+    n0: state.n0, H: state.H, eyeY: state.eyeY,
+    theta0: 0.004, step: 0.25,
+  };
+}
+
+// ── canvas plumbing ──
+const cv = document.getElementById('scene'), ctx = cv.getContext('2d');
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+let W = 0, H = 0;
+// a low-res offscreen copy of the painted scene, used to MIRROR-SAMPLE the inverted twin.
+const off = document.createElement('canvas'); const octx = off.getContext('2d', { willReadFrequently: true });
+
+function resize(){
+  const r = cv.getBoundingClientRect();
+  W = Math.max(2, Math.round(r.width)); H = Math.max(2, Math.round(r.height));
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  off.width = W; off.height = H;
+  layout();
+}
+window.addEventListener('resize', resize);
+
+// ── the perspective frame (a first-person camera looking down the road) ──
+// The horizon sits a touch above the vertical centre; the road fans out below it.
+let HORIZON = 0, VP = 0;     // horizon screen-y, vanishing-point screen-x
+function layout(){
+  HORIZON = Math.round(H * 0.42);
+  VP = Math.round(W * 0.5);
+}
+
+// world ground-distance x (m, down the road) → screen y, via a simple ground-plane
+// perspective: things far away crowd toward the horizon. eyeH sets how fast.
+const GROUND_K = 26;        // perspective tightness (m·px scale)
+function distToScreenY(xMeters){
+  // y = horizon + K/(x + k0): x→∞ ⇒ y→horizon; x→0 ⇒ y→bottom.
+  return HORIZON + (H - HORIZON) * (GROUND_K / (xMeters + GROUND_K));
+}
+function screenYToDist(py){
+  if (py <= HORIZON) return Infinity;
+  const f = (py - HORIZON) / (H - HORIZON);
+  return GROUND_K / f - GROUND_K;
+}
+// road half-width (px) at a given screen y (wider as it nears the viewer)
+function roadHalfWidth(py){
+  const f = Math.max(0, (py - HORIZON) / (H - HORIZON));
+  return (W * 0.5) * (0.018 + 0.92 * f * f);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  ONE emitState() — the single source of truth read by the painting + readout.
+// ════════════════════════════════════════════════════════════════════════════
+let LAST = null;
+function emitState(){
+  const p = params();
+  const edge = puddleHorizon(p);             // certified false-water distance (m) or null
+  const tc = criticalAngle(p);
+  const cls = classifyProfile(p);
+  const out = { p, edge, thetaC: tc, cls, heat: state.heat, showRays: state.showRays, profile: state.profile };
+  LAST = out;
+  updateReadout(out);
+  return out;
+}
+
+// ── readout (reads the SAME emitState object) ──
+const readoutEl = document.getElementById('readout');
+function fmt(n, d){ return n.toFixed(d == null ? 1 : d); }
+function updateReadout(o){
+  const heatPct = Math.round(o.heat * 100);
+  let waterRow;
+  if (o.edge == null || o.profile === 'superior'){
+    waterRow = '<span class="k">false water reaches</span><span class="v none">' +
+      (o.profile === 'superior' ? '— (looming, no puddle)' : 'no false water') + '</span>';
+  } else {
+    waterRow = '<span class="k">false water reaches</span><span class="v big">' + fmt(o.edge, 0) + ' m ahead</span>';
+  }
+  const tcStr = (o.thetaC == null) ? '—' : fmt(o.thetaC * 180 / Math.PI, 2) + '°';
+  readoutEl.innerHTML =
+    '<span class="k">heat</span><span class="v">' + heatPct + '%</span>' +
+    waterRow +
+    '<span class="k">grazing angle θc</span><span class="v">' + tcStr + '</span>' +
+    '<span class="k">profile (dn/dy sign)</span><span class="v">' + o.cls + '</span>';
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  RENDER — owns the rAF. Paints: the graded sky, the heat-pale asphalt with
+//  dithered grain, telephone poles marching to the vanishing point, the car
+//  silhouette, then the false-water puddle (mirror-sampled inverted twin + the
+//  shimmer), then optionally the bending-ray overlay.
+// ════════════════════════════════════════════════════════════════════════════
+let tStart = performance.now();
+function frame(now){
+  draw(now);
+  requestAnimationFrame(frame);
+}
+
+// car position down the road (m). A single dark speck near the vanishing point.
+const CAR_DIST = 95;          // metres to the distant car
+const CAR_BASE_Y_W = 0.0;     // car sits on the road
+
+function draw(now){
+  const o = emitState();
+  const time = (now - tStart) / 1000;
+  // 1) paint the base scene (sky, road, poles, car) into BOTH the visible ctx and the offscreen.
+  paintScene(ctx, o, time, true);
+  paintScene(octx, o, time, false);
+  // 2) the false-water puddle: mirror-sample the offscreen across the puddle edge, with
+  //    vertical compression + heat-haze ripple, tinted steel-blue — the inverted twin lives here.
+  if (o.edge != null && o.profile === 'inferior') paintPuddle(ctx, o, time);
+  // 3) the shimmer: a subtle horizontal sinusoidal warp just above the road.
+  // (painted inside paintScene's near-road band; amplitude scales with heat.)
+  // 4) the bending-ray overlay (optional).
+  if (o.showRays) paintRays(ctx, o, time);
+  updateHud(o);
+}
+
+// ── the base painting ───────────────────────────────────────────────────────
+function paintScene(c, o, time, withShimmer){
+  // SKY — a bleached desert gradient: pale steel-blue up high fading to hot haze at the horizon.
+  let g = c.createLinearGradient(0, 0, 0, HORIZON);
+  g.addColorStop(0.00, '#9fb6cc');
+  g.addColorStop(0.55, '#c2cdd2');
+  g.addColorStop(1.00, '#e8ddc4');     // hot pale band hugging the horizon
+  c.fillStyle = g; c.fillRect(0, 0, W, HORIZON + 1);
+
+  // ROAD bed (the desert ground flanking the asphalt) — bleached ochre.
+  g = c.createLinearGradient(0, HORIZON, 0, H);
+  g.addColorStop(0.00, '#d8c49a');
+  g.addColorStop(1.00, '#b89a68');
+  c.fillStyle = g; c.fillRect(0, HORIZON, W, H - HORIZON);
+
+  // the ASPHALT ribbon — a tapering quad from the vanishing point to the foreground.
+  paintAsphalt(c, o);
+
+  // telephone POLES marching smaller toward the vanishing point (both shoulders).
+  paintPoles(c, o);
+
+  // the distant CAR — a dark silhouette near the vanishing point.
+  paintCar(c, o);
+
+  // a faint heat-haze shimmer just above the asphalt near the horizon (visible warp).
+  if (withShimmer) paintShimmerBand(c, o, time);
+}
+
+function paintAsphalt(c, o){
+  const topY = HORIZON + 1;
+  const botY = H;
+  // left & right edges of the road as functions of screen-y
+  c.beginPath();
+  c.moveTo(VP - roadHalfWidth(topY), topY);
+  c.lineTo(VP + roadHalfWidth(topY), topY);
+  // walk down the right edge
+  for (let py = topY; py <= botY; py += 6) c.lineTo(VP + roadHalfWidth(py), py);
+  c.lineTo(VP + roadHalfWidth(botY), botY);
+  c.lineTo(VP - roadHalfWidth(botY), botY);
+  for (let py = botY; py >= topY; py -= 6) c.lineTo(VP - roadHalfWidth(py), py);
+  c.closePath();
+  // heat-pale asphalt: nearer = darker tar, farther = bleached/whitened by the hot air.
+  const g = c.createLinearGradient(0, topY, 0, botY);
+  g.addColorStop(0.00, '#cfc8bd');     // bleached near the horizon
+  g.addColorStop(0.35, '#8f8a86');
+  g.addColorStop(1.00, '#56514e');     // dark tar in the foreground
+  c.save(); c.fillStyle = g; c.fill();
+  // dithered asphalt grain (deterministic stipple) clipped to the ribbon
+  c.clip();
+  c.globalAlpha = 0.10;
+  for (let i = 0; i < 900; i++){
+    const py = topY + ((i * 53 + 11) % (botY - topY));
+    const half = roadHalfWidth(py);
+    const px = VP - half + ((i * 97 + 31) % Math.max(1, 2 * half));
+    c.fillStyle = (i & 1) ? '#2c2826' : '#e6e0d6';
+    const s = 0.6 + (py - topY) / (botY - topY) * 1.6;
+    c.fillRect(px, py, s, s);
+  }
+  c.restore();
+
+  // the cracked CENTERLINE — dashed, running to the vanishing point, perspective-spaced.
+  c.save();
+  c.strokeStyle = 'rgba(236,222,170,0.85)';
+  for (let py = botY; py > topY; ){
+    const seg = 4 + (py - topY) / (botY - topY) * 26;     // longer dashes up close
+    const w = Math.max(1, (py - topY) / (botY - topY) * 7);
+    const y2 = Math.max(topY, py - seg);
+    c.lineWidth = w;
+    c.beginPath(); c.moveTo(VP, py); c.lineTo(VP, y2); c.stroke();
+    py = y2 - (seg * 0.9);    // gap
+  }
+  c.restore();
+}
+
+function paintPoles(c, o){
+  // poles at receding ground distances on both shoulders.
+  for (let d = 8; d < 140; d *= 1.35){
+    const py = distToScreenY(d);
+    if (py <= HORIZON + 2) continue;
+    const half = roadHalfWidth(py);
+    const f = (py - HORIZON) / (H - HORIZON);
+    const poleH = 14 + 150 * f * f;
+    const poleW = Math.max(1, 1 + 5 * f * f);
+    for (const side of [-1, 1]){
+      const px = VP + side * (half + 14 + 60 * f);
+      if (px < -10 || px > W + 10) continue;
+      // post
+      c.fillStyle = 'rgba(60,48,38,' + (0.45 + 0.4 * f) + ')';
+      c.fillRect(px - poleW / 2, py - poleH, poleW, poleH);
+      // crossarm
+      const armW = poleW * 5;
+      c.fillRect(px - armW / 2, py - poleH + poleW * 1.5, armW, Math.max(1, poleW * 0.6));
+    }
+  }
+}
+
+function paintCar(c, o){
+  const py = distToScreenY(CAR_DIST);
+  const f = (py - HORIZON) / (H - HORIZON);
+  const cw = Math.max(3, 6 + 40 * f);
+  const ch = Math.max(2, 4 + 26 * f);
+  const cx = VP;
+  const cy = py;
+  // a dark silhouette — body + cabin, slightly trembling in the haze near the horizon.
+  c.save();
+  c.fillStyle = 'rgba(34,30,32,0.92)';
+  // body
+  c.beginPath();
+  roundRectPath(c, cx - cw / 2, cy - ch, cw, ch, ch * 0.22);
+  c.fill();
+  // cabin
+  c.fillStyle = 'rgba(28,26,30,0.95)';
+  c.beginPath();
+  roundRectPath(c, cx - cw * 0.30, cy - ch * 1.55, cw * 0.6, ch * 0.62, ch * 0.18);
+  c.fill();
+  // a hot glint of windshield
+  c.fillStyle = 'rgba(220,210,180,0.5)';
+  c.fillRect(cx - cw * 0.22, cy - ch * 1.45, cw * 0.44, Math.max(1, ch * 0.16));
+  c.restore();
+  o._carPy = cy; o._carCw = cw; o._carCh = ch;     // stash for the puddle twin
+}
+
+function paintShimmerBand(c, o, time){
+  if (REDUCED || c !== ctx) return;        // only on the visible canvas (drawImage self-copy)
+  // a thin band of horizontal warp just above the asphalt vanishing zone — amplitude ∝ heat.
+  // Self-copy each scan-row of the freshly-painted near-horizon strip back with a sin x-offset.
+  // Source coords for drawImage(cv,...) are in the canvas BACKING store (device px); dest is in
+  // the CSS-px coordinate space (ctx carries the DPR transform). We map src rows by *DPR.
+  const amp = 1.0 + 7.0 * o.heat;
+  const bandTop = HORIZON + 2, bandH = Math.min(54, (H - HORIZON) * 0.34);
+  const slice = 2;
+  for (let row = 0; row < bandH; row += slice){
+    const phase = time * 2.0 + row * 0.32;
+    const dx = Math.sin(phase) * amp * (1 - row / bandH);
+    if (Math.abs(dx) < 0.25) continue;
+    c.drawImage(cv,
+      0, (bandTop + row) * DPR, Math.round(W * DPR), Math.round(slice * DPR),
+      dx, bandTop + row, W, slice);
+  }
+}
+
+// ── the false-water puddle: mirror-sample the offscreen scene across the edge ─
+function paintPuddle(c, o, time){
+  const edgePy = distToScreenY(o.edge);          // screen-y of the near edge of the false water
+  if (edgePy <= HORIZON + 1) return;
+  // the puddle fills the road from the edge UP toward the horizon (sky pooled on the road).
+  // 1) lay a steel-blue mirror sheen over that wedge.
+  c.save();
+  // clip to the road ribbon between horizon and the edge
+  c.beginPath();
+  c.moveTo(VP - roadHalfWidth(HORIZON + 1), HORIZON + 1);
+  c.lineTo(VP + roadHalfWidth(HORIZON + 1), HORIZON + 1);
+  for (let py = HORIZON + 1; py <= edgePy; py += 4) c.lineTo(VP + roadHalfWidth(py), py);
+  c.lineTo(VP + roadHalfWidth(edgePy), edgePy);
+  c.lineTo(VP - roadHalfWidth(edgePy), edgePy);
+  for (let py = edgePy; py >= HORIZON + 1; py -= 4) c.lineTo(VP - roadHalfWidth(py), py);
+  c.closePath();
+  c.clip();
+
+  // 2) the inverted twin: fold the offscreen scene that sits ABOVE the horizon (the sky and the
+  //    distant car) DOWN onto the road wedge, vertically compressed, with a heat-haze ripple — so
+  //    the car's base dissolves into a hanging mirror-twin. Row i below the edge samples the row
+  //    i·compress ABOVE the horizon: a true reflection across the apparent waterline.
+  const reflectSpan = edgePy - HORIZON;             // pixels of road between horizon and the near edge
+  const compress = 0.78;                            // vertical squash of the reflected image
+  const rows = Math.max(1, Math.round(reflectSpan));
+  const hazeAmp = (REDUCED ? 0 : 1) * (1.5 + 7 * o.heat);
+  for (let i = 0; i < rows; i++){
+    const dstY = edgePy - i;                          // paint upward from the near edge toward the horizon
+    const srcY = HORIZON - i * compress;              // sample the scene ABOVE the horizon (reflected)
+    if (srcY < 0) break;
+    const ripple = REDUCED ? 0 : Math.sin(time * 3 + i * 0.45) * hazeAmp * (i / rows);
+    c.drawImage(off, 0, srcY, W, 1, ripple, dstY, W, 1);
+  }
+
+  // 3) tint the whole pool a cool steel-blue mirror sheen, brighter near the far (horizon) end.
+  const g = c.createLinearGradient(0, HORIZON, 0, edgePy);
+  g.addColorStop(0.00, 'rgba(120,160,196,0.62)');
+  g.addColorStop(0.55, 'rgba(110,150,188,0.40)');
+  g.addColorStop(1.00, 'rgba(150,176,200,0.06)');   // the hard near edge fades to the road
+  c.fillStyle = g; c.fillRect(0, HORIZON, W, edgePy - HORIZON);
+
+  // a bright specular skim along the puddle, swimming with the heat
+  c.globalAlpha = 0.5;
+  c.strokeStyle = 'rgba(226,236,246,0.7)'; c.lineWidth = 1;
+  for (let k = 0; k < 4; k++){
+    const yy = HORIZON + (edgePy - HORIZON) * (0.2 + 0.2 * k);
+    const ph = time * 1.4 + k;
+    c.beginPath();
+    for (let xx = 0; xx <= W; xx += 8){
+      const yo = (REDUCED ? 0 : Math.sin(xx * 0.05 + ph) * (0.6 + 1.6 * o.heat));
+      if (xx === 0) c.moveTo(xx, yy + yo); else c.lineTo(xx, yy + yo);
+    }
+    c.stroke();
+  }
+  c.restore();
+
+  // 4) the HARD near edge — a crisp bright line where the false water meets the dry road.
+  c.save();
+  c.strokeStyle = 'rgba(214,230,244,0.85)'; c.lineWidth = 1.4;
+  c.beginPath();
+  c.moveTo(VP - roadHalfWidth(edgePy), edgePy);
+  c.lineTo(VP + roadHalfWidth(edgePy), edgePy);
+  c.stroke();
+  c.restore();
+}
+
+// ── the bending-ray overlay: the grazing beam arcs and TURNS before the road ──
+function paintRays(c, o, time){
+  const p = o.p;
+  c.save();
+  // march a few rays from the eye at depressions around critical; draw them ON the scene.
+  const tc = o.thetaC;
+  if (tc == null){ c.restore(); return; }
+  const angles = [tc * 0.85, tc * 0.94, tc * 0.999];
+  for (let ai = 0; ai < angles.length; ai++){
+    const th = angles[ai];
+    const r = marchRay(th, p);
+    c.strokeStyle = ai === angles.length - 1 ? 'rgba(255,228,150,0.95)' : 'rgba(255,210,120,0.55)';
+    c.lineWidth = ai === angles.length - 1 ? 2 : 1.2;
+    c.shadowColor = 'rgba(255,210,120,0.7)'; c.shadowBlur = 6;
+    c.beginPath();
+    let started = false;
+    for (const q of r.pts){
+      // project (x down the road, y height) → screen. The eye is at the bottom-centre.
+      const py = distToScreenY(q.x);
+      const yLift = (q.y / Math.max(0.001, p.eyeY));          // 0 at road, 1 at eye height
+      const sy = py - yLift * (H - HORIZON) * 0.10;           // small vertical lift for height
+      if (q.x > 220) break;
+      if (!started){ c.moveTo(VP, sy); started = true; } else c.lineTo(VP, sy);
+    }
+    c.stroke();
+    // mark the turning point with a caret + a faint hairline at the turn height.
+    if (r.turned && r.xStar != null){
+      const py = distToScreenY(r.xStar);
+      c.shadowBlur = 0;
+      c.fillStyle = 'rgba(255,236,180,0.95)';
+      c.beginPath(); c.moveTo(VP, py - 5); c.lineTo(VP - 4, py + 2); c.lineTo(VP + 4, py + 2); c.closePath(); c.fill();
+      if (ai === angles.length - 1){
+        c.strokeStyle = 'rgba(255,228,150,0.35)'; c.lineWidth = 0.8; c.setLineDash([3, 4]);
+        c.beginPath(); c.moveTo(0, py); c.lineTo(W, py); c.stroke(); c.setLineDash([]);
+      }
+    }
+  }
+  c.shadowBlur = 0;
+  c.restore();
+  if (!REDUCED) { /* rays animate with the rest via rAF */ }
+}
+
+function roundRectPath(c, x, y, w, h, r){
+  r = Math.min(r, w / 2, h / 2);
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+}
+
+// ── HUD verdict ──
+const hudEl = document.getElementById('hud');
+function updateHud(o){
+  if (o.profile === 'superior'){
+    hudEl.innerHTML = '<b>warm-above</b> · the cold dense air near the ground bends rays DOWN — the far car <span class="water">looms</span> and stretches above the true horizon (a Fata Morgana). No puddle here.';
+    return;
+  }
+  if (o.edge == null){
+    hudEl.innerHTML = 'The road is dry. <b>Drag the thermometer up</b> — heat the air near the asphalt and the false water will bloom on the road ahead.';
+    return;
+  }
+  hudEl.innerHTML = 'False water pools <span class="num">' + fmt(o.edge, 0) + ' m</span> ahead, its hard near edge creeping toward you as the heat climbs. The grazing ray turns at θc = <span class="num">' + fmt(o.thetaC * 180 / Math.PI, 2) + '°</span> and arrives from below the horizon — the car melts into its <span class="water">inverted twin</span>.';
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  CONTROLS — the HEAT thermometer (primary), LAYERS, SHOW RAYS.
+// ════════════════════════════════════════════════════════════════════════════
+const thermo = document.getElementById('thermo'), grab = document.getElementById('thermoGrab');
+function placeGrab(){ grab.style.top = ((1 - state.heat) * 100) + '%'; }
+function setHeat(h){
+  state.heat = Math.max(0, Math.min(1, h));
+  placeGrab();
+  thermo.setAttribute('aria-valuenow', String(Math.round(state.heat * 100)));
+  emitState();
+}
+let dragging = false;
+function heatFromEvent(ev){
+  const r = thermo.getBoundingClientRect();
+  const y = (ev.touches ? ev.touches[0].clientY : ev.clientY) - r.top;
+  return 1 - y / r.height;
+}
+thermo.addEventListener('pointerdown', (ev) => {
+  dragging = true; try { thermo.setPointerCapture(ev.pointerId); } catch(e){}
+  setHeat(heatFromEvent(ev)); ev.preventDefault();
+});
+thermo.addEventListener('pointermove', (ev) => { if (dragging){ setHeat(heatFromEvent(ev)); ev.preventDefault(); } });
+function endHeat(ev){ if (!dragging) return; dragging = false; try { thermo.releasePointerCapture(ev.pointerId); } catch(e){} }
+thermo.addEventListener('pointerup', endHeat);
+thermo.addEventListener('pointercancel', endHeat);
+thermo.addEventListener('keydown', (ev) => {
+  const st = ev.shiftKey ? 0.1 : 0.02;
+  if (ev.key === 'ArrowUp' || ev.key === 'ArrowRight'){ setHeat(state.heat + st); ev.preventDefault(); }
+  else if (ev.key === 'ArrowDown' || ev.key === 'ArrowLeft'){ setHeat(state.heat - st); ev.preventDefault(); }
+  else if (ev.key === 'Home'){ setHeat(1); ev.preventDefault(); }
+  else if (ev.key === 'End'){ setHeat(0); ev.preventDefault(); }
+});
+
+const btnLayers = document.getElementById('btnLayers');
+btnLayers.addEventListener('click', () => {
+  state.profile = (state.profile === 'inferior') ? 'superior' : 'inferior';
+  btnLayers.textContent = state.profile === 'inferior' ? 'layers: hot-below (puddle)' : 'layers: warm-above (looming)';
+  btnLayers.classList.toggle('on', state.profile === 'superior');
+  emitState();
+});
+const btnRays = document.getElementById('btnRays');
+btnRays.addEventListener('click', () => {
+  state.showRays = !state.showRays;
+  btnRays.textContent = state.showRays ? '✓ bending rays shown' : 'show the bending rays';
+  btnRays.classList.toggle('on', state.showRays);
+  emitState();
+});
+
+// ── self-test pill (click to expand) ──
+const pill = document.getElementById('selftest');
+function refreshPill(){
+  const st = runSelfTest();
+  pill.textContent = (st.ok ? '✓ ' : '✗ ') + st.passed + '/' + st.total + ' self-test';
+  pill.className = 'selftest ' + (st.ok ? 'ok' : 'bad');
+  pill.title = st.checks.map(c => (c.pass ? '✓' : '✗') + ' ' + c.name + '  [' + c.info + ']').join('\n');
+}
+pill.addEventListener('click', () => alert(runSelfTest().checks.map(c => (c.pass ? '✓ ' : '✗ ') + c.name + '\n   ' + c.info).join('\n\n')));
+
+// ── front-door breadcrumb ──
+try{ var k = 'ws:seen:mirage'; if(!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); }catch(e){}
+
+// ── boot ──
+function init(){
+  resize();
+  placeGrab();
+  emitState();
+  refreshPill();
+  requestAnimationFrame(frame);
+}
+window.addEventListener('load', init);
+
+// browser-verification hook
+window.__mirage = {
+  runSelfTest, witness, marchRay, turningPoint, criticalAngle, puddleHorizon, classifyProfile, nOf, gradOf,
+  state, params, getLast: () => LAST, setHeat,
+};
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   THE GRAND TOUR DOCENT (WS2, inlined at build time by forge). tours.js FIRST
+   (it defines the TOURS / EXTRA_STOPS / DOCENT_SENTINEL browser globals the engine
+   reads lazily), then tour.js (the docent engine). This page is a TOUR STOP: with
+   ?tour=<id>&stop=n params the engine mounts the docent card, runs this stop's
+   beats, and walks on to the next; with no tour params the page is untouched. Use
+   block-comment form only inside a forge-included script — a multi-line HTML comment
+   lands inside the inlined script and silently kills it. See tools/tour/README.md +
+   DESIGN §6. */
+<!-- forge:include ../tools/tour/tours.js -->
+<!-- forge:include ../tools/tour/tour.js -->
+</script>
+</body>
+</html>

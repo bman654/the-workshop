@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Iridescence</title>
+<style>
+  :root{
+    --panel-bg: rgba(10,9,7,0.86);
+    --panel-edge: rgba(201,162,74,0.30);
+    --ink: #f0e9da;
+    --ink-dim: #b0a487;
+    --accent: #c9a24a;
+    --accent-bright: #f0d489;
+    --accent-soft: rgba(201,162,74,0.16);
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    /* skin variables (cosmetic only — never read by the physics core) */
+    --stage-a: #0c0a08;
+    --stage-b: #050404;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:radial-gradient(ellipse 120% 90% at 50% 38%, var(--stage-a), var(--stage-b) 78%);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none; gap:14px;
+  }
+  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
+  .navlinks{ display:flex; flex-direction:column; gap:5px; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent-bright); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; flex:1; justify-content:center; }
+  .brand h1{ font-family:var(--font-serif); font-size:22px; font-weight:600; letter-spacing:.5px; margin:0;
+    background:linear-gradient(95deg, var(--accent-bright), var(--accent) 55%, #9c7a2e);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:var(--accent); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; text-transform:uppercase; }
+  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.3px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.35); white-space:nowrap; }
+  .selftest.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(30,58,38,0.4); }
+  .selftest.bad{ color:#f08a7a; border-color:rgba(220,120,100,0.6); background:rgba(70,30,26,0.4); }
+
+  /* ---- Layout ---- */
+  #wrap{ position:fixed; inset:0; display:flex; }
+  #stage{ flex:1; position:relative; min-width:0; }
+  #film{ display:block; position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:crosshair; }
+  #hud{ position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+    font:11px/1.3 var(--font-mono); color:var(--ink-dim); background:rgba(0,0,0,0.55);
+    border:1px solid var(--panel-edge); border-radius:8px; padding:7px 12px; letter-spacing:.3px;
+    pointer-events:none; opacity:0; transition:opacity .15s; max-width:90%; text-align:center; }
+  #hud.show{ opacity:1; }
+  #hud b{ color:var(--accent-bright); }
+
+  /* ---- Control panel ---- */
+  #panel{
+    width:322px; flex:0 0 322px; height:100%;
+    background:var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border-left:1px solid var(--panel-edge);
+    padding:58px 16px 22px;
+    box-shadow: -18px 0 50px rgba(0,0,0,0.5);
+    z-index:20; overflow-y:auto;
+  }
+  #panel .lede{ font-size:11.5px; color:var(--ink-dim); line-height:1.55; margin:0 0 14px; letter-spacing:.2px; }
+  #panel .lede b{ color:var(--ink); font-weight:600; }
+  .sect{ font:600 10px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-dim);
+    margin:18px 0 8px; border-top:1px solid rgba(201,162,74,0.16); padding-top:13px; }
+  .sect:first-of-type{ border-top:none; padding-top:0; margin-top:4px; }
+  .row{ margin:11px 0; }
+  .row > label{ display:flex; justify-content:space-between; align-items:baseline; font:600 10px/1 var(--font-mono);
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; }
+  .row > label .val{ color:var(--accent-bright); font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:.2px; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--fill,50%), rgba(255,255,255,0.12) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:#f6ecd2; border:2px solid #8a6d24; box-shadow:0 1px 4px rgba(0,0,0,.5); cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%; background:#f6ecd2; border:2px solid #8a6d24; cursor:pointer;
+  }
+  input[type=range]:disabled{ opacity:.4; cursor:not-allowed; }
+  .seg{ display:flex; gap:4px; background:rgba(0,0,0,0.30); padding:3px; border-radius:9px; border:1px solid rgba(201,162,74,0.24); }
+  .seg button{
+    flex:1; border:none; background:transparent; color:var(--ink-dim); font-size:11px; padding:6px 3px; border-radius:6px;
+    cursor:pointer; transition:.15s; letter-spacing:.2px; white-space:nowrap; font-family:var(--font-mono);
+  }
+  .seg button.active{ background:var(--accent); color:#1a1305; font-weight:700; }
+  .seg button:not(.active):hover{ color:var(--ink); background:rgba(255,255,255,0.05); }
+  .toggle{ display:flex; align-items:center; gap:9px; cursor:pointer; user-select:none; margin:11px 0; }
+  .toggle input{ display:none; }
+  .toggle .box{ width:34px; height:18px; border-radius:10px; background:rgba(0,0,0,0.4); border:1px solid var(--panel-edge);
+    position:relative; transition:.15s; flex:0 0 auto; }
+  .toggle .box::after{ content:''; position:absolute; top:1px; left:1px; width:14px; height:14px; border-radius:50%;
+    background:var(--ink-dim); transition:.15s; }
+  .toggle input:checked + .box{ background:var(--accent-soft); border-color:var(--accent); }
+  .toggle input:checked + .box::after{ left:17px; background:var(--accent-bright); }
+  .toggle .lab{ font:600 10.5px/1.3 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--ink-dim); }
+  .btnrow{ display:flex; gap:8px; margin:12px 0; }
+  .btn{
+    flex:1; border:1px solid var(--panel-edge); background:rgba(255,255,255,0.04); color:var(--ink);
+    border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; letter-spacing:.3px; cursor:pointer; transition:.15s;
+    font-family:var(--font-ui);
+  }
+  .btn:hover{ background:var(--accent-soft); border-color:var(--accent); }
+  .btn.primary{ background:linear-gradient(180deg, rgba(201,162,74,0.30), rgba(201,162,74,0.08)); }
+  .btn.primary:hover{ background:linear-gradient(180deg, rgba(201,162,74,0.46), rgba(201,162,74,0.14)); }
+  .swatchrow{ display:flex; align-items:center; gap:8px; margin:8px 0 2px; }
+  #spectrumStrip{ flex:1; height:30px; border-radius:6px; border:1px solid var(--panel-edge); image-rendering:pixelated; }
+  #colorChip{ width:36px; height:30px; border-radius:6px; border:1px solid var(--panel-edge); flex:0 0 auto; }
+  .reading{ font:11px/1.6 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; }
+  .reading b{ color:var(--accent-bright); font-weight:600; }
+  .hint{ font:10.5px/1.55 var(--font-mono); color:var(--ink-dim); opacity:.8; letter-spacing:.2px; margin:16px 0 4px;
+    border-top:1px solid rgba(201,162,74,0.16); padding-top:12px; }
+  .hint b{ color:var(--ink); font-weight:600; }
+
+  /* ---- Feats of Light (shared gilt UX — literal colours intentionally shared) ---- */
+  .feat-toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,12px);z-index:9999;
+    background:rgba(20,18,14,0.95);border:1px solid rgba(201,162,74,0.6);border-radius:12px;
+    padding:11px 18px;color:#f0e6cf;font:500 13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    text-align:center;box-shadow:0 8px 30px rgba(0,0,0,0.5),0 0 24px rgba(201,162,74,0.25);opacity:0;
+    transition:opacity .5s ease,transform .5s ease;pointer-events:none;max-width:80vw}
+  .feat-toast.show{opacity:1;transform:translate(-50%,0)}
+  .feat-toast .feat-star{color:#e9c46a;font-size:15px}
+  .feat-toast b{color:#ffe9b0;font-weight:600}
+  .feat-chip{display:inline-flex;align-items:center;gap:5px;font:600 10px/1 ui-monospace,Menlo,monospace;
+    letter-spacing:.04em;padding:6px 10px;border-radius:20px;border:1px solid rgba(201,162,74,0.35);
+    background:rgba(40,34,22,0.4);color:#b9a571;white-space:nowrap;transition:all .35s ease}
+  .feat-chip.earned{color:#ffe3a0;border-color:rgba(233,196,106,0.85);background:rgba(70,56,24,0.55);
+    box-shadow:0 0 14px rgba(233,196,106,0.3)}
+  .feat-chip .fc-star{color:#e9c46a}
+
+  /* ── phone width (WS1 T4.1): the room chrome folds — panel flows UNDER the stage, scrimmed wrapped topbar ── */
+  @media (max-width:460px){
+    .topbar{ flex-wrap:wrap; row-gap:4px; font-size:12px; background:rgba(11,14,22,.92); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); }
+    #wrap{ flex-direction:column; overflow-y:auto; }
+    #stage{ flex:0 0 auto; height:62vh; min-height:340px; }
+    #panel{ position:static; width:100%; max-width:none; flex:0 0 auto; height:auto; border-left:none; border-top:1px solid var(--panel-edge); margin-top:8px; box-shadow:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="navlinks">
+      <a class="back" href="../index.html">&larr; The Orrery Estate</a>
+      <a class="back" href="../hall-of-mirrors/index.html">&#8599; hall of mirrors</a>
+      <a class="back" href="../structural-colour/index.html">&#8599; structural colour</a>
+    </div>
+    <div class="brand">
+      <h1>Iridescence</h1>
+      <span class="tag">thin-film interference</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;pointer-events:auto;">
+      <div class="feat-chip" id="featChip"><span class="fc-star">&#10022;</span> Feat: match the colour</div>
+      <div class="selftest" id="selftest">checking…</div>
+    </div>
+  </div>
+
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="film"></canvas>
+      <div id="hud"></div>
+    </div>
+
+    <aside id="panel">
+      <p class="lede">The colours of soap bubbles, oil on a puddle, and Newton's rings — computed,
+        not painted. Light reflecting off the two faces of a thin film interferes; the path
+        difference <b>2nt&nbsp;cosθ′</b> cancels some wavelengths and reinforces others. Each pixel's
+        colour is its <b>reflected spectrum</b> integrated against the <b>CIE 1931</b> observer.</p>
+
+      <div class="sect">Mode</div>
+      <div class="row">
+        <div class="seg" id="modeSeg">
+          <button data-mode="newton" class="active">Newton</button>
+          <button data-mode="soap">Soap film</button>
+          <button data-mode="oil">Oil slick</button>
+        </div>
+      </div>
+
+      <div class="sect">Light</div>
+      <div class="row">
+        <div class="seg" id="lightSeg">
+          <button data-light="white" class="active">White (D65)</button>
+          <button data-light="mono">Monochromatic</button>
+        </div>
+      </div>
+      <div class="row" id="lambdaRow">
+        <label>Wavelength λ <span class="val" id="lamVal">589 nm</span></label>
+        <input type="range" id="lamSlider" min="400" max="700" step="1" value="589">
+      </div>
+
+      <div class="sect" id="paramTitle">Lens</div>
+      <div class="row" id="param1Row">
+        <label id="param1Lab">Radius of curvature R <span class="val" id="param1Val">8.0 m</span></label>
+        <input type="range" id="param1Slider" min="2" max="20" step="0.1" value="8">
+      </div>
+      <div class="row" id="param2Row">
+        <label id="param2Lab">Tilt <span class="val" id="param2Val">0.0</span></label>
+        <input type="range" id="param2Slider" min="0" max="1" step="0.01" value="0">
+      </div>
+
+      <div class="sect">Animation</div>
+      <label class="toggle"><input type="checkbox" id="animChk" checked><span class="box"></span><span class="lab" id="animLab">Drain / drift</span></label>
+
+      <div class="sect">Spectrum at cursor</div>
+      <div class="swatchrow">
+        <canvas id="spectrumStrip" width="120" height="1"></canvas>
+        <div id="colorChip"></div>
+      </div>
+      <div class="reading" id="reading">Hover the film to read its thickness &amp; reflected spectrum.</div>
+
+      <div class="sect">Feat — match the colour</div>
+      <div class="swatchrow">
+        <div id="targetChip" title="Target colour" style="width:36px;height:30px;border-radius:6px;border:1px solid var(--panel-edge);flex:0 0 auto;"></div>
+        <div class="reading" id="matchReading" style="flex:1;margin:0;">In <b>white light</b>, hover the film to find the spot whose colour matches this swatch.</div>
+      </div>
+
+      <div class="sect">Skin</div>
+      <div class="row">
+        <div class="seg" id="skinSeg">
+          <button data-skin="estate" class="active">Estate</button>
+          <button data-skin="slate">Slate</button>
+          <button data-skin="ivory">Ivory</button>
+        </div>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn primary" id="pngBtn">Export 2× PNG</button>
+      </div>
+
+      <div class="hint">
+        Newton's rings: a lens on glass — the air gap <b>t = r²/2R</b>; dark rings at <b>2t = mλ</b>, a
+        <b>dark centre</b>. Soap film drains to a wedge: a <b>black top band</b> then descending colours.
+        Oil slick: an oil film on water swirls. <b>Hover</b> anywhere to read the physics.
+      </div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+// ============================================================================
+// Iridescence CORE — pure thin-film interference + CIE 1931 colour.
+// NO DOM, NO skin, NO render in this section. The headless self-test below and
+// the browser renderer both call THESE real functions (single source of truth).
+// ============================================================================
+
+// ---------------------------------------------------------------------------
+// CIE 1931 2° colour-matching functions — Wyman, Sloan & Shirley (2013)
+// "Simple Analytic Approximations to the CIE XYZ Color Matching Functions"
+// (JCGT). Multi-lobe piecewise Gaussian fit; λ in NANOMETRES. These integrate
+// to the standard observer to a few parts per thousand — small & self-contained.
+// ---------------------------------------------------------------------------
+function gaussLobe(x, mu, s1, s2){
+  const t = (x - mu) * (x < mu ? s1 : s2);
+  return Math.exp(-0.5 * t * t);
+}
+function cieX(nm){
+  return 1.056 * gaussLobe(nm, 599.8, 0.0264, 0.0323)
+       + 0.362 * gaussLobe(nm, 442.0, 0.0624, 0.0374)
+       - 0.065 * gaussLobe(nm, 501.1, 0.0490, 0.0382);
+}
+function cieY(nm){
+  return 0.821 * gaussLobe(nm, 568.8, 0.0213, 0.0247)
+       + 0.286 * gaussLobe(nm, 530.9, 0.0613, 0.0322);
+}
+function cieZ(nm){
+  return 1.217 * gaussLobe(nm, 437.0, 0.0845, 0.0278)
+       + 0.681 * gaussLobe(nm, 459.0, 0.0385, 0.0725);
+}
+
+// Spectral sampling grid for all integrations (5 nm, 380–780 nm inclusive).
+const LAMBDA_MIN = 380, LAMBDA_MAX = 780, LAMBDA_STEP = 5;
+const LAMBDAS = (function(){
+  const a = [];
+  for(let l = LAMBDA_MIN; l <= LAMBDA_MAX + 1e-9; l += LAMBDA_STEP) a.push(l);
+  return a;
+})();
+
+// ---------------------------------------------------------------------------
+// Illuminant spectral power distributions S(λ), sampled on LAMBDAS.
+//  'E'   → equal-energy (flat 1.0) — calibration reference.
+//  'D65' → CIE D65 daylight, from the standard 300–830 nm 5 nm table (subset).
+// ---------------------------------------------------------------------------
+function illuminantE(){ return LAMBDAS.map(() => 1.0); }
+
+// CIE D65 relative spectral power, 380..780 nm @ 5nm (normalised ~100 at 560nm).
+const D65_TABLE = [
+  49.98, 52.31, 54.65, 68.70, 82.75, 87.12, 91.49, 92.46, 93.43, 90.06,  // 380..425
+  86.68, 95.77, 104.86, 110.94, 117.01, 117.41, 117.81, 116.34, 114.86, 115.39, // 430..475
+  115.92, 112.37, 108.81, 109.08, 109.35, 108.58, 107.80, 106.30, 104.79, 106.24, // 480..525
+  107.69, 106.05, 104.41, 104.23, 104.05, 102.02, 100.00, 98.17, 96.33, 96.06,   // 530..575
+  95.79, 92.24, 88.69, 89.35, 90.01, 89.80, 89.60, 88.65, 87.70, 85.49,          // 580..625
+  83.29, 83.49, 83.70, 81.86, 80.03, 80.12, 80.21, 81.25, 82.28, 80.28,          // 630..675
+  78.28, 74.00, 69.72, 70.67, 71.61, 72.98, 74.35, 67.98, 61.60, 65.74,          // 680..725
+  69.89, 72.49, 75.09, 69.34, 63.59, 55.01, 46.42, 56.61, 66.81, 65.09, 63.38    // 730..780
+];
+function illuminantD65(){ return D65_TABLE.slice(); }
+
+// ---------------------------------------------------------------------------
+// Spectrum → CIE XYZ (integration against the CMFs under an illuminant), then
+// XYZ → linear sRGB → gamma-encoded sRGB bytes.
+//   refl(λ) is the film's spectral reflectance in [0,1] sampled on LAMBDAS.
+//   spd(λ)  is the illuminant SPD on LAMBDAS.
+//   Y is normalised by the illuminant's own Y so a perfect (R≡1) reflector → white.
+// ---------------------------------------------------------------------------
+function spectrumToXYZ(refl, spd){
+  let X = 0, Y = 0, Z = 0, Yn = 0;
+  for(let i = 0; i < LAMBDAS.length; i++){
+    const l = LAMBDAS[i];
+    const w = spd[i];
+    const r = refl[i];
+    const xb = cieX(l), yb = cieY(l), zb = cieZ(l);
+    X += w * r * xb;
+    Y += w * r * yb;
+    Z += w * r * zb;
+    Yn += w * yb;             // illuminant white-point normaliser
+  }
+  const inv = Yn > 0 ? 1 / Yn : 0;
+  return { X: X * inv, Y: Y * inv, Z: Z * inv };
+}
+
+// Chromaticity (x,y) from XYZ — independent of luminance.
+function xyChromaticity(X, Y, Z){
+  const s = X + Y + Z;
+  if(s <= 0) return { x: 0, y: 0 };
+  return { x: X / s, y: Y / s };
+}
+
+// Linear sRGB from CIE XYZ (D65 primaries, IEC 61966-2-1 matrix).
+function xyzToLinearRGB(X, Y, Z){
+  const r =  3.2406 * X - 1.5372 * Y - 0.4986 * Z;
+  const g = -0.9689 * X + 1.8758 * Y + 0.0415 * Z;
+  const b =  0.0557 * X - 0.2040 * Y + 1.0570 * Z;
+  return [r, g, b];
+}
+// sRGB gamma encode one linear channel → [0,1].
+function srgbEncode(c){
+  c = c <= 0 ? 0 : c;
+  return c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+}
+// Full pipeline: spectral reflectance + illuminant → 0..255 sRGB triple.
+// Out-of-gamut negatives are clipped after a desaturate-toward-white step so
+// vivid film colours stay plausible rather than going black.
+function spectrumToSRGB(refl, spd){
+  const { X, Y, Z } = spectrumToXYZ(refl, spd);
+  let [r, g, b] = xyzToLinearRGB(X, Y, Z);
+  // de-saturate toward white by adding the most-negative channel (gamut map)
+  const m = Math.min(r, g, b);
+  if(m < 0){ r -= m; g -= m; b -= m; }
+  // normalise if any channel > 1 (preserve hue, avoid hard clip flattening)
+  const mx = Math.max(r, g, b, 1);
+  r /= mx; g /= mx; b /= mx;
+  return [
+    Math.round(255 * srgbEncode(r)),
+    Math.round(255 * srgbEncode(g)),
+    Math.round(255 * srgbEncode(b))
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Thin-film reflectance R(λ) — two-beam interference.
+// A film of index n, thickness t (nm), at internal angle θ′, has phase
+//   δ = (4π n t cosθ′) / λ
+// between the two reflected beams. With one hard (π) phase shift — exactly the
+// Newton's-rings geometry: air gap (n≈1) bounded BELOW by denser glass (π shift)
+// and ABOVE by the lens glass→air interface (no shift, going from dense to
+// rare) — the reflected intensity is
+//   R(λ) = R0 · sin²(δ/2)            (two-beam, equal-amplitude approximation)
+// so 2t = mλ (δ = 2πm·... see below) gives sin²=0 → DARK, and t=0 → DARK.
+// For a soap/oil film the same single-π-shift bookkeeping holds (rare→dense at
+// the front face gives the π shift), so the identical formula applies with n>1.
+// R0 scales the fringe contrast (a stand-in for the surface reflectivities).
+// ---------------------------------------------------------------------------
+function filmPhase(n, t, cosThetaPrime, lambda){
+  return (4 * Math.PI * n * t * cosThetaPrime) / lambda;   // δ, radians
+}
+// Reflectance with ONE π phase shift (the net extra π adds to δ): the two beams
+// are out of phase by δ + π, so reflected intensity ∝ sin²(δ/2).
+function filmReflectance(n, t, cosThetaPrime, lambda, R0){
+  const delta = filmPhase(n, t, cosThetaPrime, lambda);
+  const s = Math.sin(delta / 2);
+  return (R0 === undefined ? 1 : R0) * s * s;
+}
+// Internal propagation angle from Snell's law given the angle of incidence in
+// the surrounding medium. Returns cosθ′ (always real for n2 ≥ n1).
+function cosInternal(nOutside, nFilm, thetaIncidence){
+  const sinI = Math.sin(thetaIncidence);
+  const sinT = (nOutside / nFilm) * sinI;
+  const c2 = 1 - sinT * sinT;
+  return c2 <= 0 ? 0 : Math.sqrt(c2);
+}
+
+// Build a full reflectance spectrum on LAMBDAS for a film of (n, t, cosθ′, R0).
+function filmSpectrum(n, t, cosThetaPrime, R0){
+  const out = new Array(LAMBDAS.length);
+  for(let i = 0; i < LAMBDAS.length; i++){
+    out[i] = filmReflectance(n, t, cosThetaPrime, LAMBDAS[i], R0);
+  }
+  return out;
+}
+
+// Convenience: the visible colour (sRGB bytes) of a film at thickness t.
+function filmColor(n, t, cosThetaPrime, spd, R0){
+  return spectrumToSRGB(filmSpectrum(n, t, cosThetaPrime, R0), spd);
+}
+
+// ---------------------------------------------------------------------------
+// Newton's rings geometry — air gap thickness at radius r for a plano-convex
+// lens of radius of curvature R resting on a flat plate:  t(r) = r² / (2R).
+// Dark-ring (destructive, reflected) condition 2t = mλ  ⟹  r_m = √(m R λ).
+// ---------------------------------------------------------------------------
+function newtonGap(r, R){ return (r * r) / (2 * R); }
+function newtonDarkRadius(m, R, lambda){ return Math.sqrt(m * R * lambda); }
+
+// ---------------------------------------------------------------------------
+// Spectrum fingerprint — stable hash proving skin-invariance of the colour
+// pipeline (it takes NO skin argument). Used by the self-test.
+// ---------------------------------------------------------------------------
+function hashStr(s){
+  let h = 2166136261 >>> 0;
+  for(let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return ('00000000' + (h >>> 0).toString(16)).slice(-8) + ':' + s.length;
+}
+
+// ============================================================================
+// HEADLESS SELF-TEST — calls the REAL functions above. Returns {pass,total,log}.
+// ============================================================================
+function runSelfTest(){
+  let pass = 0, total = 0; const log = [];
+  function check(name, cond){
+    total++;
+    if(cond){ pass++; log.push('PASS: ' + name); if(typeof console !== 'undefined') console.log('PASS: ' + name); }
+    else { log.push('FAIL: ' + name); if(typeof console !== 'undefined') console.error('FAIL: ' + name); }
+  }
+
+  // (1) Newton dark-ring radii satisfy r_m == √(mRλ) AND the gap there gives the
+  //     exact dark condition 2t = mλ (so sin²(δ/2)=0 to floating precision).
+  {
+    let maxRadErr = 0, maxDarkErr = 0, maxRefl = 0;
+    const Rs = [4e6, 8e6, 1.2e7];          // radius of curvature, nm (4..12 mm-ish in nm? -> use metres scaled)
+    const lams = [430, 532, 589, 633];
+    for(const R of Rs){
+      for(const lam of lams){
+        for(let m = 1; m <= 8; m++){
+          const r = newtonDarkRadius(m, R, lam);          // candidate dark-ring radius
+          const expected = Math.sqrt(m * R * lam);
+          maxRadErr = Math.max(maxRadErr, Math.abs(r - expected));
+          // gap at that radius and the dark-condition residual 2t - mλ
+          const t = newtonGap(r, R);
+          maxDarkErr = Math.max(maxDarkErr, Math.abs(2 * t - m * lam));
+          // reflectance at the dark ring (air gap n=1, normal incidence) ≈ 0
+          const refl = filmReflectance(1.0, t, 1.0, lam, 1.0);
+          maxRefl = Math.max(maxRefl, refl);
+        }
+      }
+    }
+    check('Newton dark rings: r_m == √(mRλ) and 2t == mλ at those radii (<1e-6)',
+          maxRadErr < 1e-6 && maxDarkErr < 1e-6);
+    check('Newton dark rings are dark: reflectance ≈ 0 at r_m (<1e-12)', maxRefl < 1e-12);
+  }
+
+  // (2) The centre t=0 is a reflectance MINIMUM (the π-shift bookkeeping): R(0)=0
+  //     for every wavelength, and R rises immediately as t grows (bright between).
+  {
+    let centreOk = true, risesOk = true;
+    for(const lam of [410, 470, 530, 590, 650, 700]){
+      if(filmReflectance(1.0, 0, 1.0, lam, 1.0) > 1e-15) centreOk = false;
+      // first bright ring (sin²=1) is at δ/2 = π/2 → t = λ/4; reflectance there = R0
+      const tBright = lam / 4;
+      const rb = filmReflectance(1.0, tBright, 1.0, lam, 1.0);
+      if(Math.abs(rb - 1.0) > 1e-9) risesOk = false;
+    }
+    check('centre t=0 is dark (min reflectance) for all λ; first bright at t=λ/4', centreOk && risesOk);
+  }
+
+  // (3) Colour pipeline calibration: a FLAT (equal-energy reflectance under the
+  //     equal-energy illuminant) spectrum integrates to neutral x≈y≈1/3.
+  {
+    const flat = LAMBDAS.map(() => 1.0);
+    const E = illuminantE();
+    const { X, Y, Z } = spectrumToXYZ(flat, E);
+    const { x, y } = xyChromaticity(X, Y, Z);
+    const err = Math.hypot(x - 1 / 3, y - 1 / 3);
+    check('flat spectrum under equal-energy → neutral chromaticity x≈y≈1/3 (err<0.01)', err < 0.01);
+
+    // and a perfect reflector under D65 lands near the D65 white point (0.3127,0.3290)
+    const d65 = illuminantD65();
+    const w = spectrumToXYZ(flat, d65);
+    const wc = xyChromaticity(w.X, w.Y, w.Z);
+    const werr = Math.hypot(wc.x - 0.3127, wc.y - 0.3290);
+    check('perfect reflector under D65 → D65 white point (0.3127,0.3290) (err<0.02)', werr < 0.02);
+  }
+
+  // (4) A narrow single-wavelength spectrum integrates to a colour near that
+  //     wavelength's known spectral-locus chromaticity (monochromatic test).
+  {
+    // known CIE spectral-locus points (x,y) at a few wavelengths (reference data)
+    const locus = {
+      450: [0.1566, 0.0177], 520: [0.0743, 0.8338],
+      580: [0.5125, 0.4866], 620: [0.6915, 0.3083]
+    };
+    let worst = 0;
+    for(const key of Object.keys(locus)){
+      const lam0 = +key;
+      // a narrow spectrum: a single 5nm bin lit at the nearest grid wavelength
+      const refl = LAMBDAS.map(l => Math.abs(l - lam0) < 2.5 ? 1.0 : 0.0);
+      const E = illuminantE();
+      const { X, Y, Z } = spectrumToXYZ(refl, E);
+      const { x, y } = xyChromaticity(X, Y, Z);
+      const d = Math.hypot(x - locus[lam0][0], y - locus[lam0][1]);
+      worst = Math.max(worst, d);
+    }
+    // analytic-CMF fit + 5nm bin → within ~0.03 of the reference locus
+    check('narrow single-λ spectrum → chromaticity near that λ on the spectral locus (err<0.05)', worst < 0.05);
+  }
+
+  // (5) Monochromatic ring spacing scales as √λ: ring m radius ∝ √λ across two
+  //     wavelengths (r_m(λ2)/r_m(λ1) == √(λ2/λ1) exactly).
+  {
+    const R = 9e6, lam1 = 450, lam2 = 650;
+    let maxErr = 0;
+    for(let m = 1; m <= 10; m++){
+      const r1 = newtonDarkRadius(m, R, lam1);
+      const r2 = newtonDarkRadius(m, R, lam2);
+      const ratio = r2 / r1;
+      maxErr = Math.max(maxErr, Math.abs(ratio - Math.sqrt(lam2 / lam1)));
+    }
+    check('monochromatic ring radius ∝ √λ: r_m(λ2)/r_m(λ1) == √(λ2/λ1) (<1e-9)', maxErr < 1e-9);
+  }
+
+  // (6) Reflectance is periodic in optical path 2nt with period λ, and Snell's
+  //     internal angle is consistent (cosθ′ in (0,1], shrinks the optical path).
+  {
+    let periodOk = true;
+    const n = 1.33, lam = 550, cs = 1.0;
+    for(let k = 0; k < 6; k++){
+      const t0 = 90 + k * 37;
+      const tShift = t0 + lam / (2 * n);     // adds 2π to δ (one full period)
+      const a = filmReflectance(n, t0, cs, lam, 1.0);
+      const b = filmReflectance(n, tShift, cs, lam, 1.0);
+      if(Math.abs(a - b) > 1e-9) periodOk = false;
+    }
+    // Snell internal angle: at 45° incidence into n=1.33 from air, cosθ′ matches
+    const ci = cosInternal(1.0, 1.33, Math.PI / 4);
+    const sinT = (1.0 / 1.33) * Math.sin(Math.PI / 4);
+    const ciRef = Math.sqrt(1 - sinT * sinT);
+    const snellOk = Math.abs(ci - ciRef) < 1e-12 && ci > 0 && ci <= 1;
+    check('reflectance periodic in t with period λ/2n; Snell internal cosθ′ exact', periodOk && snellOk);
+  }
+
+  // (7) Determinism / skin-invariance: the colour pipeline takes no skin
+  //     argument, so identical (n,t,cosθ′,illuminant) → identical colour, and a
+  //     thickness change DOES change it (guards against a constant hash).
+  {
+    const d65 = illuminantD65();
+    const c1 = filmColor(1.33, 320, 1.0, d65, 1.0);
+    const c2 = filmColor(1.33, 320, 1.0, d65, 1.0);
+    const c3 = filmColor(1.33, 360, 1.0, d65, 1.0);
+    const h1 = hashStr(c1.join(',')), h2 = hashStr(c2.join(',')), h3 = hashStr(c3.join(','));
+    check('determinism / skin-invariance: same film → identical colour; Δt differs', h1 === h2 && h1 !== h3);
+  }
+
+  return { pass, total, log };
+}
+
+// expose for Node extraction / external re-audit
+const __IridescenceCore = {
+  cieX, cieY, cieZ, LAMBDAS, illuminantE, illuminantD65,
+  spectrumToXYZ, xyChromaticity, xyzToLinearRGB, srgbEncode, spectrumToSRGB,
+  filmPhase, filmReflectance, cosInternal, filmSpectrum, filmColor,
+  newtonGap, newtonDarkRadius, runSelfTest
+};
+if(typeof window !== 'undefined'){ window.IridescenceCore = __IridescenceCore; }
+if(typeof module !== 'undefined' && module.exports){ module.exports = __IridescenceCore; }
+
+// ============================================================================
+// APPLICATION (DOM). Everything below derives from the pure CORE above. Skipped
+// entirely under Node (no document).
+// ============================================================================
+if(typeof document !== 'undefined'){ (function(){
+
+/* Hall of Mirrors — "Feats of Light": a quiet, earned achievement.
+   Drops a raise-only breadcrumb the Survey/Undercroft can read, + a consistent gilt toast. */
+function earnFeat(id,label){var k='ws:flag:earned-'+id,fresh=false;
+  try{if(!localStorage.getItem(k)){localStorage.setItem(k,String(Date.now()));fresh=true;}}catch(e){}
+  var chip=document.getElementById('featChip'); if(chip){chip.classList.add('earned');}
+  if(fresh)showFeatToast(label);}
+function showFeatToast(label){var t=document.createElement('div');t.className='feat-toast';
+  t.innerHTML='<span class="feat-star">&#10022;</span> Feat of Light earned<br><b>'+label+'</b>';
+  document.body.appendChild(t);requestAnimationFrame(function(){t.classList.add('show');});
+  setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove();},600);},3800);}
+function initFeatChip(id){try{if(localStorage.getItem('ws:flag:earned-'+id)){var c=document.getElementById('featChip');if(c)c.classList.add('earned');}}catch(e){}}
+
+// ---------- skins (COSMETIC ONLY — never touch the physics) -----------------
+// Each skin only recolours the stage backdrop + the surrounding chrome. The
+// film colours come strictly from the spectral pipeline above.
+const SKINS = {
+  estate: { stageA: '#0c0a08', stageB: '#050404', vignette: 0.45 },
+  slate:  { stageA: '#10131a', stageB: '#060709', vignette: 0.40 },
+  ivory:  { stageA: '#2a2620', stageB: '#161310', vignette: 0.30 },
+};
+
+// ---------- app state -------------------------------------------------------
+const state = {
+  mode: 'newton',           // 'newton' | 'soap' | 'oil'
+  light: 'white',           // 'white' | 'mono'
+  lambda: 589,              // monochromatic wavelength (nm)
+  R: 8,                     // Newton: radius of curvature (metres)
+  tilt: 0,                  // Newton: lens tilt fraction
+  soapTop: 0,               // soap: drain phase (animated)
+  oilPhase: 0,              // oil: drift phase (animated)
+  anim: true,
+  skin: 'estate',
+  t: 0,
+};
+const reduceMotion = (typeof window.matchMedia === 'function')
+  && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if(reduceMotion) state.anim = false;
+
+const cv = document.getElementById('film');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0;
+let dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+
+// Offscreen low-res buffer — evaluating a full spectral integral per display
+// pixel per frame is far too heavy, so we render into a modest buffer and
+// drawImage-upscale (the same trick Ripple uses). A precomputed colour LUT over
+// thickness makes the per-pixel cost a single table lookup.
+const buf = document.createElement('canvas');
+const bctx = buf.getContext('2d');
+let bw = 0, bh = 0, img = null, idata = null;
+const TARGET_BUF_W = 340;
+
+// ---------- colour LUT over thickness --------------------------------------
+// For the current light + film index we precompute colour bytes for a dense set
+// of thicknesses. Newton's gap, soap wedge and oil field all map a position to a
+// thickness, then index this LUT. Rebuilt only when light/mode/λ change.
+const LUT_SIZE = 1024;          // thickness samples
+let lutMaxT = 1400;             // nm — covers the vivid first several orders
+let lutR = new Uint8ClampedArray(LUT_SIZE);
+let lutG = new Uint8ClampedArray(LUT_SIZE);
+let lutB = new Uint8ClampedArray(LUT_SIZE);
+
+function currentSPD(){ return state.light === 'mono' ? null : __IridescenceCore.illuminantD65(); }
+function currentFilmN(){
+  if(state.mode === 'newton') return 1.0;   // air gap
+  if(state.mode === 'soap')   return 1.33;  // soap (water)
+  return 1.45;                               // oil
+}
+// monochromatic display colour: the line's own hue, modulated by reflectance.
+function monoBaseRGB(lam){
+  // use the spectral pipeline on a narrow line so the hue is physically derived
+  const refl = __IridescenceCore.LAMBDAS.map(l => Math.abs(l - lam) < 2.5 ? 1.0 : 0.0);
+  const c = __IridescenceCore.spectrumToSRGB(refl, __IridescenceCore.illuminantE());
+  // boost to full brightness (it'll be scaled by reflectance per pixel)
+  const mx = Math.max(c[0], c[1], c[2], 1);
+  return [c[0] / mx, c[1] / mx, c[2] / mx];
+}
+
+function buildLUT(){
+  const n = currentFilmN();
+  const R0 = state.mode === 'oil' ? 0.85 : 1.0;     // contrast stand-in
+  if(state.light === 'mono'){
+    const base = monoBaseRGB(state.lambda);
+    for(let i = 0; i < LUT_SIZE; i++){
+      const t = (i / (LUT_SIZE - 1)) * lutMaxT;
+      const refl = __IridescenceCore.filmReflectance(n, t, 1.0, state.lambda, 1.0);
+      // gamma the intensity a touch so dark rings read crisply
+      const g = Math.pow(refl, 0.85);
+      lutR[i] = 255 * base[0] * g;
+      lutG[i] = 255 * base[1] * g;
+      lutB[i] = 255 * base[2] * g;
+    }
+  } else {
+    const spd = __IridescenceCore.illuminantD65();
+    for(let i = 0; i < LUT_SIZE; i++){
+      const t = (i / (LUT_SIZE - 1)) * lutMaxT;
+      const c = __IridescenceCore.filmColor(n, t, 1.0, spd, R0);
+      lutR[i] = c[0]; lutG[i] = c[1]; lutB[i] = c[2];
+    }
+  }
+}
+// sample the LUT at thickness t (nm), clamped.
+function lutAt(t){
+  let f = t / lutMaxT;
+  if(f < 0) f = 0; else if(f > 1) f = 1;
+  return (f * (LUT_SIZE - 1)) | 0;
+}
+
+function resize(){
+  const stage = document.getElementById('stage');
+  W = Math.max(200, stage.clientWidth);
+  H = Math.max(200, stage.clientHeight);
+  dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  bw = TARGET_BUF_W;
+  bh = Math.max(40, Math.round(TARGET_BUF_W * H / W));
+  buf.width = bw; buf.height = bh;
+  img = bctx.createImageData(bw, bh);
+  idata = img.data;
+}
+
+// ---------- thickness fields per mode ---------------------------------------
+// Each returns the film thickness (nm) at buffer pixel (bx,by). Pure geometry;
+// the colour comes from the LUT. Coordinates normalised to the buffer.
+
+// Newton: lens centred on the stage; gap t = r²/2R with R in nm. We map the
+// buffer so a comfortable number of rings fit, and add an optional tilt that
+// shifts the contact point (turns rings into off-centre arcs / fringes).
+function newtonThickness(bx, by){
+  const cx = bw * 0.5, cy = bh * 0.5;
+  // physical extent: choose so ~ the first ~14 dark rings of 550nm span the radius
+  const Rnm = state.R * 1e9;                 // metres → nm
+  const px = bx - cx, py = by - cy;
+  // pixels → physical radius (nm). Scale so the visible disc shows many orders.
+  const maxPxR = Math.min(bw, bh) * 0.46;
+  const lam0 = 550;
+  const ringsToShow = 16;
+  const rPhysMax = __IridescenceCore.newtonDarkRadius(ringsToShow, Rnm, lam0); // nm
+  const sc = rPhysMax / maxPxR;              // nm per buffer pixel
+  // tilt: displace the contact point so the gap is a tilted plane near contact
+  const rx = px * sc, ry = py * sc;
+  const r = Math.hypot(rx, ry);
+  let t = __IridescenceCore.newtonGap(r, Rnm);
+  if(state.tilt > 0){
+    // add a wedge: linear gap component across x (a slightly tilted lens)
+    t += state.tilt * 600 * (rx / rPhysMax);
+    if(t < 0) t = -t;                        // gap can't be negative
+  }
+  return t;
+}
+
+// Soap film: a vertical draining wedge. Gravity pulls liquid down, so the film
+// is thinnest at the TOP and thicker toward the bottom. At the very top t→0 — a
+// "Newton black" film, thinner than λ, destructive for every wavelength → a
+// BLACK BAND. The drain animation thins the whole film over time, so the black
+// band grows downward and the colour fringes migrate. Gentle horizontal
+// undulation (Plateau-border lensing) gives the organic look.
+function soapThickness(bx, by){
+  const yFrac = by / bh;                     // 0 top .. 1 bottom
+  const drain = state.soapTop;               // 0..1 drain phase (animated)
+  // horizontal undulation — wavy fringes, small amplitude
+  const u = Math.sin(bx / bw * Math.PI * 3.0 + yFrac * 5.0)
+          + 0.45 * Math.sin(bx / bw * Math.PI * 7.0 - yFrac * 3.0 + 1.3);
+  // wedge profile: ~quadratic growth with depth (a draining film thins at top
+  // faster than the bottom). Multiply by (1 - thinning) so draining shrinks it.
+  const thin = 0.18 + 0.55 * drain;          // overall thinning grows as it drains
+  const depth = yFrac;
+  let t = (depth * depth * 1600 + depth * 120) * (1 - 0.45 * thin)
+        + (18 + 22 * u) * depth;
+  // the top band is forced toward zero (Newton black): a smooth ramp from 0 at
+  // the very top up to the wedge over the first slice — and it widens as it
+  // drains, so the black band visibly grows down the film.
+  const blackBand = 0.04 + 0.16 * drain;     // fraction of height that is ~black
+  if(yFrac < blackBand){
+    const f = yFrac / blackBand;             // 0 at top → 1 at band bottom
+    t *= f * f;                              // t→0 at the very top (all-λ destructive)
+  }
+  return t < 0 ? 0 : t;
+}
+
+// Oil slick: a thin oil film whose thickness varies smoothly in 2D (a few sine
+// lobes + a drifting term), giving the characteristic swirls of colour.
+function oilThickness(bx, by){
+  const x = bx / bw, y = by / bh;
+  const p = state.oilPhase;
+  const t =
+      230
+    + 150 * Math.sin(6.2 * x + 1.3 * Math.sin(3.1 * y + p))
+    + 120 * Math.sin(5.0 * y - 0.9 * Math.cos(4.0 * x - p * 0.7))
+    +  90 * Math.sin(9.0 * (x + y) + p * 1.1)
+    +  60 * Math.cos(11.0 * x - 7.0 * y + p * 0.5);
+  return t < 4 ? 4 : t;
+}
+
+function thicknessAt(bx, by){
+  if(state.mode === 'newton') return newtonThickness(bx, by);
+  if(state.mode === 'soap')   return soapThickness(bx, by);
+  return oilThickness(bx, by);
+}
+
+// ---------- render the film into the buffer, then upscale -------------------
+function renderFilm(targetCtx, targetW, targetH){
+  let p = 0;
+  for(let by = 0; by < bh; by++){
+    for(let bx = 0; bx < bw; bx++){
+      const t = thicknessAt(bx, by);
+      const i = lutAt(t);
+      idata[p++] = lutR[i];
+      idata[p++] = lutG[i];
+      idata[p++] = lutB[i];
+      idata[p++] = 255;
+    }
+  }
+  bctx.putImageData(img, 0, 0);
+  targetCtx.imageSmoothingEnabled = true;
+  targetCtx.imageSmoothingQuality = 'high';
+  targetCtx.drawImage(buf, 0, 0, bw, bh, 0, 0, targetW, targetH);
+  // a soft vignette to seat the film in the dark estate stage
+  const sk = SKINS[state.skin];
+  const g = targetCtx.createRadialGradient(
+    targetW * 0.5, targetH * 0.45, Math.min(targetW, targetH) * 0.2,
+    targetW * 0.5, targetH * 0.45, Math.max(targetW, targetH) * 0.72);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(1, 'rgba(0,0,0,' + sk.vignette + ')');
+  targetCtx.fillStyle = g;
+  targetCtx.fillRect(0, 0, targetW, targetH);
+}
+
+function draw(){
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(dpr, dpr);
+  renderFilm(ctx, W, H);
+}
+
+// ---------- animation loop (reduced-motion safe) ----------------------------
+let last = 0, rafId = null;
+function frame(ts){
+  rafId = requestAnimationFrame(frame);
+  if(state.anim){
+    const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0;
+    state.t += dt;
+    if(state.mode === 'soap'){
+      // drain cycles slowly 0→1 then resets
+      state.soapTop += dt * 0.04;
+      if(state.soapTop > 1) state.soapTop = 0;
+    } else if(state.mode === 'oil'){
+      state.oilPhase += dt * 0.5;
+    }
+  }
+  last = ts;
+  draw();
+}
+function startLoop(){ if(rafId == null){ last = 0; rafId = requestAnimationFrame(frame); } }
+
+// ---------- cursor read-out (thickness + spectrum strip + chip) -------------
+const stripCv = document.getElementById('spectrumStrip');
+const stripCtx = stripCv.getContext('2d');
+const STRIP_W = 120;
+stripCv.width = STRIP_W; stripCv.height = 1;
+const colorChip = document.getElementById('colorChip');
+const reading = document.getElementById('reading');
+
+// ---------- Feat target: "match the colour" ---------------------------------
+// A genuine perceptual skill: present a TARGET film colour (the colour of a
+// specific air-gap thickness under D65 white light) as a swatch, and ask the
+// user to hover the Newton's-rings film until the colour under the cursor
+// matches it within a CIELAB ΔE tolerance. The match is computed from live
+// state (thicknessAt → reflectance spectrum → CIE Lab), so it's real and
+// transitions exactly once into the satisfied state.
+const FEAT_TARGET_T = 305;          // nm air gap — a vivid second-order gold/amber
+const FEAT_DELTAE_TOL = 8;          // CIELAB ΔE76 tolerance — close but non-trivial
+let featTargetLab = null, featMatched = false;
+const targetChip = document.getElementById('targetChip');
+const matchReading = document.getElementById('matchReading');
+
+// XYZ → CIELAB (D65 white point), for a perceptual colour distance.
+function xyzToLab(X, Y, Z){
+  // D65 reference white (same scale as the core's Y-normalised output: white≈1)
+  const Xn = 0.95047, Yn = 1.0, Zn = 1.08883;
+  const f = (v) => v > 0.008856 ? Math.cbrt(v) : (7.787 * v + 16 / 116);
+  const fx = f(X / Xn), fy = f(Y / Yn), fz = f(Z / Zn);
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+function filmLab(n, t){
+  const spd = __IridescenceCore.illuminantD65();
+  const xyz = __IridescenceCore.spectrumToXYZ(__IridescenceCore.filmSpectrum(n, t, 1.0, 1.0), spd);
+  return xyzToLab(xyz.X, xyz.Y, xyz.Z);
+}
+function deltaE76(a, b){
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+function initFeatTarget(){
+  // the target colour is the air-gap (n=1) film colour at FEAT_TARGET_T under D65
+  featTargetLab = filmLab(1.0, FEAT_TARGET_T);
+  const rgb = __IridescenceCore.filmColor(1.0, FEAT_TARGET_T, 1.0, __IridescenceCore.illuminantD65(), 1.0);
+  if(targetChip) targetChip.style.background = 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')';
+}
+// Evaluate the cursor colour against the target; fire the feat on first match.
+function checkFeatMatch(n, t){
+  // the skill is defined in white light against an air-gap film (Newton mode):
+  // require white light so the target swatch is meaningful and reachable.
+  if(state.light !== 'white' || !featTargetLab) return;
+  const lab = filmLab(n, t);
+  const de = deltaE76(lab, featTargetLab);
+  if(matchReading){
+    if(de <= FEAT_DELTAE_TOL){
+      matchReading.innerHTML = 'Matched! ΔE = <b>' + de.toFixed(1) + '</b> ≤ ' + FEAT_DELTAE_TOL + '.';
+    } else {
+      matchReading.innerHTML = 'ΔE to target = <b>' + de.toFixed(1) + '</b> · keep hovering toward the swatch (≤ ' + FEAT_DELTAE_TOL + ' to earn).';
+    }
+  }
+  if(de <= FEAT_DELTAE_TOL && !featMatched){
+    featMatched = true;
+    earnFeat('iridescence', 'Matched the colour');
+  }
+}
+
+// Render the visible-spectrum strip tinted by the film's reflectance at t: each
+// column is wavelength 380..780, its brightness = reflectance there.
+function drawSpectrumStrip(n, t, spd){
+  const idat = stripCtx.createImageData(STRIP_W, 1);
+  const d = idat.data;
+  for(let i = 0; i < STRIP_W; i++){
+    const lam = 380 + (i / (STRIP_W - 1)) * 400;
+    // hue of this wavelength
+    const refl1 = __IridescenceCore.LAMBDAS.map(l => Math.abs(l - lam) < 3 ? 1 : 0);
+    const hue = __IridescenceCore.spectrumToSRGB(refl1, __IridescenceCore.illuminantE());
+    const mx = Math.max(hue[0], hue[1], hue[2], 1);
+    const r = __IridescenceCore.filmReflectance(n, t, 1.0, lam, 1.0);
+    const b = Math.pow(r, 0.8);
+    d[i * 4]     = hue[0] / mx * 255 * b;
+    d[i * 4 + 1] = hue[1] / mx * 255 * b;
+    d[i * 4 + 2] = hue[2] / mx * 255 * b;
+    d[i * 4 + 3] = 255;
+  }
+  stripCtx.putImageData(idat, 0, 0);
+}
+
+function updateReadout(bx, by){
+  const n = currentFilmN();
+  const t = thicknessAt(bx, by);
+  const spd = currentSPD();
+  drawSpectrumStrip(n, t, spd);
+  let rgb;
+  if(state.light === 'mono'){
+    const base = monoBaseRGB(state.lambda);
+    const r = __IridescenceCore.filmReflectance(n, t, 1.0, state.lambda, 1.0);
+    const g = Math.pow(r, 0.85);
+    rgb = [255 * base[0] * g | 0, 255 * base[1] * g | 0, 255 * base[2] * g | 0];
+  } else {
+    rgb = __IridescenceCore.filmColor(n, t, 1.0, spd, 1.0);
+  }
+  colorChip.style.background = 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')';
+  let label;
+  if(state.mode === 'newton'){
+    const order = (2 * t) / 550;
+    label = 'air gap <b>t = ' + t.toFixed(0) + ' nm</b> · order m ≈ <b>' + order.toFixed(1) + '</b> @ 550 nm';
+  } else {
+    const opt = 2 * n * t;
+    label = 'film <b>t = ' + t.toFixed(0) + ' nm</b> · optical path 2nt = <b>' + opt.toFixed(0) + ' nm</b>';
+  }
+  reading.innerHTML = label;
+  checkFeatMatch(n, t);
+}
+
+cv.addEventListener('pointermove', ev => {
+  const r = cv.getBoundingClientRect();
+  const bx = ((ev.clientX - r.left) / W) * bw;
+  const by = ((ev.clientY - r.top) / H) * bh;
+  updateReadout(Math.max(0, Math.min(bw - 1, bx)), Math.max(0, Math.min(bh - 1, by)));
+});
+
+// ---------- control wiring --------------------------------------------------
+function setSeg(seg, value, key, after){
+  for(const b of seg.querySelectorAll('button')){
+    b.classList.toggle('active', b.dataset[key] === value);
+  }
+  if(after) after();
+}
+
+// mode
+const modeSeg = document.getElementById('modeSeg');
+modeSeg.addEventListener('click', ev => {
+  const b = ev.target.closest('button[data-mode]'); if(!b) return;
+  state.mode = b.dataset.mode;
+  setSeg(modeSeg, state.mode, 'mode');
+  syncModeUI();
+  buildLUT();
+});
+
+// light
+const lightSeg = document.getElementById('lightSeg');
+lightSeg.addEventListener('click', ev => {
+  const b = ev.target.closest('button[data-light]'); if(!b) return;
+  state.light = b.dataset.light;
+  setSeg(lightSeg, state.light, 'light');
+  document.getElementById('lambdaRow').style.display = state.light === 'mono' ? '' : 'none';
+  buildLUT();
+});
+
+// wavelength slider
+const lamSlider = document.getElementById('lamSlider');
+const lamVal = document.getElementById('lamVal');
+function syncLam(){
+  state.lambda = parseFloat(lamSlider.value);
+  lamVal.textContent = Math.round(state.lambda) + ' nm';
+  lamSlider.style.setProperty('--fill', ((lamSlider.value - lamSlider.min) / (lamSlider.max - lamSlider.min) * 100) + '%');
+}
+lamSlider.addEventListener('input', () => { syncLam(); if(state.light === 'mono') buildLUT(); });
+
+// parametric sliders (re-purposed per mode)
+const p1Slider = document.getElementById('param1Slider');
+const p1Lab = document.getElementById('param1Lab');
+const p1Val = document.getElementById('param1Val');
+const p2Slider = document.getElementById('param2Slider');
+const p2Lab = document.getElementById('param2Lab');
+const p2Val = document.getElementById('param2Val');
+const p2Row = document.getElementById('param2Row');
+const paramTitle = document.getElementById('paramTitle');
+const animLab = document.getElementById('animLab');
+
+function setFill(sl){ sl.style.setProperty('--fill', ((sl.value - sl.min) / (sl.max - sl.min) * 100) + '%'); }
+
+function syncModeUI(){
+  if(state.mode === 'newton'){
+    paramTitle.textContent = 'Lens';
+    p1Lab.childNodes[0].nodeValue = 'Radius of curvature R ';
+    p1Slider.min = 2; p1Slider.max = 20; p1Slider.step = 0.1; p1Slider.value = state.R;
+    p1Val.textContent = state.R.toFixed(1) + ' m';
+    p2Row.style.display = '';
+    p2Lab.childNodes[0].nodeValue = 'Lens tilt ';
+    p2Slider.min = 0; p2Slider.max = 1; p2Slider.step = 0.01; p2Slider.value = state.tilt;
+    p2Val.textContent = state.tilt.toFixed(2);
+    animLab.textContent = 'Animate (static)';
+  } else if(state.mode === 'soap'){
+    paramTitle.textContent = 'Film';
+    p2Row.style.display = 'none';
+    p1Lab.childNodes[0].nodeValue = 'Drain rate ';
+    p1Slider.min = 0; p1Slider.max = 1; p1Slider.step = 0.01; p1Slider.value = 0.5;
+    p1Val.textContent = '0.50';
+    animLab.textContent = 'Drain';
+  } else {
+    paramTitle.textContent = 'Film';
+    p2Row.style.display = 'none';
+    p1Lab.childNodes[0].nodeValue = 'Turbulence ';
+    p1Slider.min = 0; p1Slider.max = 1; p1Slider.step = 0.01; p1Slider.value = 0.5;
+    p1Val.textContent = '0.50';
+    animLab.textContent = 'Drift';
+  }
+  setFill(p1Slider); setFill(p2Slider);
+  // wavelength row only matters in mono light
+  document.getElementById('lambdaRow').style.display = state.light === 'mono' ? '' : 'none';
+}
+
+p1Slider.addEventListener('input', () => {
+  const v = parseFloat(p1Slider.value);
+  if(state.mode === 'newton'){
+    state.R = v; p1Val.textContent = v.toFixed(1) + ' m';
+  } else {
+    p1Val.textContent = v.toFixed(2);
+    // soap/oil: param scales the animation/turbulence amplitude indirectly via speed
+    state._p1 = v;
+  }
+  setFill(p1Slider);
+});
+p2Slider.addEventListener('input', () => {
+  const v = parseFloat(p2Slider.value);
+  if(state.mode === 'newton'){ state.tilt = v; p2Val.textContent = v.toFixed(2); }
+  setFill(p2Slider);
+});
+
+// animation toggle
+document.getElementById('animChk').addEventListener('change', ev => { state.anim = ev.target.checked; });
+
+// skin
+const skinSeg = document.getElementById('skinSeg');
+skinSeg.addEventListener('click', ev => {
+  const b = ev.target.closest('button[data-skin]'); if(!b) return;
+  state.skin = b.dataset.skin;
+  setSeg(skinSeg, state.skin, 'skin');
+  applySkin();
+});
+function applySkin(){
+  const sk = SKINS[state.skin];
+  document.documentElement.style.setProperty('--stage-a', sk.stageA);
+  document.documentElement.style.setProperty('--stage-b', sk.stageB);
+}
+
+// ---------- PNG export (canvas-native, 2×) ----------------------------------
+function exportPNG(){
+  const scale = 2;
+  const off = document.createElement('canvas');
+  off.width = Math.round(W * scale); off.height = Math.round(H * scale);
+  const octx = off.getContext('2d');
+  renderFilm(octx, off.width, off.height);
+  const finish = (url) => {
+    const a = document.createElement('a'); a.href = url;
+    a.download = 'iridescence-' + state.mode + '.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+  if(off.toBlob){ off.toBlob(b => { const u = URL.createObjectURL(b); finish(u); setTimeout(() => URL.revokeObjectURL(u), 4000); }, 'image/png'); }
+  else finish(off.toDataURL('image/png'));
+}
+document.getElementById('pngBtn').addEventListener('click', exportPNG);
+
+window.addEventListener('resize', () => { resize(); });
+
+// ---------- HUD hint --------------------------------------------------------
+const hud = document.getElementById('hud');
+function flashHud(msg, ms){
+  hud.innerHTML = msg; hud.classList.add('show');
+  clearTimeout(flashHud._t); flashHud._t = setTimeout(() => hud.classList.remove('show'), ms || 2600);
+}
+
+// ============================================================================
+// INIT
+// ============================================================================
+function init(){
+  try{ var k = 'ws:seen:iridescence'; if(!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); }catch(e){}
+
+  const res = runSelfTest();
+  const chip = document.getElementById('selftest');
+  if(res.pass === res.total){
+    chip.className = 'selftest ok';
+    chip.textContent = 'iridescence verified — ' + res.pass + '/' + res.total + ' ✓';
+  } else {
+    chip.className = 'selftest bad';
+    chip.textContent = 'iridescence FAILED — ' + res.pass + '/' + res.total;
+  }
+  console.log('Iridescence self-test: ' + res.pass + '/' + res.total + ' passed.');
+
+  applySkin();
+  initFeatChip('iridescence');
+  initFeatTarget();
+  syncLam();
+  syncModeUI();
+  resize();
+  buildLUT();
+  // an initial readout near the centre
+  updateReadout(bw * 0.5, bh * 0.42);
+  if(reduceMotion) flashHud('Reduced motion: animation paused. Switch modes and <b>hover</b> to read the film.', 5200);
+  else flashHud('Hover the film to read thickness &amp; reflected spectrum · try <b>Soap film</b> and <b>Oil slick</b>', 3800);
+  startLoop();
+}
+init();
+
+})(); }
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   THE GRAND TOUR DOCENT (WS2, inlined at build time by forge). tours.js FIRST
+   (it defines the TOURS / EXTRA_STOPS / DOCENT_SENTINEL browser globals the engine
+   reads lazily), then tour.js (the docent engine). This page is a TOUR STOP: with
+   ?tour=<id>&stop=n params the engine mounts the docent card, runs this stop's
+   beats, and walks on to the next; with no tour params the page is untouched. Use
+   block-comment form only inside a forge-included script — a multi-line HTML comment
+   lands inside the inlined script and silently kills it. See tools/tour/README.md +
+   DESIGN §6. */
+<!-- forge:include ../tools/tour/tours.js -->
+<!-- forge:include ../tools/tour/tour.js -->
+</script>
+</body>
+</html>
