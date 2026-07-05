@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /* ════════════════════════════════════════════════════════════════════════════
    acts.test.mjs — THE GRAND TOUR ACTS, asserted against the LIVE RENDERED PAGE.
-   (WS2 · DESIGN §4 beats API · Appendix A act briefs · T2.5 acts 1 + T2.6 acts 2.)
+   (WS2 · DESIGN §4 beats API · Appendix A act briefs · T2.5 acts 1 + T2.6 acts 2
+    + T2.7 acts 3.)
 
    WHAT IT PROVES: the two W2 "acts 1" stop performances actually DO something on the
    real page, driven through the page's OWN entry functions (the liveness-twin rule,
@@ -47,6 +48,27 @@
             stay 8) — the act only ever stages the FIRST weighing (re-entrant guard).
        CT4  on a FRESH load the reduced act stages the first weighing the same way (0→1, 24→8).
 
+     the-rewind-shelf — the verdict tally (#tallyG returned-clean / #tallyR kept-the-arrow):
+       RS1  __tourAct is present; __tourHooks is undefined (rewind-shelf is not a Showing stop).
+       RS2  the reduced act runs one forward-then-back pass through the REAL nudge + master-
+            rewind entry functions → every card lands a verdict (clean + arrow == cards on the
+            shelf) and the clean/arrow split EQUALS the page's own well-formedness twin
+            (window.__rewindShelf.clean/.arrow) — the demonstrated verdict matches the theorem.
+       RS3  a 2nd act call re-runs cleanly (re-entrant: it resets to a pristine shelf, then
+            re-derives the SAME honest split).
+       RS4  on a FRESH load the NON-REDUCED beats-paced act flips every card the same way.
+
+     the-barrel-house/pin-barrel — the transport clock φ = phiAbs (STEPS=48; a half turn ≈ 24):
+       PB1  __tourAct present; __tourHooks.crank present (the STATE poke); the barrel loads at
+            rest (φ ≈ 0 — no auto-spin).
+       PB2  the reduced act steps the barrel ~half a turn (φ → ≈24) through the REAL crankBy,
+            then HOLDS — read again 600ms later, φ is unchanged (no flywheel, never spinning).
+       PB3  on a FRESH load the NON-REDUCED walking-tempo act cranks 0 → ≈24, then HOLDS.
+       PB4  window.__tourHooks.crank(x) is an idempotent crank-TO-position (STATE class):
+            crank(30) → φ=30; a repeat crank(30) moves nothing (crankBy(0) no-op).
+       (The transport is silenced for the act's life — pluck is stubbed → visual-only crank —
+        so the act plays no audio; silence is enforced by construction, not asserted here.)
+
    Run:  node tools/tour/acts.test.mjs   (exit 0 = all pass, 1 = a check failed,
          2 = harness could not run — agent-browser missing / server / forge error).
 
@@ -72,6 +94,8 @@ const URL_DS = `${BASE}/cavern/double-slit/index.html`;
 const URL_BM = `${BASE}/benford-mill/index.html`;
 const URL_TD = `${BASE}/the-three-doors/index.html`;
 const URL_CO = `${BASE}/the-coin-that-lies/index.html`;
+const URL_RS = `${BASE}/the-rewind-shelf/index.html`;
+const URL_PB = `${BASE}/the-barrel-house/pin-barrel/index.html`;
 
 const AB_ENV = { ...process.env, AGENT_BROWSER_DEFAULT_TIMEOUT: '20000' };
 const CALL_TIMEOUT = 40000;
@@ -212,6 +236,56 @@ function pollCoinWeighed(target, maxMs) {
   }
   return st;
 }
+/* the-rewind-shelf: the verdict tally (#tallyG clean / #tallyR arrow) + the page's
+   own well-formedness handle (window.__rewindShelf.clean/.arrow give the ground-truth
+   split the forward-then-back pass must reproduce). */
+function rewindState() {
+  return abEval(`(function(){
+    function iv(el){ return el ? (parseInt(String(el.textContent).replace(/[^0-9-]/g,''),10)||0) : 0; }
+    var tw = window.__rewindShelf || {};
+    return JSON.stringify({
+      g: iv(document.getElementById('tallyG')),
+      r: iv(document.getElementById('tallyR')),
+      total: iv(document.getElementById('tallyN')),
+      clean: (tw.clean||[]).length, arrow: (tw.arrow||[]).length,
+      act: typeof window.__tourAct, hooks: typeof window.__tourHooks
+    });
+  })()`);
+}
+/* poll a rewind act to completion: every card has landed a verdict (clean + arrow == total). */
+function pollRewind(total, maxMs) {
+  const start = Date.now();
+  let st = rewindState();
+  while (!(st.g + st.r >= total) && Date.now() - start < maxMs) { ab('wait', '300'); st = rewindState(); }
+  return st;
+}
+/* the-barrel-house/pin-barrel: the transport clock φ (phiAbs) read through the STATE
+   hook's no-arg form (window.__tourHooks.crank() moves nothing, returns phiAbs). */
+function barrelState() {
+  return abEval(`(function(){
+    var h = window.__tourHooks;
+    var pos = (h && typeof h.crank === 'function') ? h.crank() : null;
+    return JSON.stringify({
+      act: typeof window.__tourAct, hooks: typeof window.__tourHooks,
+      crank: (h && typeof h.crank) || 'absent', phiAbs: pos
+    });
+  })()`);
+}
+/* drive the STATE poke: read φ (before), crank TO an absolute position, return both. */
+function crankTo(toPhi) {
+  return abEval(`(function(){
+    var before = window.__tourHooks.crank();
+    var ret = window.__tourHooks.crank(${JSON.stringify(toPhi)});
+    return JSON.stringify({ before: before, ret: ret });
+  })()`);
+}
+/* poll a crank act to completion: the transport reached at least minPhi. */
+function pollBarrel(minPhi, maxMs) {
+  const start = Date.now();
+  let st = barrelState();
+  while (!(st.phiAbs !== null && st.phiAbs >= minPhi) && Date.now() - start < maxMs) { ab('wait', '300'); st = barrelState(); }
+  return st;
+}
 
 async function main() {
   console.log('acts.test — THE GRAND TOUR ACTS (§4): the LIVE RENDERED PAGE, headless, REAL entry functions\n');
@@ -223,13 +297,15 @@ async function main() {
 
   // 1. FORGE the four act pages (test the built artifact, not the source).
   const SRCS = ['cavern/double-slit/index.src.html', 'benford-mill/index.src.html',
-                'the-three-doors/index.src.html', 'the-coin-that-lies/index.src.html'];
+                'the-three-doors/index.src.html', 'the-coin-that-lies/index.src.html',
+                'the-rewind-shelf/index.src.html', 'the-barrel-house/pin-barrel/index.src.html'];
   for (const src of SRCS) {
     const f = sh('node', ['tools/forge/forge.mjs', src]);
     if (f.status !== 0) { console.error('  ⚠ forge failed for ' + src + ':\n' + f.stderr); process.exit(2); }
   }
   for (const p of ['cavern/double-slit/index.html', 'benford-mill/index.html',
-                   'the-three-doors/index.html', 'the-coin-that-lies/index.html']) {
+                   'the-three-doors/index.html', 'the-coin-that-lies/index.html',
+                   'the-rewind-shelf/index.html', 'the-barrel-house/pin-barrel/index.html']) {
     if (!existsSync(path.join(ROOT, p))) { console.error('  ⚠ a forged page is missing: ' + p); process.exit(2); }
   }
 
@@ -353,8 +429,72 @@ async function main() {
       ctr0.weighed === 0 && ctr.weighed === 1 && ctr.survivors === 8,
       'weighed ' + ctr0.weighed + ' → ' + ctr.weighed + ' · cases ' + ctr0.survivors + ' → ' + ctr.survivors);
 
+    // ═══ THE REWIND SHELF — forward-then-back pass, the verdict cards flip ═══
+    console.log('\nthe-rewind-shelf — the verdict tally (#tallyG clean / #tallyR arrow) after a forward-then-back pass:');
+    ab('open', URL_RS); ab('wait', '--load', 'networkidle'); ab('wait', '1200');
+
+    const rss = rewindState();
+    check('RS1 act present; no __tourHooks (rewind-shelf is not a Showing stop)',
+      rss.act === 'function' && rss.hooks === 'undefined' && rss.total > 0,
+      '__tourAct=' + rss.act + ' · __tourHooks=' + rss.hooks + ' · cards=' + rss.total);
+
+    kickAct(true);
+    const rs1 = pollRewind(rss.total, 14000);
+    check('RS2 reduced act flips every card → clean+arrow == cards, split matches the well-formedness twin',
+      rs1.g + rs1.r === rss.total && rs1.g === rs1.clean && rs1.r === rs1.arrow && rs1.g > 0 && rs1.r > 0,
+      'clean ' + rs1.g + '/' + rs1.clean + ' · arrow ' + rs1.r + '/' + rs1.arrow + ' of ' + rss.total);
+
+    kickAct(true);
+    const rs2 = pollRewind(rss.total, 14000);
+    check('RS3 a 2nd act re-runs cleanly (re-entrant) → same clean/arrow split',
+      rs2.g + rs2.r === rss.total && rs2.g === rs1.g && rs2.r === rs1.r,
+      'clean ' + rs2.g + ' · arrow ' + rs2.r + ' (stable, resets then re-derives)');
+
+    // fresh load → the real (non-reduced, beats-paced) visitor path
+    ab('open', URL_RS); ab('wait', '--load', 'networkidle'); ab('wait', '1200');
+    const rsb = rewindState();
+    kickAct(false);
+    const rsl = pollRewind(rsb.total, 16000);
+    check('RS4 non-reduced beats-paced act flips every card → split matches the twin',
+      rsb.g === 0 && rsb.r === 0 && rsl.g + rsl.r === rsb.total && rsl.g === rsl.clean && rsl.r === rsl.arrow,
+      'clean ' + rsl.g + '/' + rsl.clean + ' · arrow ' + rsl.r + '/' + rsl.arrow);
+
+    // ═══ THE PIN-BARREL — a walking half-turn via the real crankBy, then HOLD ═══
+    console.log('\nthe-barrel-house/pin-barrel — the transport clock φ (STEPS=48; a half turn ≈ 24) via the real crankBy:');
+    ab('open', URL_PB); ab('wait', '--load', 'networkidle'); ab('wait', '1200');
+
+    const pbs = barrelState();
+    check('PB1 act present; __tourHooks.crank present (STATE poke); barrel at rest φ≈0',
+      pbs.act === 'function' && pbs.crank === 'function' && pbs.phiAbs !== null && Math.abs(pbs.phiAbs) < 0.6,
+      '__tourAct=' + pbs.act + ' · __tourHooks.crank=' + pbs.crank + ' · φ=' + pbs.phiAbs);
+
+    kickAct(true);
+    const pb1 = pollBarrel(23.5, 9000);
+    ab('wait', '600'); const pb1b = barrelState();
+    check('PB2 reduced act steps the barrel ~half a turn (≈24) then HOLDS (no flywheel)',
+      Math.abs(pb1.phiAbs - 24) < 0.6 && Math.abs(pb1b.phiAbs - pb1.phiAbs) < 0.001,
+      'φ → ' + pb1.phiAbs + ' · after 600ms still ' + pb1b.phiAbs + ' (held, not spinning)');
+
+    // fresh load → the real (non-reduced, walking-tempo) crank
+    ab('open', URL_PB); ab('wait', '--load', 'networkidle'); ab('wait', '1200');
+    const pbb = barrelState();
+    kickAct(false);
+    const pbl = pollBarrel(23.5, 11000);
+    ab('wait', '700'); const pblb = barrelState();
+    check('PB3 non-reduced walking-tempo act cranks ~half a turn (0→≈24) then HOLDS',
+      Math.abs(pbb.phiAbs) < 0.6 && Math.abs(pbl.phiAbs - 24) < 0.6 && Math.abs(pblb.phiAbs - pbl.phiAbs) < 0.001,
+      'φ ' + pbb.phiAbs + ' → ' + pbl.phiAbs + ' · held at ' + pblb.phiAbs);
+
+    // fresh load → the Showing's STATE poke is idempotent crank-to-position
+    ab('open', URL_PB); ab('wait', '--load', 'networkidle'); ab('wait', '1200');
+    const c1 = crankTo(30);
+    const c2 = crankTo(30);
+    check('PB4 __tourHooks.crank(x) is idempotent crank-to-position (STATE class)',
+      c1.before !== null && Math.abs(c1.before) < 0.6 && Math.abs(c1.ret - 30) < 0.001 && Math.abs(c2.ret - 30) < 0.001,
+      'crank(30): φ ' + c1.before + ' → ' + c1.ret + ' · repeat → ' + c2.ret + ' (no further move)');
+
     console.log('\n' + (fail === 0 ? '✓ acts.test: all ' : '✗ acts.test: ') +
-      (fail === 0 ? '16/16 pass' : fail + ' of 16 checks FAILED'));
+      (fail === 0 ? '24/24 pass' : fail + ' of 24 checks FAILED'));
   } finally {
     try { ab('close'); } catch (_) {}
     try { server.kill('SIGKILL'); } catch (_) {}
