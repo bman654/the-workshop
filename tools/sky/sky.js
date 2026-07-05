@@ -598,7 +598,11 @@
     for (i = 0; i < st.stars.length; i++) {
       var s = st.stars[i];
       var charted = !!chartedIds[s.id];
-      var rad = (s.mag === 1 ? 2.6 : (s.mag === 2 ? 2.0 : 1.6)) + (charted ? 0.8 : 0);
+      // BUG#3: the sky rides the plate's scale(k); at fit view the 3100 world maps to
+      // ~0.4× screen, so the old ~1.6–2.6 world-unit dots rendered ~1px and vanished.
+      // Bump the base radii (~1.8×) so lit stars read as points at fit view; their CSS
+      // drop-shadow glow does the rest. Still modest ornament when zoomed in.
+      var rad = (s.mag === 1 ? 4.6 : (s.mag === 2 ? 3.6 : 2.8)) + (charted ? 1.3 : 0);
       // first-light bloom (this star has never kindled) vs first-completion brighten (an
       // already-lit member of a wing charting for the first time this render). The freshly-lit
       // completing member is the one that kindles; its already-lit siblings brighten in turn.
