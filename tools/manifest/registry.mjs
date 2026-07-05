@@ -80,7 +80,12 @@ export const HUBS = [
    contribute their pieces to the estate-wide + per-district `pieces` counts (the
    honest depth the §5.5 map tally reads). DESIGN §6.2 names js-manifest
    (sound-garden, arcade) and pieces-dir (strange-garden); cavern is the 21-bench
-   exemplar the gather copies (§2.1). ── */
+   exemplar the gather copies (§2.1). the-barrel-house (WS2 §9 T3.0) is a second
+   `internal-links` hub: its landing presents pin-barrel + mirror-drum via a
+   `class="card"` grid of SUBDIR links (NOT the `.bench` idiom); the `card dark`
+   future seat is a <div> (no <a>, unmatched) and the `../tone-mill/` footer link
+   is a cross-reference (`../` prefix, unmatched by the no-`../` subdir regex — it
+   resolves to its own Tone Mill hub, per the cross-reference convention). ── */
 export const INTERNAL = [
   // `base` = the dir the manifest's `file:` slugs actually resolve under (arcade
   // serves its games from arcade/games/, sound-garden its racks from sound-garden/).
@@ -88,6 +93,7 @@ export const INTERNAL = [
   { hub: 'arcade',       rule: 'js-manifest', file: 'arcade/games.js',              base: 'arcade/games', kind: 'game' },
   { hub: 'strange-garden', rule: 'pieces-dir', dir: 'strange-garden/pieces', kind: 'piece' },
   { hub: 'cavern',       rule: 'internal-links', file: 'cavern/index.html', firstClass: ['bench'], kind: 'bench' },
+  { hub: 'the-barrel-house', rule: 'internal-links', file: 'the-barrel-house/index.html', firstClass: ['card'], kind: 'exhibit' },
 ];
 
 /* ── STRAYS: the R3 re-homing table (DESIGN §7.1 R3) ──────────────────────────
