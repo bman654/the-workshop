@@ -823,6 +823,161 @@
       (doc.head || doc.body).appendChild(st);
     }
 
+    /* ── the TOURS drawer (§6/§7) — the front door's REST affordance ─────────────
+       A labeled `⟲ tours` control joins the .pzctl corner cluster (visible text
+       label, not icon-only — [[hidden-features-need-an-on-ramp]]); it opens an
+       engraved, focus-trapped panel (Esc / ✕ / scrim-click closes) listing every
+       thread from the TOURS data with title · minutes — tagline + begin / resume.
+       Panel + scrim mount at BODY level and the control lives in the top-level
+       .pzctl (both OUTSIDE #sheet), so the map's capture-phase pointerdown never
+       swallows a click (recon A §10a). Mounts ONLY on a page carrying the .pzctl
+       cluster (the front door) and ONLY in normal mode (the docent card, not the
+       drawer, is the affordance while touring). All copy is Appendix A verbatim. */
+    function injectDrawerStyles() {
+      if (doc.getElementById('td-drawer-style')) return;
+      var st = el('style'); st.id = 'td-drawer-style';
+      st.textContent =
+        '#td-drawer-scrim{position:fixed;inset:0;z-index:2147482400;background:rgba(6,8,13,.55);cursor:pointer;' +
+        'opacity:0;visibility:hidden;transition:opacity .28s ease,visibility 0s linear .28s;}' +
+        '#td-drawer-scrim.td-open{opacity:1;visibility:visible;transition:opacity .28s ease,visibility 0s;}' +
+        '#td-drawer{position:fixed;z-index:2147482500;left:50%;top:50%;transform:translate(-50%,-50%);' +
+        'width:min(92vw,30rem);max-height:82vh;overflow:auto;box-sizing:border-box;' +
+        'opacity:0;visibility:hidden;transition:opacity .28s ease,visibility 0s linear .28s;' +
+        'font-family:var(--serif,Georgia,"Times New Roman",serif);}' +
+        '#td-drawer.td-open{opacity:1;visibility:visible;transition:opacity .28s ease,visibility 0s;}' +
+        '#td-drawer .tdd-panel{position:relative;box-sizing:border-box;padding:20px 22px 18px;' +
+        'color:var(--ink,#eaf0fa);background:linear-gradient(180deg,rgba(26,30,42,.98),rgba(15,18,27,.99));' +
+        'border:1px solid var(--brass,#c9a24a);border-radius:10px;' +
+        'box-shadow:0 0 0 1px rgba(201,162,74,.16),0 22px 70px rgba(0,0,0,.62),inset 0 0 34px rgba(201,162,74,.05);}' +
+        '.tdd-h{margin:0;font:600 12px/1 var(--mono,ui-monospace,Menlo,monospace);letter-spacing:.28em;' +
+        'text-transform:uppercase;color:var(--brass,#c9a24a);}' +
+        '.tdd-sub{margin:9px 0 15px;font:italic 13.5px/1.5 var(--serif,Georgia,serif);color:var(--muted,#c8cddb);' +
+        'padding-bottom:14px;border-bottom:1px solid rgba(201,162,74,.16);}' +
+        '.tdd-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:16px;}' +
+        '.tdd-row{display:flex;flex-direction:column;gap:9px;}' +
+        '.tdd-meta{font:14.5px/1.5 var(--serif,Georgia,serif);color:var(--ink,#eaf0fa);}' +
+        '.tdd-title{font-weight:600;text-transform:uppercase;letter-spacing:.02em;color:var(--brass-bright,#f0d489);}' +
+        '.tdd-min{color:var(--brass,#c9a24a);font:600 11px/1 var(--mono,ui-monospace,Menlo,monospace);letter-spacing:.05em;}' +
+        '.tdd-tag{color:var(--muted,#c8cddb);font-style:italic;}' +
+        '.tdd-actions{display:flex;gap:8px;flex-wrap:wrap;}' +
+        '.tdd-go{min-height:40px;padding:0 15px;cursor:pointer;color:#12151d;background:var(--brass-bright,#f0d489);' +
+        'border:1px solid var(--brass-bright,#f0d489);border-radius:6px;' +
+        'font:600 11.5px/1 var(--mono,ui-monospace,Menlo,monospace);letter-spacing:.05em;}' +
+        '.tdd-go:hover{filter:brightness(1.06);}' +
+        '.tdd-go:focus-visible{outline:2px solid #fff;outline-offset:2px;}' +
+        '.tdd-alt{color:var(--brass,#c9a24a);background:rgba(0,0,0,.22);border-color:rgba(201,162,74,.32);}' +
+        '.tdd-x{position:absolute;top:9px;right:9px;width:30px;height:30px;padding:0;cursor:pointer;' +
+        'color:var(--muted,#8b95a8);background:none;border:0;border-radius:6px;' +
+        'font:600 15px/1 var(--mono,ui-monospace,Menlo,monospace);}' +
+        '.tdd-x:hover{color:var(--brass,#c9a24a);}' +
+        '.tdd-x:focus-visible{outline:1.5px solid var(--brass,#c9a24a);outline-offset:2px;}' +
+        '.pzctl button.td-tours-btn{width:auto;min-width:0;height:26px;padding:0 11px;white-space:nowrap;' +
+        'font:600 11px/1 var(--mono,ui-monospace,Menlo,monospace);letter-spacing:.08em;}' +
+        '@media (max-width:430px){#td-drawer{left:0;top:auto;bottom:0;transform:none;width:100%;max-height:86vh;}' +
+        '#td-drawer .tdd-panel{border-radius:12px 12px 0 0;border-bottom:0;}}' +
+        '@media (prefers-reduced-motion:reduce){#td-drawer,#td-drawer-scrim{transition:none;}}';
+      (doc.head || doc.body).appendChild(st);
+    }
+
+    function mountDrawer(ws) {
+      var cluster = doc.querySelector('.pzctl');
+      if (!cluster || doc.getElementById('td-tours-btn')) return;   /* front door only; idempotent */
+      var tours = TOURS_REF();
+      if (!Array.isArray(tours) || !tours.length) return;
+      injectDrawerStyles();
+
+      /* the control that joins the corner cluster */
+      var opener = el('button', 'td-tours-btn'); opener.id = 'td-tours-btn'; opener.type = 'button';
+      opener.textContent = '⟲ tours';                          /* ⟲ tours */
+      opener.setAttribute('title', 'take a grand tour');
+      opener.setAttribute('aria-haspopup', 'dialog');
+      opener.setAttribute('aria-controls', 'td-drawer');
+      opener.setAttribute('aria-expanded', 'false');
+      cluster.insertBefore(opener, cluster.firstChild);
+
+      /* the scrim + engraved panel, mounted body-level (outside #sheet) */
+      var scrim = el('div'); scrim.id = 'td-drawer-scrim';
+      var panel = el('div'); panel.id = 'td-drawer';
+      panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true');
+      panel.setAttribute('aria-labelledby', 'td-drawer-h');
+      var inner = el('div', 'tdd-panel');
+      inner.appendChild(btn('tdd-x', '✕', 'close the tours drawer', function () { closeDrawer(); }));
+      var h = el('h2', 'tdd-h', 'GRAND TOURS'); h.id = 'td-drawer-h';
+      inner.appendChild(h);
+      inner.appendChild(el('p', 'tdd-sub',
+        'composed walks, docent at your side — begin one; leave whenever you like.'));
+      var list = el('ul', 'tdd-list');
+      inner.appendChild(list);
+      panel.appendChild(inner);
+      doc.body.appendChild(scrim); doc.body.appendChild(panel);
+
+      /* rebuild rows each open so the resume state (WS.best) is fresh */
+      function renderRows() {
+        list.innerHTML = '';
+        var rows = drawerRows(tours, ws, 'index.html');
+        for (var i = 0; i < rows.length; i++) {
+          var li = el('li', 'tdd-row');
+          var meta = el('div', 'tdd-meta');
+          meta.appendChild(el('span', 'tdd-title', rows[i].title));
+          meta.appendChild(doc.createTextNode(' · '));        /* · */
+          meta.appendChild(el('span', 'tdd-min', rows[i].minutes + ' min'));
+          meta.appendChild(doc.createTextNode(' — '));        /* — */
+          meta.appendChild(el('span', 'tdd-tag', rows[i].tagline));
+          li.appendChild(meta);
+          var actions = el('div', 'tdd-actions');
+          (function (r) {
+            if (r.resume) {
+              actions.appendChild(btn('tdd-go', 'resume where you left off',
+                'resume ' + r.title + ' where you left off', function () { root.location.assign(r.resume.resumeTarget); }));
+              actions.appendChild(btn('tdd-go tdd-alt', 'start over',
+                'start ' + r.title + ' over', function () { root.location.assign(r.resume.startOverTarget); }));
+            } else {
+              actions.appendChild(btn('tdd-go', 'begin',
+                'begin ' + r.title, function () { root.location.assign(r.beginTarget); }));
+            }
+          })(rows[i]);
+          li.appendChild(actions);
+          list.appendChild(li);
+        }
+      }
+
+      function focusables() {
+        return Array.prototype.slice.call(panel.querySelectorAll('button:not([disabled])'));
+      }
+      function onKeydown(e) {
+        if (e.key === 'Escape' || e.keyCode === 27) {
+          e.preventDefault(); e.stopPropagation();
+          if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+          closeDrawer(); return;
+        }
+        if (e.key === 'Tab') {                                     /* focus trap */
+          var f = focusables(); if (!f.length) { e.preventDefault(); return; }
+          var first = f[0], last = f[f.length - 1], a = doc.activeElement;
+          if (!panel.contains(a)) { e.preventDefault(); first.focus(); return; }
+          if (e.shiftKey && a === first) { e.preventDefault(); last.focus(); }
+          else if (!e.shiftKey && a === last) { e.preventDefault(); first.focus(); }
+        }
+      }
+      function isOpen() { return panel.classList.contains('td-open'); }
+      function openDrawer() {
+        if (isOpen()) return;
+        renderRows();
+        scrim.classList.add('td-open'); panel.classList.add('td-open');
+        opener.setAttribute('aria-expanded', 'true');
+        doc.addEventListener('keydown', onKeydown, true);         /* capture: outrank the global Esc→retreat (recon A §10c) */
+        var f = focusables(); if (f.length) f[0].focus();
+      }
+      function closeDrawer() {
+        if (!isOpen()) return;
+        scrim.classList.remove('td-open'); panel.classList.remove('td-open');
+        opener.setAttribute('aria-expanded', 'false');
+        doc.removeEventListener('keydown', onKeydown, true);
+        try { opener.focus(); } catch (e) {}
+      }
+      opener.addEventListener('click', function (e) { e.preventDefault(); if (isOpen()) closeDrawer(); else openDrawer(); });
+      scrim.addEventListener('click', function () { closeDrawer(); });
+    }
+
     /* ── the beats seam (§4) — the browser side of the layered runtime ──────────
        Wires createBeatsRuntime to the live page: the act is the page's own
        window.__tourAct (a bespoke performance); with none, the declarative walk
@@ -889,6 +1044,7 @@
         if (cls0.reason && cls0.reason !== 'no-params') { try { console.info('[grand-tour] ' + cls0.reason + ' — showing a plain page'); } catch (e) {} }
         var plaque = startPlaqueInfo(TOURS_REF(), pathname, ws);
         if (plaque) renderPlaque(plaque, reduced);
+        try { mountDrawer(ws); } catch (e) { /* the drawer is optional chrome; a throw must not blank the front door */ }
         return;
       }
 
