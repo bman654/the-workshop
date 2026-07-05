@@ -204,4 +204,8 @@ export const ALLOWLIST = [
   'tools', 'the-fairground-gate', 'art-foundry', 'gate-foundry', 'seedbed',
   'ledger', 'worklog', 'colophon', 'assets', 'voices', 'regalia',
   'cabinet-of-honors',
+  // meta: the Showing (WS2 §10) — a narrated talk deck, not an estate exhibit
+  // (no room/exhibit href, not a crossing, not hidden); claimed here like the
+  // other engines/meta dirs, contributes no pieces.
+  'talk',
 ];
