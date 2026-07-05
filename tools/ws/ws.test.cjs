@@ -107,6 +107,14 @@ ok(!WS.unlocked('reckoner', WS.store()), 'reckoner locked with only two instrume
 WS.seen('abacus');
 ok(WS.unlocked('reckoner', WS.store()), 'reckoner unlocks with all three instruments');
 
+// the-mere: the grand payoff — single key ws:seen:the-mere
+reset();
+ok(!WS.unlocked('the-mere', WS.store()), 'the-mere locked by default');
+WS.seen('reliquary-solved'); // near-miss: the mystery's OTHER seen key, not the-mere
+ok(!WS.unlocked('the-mere', WS.store()), 'the-mere STAYS locked on reliquary-solved alone (near-miss)');
+WS.seen('the-mere');
+ok(WS.unlocked('the-mere', WS.store()), 'the-mere unlocks on ws:seen:the-mere');
+
 // unlocked() guards: bad id / store-off
 reset();
 ok(!WS.unlocked('no-such-secret', WS.store()), 'unlocked() false for unknown id');

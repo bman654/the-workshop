@@ -4646,13 +4646,15 @@
   function drawReliquaryCasket(parent) {
     var state = reliquaryState();
     if (state === 'none') return;
-    var open = (state === 'open');
+    var remembered = (state === 'remembered');
+    var open = (state === 'open' || remembered);       // 'remembered' draws the OPEN casket + mere light
     var g = group('reliquary-casket', parent);
     var FR    = 'var(--brass-stroke-ref, #9c8350)';    // brass stroke
     var BRI   = 'var(--brass-bright-ref, #cdb375)';    // brass-bright sheen
     var BODY  = 'rgba(11,14,22,.9)';                   // estate brass DARK body
     var STONE = 'var(--stone-ref, #6a7079)';           // the flagstone the casket rests on
     var GLEAM = 'var(--window-lit-ref, #ffcf73)';      // warm inner gleam (reuses the lit-window role)
+    var MERE  = '#5f9ea0';                             // the mere's cold blue-green, joined at the grand payoff
     var fx = function (n) { return (Math.round(n * 10) / 10); };
 
     var cx = 470, baseY = 772;      // near-centre-left, forward of the cairn, on the grass
@@ -4748,6 +4750,19 @@
         ' L ' + fx(cx + 10) + ' ' + fx(topY - 16) +
         ' L ' + fx(cx - 10) + ' ' + fx(topY - 12) + ' Z',
         fill: '#efe2c9', opacity: '0.9', stroke: '#cdbf9c', 'stroke-width': '0.6' }, g);
+      // ── the grand payoff: the mere's blue-green light joins the gold ──
+      // (whole diary read, the far wall pushed through — ws:seen:the-mere). A cool
+      // halo lies just inside the warm one, and a scatter of drowned window-lights
+      // glimmers under the water rising from the mouth.
+      if (remembered) {
+        el('ellipse', { cx: fx(cx + depth / 2), cy: fx(topY - drise / 2 - 8), rx: 40, ry: 22,
+          fill: MERE, opacity: '0.20', filter: 'url(#glow-soft)' }, g);
+        var lights = [[-16, -10], [-4, -16], [9, -12], [18, -20], [2, -24], [-11, -22]];
+        for (var li = 0; li < lights.length; li++) {
+          el('rect', { x: fx(cx + lights[li][0]), y: fx(topY + lights[li][1] - drise / 2),
+            width: 2, height: 2.4, rx: 0.4, fill: MERE, opacity: '0.75', filter: 'url(#glow-soft)' }, g);
+        }
+      }
     }
 
     S.refs.reliquary = g;
@@ -4815,22 +4830,28 @@
      STORE-KEY MAPPING (mirrors revealReliquary in index.src.html):
        ws:seen:reliquary          → the study was ENTERED (the casket is found)
        ws:seen:reliquary-solved   → the diary was READ to its end (the confession)
+       ws:seen:the-mere           → the WHOLE diary read, the far wall pushed through
+                                    (the grand payoff — the memorial mere entered)
 
-       • solved (reliquary-solved) → 'open'  — the casket lid ajar, a warm inner
+       • the-mere (grand key)      → 'remembered' — the open casket, its warm gold gleam
+                                     now joined by a faint blue-green light: the mere
+                                     under the water, remembered. Wins over 'open'.
+       • else solved (reliquary-solved) → 'open'  — the casket lid ajar, a warm inner
                                      gleam: the estate visibly REMEMBERING its first
                                      name. Wins over 'found'.
        • else ws:seen:reliquary    → 'found' — a hairline-lit CLOSED reliquary casket
                                      resting in the grounds: discovered, not yet read.
        • else                      → 'none'  — undiscovered: draw nothing.
 
-     The dev pin (?reliquary → S._devReliquary = 'found'|'open') FORCES a state for
-     review; production stays earned-only via the store keys. */
+     The dev pin (?reliquary → S._devReliquary = 'found'|'open'|'remembered') FORCES a
+     state for review; production stays earned-only via the store keys. */
   function reliquaryState() {
-    if (S._devReliquary === 'open' || S._devReliquary === 'found') return S._devReliquary;
+    if (S._devReliquary === 'remembered' || S._devReliquary === 'open' || S._devReliquary === 'found') return S._devReliquary;
     var WS = root.WS;
     if (!WS || !WS.store) return 'none';
     var store = WS.store();
     if (!store.ok) return 'none';                // file:// or storage off → nothing unlocked
+    if (store.has('ws:seen:the-mere')) return 'remembered';     // whole diary read → the mere remembered
     if (store.has('ws:seen:reliquary-solved')) return 'open';   // read to the end → lid ajar
     if (store.has('ws:seen:reliquary')) return 'found';         // entered → closed casket
     return 'none';
@@ -4838,10 +4859,12 @@
   S.reliquaryState = reliquaryState;
 
   /* setDevReliquary(state): the ?reliquary dev override (boot calls this before
-     build). null/false/0/undefined → earned-only; 'open' → lid-ajar gleam;
-     'found' (or 2) → the found-but-sealed closed casket. */
+     build). null/false/0/undefined → earned-only; 'remembered' → lid-ajar gleam with
+     the blue-green mere light; 'open' → lid-ajar gold gleam; 'found' (or 2) → the
+     found-but-sealed closed casket. */
   S.setDevReliquary = function (state) {
-    if (state === 'found') S._devReliquary = 'found';
+    if (state === 'remembered') S._devReliquary = 'remembered';
+    else if (state === 'found') S._devReliquary = 'found';
     else if (state === 'open' || state === true) S._devReliquary = 'open';
     else S._devReliquary = null;
   };

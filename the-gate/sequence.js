@@ -88,13 +88,15 @@
         if (v === 'closed' || v === '2') return 'closed';
         return 'open';                                   // '', '1', 'true', 'open', …
       })(),
-      // ?reliquary — TRI-STATE dev override (#399), sibling to ?undercroft (null =
-      // earned-only; 'found' = the found-but-sealed closed casket; 'open' = the
-      // lid-ajar gleam). Mirrors S.reliquaryState().
+      // ?reliquary — dev override (#399), sibling to ?undercroft (null = earned-only;
+      // 'found' = the found-but-sealed closed casket; 'open' = the lid-ajar gold
+      // gleam; 'remembered' = the open casket with the mere's blue-green light joined
+      // in, the grand payoff). Mirrors S.reliquaryState().
       reliquary: (function () {
         if (!('reliquary' in q)) return null;
         var v = String(q.reliquary).toLowerCase();
         if (v === '0' || v === 'false') return null;
+        if (v === 'remembered' || v === '3') return 'remembered';
         if (v === 'found' || v === '2') return 'found';
         return 'open';                                   // '', '1', 'true', 'open', …
       })(),
