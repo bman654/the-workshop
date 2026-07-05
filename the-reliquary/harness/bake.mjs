@@ -76,7 +76,11 @@ const gapPrev = eigHz(BELL_INDEX) - eigHz(singable[8]);
 const gapNext = eigHz(singable[10]) - eigHz(BELL_INDEX);
 const minGap = Math.min(gapPrev, gapNext);
 const TOL_RAW = 0.5 * minGap;
-const TOL = Math.floor(TOL_RAW * 10) / 10;                    // DESIGN §8 T1: rounded DOWN to one decimal
+// DESIGN §4 c4: TOL = 7.0 Hz, PINNED. T1 derived 0.5×min-adjacent-singable-gap
+// (≈7.351) and flagged the rounding choice; the design pins 7.0 — comfortably
+// inside the invariant TOL ≤ TOL_RAW, exact for stepper/snap, fair for hand-dial,
+// and no neighbor can false-fire. TOL_RAW is retained (below) as the invariant bound.
+const TOL = 7.0;
 let specMaxF = 0;
 for (let k = 0; k < SOL.eig.vals.length; k++) specMaxF = Math.max(specMaxF, eigHz(k));
 specMaxF = specMaxF * 1.06 || 1;
@@ -89,7 +93,11 @@ gate('TOL ≤ 0.5 × min adjacent singable gap', TOL <= TOL_RAW + 1e-9, `TOL ${T
 
 /* ════════════════════ c5 — STAR_COUNT ═════════════════════════════════════ */
 console.log('\nc5 — the stars that stood witness');
-const STAR_MOMENT = { latDeg: 51, lonDeg: -3, dayOfYear: 171, minutesOfDay: 0 };  // year defaults to live 2026
+// The diary's remembered sky is a FIXED historical moment: the year is PINNED to
+// 2026 here (never the wall-clock year), so STAR_COUNT can never drift as real
+// years advance. The astrolabe's sky is year-sensitive; the c5 witness is tuple-
+// only (no live-count clause) precisely so a later-year player is never softlocked.
+const STAR_MOMENT = { latDeg: 51, lonDeg: -3, dayOfYear: 171, minutesOfDay: 0, year: 2026 };
 const STAR_COUNT = Astro.aboveHorizonCount(STAR_MOMENT);
 // knife-edge probe: minute 0 must differ from an off-minute (justifies the EXACT-minute gate)
 const cntPlus1 = Astro.aboveHorizonCount(Object.assign({}, STAR_MOMENT, { minutesOfDay: 1 }));
@@ -148,9 +156,13 @@ console.log(`    (search: ${survivors}/${trials} survived normalizeInput → ${(
 
 /* ════════════════════ c9 — C8_PLAINTEXT finalization (order-matched) ═══════ */
 const MARK_UP = winner.mark.toUpperCase();
-// order A: "…THEN THE STARS THEN THE BELLS VOICE…"; order B swaps STARS/BELLS-VOICE
-const starsClause = 'THEN THE STARS THEN THE BELLS VOICE';
-const swapClause = 'THEN THE BELLS VOICE THEN THE STARS';
+// DESIGN §4 c8: order A = "…THEN THE STARS WE COUNTED THEN THE BELLS VOICE…";
+// order B swaps THE STARS WE COUNTED / THE BELLS VOICE. ("the stars WE counted"
+// points the player at the diary's own remembered number on the dried c5 page —
+// the year-proof reading.) Only C8_STRIP re-bakes; SCRIPT_SEED is a function of
+// the seed string alone (unchanged), so order+MARK are unchanged.
+const starsClause = 'THEN THE STARS WE COUNTED THEN THE BELLS VOICE';
+const swapClause = 'THEN THE BELLS VOICE THEN THE STARS WE COUNTED';
 const seq = winner.order === 'A' ? starsClause : swapClause;
 const C8_PLAINTEXT =
   `SEED THE WRITING PRESS WITH THE HOUSES FIRST NAME ${seq} THEN MY MARK WHICH IS ${MARK_UP} ` +
