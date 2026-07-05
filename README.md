@@ -21,6 +21,12 @@ the **Orrery** behind Firmament, **Blazon** behind Compositor, **Ariadne** behin
 **Bastion** behind Cartographer, **Scriptorium** behind The Oracle, **Tessellarium** behind the
 Strange Garden, and **Theogony** behind Threshold. Click a live link, or open any `.html` in a browser.
 
+> 🧭 **Prefer a guided walk?** Five docent-led **Grand Tours** thread the estate in order —
+> *The Thread of Light*, *of Hours*, *of Chance*, the *Maker's Thread*, and the *Founding
+> Walk* — each begun from the map's **⟲ tours** drawer (or from its own starting room). A
+> quiet engraved card narrates each stop and walks you on; every stop is the real, running
+> page.
+
 ### 🌿 [Strange Garden](https://bman654.github.io/the-workshop/strange-garden/)
 **34 *living* generative systems** — particle life, slime moulds, reaction–diffusion, boids,
 Lenia, the Lorenz attractor, Penrose tilings, Conway's Game of Life, draping cloth, liquid
