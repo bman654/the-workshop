@@ -16,7 +16,12 @@
        ADVANCE, soft-pause, explicit pause/resume, back, leave (records nothing),
        hold (no countdown), FINALE (flags done), finale choices, wandered, and the
        bfcache pageshow re-entry.
-   No deps beyond Node + the sibling tour.js/tours.js/ws.js.
+   No deps beyond Node + the sibling tour.js/ws.js. The twin carries its OWN two
+   fixture threads (a local FIXTURES const below) rather than importing the
+   shipped tools/tour/tours.js: a pure-logic engine twin must be decoupled from
+   register content, so replacing the fixtures with the five real threads (T3.1)
+   cannot break these logic assertions (DESIGN §8 — the twins test the engine's
+   testable core, not the shipped thread data).
    ═══════════════════════════════════════════════════════════════════════════ */
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -40,7 +45,64 @@ function makeLocalStorage() {
 global.localStorage = makeLocalStorage();
 const WS = require(join(__dirname, '..', 'ws', 'ws.js'));
 const T = require(join(__dirname, 'tour.js'));
-const { TOURS: FIXTURES } = require(join(__dirname, 'tours.js'));
+
+/* ── the twin's OWN fixture threads (decoupled from the shipped tours.js) ────────
+   These are the two tiny fixture threads that tools/tour/tours.js carried before
+   T3.1 installed the five real threads. The twin owns them so its engine-logic
+   assertions are immune to register-content changes in the shipped data. They
+   exercise the full schema surface (front-door + exhibit starts, mid-thread
+   waypoint, hold/act/dwell, EXTRA_STOPS). */
+const FIXTURES = [
+  {
+    id: 'fixture-a',
+    fixture: true,
+    title: 'Fixture — Light Sampler',
+    tagline: 'a tiny fixture thread over real optics pages (schema + gate proof only)',
+    minutes: 2,
+    start: 'index.html',
+    stops: [
+      { href: 'index.html', at: 'opticks',
+        title: 'Fixture — The Estate from Above',
+        caption: 'Fixture stop — front-door waypoint overture; anchored at the opticks district. Placeholder prose.',
+        dwell: 12000 },
+      { href: 'rainbow/index.html', room: 'hall-of-mirrors',
+        title: 'Fixture — The Rainbow',
+        caption: 'Fixture stop — an exhibit stop with a per-stop dwell override. Placeholder prose.',
+        dwell: 20000 },
+      { href: 'iridescence/index.html', room: 'hall-of-mirrors',
+        title: 'Fixture — Iridescence',
+        caption: 'Fixture stop — a HOLD stop (no countdown; the docent waits). Placeholder prose.',
+        hold: true },
+      { href: 'cavern/double-slit/index.html', room: 'physics-lab',
+        title: 'Fixture — The Double Slit',
+        caption: 'Fixture stop — an ACT stop (bespoke performance) and the FINALE. Placeholder prose.',
+        beats: 'act' }
+    ]
+  },
+  {
+    id: 'fixture-b',
+    fixture: true,
+    title: 'Fixture — Chance & Records Sampler',
+    tagline: 'a tiny fixture thread with a mid-thread waypoint and an EXTRA_STOPS page',
+    minutes: 2,
+    start: 'galton/index.html',
+    stops: [
+      { href: 'galton/index.html', room: 'workbench',
+        title: 'Fixture — The Galton Board',
+        caption: 'Fixture stop — an exhibit start (the plaque page for this thread). Placeholder prose.' },
+      { href: 'index.html', at: 'number',
+        title: 'Fixture — The Number Garden',
+        caption: 'Fixture stop — a mid-thread front-door waypoint, anchored at the number district. Placeholder prose.',
+        dwell: 10000 },
+      { href: 'buffon/index.html', room: 'numbers-room',
+        title: "Fixture — Buffon's Needles",
+        caption: 'Fixture stop — a plain exhibit stop. Placeholder prose.' },
+      { href: 'colophon.html',
+        title: 'Fixture — The Colophon',
+        caption: 'Fixture stop — an EXTRA_STOPS page (outside the manifest) and the FINALE. Placeholder prose.' }
+    ]
+  }
+];
 
 /* ── tiny assert harness (ws.test.cjs style) ─────────────────────────────────── */
 let pass = 0, fail = 0;

@@ -56,10 +56,12 @@
            is a keyboard button that a REAL Enter opens into the grouped, keyboard-operable SKY
            INDEX; and the unseen hidden star (starlight-bend) stays HINT-ONLY in the index (its
            name never leaks before its ws:seen crumb — the Register's lock-parity, in the sky).
-     D10 — THE GRAND TOUR OVERTURE (WS2 §6, T1.2): with ?tour=<fixture>&stop=0 the front door
-           ACTS — __tourAct draws the LIT THREAD (the fixture's 3 distinct-anchor roundels, one
-           ×2 bead, never a numeral), flies the REAL __panCamera.frameTo to the waypoint
-           district's Layout frame, retires the hint, and restores the platewalk's onManual;
+     D10 — THE GRAND TOUR OVERTURE (WS2 §6, T1.2; retargeted to the real `light` thread at
+           T3.1 when the fixtures were replaced): with ?tour=light&stop=0 the front door
+           ACTS — __tourAct draws the LIT THREAD (the thread's distinct-anchor roundels,
+           consecutive repeats collapsed into ×n beads, never a bare numeral), flies the REAL
+           __panCamera.frameTo to the stop-0 waypoint district's Layout frame (opticks),
+           retires the hint, and restores the platewalk's onManual;
            the dwell then AUTO-ADVANCES to stop 1 (D10b). A REAL mid-overture wheel fires the
            adapter's own onManual → ctx.softPause(): the card WAITS (D10c). A plain load stays
            inert — no overlay, no docent card, hint shown (D10d) — and the reduced-motion
@@ -452,17 +454,19 @@ async function main() {
 
     // ════════════════════════════════════════════════════════════════════════════
     //  D10 — THE GRAND TOUR OVERTURE (WS2 §6, T1.2). The front door implements the docent's
-    //  page contract: ?tour=fixture-a&stop=0 runs __tourAct — lit thread + camera fly + advance.
+    //  page contract: ?tour=light&stop=0 runs __tourAct — lit thread + camera fly + advance.
     //  The act mirrors its liveness into window.__tourOverture (the __fairgroundLiveness idiom).
     // ════════════════════════════════════════════════════════════════════════════
 
     // D10a — the act draws the DISTINCT-ANCHOR thread and flies the REAL camera to the
-    // waypoint district's frame. fixture-a resolves to exactly 3 distinct anchors (its two
-    // hall-of-mirrors stops collapse into one ×2 roundel — never a numeral), and the stop-0
-    // waypoint is at:'opticks', so after the act the applied transform must EQUAL the pure
-    // Layout.plates(...) frame for opticks (frameTo is the only path that can set it — it
-    // bypasses K_MAX; a manual zoom cannot reach a plate frame exactly).
-    ab('open', URL + '?tour=fixture-a&stop=0');
+    // waypoint district's frame. `light` resolves to several distinct anchors, its run of
+    // consecutive hall-of-mirrors stops collapsing into one ×n bead (never a bare numeral);
+    // we assert the CONTRACT (≥2 roundels, every bead a ×n form, no bare numerals) rather
+    // than a thread-shape magic number. The stop-0 waypoint is at:'opticks', so after the
+    // act the applied transform must EQUAL the pure Layout.plates(...) frame for opticks
+    // (frameTo is the only path that can set it — it bypasses K_MAX; a manual zoom cannot
+    // reach a plate frame exactly).
+    ab('open', URL + '?tour=light&stop=0');
     ab('wait', '4500');   // world-await + draw beat + fly + settle comfortably done
     const ov1 = abEval(`(function(){
       var g=document.getElementById('tour-thread');
@@ -485,30 +489,30 @@ async function main() {
         camAtFrame: camAtFrame,
         platewalkManualBack: !!(pc && typeof pc.onManual === 'function' && !pc.onManual.__tourOverture) });
     })()`);
-    check('D10a — the overture DRAWS the lit thread (3 distinct anchors, one ×2 bead, no bare numerals), flies the REAL frameTo to the opticks Layout frame, retires the hint, and hands onManual back to the platewalk',
+    check('D10a — the overture DRAWS the lit thread (≥2 distinct anchors, every repeat bead a ×n form, no bare numerals), flies the REAL frameTo to the opticks Layout frame, retires the hint, and hands onManual back to the platewalk',
       ov1.ov && ov1.ov.stage === 'done' && ov1.ov.installed === true && ov1.ov.restored === true && ov1.ov.flew === true &&
-      ov1.card === true && ov1.roundels === 3 && ov1.beads.length === 1 && /2/.test(ov1.beads[0] || '') && ov1.bareNumerals === false &&
+      ov1.card === true && ov1.roundels >= 2 && ov1.beads.length >= 1 && ov1.beads.every(function(b){ return /^×\d+$/.test(b); }) && ov1.bareNumerals === false &&
       ov1.hintShown === false && ov1.camAtFrame === true && ov1.platewalkManualBack === true,
       '[stage=' + (ov1.ov && ov1.ov.stage) + ', roundels=' + ov1.roundels + ', beads=' + JSON.stringify(ov1.beads) +
       ', camAtFrame=' + ov1.camAtFrame + ', hintShown=' + ov1.hintShown + ', restored=' + (ov1.ov && ov1.ov.restored) + ']');
 
     // D10b — the dwell then AUTO-ADVANCES: the same load walks itself to stop 1 (the engine's
-    // countdown navigation — rainbow/index.html?tour=fixture-a&stop=1). Poll up to ~20s
-    // (stop 0 dwells 12s after the ~3s act).
+    // countdown navigation — light's stop 1 is why-the-sky-is-blue/index.html?tour=light&stop=1).
+    // Poll up to ~20s (stop 0 dwells 12s after the ~3s act).
     let advanced = null;
     for (let i = 0; i < 10; i++) {
       ab('wait', '2000');
       const u = abEval(`JSON.stringify({ href: location.href })`);
-      if (u && /rainbow\/index\.html\?tour=fixture-a&stop=1$/.test(u.href || '')) { advanced = u.href; break; }
+      if (u && /why-the-sky-is-blue\/index\.html\?tour=light&stop=1$/.test(u.href || '')) { advanced = u.href; break; }
     }
-    check('D10b — the overture stop AUTO-ADVANCES to stop 1 (rainbow/index.html?tour=fixture-a&stop=1) when its dwell expires',
+    check('D10b — the overture stop AUTO-ADVANCES to stop 1 (why-the-sky-is-blue/index.html?tour=light&stop=1) when its dwell expires',
       advanced !== null, '[landed=' + advanced + ']');
 
     // D10c — the VISITOR OUTRANKS THE DOCENT: a REAL CDP wheel over the map mid-overture fires
     // the adapter's own onManual → ctx.softPause(); the following dwell starts SUSPENDED and the
     // card shows the waiting affordance. (The wheel must land inside the act's ~2.6s window; the
     // 1200ms draw beat exists to give a hand-on-the-wheel exactly this room.)
-    ab('open', URL + '?tour=fixture-a&stop=0');
+    ab('open', URL + '?tour=light&stop=0');
     ab('wait', '600');
     ab('mouse', 'move', '640', '250');
     ab('mouse', 'wheel', '240');
@@ -548,7 +552,7 @@ async function main() {
     // ease class. (CDP media emulation for prefers-reduced-motion proved unreliable in this CLI,
     // so the degrade branch is exercised at the contract seam — the same surface the engine uses.)
     const red = abEval(`(function(){
-      var ctx={ tourId:'fixture-a', stopIndex:0, reduced:true, signal:{aborted:false},
+      var ctx={ tourId:'light', stopIndex:0, reduced:true, signal:{aborted:false},
         beat:function(){ return Promise.resolve(); }, spotlight:function(){}, softPause:function(){}, done:function(){} };
       return window.__tourAct(ctx).then(function(){
         var g=document.getElementById('tour-thread');
@@ -565,7 +569,7 @@ async function main() {
       });
     })()`);
     check('D10e — the REAL __tourAct under a reduced ctx DEGRADES: the thread appears still (no draw-on), the camera JUMPS to the frame (k=frame.k, no .walking ease), onManual restored',
-      red.still === true && red.roundels === 3 && typeof red.k === 'number' && red.k > 1 && red.walking === false && red.restored === true,
+      red.still === true && red.roundels >= 2 && typeof red.k === 'number' && red.k > 1 && red.walking === false && red.restored === true,
       '[still=' + red.still + ', roundels=' + red.roundels + ', k=' + red.k + ', walking=' + red.walking + ']');
 
   } finally {

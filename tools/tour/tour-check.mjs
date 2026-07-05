@@ -5,7 +5,7 @@
    Joins the estate gate set. Validates tools/tour/tours.js against the live
    estate-manifest.json and the files on disk, then runs a battery of NEGATIVE
    CONTROLS that MUST fail (asserted-red self-tests). Prints a summary; exits 0
-   iff the real fixtures are clean AND every negative control correctly failed.
+   iff the installed threads are clean AND every negative control correctly failed.
 
    ── The §8 checks (all implemented in `validate()`) ──────────────────────────
      • every stop href resolves into estate-manifest.json (a room or exhibit
@@ -20,11 +20,15 @@
        `index.html`) resolves to a file that exists on disk (DESIGN §1 `rel()`);
      • every tour has ≥2 stops, a unique stable id (`[a-z-]+`), non-empty
        title / tagline / stop captions / stop titles, `minutes` present, and a
-       `start` page that exists; no duplicate hrefs within a thread;
+       `start` page that exists; no duplicate stops within a thread (a front-door
+       waypoint is identified by its `at:` district, so a thread may cross
+       `index.html` several times at different anchors — DESIGN §6/§9);
      • docent-sentinel presence: every stop's shipped `.html` contains
        DOCENT_SENTINEL — ARMED PER-THREAD via the `fixture:` flag: a
        `fixture:true` thread SKIPS this check (its includes are swept in later,
-       W2). T3.1 removes the fixtures and this check goes fully live.
+       W2). Since T3.1 the installed threads carry no `fixture:`, so this check
+       runs live over every shipped stop page (the fixture flag survives only for
+       the negative-control self-tests below).
 
    ── EXTRA_STOPS allow-list ────────────────────────────────────────────────────
      Each entry must exist on disk, carry a valid top-level district `anchor`,
@@ -123,12 +127,18 @@ export function validate(tours, extraStops, idx, opts = {}) {
     const stops = Array.isArray(t.stops) ? t.stops : [];
     if (stops.length < 2) fail(tid, `a tour needs ≥2 stops (got ${stops.length})`);
 
-    /* duplicate href (path) within the thread */
-    const seenHrefs = new Set();
+    /* duplicate-stop check within the thread. A stop's identity is its href
+       path, EXCEPT a front-door waypoint (`at:`) is identified by (index.html +
+       its district anchor): a thread legitimately crosses the estate via several
+       `index.html` waypoints at different districts (DESIGN §6/§9 — e.g. light's
+       ⌂at:opticks … ⌂at:cavern), which are DISTINCT stops, not duplicates. Two
+       stops with the same path AND the same waypoint anchor (or two identical
+       non-waypoint hrefs) are a real duplicate. */
+    const seenStops = new Set();
     for (const s of stops) {
-      const p = pathOf(s.href);
-      if (seenHrefs.has(p)) fail(tid, `duplicate stop href within thread: "${p}"`);
-      seenHrefs.add(p);
+      const key = pathOf(s.href) + (s.at !== undefined ? '@' + s.at : '');
+      if (seenStops.has(key)) fail(tid, `duplicate stop within thread: "${pathOf(s.href)}"${s.at !== undefined ? ` at "${s.at}"` : ''}`);
+      seenStops.add(key);
     }
 
     /* per-stop classification (short-circuits to ONE clear reason per stop) */
@@ -202,14 +212,19 @@ function runGate() {
   let pass = 0, fail = 0;
   const ok = (cond, label) => { if (cond) pass++; else { fail++; console.error('  ✗ ' + label); } };
 
-  /* (1) the real fixtures must be CLEAN */
+  /* (1) the installed threads must be CLEAN */
   const live = validate(TOURS, EXTRA_STOPS, idx, opts);
-  ok(live.ok, 'fixtures validate GREEN (failures: ' + live.failures.join(' | ') + ')');
+  ok(live.ok, 'installed threads validate GREEN (failures: ' + live.failures.join(' | ') + ')');
 
   /* (2) NEGATIVE CONTROLS (§8) — each mutated tour MUST fail, for the right reason.
-     A negative "passes" iff validate() returns ok:false AND names the expected law. */
+     A negative "passes" iff validate() returns ok:false AND names the expected law.
+     The base is a real thread whose stop 1 is a plain exhibit stop (`light`); the
+     `fixture:true` flag set below just SKIPS the sentinel check for the href/room
+     controls (they are not about the include), so a real page's include state can
+     never mask them. */
+  const BASE = 'light';
   const neg = (mutate, needle, label) => {
-    const tours = deepClone(TOURS).filter((t) => t.id === 'fixture-a');
+    const tours = deepClone(TOURS).filter((t) => t.id === BASE);
     tours[0].fixture = true;
     mutate(tours[0]);
     const r = validate(tours, EXTRA_STOPS, idx, opts);
@@ -222,6 +237,10 @@ function runGate() {
   neg((t) => { t.stops[1].href = 'the-reliquary/index.html'; t.stops[1].room = 'reliquary'; }, 'locked', 'locked-room stop');
   neg((t) => { t.stops[1].room = 'physics-lab'; }, 'room mismatch', 'wrong room');
   neg((t) => { t.stops[1].href = '/rainbow/index.html'; }, 'absolute', 'absolute href');
+  /* duplicate-stop control: two front-door waypoints at the SAME district anchor
+     must still fail (proves the waypoint-aware dedup key rejects real dupes, not
+     just the coarse path check). light stop 0 is ⌂at:opticks; collide stop 6 onto it. */
+  neg((t) => { t.stops[6].at = t.stops[0].at; }, 'duplicate', 'duplicate waypoint anchor');
 
   /* (3) the docent-sentinel gate ARMS when a thread is NOT a fixture — a real
      thread over pages missing the include must fail. Proves BOTH the fixture-flag
@@ -233,7 +252,7 @@ function runGate() {
      the nonce keeps the control armed regardless of which real pages carry the
      include, across every W2/T3.1 include sweep. */
   {
-    const tours = deepClone(TOURS).filter((t) => t.id === 'fixture-a');
+    const tours = deepClone(TOURS).filter((t) => t.id === BASE);
     tours[0].fixture = false;                       // arm the sentinel check
     const NONCE = ' grand-tour-docent-NONCE-no-shipped-page-can-contain-this';
     const r = validate(tours, EXTRA_STOPS, idx, { ...opts, sentinel: NONCE });
@@ -243,7 +262,7 @@ function runGate() {
 
   const total = pass + fail;
   if (fail) { console.error('\ntour-check: ' + pass + '/' + total + ' PASS — ' + fail + ' FAILED'); process.exit(1); }
-  console.log('tour-check: ' + total + '/' + total + ' PASS (fixtures green; ' + (total - 1) + ' negative controls correctly red)');
+  console.log('tour-check: ' + total + '/' + total + ' PASS (installed threads green; ' + (total - 1) + ' negative controls correctly red)');
 }
 
 /* run as a gate only when invoked directly (importable without side effects) */
