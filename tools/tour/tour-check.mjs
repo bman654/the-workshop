@@ -224,14 +224,21 @@ function runGate() {
   neg((t) => { t.stops[1].href = '/rainbow/index.html'; }, 'absolute', 'absolute href');
 
   /* (3) the docent-sentinel gate ARMS when a thread is NOT a fixture — a real
-     thread over pages that do not yet carry the include must fail. Proves the
-     fixture-flag mechanism + the forgotten-include gate work. */
+     thread over pages missing the include must fail. Proves BOTH the fixture-flag
+     mechanism AND the forgotten-include gate.
+     ROBUST-BY-CONSTRUCTION (WS2 T2.1e): probe with a NONCE sentinel no shipped page
+     can ever contain (its literal self-describing suffix appears in no estate page).
+     The T2.1 mint gave fixture-a's own stop pages the REAL sentinel, so probing with
+     DOCENT_SENTINEL would silently disarm this self-test (every page now has it);
+     the nonce keeps the control armed regardless of which real pages carry the
+     include, across every W2/T3.1 include sweep. */
   {
     const tours = deepClone(TOURS).filter((t) => t.id === 'fixture-a');
     tours[0].fixture = false;                       // arm the sentinel check
-    const r = validate(tours, EXTRA_STOPS, idx, opts);
+    const NONCE = ' grand-tour-docent-NONCE-no-shipped-page-can-contain-this';
+    const r = validate(tours, EXTRA_STOPS, idx, { ...opts, sentinel: NONCE });
     ok(!r.ok && r.failures.some((f) => f.toLowerCase().includes('sentinel')),
-       `sentinel gate arms for a non-fixture thread (got: ${r.failures.join(' | ') || 'NO FAILURES'})`);
+       `sentinel gate arms for a non-fixture thread via a nonce sentinel (got: ${r.failures.join(' | ') || 'NO FAILURES'})`);
   }
 
   const total = pass + fail;
