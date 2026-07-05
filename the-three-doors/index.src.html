@@ -746,6 +746,50 @@
 
   // boot
   buildGrid(); buildDoors(); updateGauges(); startRound();
+
+  // ── the Grand Tour act (WS2 T2.6, DESIGN §4 · Appendix A) ─────────────────────────────
+  // Play ONE full demonstrated round through the page's OWN entry functions — pick door A,
+  // let the informed host swing a goat open, SWITCH, watch the outcome — then hand a fresh
+  // untouched board back to the visitor. The demonstrated round is COUNTED in the tally on
+  // purpose (the caption: "the tally above keeps the honest count. I played one round for
+  // you the slow way"), so the act ADDS to the tally but NEVER clears it — re-entrant-safe
+  // (a back/forward arrival just plays another counted round; the tally only ever grows).
+  // Tours are silent (§4): the round runs with the page's own click/chime SFX stubbed for
+  // its duration, then restored, so the docent never makes a sound. BOTH paths let onPick's
+  // OWN host-swing timer FIRE before we switch and before the finally resets the board — that
+  // timer wires the switch control and reads the round's `world`, so resetting ahead of it
+  // would strand a stale timer (it reads a nulled `world`). reduced: switch as soon as the
+  // page has wired the control (0ms under real reduced-motion; a bounded wait otherwise), no
+  // eased pacing. non-reduced: deliberate beats that outlast the ~1s swing (pick → host opens
+  // → switch → outcome). informed host always reveals a goat, so #sw always appears (no void).
+  window.__tourAct = async function(ctx){
+    const reduced = !!(ctx && ctx.reduced);
+    const beat = (ctx && ctx.beat) ? ctx.beat : (ms)=> new Promise(r=> setTimeout(r, ms||0));
+    // silence the page's incidental UI sound for the demonstrated round (tours never play audio)
+    const _latch = sfxLatch, _chime = sfxChime, _tick = sfxTick, _noop = function(){};
+    sfxLatch = _noop; sfxChime = _noop; sfxTick = _noop;
+    try {
+      startRound();                       // ensure a clean pick phase (idempotent; leaves the tally)
+      if (reduced) {
+        onPick(0);                        // pick door A — the informed host swings a goat open
+        // wait for the page's OWN swing to wire the switch control (#sw) — that means its swing
+        // timer has fired (no stale timer left to clobber the reset) and we switch through the
+        // real button flow. Bounded so an edge round can never hang the act.
+        for (let i = 0; i < 60 && !document.getElementById('sw'); i++) await beat(30);
+        decide('switch');                 // demonstrate the switch (switching wins two-thirds)
+        await beat(60);                   // let the reveal settle before the reset
+      } else {
+        await beat(900);
+        onPick(0);                        // pick door A — the informed host swings a goat open
+        await beat(1500);                 // outlast the host's ~1s swing so its own timer wires the choice
+        decide('switch');                 // demonstrate the switch (switching wins two-thirds)
+        await beat(1600);                 // let the reveal read
+      }
+    } finally {
+      startRound();                       // reset to a fresh untouched board for the visitor's own play
+      sfxLatch = _latch; sfxChime = _chime; sfxTick = _tick;   // restore the page's sound
+    }
+  };
 })();
 </script>
 <!-- ws: the shared unlock module (one source of truth), inlined via forge. -->
