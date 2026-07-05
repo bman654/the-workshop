@@ -42,7 +42,8 @@
   var DOCENT_SENTINEL = 'grand-tour-docent';
 
   var DEFAULT_DWELL = 18000; /* ms, §1 (per-stop `dwell` overrides it) */
-  var ACT_CAP = 45000;       /* ms hard cap on a beats act (§4); unused until T0.3 */
+  var ACT_CAP = 45000;       /* ms hard cap on a beats act (§4) — then proceed to DWELL */
+  var SPOT_DWELL = 4000;     /* ms per [data-tour-spot] in the declarative walk (§4) */
 
   /* ════════════════════════════════════════════════════════════════════════
      PURE LOGIC — no DOM, no Date, no Math.random. Exported for the Node twin.
@@ -236,11 +237,181 @@
     };
   }
 
+  /* ── the beats RUNTIME (§4) — the layered page-side act contract ─────────────
+     Pure + TICK-DRIVEN (the createDwellClock philosophy): the caller advances an
+     internal clock with tick(dt); beat(ms) resolves once that clock passes `ms`
+     of UNPAUSED time. NO Date / performance.now / setTimeout lives here — the
+     browser drives ticks from the same rAF loop that feeds the dwell clock; the
+     twin drives them by hand. Layering, lowest wins by absence (§4):
+        __tourAct(ctx)  →  [data-tour-spot] walk (~4s each)  →  do-nothing.
+     run() ALWAYS resolves (never rejects): the machine proceeds to DWELL whether
+     the act finished, called ctx.done(), was aborted (leave/advance), threw, or
+     hit the hard cap. The act's OWN pending beats reject with an AbortError on
+     abort/cap so a cooperative act unwinds and stops touching the page. `ctx` is
+     EXACTLY the §4 surface — eight keys, nothing more. */
+  function makeAbortController(Ctor) {
+    var C = Ctor || (typeof AbortController !== 'undefined' ? AbortController : null);
+    if (C) { return new C(); }
+    /* tiny shim for an environment without AbortController (both Node 24 and
+       modern browsers ship it; this is a belt-and-braces fallback). */
+    var fired = false, listeners = [];
+    var signal = {
+      aborted: false,
+      addEventListener: function (t, f) { if (t === 'abort' && typeof f === 'function') listeners.push(f); },
+      removeEventListener: function (t, f) { for (var i = listeners.length - 1; i >= 0; i--) if (listeners[i] === f) listeners.splice(i, 1); }
+    };
+    return {
+      signal: signal,
+      abort: function () {
+        if (fired) return; fired = true; signal.aborted = true;
+        for (var i = 0; i < listeners.length; i++) { try { listeners[i]({ type: 'abort' }); } catch (e) {} }
+      }
+    };
+  }
+
+  /* spec = {
+       info:{tourId, stopIndex, reduced, cap},   act: fn|null,   spots: [el…],
+       spotDwell?, spotlight?(el, on), scrollTo?(el), onSoftPause?(),
+       Promise?, AbortCtor?   (injection seams for the twin) } */
+  function createBeatsRuntime(spec) {
+    spec = spec || {};
+    var info = spec.info || {};
+    var P = spec.Promise || (typeof Promise !== 'undefined' ? Promise : null);
+    var reduced = !!info.reduced;
+    var cap = (typeof info.cap === 'number' && info.cap > 0) ? info.cap : ACT_CAP;
+    var spotDwell = (typeof spec.spotDwell === 'number' && spec.spotDwell > 0) ? spec.spotDwell : SPOT_DWELL;
+    var spotlightImpl = typeof spec.spotlight === 'function' ? spec.spotlight : null;
+    var scrollImpl = typeof spec.scrollTo === 'function' ? spec.scrollTo : null;
+    var actFn = typeof spec.act === 'function' ? spec.act : null;
+    var spots = Array.isArray(spec.spots) ? spec.spots.slice() : [];
+    var layer = actFn ? 'act' : (spots.length ? 'walk' : 'none');
+
+    var clock = 0, capElapsed = 0;
+    var paused = false, aborted = false, finished = false, capped = false, softPaused = false;
+    var abortReason = null;
+    var pending = [];             /* {target, resolve, reject} — beats awaiting the clock */
+    var ac = makeAbortController(spec.AbortCtor);
+
+    function abortError(reason) {
+      var e; try { e = new Error('the docent moved on'); } catch (x) { e = { message: 'aborted' }; }
+      e.name = 'AbortError'; e.reason = reason || abortReason || 'abort'; return e;
+    }
+    /* pause-aware sleep; resolves after `ms` of unpaused clock, rejects on abort. */
+    function beat(ms) {
+      return new P(function (resolve, reject) {
+        if (aborted) { reject(abortError()); return; }
+        if (finished) { resolve(); return; }
+        var d = +ms; if (!(d > 0)) { resolve(); return; }
+        pending.push({ target: clock + d, resolve: resolve, reject: reject });
+      });
+    }
+    /* the same engraved halo the declarative walk uses; resolves after the hold. */
+    function spotlight(el, ms) {
+      var hold = (typeof ms === 'number' && ms > 0) ? ms : spotDwell;
+      if (spotlightImpl) { try { spotlightImpl(el, true); } catch (e) {} }
+      function off() { if (spotlightImpl) { try { spotlightImpl(el, false); } catch (e) {} } }
+      return beat(hold).then(function () { off(); }, function (err) { off(); throw err; });
+    }
+
+    /* ctx — EXACTLY the §4 surface (kept small on purpose). */
+    var ctx = {
+      tourId: info.tourId, stopIndex: info.stopIndex, reduced: reduced,
+      signal: ac.signal,
+      beat: beat,
+      spotlight: spotlight,
+      softPause: function () { softPaused = true; if (typeof spec.onSoftPause === 'function') { try { spec.onSoftPause(); } catch (e) {} } },
+      done: function () { finish(); }
+    };
+
+    function drainResolve() {
+      if (!pending.length) return;
+      var keep = [];
+      for (var i = 0; i < pending.length; i++) {
+        if (pending[i].target <= clock) { try { pending[i].resolve(); } catch (e) {} }
+        else keep.push(pending[i]);
+      }
+      pending = keep;
+    }
+    function drainReject(reason) {
+      var p = pending; pending = [];
+      for (var i = 0; i < p.length; i++) { try { p[i].reject(abortError(reason)); } catch (e) {} }
+    }
+    function finish() {
+      if (finished || aborted) return;
+      finished = true;
+      var p = pending; pending = [];
+      for (var i = 0; i < p.length; i++) { try { p[i].resolve(); } catch (e) {} }
+    }
+    function abort(reason) {
+      if (aborted || finished) return;
+      aborted = true; abortReason = reason || 'abort';
+      drainReject(abortReason);
+      try { ac.abort(); } catch (e) {}
+    }
+
+    /* layer 2 — visit each [data-tour-spot] in order, via the SAME beat()/halo. */
+    function runWalk() {
+      var i = 0;
+      function step() {
+        if (aborted || finished || i >= spots.length) return P.resolve();
+        var elx = spots[i++];
+        if (scrollImpl) { try { scrollImpl(elx); } catch (e) {} }
+        return spotlight(elx, spotDwell).then(step);
+      }
+      return step();
+    }
+
+    var donePromise = null;
+    function run() {
+      if (donePromise) return donePromise;
+      var body;
+      if (layer === 'act') {
+        var r = null;
+        try { r = actFn(ctx); } catch (e) { r = null; }          /* a thrown act → straight to dwell */
+        body = (r && typeof r.then === 'function') ? r : P.resolve();
+      } else if (layer === 'walk') {
+        body = runWalk();
+      } else {
+        body = P.resolve();
+      }
+      /* run() never rejects: whatever the body does, the machine gets a resolve
+         so it always advances to DWELL. The result reports how the act ended. */
+      donePromise = new P(function (resolve) {
+        var settled = false;
+        function settle() { if (settled) return; settled = true; resolve({ softPaused: softPaused, aborted: aborted, capped: capped, finished: finished }); }
+        body.then(settle, settle);
+      });
+      return donePromise;
+    }
+
+    return {
+      layer: function () { return layer; },
+      run: run,
+      tick: function (dt) {
+        if (!(dt > 0) || paused || aborted || finished) return;
+        clock += dt; capElapsed += dt;
+        drainResolve();
+        if (!capped && !finished && !aborted && capElapsed >= cap) { capped = true; abort('cap'); }
+      },
+      pause: function () { paused = true; },
+      resume: function () { if (!aborted && !finished) paused = false; },
+      isPaused: function () { return paused; },
+      abort: abort,
+      done: finish,
+      softPaused: function () { return softPaused; },
+      elapsed: function () { return clock; },
+      signal: ac.signal,
+      pendingCount: function () { return pending.length; },
+      state: function () { return { layer: layer, clock: clock, paused: paused, aborted: aborted, finished: finished, capped: capped, softPaused: softPaused }; }
+    };
+  }
+
   /* ── the docent STATE MACHINE (pure; every side effect injected via `env`) ───
      env = {
        tours, params, pathname, ws, reduced,
-       perform(info)  -> Promise | undefined   (the beats seam; T0.3 fills it in;
-                          if omitted, the machine enters DWELL synchronously),
+       makeBeats(info) -> a beats runtime (createBeatsRuntime above) | undefined
+                          (the §4 seam; if omitted, the machine enters DWELL with
+                          no performance — the do-nothing default),
        navigate(url), leave(), rejoinTarget(tour, n) -> url | null,
        view: { mount(vm), announce(text), updateDwell(frac, secs), setPaused(b),
                setSoftPaused(b), setWaiting(b), showFinale(vm), showWandered(vm),
@@ -249,7 +420,7 @@
      Phases: normal · arrive · perform · dwell · paused · softpaused · hold ·
              finale · wandered · left. ═══════════════════════════════════════ */
   function createDocentMachine(env) {
-    var phase = 'idle', cur = null, clock = null;
+    var phase = 'idle', cur = null, clock = null, beats = null, gen = 0;
     var view = env.view || {};
     function call(fn) { try { return fn && fn(); } catch (e) {} }
     function dwellMs(stop) { return typeof stop.dwell === 'number' && stop.dwell > 0 ? stop.dwell : DEFAULT_DWELL; }
@@ -264,7 +435,10 @@
       return { tourId: c.tour.id, stopIndex: c.stopIndex, beats: c.stop.beats || null, reduced: !!env.reduced, cap: ACT_CAP };
     }
 
-    function enterDwell() {
+    /* softPaused: the just-finished act called ctx.softPause() ("the visitor took
+       over") — the countdown then starts SUSPENDED, waiting for a walk-on (§4). */
+    function enterDwell(softPaused) {
+      beats = null;
       if (phase === 'left' || phase === 'normal' || phase === 'wandered' || phase === 'idle') return;
       if (cur.isFinale) {
         phase = 'finale';
@@ -273,10 +447,15 @@
         return;
       }
       if (cur.isHold) { phase = 'hold'; call(function () { view.setWaiting(true); }); return; }
-      phase = 'dwell';
       clock = createDwellClock(dwellMs(cur.stop));
       clock.arm();
-      call(function () { view.updateDwell(0, clock.secondsLeft()); });
+      if (softPaused) {
+        phase = 'softpaused'; clock.suspend();
+        call(function () { view.setSoftPaused(true); });
+      } else {
+        phase = 'dwell';
+        call(function () { view.updateDwell(0, clock.secondsLeft()); });
+      }
     }
 
     var M = {
@@ -284,6 +463,8 @@
       state: function () { return { phase: phase, stopIndex: cur ? cur.stopIndex : null, remaining: clock ? clock.remaining() : null }; },
 
       start: function () {
+        gen++;                                   /* a stale act completion (bfcache re-entry) must not fire enterDwell */
+        if (beats) { call(function () { beats.abort('restart'); }); beats = null; }
         if (phase !== 'idle') { call(view.teardown); clock = null; }
         var cls = classifyLoad(env.tours, env.params, env.pathname);
         if (cls.mode === 'normal') { phase = 'normal'; return cls; }
@@ -303,13 +484,23 @@
         call(function () { view.mount(viewModel(cls)); });
         call(function () { view.announce(cls.stop.title + ' — on ' + cls.tour.title); });
         phase = 'perform';
-        var pr = env.perform ? env.perform(performInfo(cls)) : null;
-        if (pr && typeof pr.then === 'function') pr.then(function () { enterDwell(); }, function () { enterDwell(); });
-        else enterDwell();
+        var myGen = gen;
+        beats = env.makeBeats ? env.makeBeats(performInfo(cls)) : null;
+        if (beats) {
+          /* run() always RESOLVES; the result tells us whether the act soft-paused.
+             The gen guard drops a completion that belongs to a superseded start. */
+          beats.run().then(
+            function (res) { if (myGen === gen) enterDwell(!!(res && res.softPaused)); },
+            function () { if (myGen === gen) enterDwell(false); }
+          );
+        } else {
+          enterDwell(false);                     /* do-nothing default: ARRIVE → DWELL */
+        }
         return cls;
       },
 
       tick: function (dt) {
+        if (phase === 'perform') { if (beats) beats.tick(dt); return; }
         if (phase !== 'dwell' || !clock) return;
         clock.tick(dt);
         if (clock.expired()) { M.walkOn(); return; }
@@ -323,9 +514,11 @@
         call(function () { view.setSoftPaused(true); });
       },
       pause: function () {
+        if (phase === 'perform') { if (beats) beats.pause(); call(function () { view.setPaused(true); }); return; }
         if (phase === 'dwell') { phase = 'paused'; if (clock) clock.suspend(); call(function () { view.setPaused(true); }); }
       },
       resume: function () {
+        if (phase === 'perform') { if (beats) beats.resume(); call(function () { view.setPaused(false); }); return; }
         if (phase === 'paused' || phase === 'softpaused') {
           phase = 'dwell'; if (clock) clock.resume();
           call(function () { view.setPaused(false); });
@@ -337,15 +530,18 @@
         if (!cur) return;
         var tgt = advanceTarget(cur.tour, cur.stopIndex, cur.stop.href);
         if (tgt == null) return;                 /* finale has no walk-on */
+        if (beats) { call(function () { beats.abort('advance'); }); beats = null; }
         phase = 'left'; call(view.teardown); call(function () { env.navigate(tgt); });
       },
       back: function () {
         if (!cur) return;
         var tgt = backTarget(cur.tour, cur.stopIndex, cur.stop.href);
         if (tgt == null) return;                 /* first stop: back is inert */
+        if (beats) { call(function () { beats.abort('back'); }); beats = null; }
         phase = 'left'; call(view.teardown); call(function () { env.navigate(tgt); });
       },
       leave: function () {
+        if (beats) { call(function () { beats.abort('leave'); }); beats = null; }  /* stop the act; we stay on the page */
         phase = 'left'; call(view.teardown); call(env.leave);   /* strips params; records nothing */
       },
       /* FINALE footer choices (§5) */
@@ -375,7 +571,8 @@
     beginTarget: beginTarget, stopTarget: stopTarget,
     resumeState: resumeState, drawerRows: drawerRows, startPlaqueInfo: startPlaqueInfo,
     recordArrive: recordArrive, recordFinale: recordFinale,
-    createDwellClock: createDwellClock, createDocentMachine: createDocentMachine
+    createDwellClock: createDwellClock, createBeatsRuntime: createBeatsRuntime,
+    createDocentMachine: createDocentMachine
   };
 
   /* ════════════════════════════════════════════════════════════════════════
@@ -626,10 +823,50 @@
       (doc.head || doc.body).appendChild(st);
     }
 
-    /* the beats seam (§4). T0.2 default = do nothing (ARRIVE → DWELL). T0.3
-       replaces this with the layered runtime (__tourAct → data-tour-spot → none)
-       and the full `ctx`. Returns a Promise so the machine awaits it uniformly. */
-    function performBeats(/* info */) { return (root.Promise ? root.Promise.resolve() : null); }
+    /* ── the beats seam (§4) — the browser side of the layered runtime ──────────
+       Wires createBeatsRuntime to the live page: the act is the page's own
+       window.__tourAct (a bespoke performance); with none, the declarative walk
+       visits the page's [data-tour-spot] elements in numeric order with an
+       engraved halo. The runtime itself is pure + tick-driven; the machine feeds
+       it dt from the same rAF loop as the dwell clock. __tourHooks is a DIFFERENT
+       page surface (the Showing's cue verbs, §4/§10) and is deliberately NOT read
+       here — tours never call hooks. */
+    var SPOT_STYLE_ID = 'tour-spot-style';
+    function injectSpotStyles() {
+      if (doc.getElementById(SPOT_STYLE_ID)) return;
+      var st = el('style'); st.id = SPOT_STYLE_ID;
+      st.textContent =
+        '.td-spot-lit{outline:2px solid var(--brass-bright,#f0d489)!important;outline-offset:3px;' +
+        'box-shadow:0 0 0 3px rgba(201,162,74,.22),0 0 24px rgba(201,162,74,.4)!important;' +
+        'border-radius:4px;transition:outline-color .3s ease,box-shadow .3s ease;position:relative;z-index:1;}' +
+        '@media (prefers-reduced-motion:reduce){.td-spot-lit{transition:none;}}';
+      (doc.head || doc.body).appendChild(st);
+    }
+    function collectSpots() {
+      var list = [];
+      try { list = Array.prototype.slice.call(doc.querySelectorAll('[data-tour-spot]')); } catch (e) {}
+      list.sort(function (a, b) {
+        return (parseInt(a.getAttribute('data-tour-spot'), 10) || 0) - (parseInt(b.getAttribute('data-tour-spot'), 10) || 0);
+      });
+      return list;
+    }
+    function makeBeatsBrowser(info) {
+      var spots = collectSpots();
+      var act = (typeof root.__tourAct === 'function') ? root.__tourAct : null;
+      if (act || spots.length) injectSpotStyles();
+      return createBeatsRuntime({
+        info: info,
+        act: act,
+        spots: spots,
+        spotDwell: SPOT_DWELL,
+        spotlight: function (elx, on) { if (elx && elx.classList) elx.classList.toggle('td-spot-lit', !!on); },
+        scrollTo: function (elx) {
+          if (!elx || !elx.scrollIntoView) return;
+          try { elx.scrollIntoView({ behavior: info.reduced ? 'auto' : 'smooth', block: 'center', inline: 'center' }); }
+          catch (e) { try { elx.scrollIntoView(); } catch (e2) {} }
+        }
+      });
+    }
 
     /* deploy best-effort rejoin (wandered case). rel() from the CURRENT pathname:
        correct on localhost (base '/'); on Pages (base '/the-workshop/') it is off
@@ -659,7 +896,7 @@
       var view = makeView(reduced, ctl);
       var machine = createDocentMachine({
         tours: TOURS_REF(), params: params, pathname: pathname, ws: ws, reduced: reduced,
-        perform: performBeats, view: view,
+        makeBeats: makeBeatsBrowser, view: view,
         navigate: function (url) { root.location.assign(url); },
         leave: function () {
           try { root.history.replaceState(null, '', root.location.pathname + stripTourParams(root.location.search) + root.location.hash); }
@@ -713,7 +950,9 @@
       function frame(ts) {
         var ph = machine.phase();
         if (ph === 'left' || ph === 'normal' || ph === 'idle') return;
-        if (last != null && ph === 'dwell') machine.tick(ts - last);
+        /* feed dt to the machine every frame while alive; it routes ticks itself
+           (dwell → the countdown clock, perform → the beats runtime, else no-op). */
+        if (last != null) machine.tick(ts - last);
         last = ts;
         root.requestAnimationFrame(frame);
       }

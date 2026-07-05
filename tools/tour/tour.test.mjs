@@ -399,8 +399,203 @@ FIXTURES.forEach((t) => {
   });
 });
 
-/* ── report ─────────────────────────────────────────────────────────────────── */
-const total = pass + fail;
-if (fail) { console.error('\ntour engine self-test: ' + pass + '/' + total + ' PASS — ' + fail + ' FAILED'); process.exit(1); }
-console.log('tour engine self-test: ' + total + '/' + total + ' PASS');
-process.exit(0);
+/* ══════════════════════════════════════════════════════════════════════════
+   11) the beats RUNTIME (§4, T0.3) — layered contract, pause-aware beat(),
+       abort, and the hard cap. The runtime is pure + TICK-DRIVEN, so — exactly
+       like the dwell clock — the twin advances its clock by hand; because beats
+       resolve through promises, each hand-tick is followed by a microtask flush
+       so a cooperative act's `await` can progress before the next tick.
+   ══════════════════════════════════════════════════════════════════════════ */
+/* drain a handful of microtask turns so awaiting acts run between ticks */
+function flush(n) { let p = Promise.resolve(); for (let i = 0; i < (n || 6); i++) p = p.then(() => {}); return p; }
+/* advance a runtime's internal clock by `total` ms in `step` chunks, flushing
+   between each so the act's continuations register their next beat in time */
+async function drive(rt, total, step) {
+  step = step || 50; let acc = 0; await flush();
+  while (acc < total) { rt.tick(step); acc += step; await flush(); }
+  await flush(8);
+}
+/* the machine routes its own tick() to the beats runtime while in PERFORM */
+async function driveMachine(m, total, step) {
+  step = step || 50; let acc = 0; await flush();
+  while (acc < total) { m.tick(step); acc += step; await flush(); }
+  await flush(8);
+}
+
+async function beatsTests() {
+  /* 11a — layer resolution (act wins over spots; spots over nothing) */
+  eq(T.createBeatsRuntime({ info: {}, act: () => {} }).layer(), 'act', 'beats: an __tourAct wins → act layer');
+  eq(T.createBeatsRuntime({ info: {}, act: () => {}, spots: [{}] }).layer(), 'act', 'beats: act still wins when spots also present');
+  eq(T.createBeatsRuntime({ info: {}, spots: [{}, {}] }).layer(), 'walk', 'beats: spots + no act → declarative walk layer');
+  eq(T.createBeatsRuntime({ info: {} }).layer(), 'none', 'beats: neither → do-nothing layer');
+
+  /* 11b — the do-nothing default resolves at once, unaborted */
+  {
+    const rt = T.createBeatsRuntime({ info: {} });
+    const res = await rt.run();
+    eq(res.aborted, false, 'beats: none-layer run resolves (not aborted)');
+    eq(res.capped, false, 'beats: none-layer run not capped');
+  }
+
+  /* 11c — an act runs its beats in order, calling a real entry fn between them;
+     ctx is EXACTLY the §4 surface (eight keys) */
+  {
+    const order = []; let ctxKeys = '';
+    const rt = T.createBeatsRuntime({
+      info: { tourId: 'x', stopIndex: 2, reduced: false },
+      act: async (ctx) => {
+        ctxKeys = Object.keys(ctx).sort().join(',');
+        order.push('start'); await ctx.beat(300);
+        order.push('a'); await ctx.beat(300);
+        order.push('b'); ctx.done();
+      }
+    });
+    const dp = rt.run();
+    await drive(rt, 200, 50); eq(order.join(','), 'start', 'beats: act paused at its first beat before 300ms');
+    await drive(rt, 500, 50);
+    const res = await dp;
+    eq(order.join(','), 'start,a,b', 'beats: act advanced through both beats in order');
+    eq(ctxKeys, 'beat,done,reduced,signal,softPause,spotlight,stopIndex,tourId', 'beats: ctx is EXACTLY the §4 surface');
+    eq(res.finished, true, 'beats: ctx.done() marks the runtime finished');
+  }
+
+  /* 11d — beat() is pause-aware: a paused clock does not advance the beat */
+  {
+    let done = false;
+    const rt = T.createBeatsRuntime({ info: {}, act: async (ctx) => { await ctx.beat(1000); done = true; } });
+    const dp = rt.run();
+    await drive(rt, 500, 50); ok(!done, 'beats: beat not yet resolved at 500ms');
+    rt.pause(); await drive(rt, 5000, 250); ok(!done, 'beats: a PAUSED runtime freezes beat() (no advance)');
+    rt.resume(); await drive(rt, 600, 50); await dp;
+    ok(done, 'beats: resume lets the frozen beat finish');
+  }
+
+  /* 11e — abort (leave/advance): the pending beat rejects, the signal fires,
+     and run() still RESOLVES so the machine proceeds to dwell */
+  {
+    let errName = null;
+    const rt = T.createBeatsRuntime({ info: {}, act: async (ctx) => { try { await ctx.beat(10000); } catch (e) { errName = e.name; } } });
+    const dp = rt.run();
+    await drive(rt, 300, 50);
+    rt.abort('leave');
+    const res = await dp;
+    eq(errName, 'AbortError', 'beats: an aborted beat rejects with an AbortError');
+    eq(rt.signal.aborted, true, 'beats: abort fires the ctx.signal');
+    eq(res.aborted, true, 'beats: run() reports aborted but still resolves');
+  }
+
+  /* 11f — the hard cap: an act that never finishes is capped, then dwell proceeds */
+  {
+    let capReason = null;
+    const rt = T.createBeatsRuntime({ info: { cap: 1000 }, act: async (ctx) => { try { await ctx.beat(999999); } catch (e) { capReason = e.reason; } } });
+    const dp = rt.run();
+    await drive(rt, 1200, 200);
+    const res = await dp;
+    eq(res.capped, true, 'beats: exceeding the cap resolves run() as capped');
+    eq(rt.signal.aborted, true, 'beats: the cap aborts the act (signal fires)');
+    eq(capReason, 'cap', 'beats: the capped beat rejection carries the cap reason');
+  }
+
+  /* 11g — ctx.done() short-circuits a would-be long wait */
+  {
+    let reachedTail = false;
+    const rt = T.createBeatsRuntime({ info: {}, act: async (ctx) => { await ctx.beat(200); ctx.done(); await ctx.beat(999999); reachedTail = true; } });
+    const dp = rt.run();
+    await drive(rt, 300, 50);
+    const res = await dp;
+    eq(res.finished, true, 'beats: done() finishes the run without waiting out the 999999ms tail');
+    ok(reachedTail, 'beats: a beat requested after done() resolves at once (act unwinds cleanly)');
+  }
+
+  /* 11h — the declarative walk: each [data-tour-spot] is scrolled + lit in order */
+  {
+    const lit = [], scrolled = [];
+    const s1 = { id: 1 }, s2 = { id: 2 }, s3 = { id: 3 };
+    const rt = T.createBeatsRuntime({
+      info: {}, spots: [s1, s2, s3], spotDwell: 100,
+      spotlight: (elx, on) => { if (on) lit.push(elx.id); },
+      scrollTo: (elx) => scrolled.push(elx.id)
+    });
+    eq(rt.layer(), 'walk', 'beats: walk layer chosen for a spots-only page');
+    const dp = rt.run();
+    await drive(rt, 400, 25);
+    await dp;
+    eq(lit.join(','), '1,2,3', 'beats: the walk lit each spot in numeric order');
+    eq(scrolled.join(','), '1,2,3', 'beats: the walk scrolled to each spot in order');
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   12) the MACHINE ↔ beats integration (the perform seam) — an act runs a real
+       entry fn under the engine; the cap rescues a hung act; a soft-paused act
+       hands to a suspended dwell; leaving mid-act aborts it.
+   ══════════════════════════════════════════════════════════════════════════ */
+async function machineBeatsTests() {
+  /* 12a — an act stop stays in PERFORM until the beats resolve, calls its real
+     entry fn, then lands in DWELL; the high-water is recorded on ARRIVE first */
+  reset();
+  {
+    let fired = 0;
+    const mkBeats = (info) => T.createBeatsRuntime({ info, act: async (ctx) => { await ctx.beat(200); fired++; ctx.done(); } });
+    const { env, nav } = makeEnv({ tours: [TT], params: { tour: 'tt', stop: 1 }, pathname: '/rainbow/index.html', ws: WS, env: { makeBeats: mkBeats } });
+    const m = T.createDocentMachine(env);
+    m.start();
+    eq(m.phase(), 'perform', 'machine+beats: an act stop holds in PERFORM until the act resolves');
+    eq(localStorage.getItem('ws:best:tour:tt'), '1', 'machine+beats: high-water recorded on ARRIVE (before the act)');
+    await driveMachine(m, 400, 50);
+    eq(m.phase(), 'dwell', 'machine+beats: PERFORM → DWELL once the act finishes');
+    eq(fired, 1, 'machine+beats: the act ran its REAL entry function under the engine');
+    eq(nav.length, 0, 'machine+beats: no navigation yet (dwell has not expired)');
+  }
+
+  /* 12b — a hung act is capped and the walk proceeds to DWELL (safety net) */
+  reset();
+  {
+    const mkHang = (info) => T.createBeatsRuntime({ info: Object.assign({}, info, { cap: 600 }), act: async (ctx) => { try { await ctx.beat(999999); } catch (e) {} } });
+    const { env } = makeEnv({ tours: [TT], params: { tour: 'tt', stop: 1 }, pathname: '/rainbow/index.html', ws: WS, env: { makeBeats: mkHang } });
+    const m = T.createDocentMachine(env);
+    m.start();
+    await driveMachine(m, 800, 50);
+    eq(m.phase(), 'dwell', 'machine+beats: a hung act is capped, then the walk enters DWELL');
+  }
+
+  /* 12c — an act that soft-paused hands off to a SUSPENDED dwell (§4) */
+  reset();
+  {
+    const mkSoft = (info) => T.createBeatsRuntime({ info, act: async (ctx) => { ctx.softPause(); await ctx.beat(100); ctx.done(); } });
+    const { env, view } = makeEnv({ tours: [TT], params: { tour: 'tt', stop: 1 }, pathname: '/rainbow/index.html', ws: WS, env: { makeBeats: mkSoft } });
+    const m = T.createDocentMachine(env);
+    m.start();
+    await driveMachine(m, 300, 50);
+    eq(m.phase(), 'softpaused', 'machine+beats: a soft-paused act → dwell starts suspended (waiting)');
+    ok(view.calls('setSoftPaused').some((c) => c[1] === true), 'machine+beats: the waiting state shows after a soft-paused act');
+  }
+
+  /* 12d — leaving mid-act aborts it: the act's later beats never fire */
+  reset();
+  {
+    let leaked = 0;
+    const mkLeaky = (info) => T.createBeatsRuntime({ info, act: async (ctx) => { await ctx.beat(200); leaked++; await ctx.beat(200); leaked++; } });
+    const { env, leaves } = makeEnv({ tours: [TT], params: { tour: 'tt', stop: 1 }, pathname: '/rainbow/index.html', ws: WS, env: { makeBeats: mkLeaky } });
+    const m = T.createDocentMachine(env);
+    m.start();
+    await driveMachine(m, 100, 50);   /* before the first beat (200ms) completes */
+    m.leave();
+    eq(m.phase(), 'left', 'machine+beats: leave during an act → left');
+    await driveMachine(m, 600, 50);
+    eq(leaked, 0, 'machine+beats: leaving aborts the act — its beats never fire again');
+    eq(leaves.length, 1, 'machine+beats: leave stripped the params');
+  }
+}
+
+/* ── run the async suites, then report ────────────────────────────────────────── */
+function report() {
+  const total = pass + fail;
+  if (fail) { console.error('\ntour engine self-test: ' + pass + '/' + total + ' PASS — ' + fail + ' FAILED'); process.exit(1); }
+  console.log('tour engine self-test: ' + total + '/' + total + ' PASS');
+  process.exit(0);
+}
+beatsTests()
+  .then(machineBeatsTests)
+  .then(report)
+  .catch((e) => { console.error('\ntour engine self-test: async suite threw —', e && e.stack || e); process.exit(1); });
