@@ -69,6 +69,17 @@
        (The transport is silenced for the act's life — pluck is stubbed → visual-only crank —
         so the act plays no audio; silence is enforced by construction, not asserted here.)
 
+     the-errand — the Showing's `go` IMPULSE hook (WS2 T4.4; the-errand is NOT a tour stop —
+     it carries the ONE hook, no docent). App.go() is the GO lever's real click entry; the
+     page's OWN deterministic test-hook App._pump(n) advances the live fixed-timestep marble
+     run synchronously, so we read the honest result off the live world (App._debug().world):
+       ER1  __tourHooks.go present; __tourAct undefined (not a tour stop); bench at rest (BUILD).
+       ER2  __tourHooks.go() drives the REAL go() → BUILD→WATCH, then pumping the live sim to
+            the end reaches DONE with result.hit === true (the marble kept its promise —
+            reached the payoff), stepIndex climbed past 0.
+       ER3  a 2nd go() poke (IMPULSE is forward-fire, re-armable) restarts from DONE → WATCH
+            and delivers again (DONE, hit) — re-entrant, never wedges the bench.
+
    Run:  node tools/tour/acts.test.mjs   (exit 0 = all pass, 1 = a check failed,
          2 = harness could not run — agent-browser missing / server / forge error).
 
@@ -96,6 +107,7 @@ const URL_TD = `${BASE}/the-three-doors/index.html`;
 const URL_CO = `${BASE}/the-coin-that-lies/index.html`;
 const URL_RS = `${BASE}/the-rewind-shelf/index.html`;
 const URL_PB = `${BASE}/the-barrel-house/pin-barrel/index.html`;
+const URL_ER = `${BASE}/the-errand/index.html`;
 
 const AB_ENV = { ...process.env, AGENT_BROWSER_DEFAULT_TIMEOUT: '20000' };
 const CALL_TIMEOUT = 40000;
@@ -286,6 +298,40 @@ function pollBarrel(minPhi, maxMs) {
   while (!(st.phiAbs !== null && st.phiAbs >= minPhi) && Date.now() - start < maxMs) { ab('wait', '300'); st = barrelState(); }
   return st;
 }
+/* the-errand: the Showing's go IMPULSE hook (window.__tourHooks.go, T4.4). the-errand is
+   NOT a tour stop → __tourAct is undefined. App.mode() is BUILD / WATCH / DONE. */
+function errandSurfaces() {
+  return abEval(`(function(){
+    var h = window.__tourHooks; var A = window.App || {};
+    return JSON.stringify({
+      act: typeof window.__tourAct,
+      hooks: typeof window.__tourHooks,
+      go: (h && typeof h.go) || 'absent',
+      mode: (typeof A.mode === 'function') ? A.mode() : null
+    });
+  })()`);
+}
+/* poke the go hook (the REAL go() the GO lever fires), then drive the live fixed-timestep
+   marble run to its end with the page's OWN deterministic test-hook App._pump(n) — pumping
+   in chunks until the run leaves WATCH (lands = DONE) or a hard cap — and read the honest
+   result off the live world. */
+function pokeGoRun() {
+  return abEval(`(function(){
+    var A = window.App, h = window.__tourHooks;
+    function mode(){ return (typeof A.mode==='function') ? A.mode() : null; }
+    var m0 = mode();
+    var ret = h.go();                                /* IMPULSE poke -> real go() */
+    var mWatch = mode();
+    var pumped = 0, MAXP = 4000;
+    while (pumped < MAXP && mode() === 'WATCH') { A._pump(25); pumped += 25; }
+    var w = (typeof A._debug==='function') ? A._debug().world : null;
+    return JSON.stringify({
+      m0: m0, ret: ret, mWatch: mWatch, mEnd: mode(),
+      hit: (w && w.result) ? !!w.result.hit : null,
+      stepIndex: w ? w.stepIndex : null, pumped: pumped
+    });
+  })()`);
+}
 
 async function main() {
   console.log('acts.test — THE GRAND TOUR ACTS (§4): the LIVE RENDERED PAGE, headless, REAL entry functions\n');
@@ -298,14 +344,16 @@ async function main() {
   // 1. FORGE the four act pages (test the built artifact, not the source).
   const SRCS = ['cavern/double-slit/index.src.html', 'benford-mill/index.src.html',
                 'the-three-doors/index.src.html', 'the-coin-that-lies/index.src.html',
-                'the-rewind-shelf/index.src.html', 'the-barrel-house/pin-barrel/index.src.html'];
+                'the-rewind-shelf/index.src.html', 'the-barrel-house/pin-barrel/index.src.html',
+                'the-errand/index.src.html'];
   for (const src of SRCS) {
     const f = sh('node', ['tools/forge/forge.mjs', src]);
     if (f.status !== 0) { console.error('  ⚠ forge failed for ' + src + ':\n' + f.stderr); process.exit(2); }
   }
   for (const p of ['cavern/double-slit/index.html', 'benford-mill/index.html',
                    'the-three-doors/index.html', 'the-coin-that-lies/index.html',
-                   'the-rewind-shelf/index.html', 'the-barrel-house/pin-barrel/index.html']) {
+                   'the-rewind-shelf/index.html', 'the-barrel-house/pin-barrel/index.html',
+                   'the-errand/index.html']) {
     if (!existsSync(path.join(ROOT, p))) { console.error('  ⚠ a forged page is missing: ' + p); process.exit(2); }
   }
 
@@ -493,8 +541,28 @@ async function main() {
       c1.before !== null && Math.abs(c1.before) < 0.6 && Math.abs(c1.ret - 30) < 0.001 && Math.abs(c2.ret - 30) < 0.001,
       'crank(30): φ ' + c1.before + ' → ' + c1.ret + ' · repeat → ' + c2.ret + ' (no further move)');
 
+    // ═══ THE ERRAND — the Showing's go IMPULSE hook pulls the GO lever live (T4.4) ═══
+    console.log('\nthe-errand — the Showing go hook drives the real GO lever; the live marble run reaches the payoff:');
+    ab('open', URL_ER); ab('wait', '--load', 'networkidle'); ab('wait', '1200');
+
+    const ers = errandSurfaces();
+    check('ER1 go hook present; __tourAct undefined (not a tour stop); bench at rest (BUILD)',
+      ers.go === 'function' && ers.act === 'undefined' && ers.hooks === 'object' && ers.mode === 'BUILD',
+      '__tourHooks.go=' + ers.go + ' · __tourAct=' + ers.act + ' · mode=' + ers.mode);
+
+    const er1 = pokeGoRun();
+    check('ER2 go() drives the real lever → BUILD→WATCH, live run lands the payoff (hit)',
+      er1.m0 === 'BUILD' && er1.ret === true && er1.mWatch === 'WATCH' && er1.mEnd === 'DONE' &&
+      er1.hit === true && er1.stepIndex > 0,
+      'mode ' + er1.m0 + '→' + er1.mWatch + '→' + er1.mEnd + ' · hit=' + er1.hit + ' · steps=' + er1.stepIndex);
+
+    const er2 = pokeGoRun();
+    check('ER3 a 2nd go() poke re-runs (IMPULSE forward-fire, re-armable) → WATCH then DONE+hit',
+      er2.mWatch === 'WATCH' && er2.mEnd === 'DONE' && er2.hit === true && er2.stepIndex > 0,
+      'mode ' + er2.m0 + '→' + er2.mWatch + '→' + er2.mEnd + ' · hit=' + er2.hit + ' (re-entrant, delivers again)');
+
     console.log('\n' + (fail === 0 ? '✓ acts.test: all ' : '✗ acts.test: ') +
-      (fail === 0 ? '24/24 pass' : fail + ' of 24 checks FAILED'));
+      (fail === 0 ? '27/27 pass' : fail + ' of 27 checks FAILED'));
   } finally {
     try { ab('close'); } catch (_) {}
     try { server.kill('SIGKILL'); } catch (_) {}
