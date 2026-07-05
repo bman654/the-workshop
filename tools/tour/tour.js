@@ -213,6 +213,50 @@
     return null;
   }
 
+  /* ── the lit-thread ANCHOR resolution (§6, BINDING) ───────────────────────────
+     Map a thread's stops onto the front-door map's anchor sequence. Map POIs are
+     ROOMS; stops are mostly EXHIBITS — so:
+       • a waypoint stop (`at:`) → the named district's STRUCTURE;
+       • an exhibit stop (`room:`) → that room's POI if the room sits on a PARENT
+         plate (data.roomPlate[id] not 'child:…'), else its district's STRUCTURE
+         (child-layer rooms pin to their parent district — lit-path degradation);
+       • an EXTRA stop → its authored anchor district's STRUCTURE (stop.anchor
+         overrides the EXTRA_STOPS entry).
+     CONSECUTIVE same-anchor stops COLLAPSE into one anchor with a count (the ×n
+     bead; never a numeral — §3's de-quantified surface). A stop that resolves to
+     no anchor contributes no roundel (degrade, never throw). Pure: the page maps
+     the returned {kind,id} descriptors to live PLACES/Layout coordinates.
+     data = { roomPlate:{roomId:plateId}, roomDistrict:{roomId:districtId},
+              extraStops:{href:{anchor}} } */
+  function resolveThreadAnchors(stops, data) {
+    data = data || {};
+    var roomPlate = data.roomPlate || {};
+    var roomDistrict = data.roomDistrict || {};
+    var extraStops = data.extraStops || {};
+    var out = [];
+    var list = Array.isArray(stops) ? stops : [];
+    for (var i = 0; i < list.length; i++) {
+      var s = list[i]; if (!s) continue;
+      var a = null;
+      if (s.at) {
+        a = { kind: 'struct', id: s.at };
+      } else if (s.room) {
+        var pid = roomPlate[s.room];
+        if (pid && String(pid).indexOf('child:') !== 0) a = { kind: 'poi', id: s.room };
+        else if (roomDistrict[s.room]) a = { kind: 'struct', id: roomDistrict[s.room] };
+      } else {
+        var ex = extraStops[pathOf(s.href || '')] || null;
+        var anch = s.anchor || (ex && ex.anchor) || null;
+        if (anch) a = { kind: 'struct', id: anch };
+      }
+      if (!a) continue;
+      var last = out.length ? out[out.length - 1] : null;
+      if (last && last.kind === a.kind && last.id === a.id) { last.count++; continue; }
+      out.push({ kind: a.kind, id: a.id, count: 1 });
+    }
+    return out;
+  }
+
   /* ── ws: write points (the ONLY two, §7) ─────────────────────────────────── */
   function recordArrive(ws, tourId, n) { try { if (ws && ws.best) ws.best('tour:' + tourId, n); } catch (e) {} }
   function recordFinale(ws, tourId) { try { if (ws && ws.flag) ws.flag('tour:' + tourId + ':done'); } catch (e) {} }
@@ -570,6 +614,7 @@
     advanceTarget: advanceTarget, backTarget: backTarget, frontDoorTarget: frontDoorTarget,
     beginTarget: beginTarget, stopTarget: stopTarget,
     resumeState: resumeState, drawerRows: drawerRows, startPlaqueInfo: startPlaqueInfo,
+    resolveThreadAnchors: resolveThreadAnchors,
     recordArrive: recordArrive, recordFinale: recordFinale,
     createDwellClock: createDwellClock, createBeatsRuntime: createBeatsRuntime,
     createDocentMachine: createDocentMachine

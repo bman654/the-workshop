@@ -580,6 +580,32 @@
   /* down in a child layer the centred depth ribbon claims the top band; the parent-map
      hint is misleading there, so it retires (set by the platewalk's showRibbon). */
   body.in-child .hint{ display:none; }
+  /* …and WHILE TOURING the docent leads, so the free-explore hint retires the same way
+     (WS2 §6 — the same misleading-hint precedent; set/cleared by the overture adapter). */
+  body.gt-touring .hint{ display:none; }
+
+  /* ── THE GRAND TOUR's LIT THREAD (WS2 §6) — the overture's additive SVG overlay:
+     a quiet brass polyline through the thread's DISTINCT anchors, one roundel per
+     anchor (NO numerals — a ×n bead only where an anchor hosts n>1 stops). Drawn
+     into #viewport ONLY in tour mode by the __tourAct adapter, removed with the
+     docent; the resting map never carries it (legibility gates see it off). Line
+     weights ride non-scaling-stroke at the house road weight (.survey-path.drive);
+     roundel radii are world units so they seat into the plan at every zoom. */
+  #tour-thread{ pointer-events:none; }
+  #tour-thread .tt-glow{ fill:none; stroke:var(--brass); stroke-width:6; opacity:.12;
+    stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
+  #tour-thread .tt-line{ fill:none; stroke:var(--brass-bright); stroke-width:1.7; opacity:.55;
+    stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
+  #tour-thread .tt-roundel{ fill:rgba(201,162,74,.13); stroke:var(--brass); stroke-width:1.6;
+    vector-effect:non-scaling-stroke; opacity:0; transition:opacity .6s ease .35s;
+    filter:drop-shadow(0 0 4px rgba(201,162,74,.35)); }
+  #tour-thread.tt-in .tt-roundel{ opacity:1; }
+  #tour-thread .tt-bead{ font:600 13px/1 var(--mono); letter-spacing:.08em; fill:var(--brass);
+    opacity:0; transition:opacity .6s ease .55s; }
+  #tour-thread.tt-in .tt-bead{ opacity:.85; }
+  #tour-thread.tt-still .tt-roundel, #tour-thread.tt-still .tt-bead{ transition:none; }
+  @media (prefers-reduced-motion:reduce){
+    #tour-thread .tt-roundel, #tour-thread .tt-bead{ transition:none; } }
 
   /* THE DOOR'S OWN page-level self-test pill — the estate's clickable chip idiom
      (green/red RESERVED for the verdict; click to re-run). Seated top-left, well
@@ -1219,6 +1245,221 @@
    inlined script and silently kills it. See tools/tour/README.md + DESIGN §6. */
 <!-- forge:include tools/tour/tours.js -->
 <!-- forge:include tools/tour/tour.js -->
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   §6 THE FRONT DOOR AS AN ACTOR — the Grand Tour OVERTURE (WS2 T1.2).
+   The index implements the docent's PAGE CONTRACT (window.__tourAct, §4) so the
+   coupling runs page→engine only: on a waypoint stop the act draws the thread's
+   LIT PATH over the plan (distinct anchors → quiet brass roundels, ×n beads,
+   never a numeral), then eases the camera to the stop's district frame, then
+   hands back to the docent's dwell. It drives ONLY public surfaces (recon A
+   §§1–2): window.__panCamera.frameTo + the pure Layout.plates(...) frames — no
+   semantic plate-enter (LOD pin / dim / loupe / #whereami stay the platewalk's).
+   The visitor outranks the docent: a BY-HAND camera move during the overture
+   fires OUR onManual (installed only while the act runs, the platewalk's handler
+   restored after) → ctx.softPause() — the ease is abandoned and the card waits.
+   Reduced motion: the path appears without the draw-on and the camera JUMPS.
+   The lit thread lives only as long as the docent card: a body observer sweeps
+   the overlay + the hint-suppression class when the card dismounts (leave). */
+(function tourOverture(){
+  "use strict";
+  var THREAD_ID = "tour-thread";
+  var mo = null;
+
+  // the act's LIVENESS HANDLE (the __fairgroundLiveness idiom): a tiny read-only
+  // state mirror so the live-DOM gate can assert the choreography actually ran
+  // (stage walk, anchor count, install/restore) without reaching into closures.
+  var OV = { stage:"idle", anchors:0, installed:false, restored:false, interrupted:false, flew:false };
+  window.__tourOverture = OV;
+
+  // tour mode is a costume the door wears only while the docent card is up —
+  // when #tour-docent leaves the DOM (✕ leave / wander-from-here), the lit
+  // thread and the hint suppression go with it.
+  function armSweeper(){
+    if(mo || !window.MutationObserver || !document.body) return;
+    mo = new MutationObserver(function(){
+      if(document.getElementById("tour-docent")) return;
+      var g = document.getElementById(THREAD_ID);
+      if(g && g.parentNode) g.parentNode.removeChild(g);
+      document.body.classList.remove("gt-touring");
+    });
+    mo.observe(document.body, { childList:true });
+  }
+
+  // ── the §6 anchor sequence, mapped to live world coordinates ──
+  // GrandTour.resolveThreadAnchors (pure, twinned) decides WHAT anchors the
+  // thread has; this maps {kind,id} onto the solved PLACES/Layout geometry:
+  // poi → the room's footprint centre; struct → the district structure's drawn
+  // centre (structDisplayBox), else the district hull centre (the fairground
+  // has no structure — it rides its gate), else nothing (degrade, no roundel).
+  function anchorPoints(tour){
+    var pts = [];
+    try{
+      if(typeof Layout === "undefined" || typeof PLACES === "undefined" || !window.GrandTour) return pts;
+      var P = Layout.plates(PLACES.filter(function(p){ return !p.locked; }));
+      var roomDistrict = {}, placeBy = {};
+      PLACES.forEach(function(p){ roomDistrict[p.id] = p.district; placeBy[p.id] = p; });
+      var anchors = GrandTour.resolveThreadAnchors(tour.stops, {
+        roomPlate: P.roomPlate, roomDistrict: roomDistrict, extraStops: (window.EXTRA_STOPS || {})
+      });
+      var structBy = {}, rectBy = {};
+      (LAYOUT.structures || []).forEach(function(s){ structBy[s.district] = s; });
+      (LAYOUT.districtRects || []).forEach(function(d){ rectBy[d.district] = d; });
+      var DC = window.DoorClaims || null;
+      anchors.forEach(function(a){
+        var x = null, y = null;
+        if(a.kind === "poi"){
+          var p = placeBy[a.id];
+          if(p && typeof p.x === "number"){
+            var c = (DC && DC.footCentre) ? DC.footCentre(p)
+                  : (p.footprint === "tower" ? { cx:p.x, cy:p.y } : { cx:p.x + (p.w||0)/2, cy:p.y + (p.h||0)/2 });
+            x = c.cx; y = c.cy;
+          }
+        }
+        if(x == null){
+          var did = (a.kind === "struct") ? a.id : roomDistrict[a.id];
+          var s = did && structBy[did];
+          if(s){
+            var b = (DC && DC.structDisplayBox) ? DC.structDisplayBox(s.box)
+                  : { cx:s.box.x + s.box.w/2, cy:s.box.y + s.box.h/2 };
+            x = b.cx; y = b.cy;
+          } else if(did && rectBy[did]){
+            var dr = rectBy[did]; x = dr.x + dr.w/2; y = dr.y + dr.h/2;
+          }
+        }
+        if(x != null && y != null) pts.push({ x:x, y:y, count:a.count });
+      });
+    }catch(e){ /* a lit-path hiccup must never stall the docent — dwell still runs */ }
+    return pts;
+  }
+
+  // ── draw the lit thread (idempotent — a bfcache re-arrival redraws it) ──
+  function drawThread(tour, reduced){
+    var vp = document.getElementById("viewport");
+    if(!vp) return 0;
+    var old = document.getElementById(THREAD_ID);
+    if(old && old.parentNode) old.parentNode.removeChild(old);
+    var pts = anchorPoints(tour);
+    if(!pts.length) return 0;
+    var NS = "http://www.w3.org/2000/svg";
+    var g = document.createElementNS(NS, "g");
+    g.id = THREAD_ID; g.setAttribute("aria-hidden", "true");
+    if(pts.length > 1){
+      var d = "M" + pts.map(function(p){ return p.x.toFixed(1) + " " + p.y.toFixed(1); }).join("L");
+      var glow = document.createElementNS(NS, "path");
+      glow.setAttribute("d", d); glow.setAttribute("class", "tt-glow");
+      var line = document.createElementNS(NS, "path");
+      line.setAttribute("d", d); line.setAttribute("class", "tt-line");
+      g.appendChild(glow); g.appendChild(line);
+    }
+    pts.forEach(function(p){
+      var c = document.createElementNS(NS, "circle");
+      c.setAttribute("cx", p.x.toFixed(1)); c.setAttribute("cy", p.y.toFixed(1));
+      c.setAttribute("r", "11"); c.setAttribute("class", "tt-roundel");
+      g.appendChild(c);
+      if(p.count > 1){
+        var t = document.createElementNS(NS, "text");
+        t.setAttribute("x", (p.x + 16).toFixed(1)); t.setAttribute("y", (p.y - 13).toFixed(1));
+        t.setAttribute("class", "tt-bead");
+        t.textContent = "×" + p.count;    // a COUNT of stops sharing the place — never an order
+        g.appendChild(t);
+      }
+    });
+    vp.appendChild(g);
+    if(reduced){
+      g.classList.add("tt-in", "tt-still");    // the path simply appears (§6 reduced)
+    } else {
+      // draw-on: each path eases from fully-hidden dash to drawn (roundels/beads
+      // fade in on the CSS delays once .tt-in lands).
+      Array.prototype.forEach.call(g.querySelectorAll("path"), function(p){
+        try{
+          var L = p.getTotalLength();
+          p.style.strokeDasharray = L + " " + L;
+          p.style.strokeDashoffset = String(L);
+          p.getBoundingClientRect();           // flush so the transition sees the start state
+          p.style.transition = "stroke-dashoffset 1100ms ease";
+          p.style.strokeDashoffset = "0";
+        }catch(e){}
+      });
+      g.classList.add("tt-in");
+    }
+    return pts.length;
+  }
+
+  // ── the act (§4 contract; §6 choreography; Survey Reveal beat skeleton) ──
+  window.__tourAct = function(ctx){
+    var reduced = !!ctx.reduced;
+    var vp = document.getElementById("viewport");
+    var interrupted = false, pc = null, prevManual = null, installed = false;
+    OV.stage = "start"; OV.interrupted = false; OV.installed = false; OV.restored = false; OV.flew = false;
+    function onManual(){ interrupted = true; OV.interrupted = true; try{ ctx.softPause(); }catch(e){} }
+    onManual.__tourOverture = true;            // lets the gate prove install/restore
+    function cleanup(){
+      if(vp) vp.classList.remove("walking");
+      if(installed && pc && pc.onManual === onManual){ pc.onManual = prevManual; installed = false; OV.restored = true; }
+      OV.stage = "done";
+    }
+    // the visitor outranks the docent (§6): OUR onManual rides the camera for the
+    // act's whole life, the platewalk's handler restored in cleanup(). ORDER
+    // MATTERS: the platewalk's double-rAF run() SETS onManual — installing ours
+    // before that gets silently stomped. So we install only once the platewalk's
+    // handler is live (onManual is a function) — or, if the platewalk degraded
+    // (its try/catch left no handler), after the poll has clearly outwaited it.
+    var tries = 0;
+    function seeCamera(){
+      if(installed || !window.__panCamera) return;
+      if(typeof window.__panCamera.onManual !== "function" && tries < 40) return;
+      pc = window.__panCamera; prevManual = pc.onManual; pc.onManual = onManual; installed = true;
+      OV.installed = true;
+    }
+    var run = Promise.resolve().then(function(){
+      if(document.body){ document.body.classList.add("gt-touring"); armSweeper(); }
+      // wait for the platewalk's double-rAF world: __panCamera + the drawn
+      // structures + the platewalk's own onManual land a few frames after
+      // DOMContentLoaded (recon A §10-8); poll on the act's own pause-aware clock.
+      function ready(){
+        return !!(installed && typeof Layout !== "undefined" &&
+                  document.querySelector("#structures .district-rep"));
+      }
+      function awaitWorld(){
+        seeCamera();
+        if(ready() || tries++ >= 80 || interrupted) return Promise.resolve();
+        return ctx.beat(50).then(awaitWorld);
+      }
+      return awaitWorld();
+    }).then(function(){
+      var tour = (window.TOURS || []).filter(function(t){ return t && t.id === ctx.tourId; })[0];
+      if(!tour) return;
+      var stop = tour.stops[ctx.stopIndex] || {};
+      seeCamera();
+      OV.stage = "draw";
+      OV.anchors = drawThread(tour, reduced);
+      var seq = reduced ? Promise.resolve() : ctx.beat(1200);
+      return seq.then(function(){
+        if(interrupted || ctx.signal.aborted || !pc || typeof pc.frameTo !== "function" || !stop.at) return;
+        var frame = null;
+        try{
+          var P = Layout.plates(PLACES.filter(function(p){ return !p.locked; }));
+          frame = P.frame && P.frame[stop.at];
+        }catch(e){}
+        if(!frame) return;
+        OV.stage = "fly"; OV.flew = true;
+        if(reduced){ pc.frameTo(frame); return; }  // jump, not ease (§6)
+        if(vp) vp.classList.add("walking");        // the platewalk's own ease grammar
+        pc.frameTo(frame);
+        return ctx.beat(800).then(function(){
+          if(vp) vp.classList.remove("walking");
+          if(!interrupted && !ctx.signal.aborted) return ctx.beat(400);  // settle
+        });
+      });
+    });
+    // never reject into the engine (run() tolerates it, but keep our own house
+    // tidy): an AbortError just unwinds — the ease class + onManual are restored.
+    return run.then(function(){ cleanup(); }, function(){ cleanup(); });
+  };
+})();
 </script>
 
 <script>

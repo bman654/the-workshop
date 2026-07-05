@@ -56,6 +56,15 @@
            is a keyboard button that a REAL Enter opens into the grouped, keyboard-operable SKY
            INDEX; and the unseen hidden star (starlight-bend) stays HINT-ONLY in the index (its
            name never leaks before its ws:seen crumb — the Register's lock-parity, in the sky).
+     D10 — THE GRAND TOUR OVERTURE (WS2 §6, T1.2): with ?tour=<fixture>&stop=0 the front door
+           ACTS — __tourAct draws the LIT THREAD (the fixture's 3 distinct-anchor roundels, one
+           ×2 bead, never a numeral), flies the REAL __panCamera.frameTo to the waypoint
+           district's Layout frame, retires the hint, and restores the platewalk's onManual;
+           the dwell then AUTO-ADVANCES to stop 1 (D10b). A REAL mid-overture wheel fires the
+           adapter's own onManual → ctx.softPause(): the card WAITS (D10c). A plain load stays
+           inert — no overlay, no docent card, hint shown (D10d) — and the reduced-motion
+           degrade is driven through the REAL entry function (__tourAct with a reduced ctx,
+           the payoff-liveness rule): the thread appears still and the camera JUMPS (D10e).
 
    Run:  node tools/layout/gate-dom.test.mjs   (exit 0 = all pass, exit 1 = a check failed,
          exit 2 = harness could not run — agent-browser missing / server / forge error).
@@ -441,6 +450,124 @@ async function main() {
       hidden.found === true && hidden.hintOnly === true && hidden.leaksName === false,
       '[found=' + hidden.found + ', hintOnly=' + hidden.hintOnly + ', leaksName=' + hidden.leaksName + ', text="' + hidden.text + '"]');
 
+    // ════════════════════════════════════════════════════════════════════════════
+    //  D10 — THE GRAND TOUR OVERTURE (WS2 §6, T1.2). The front door implements the docent's
+    //  page contract: ?tour=fixture-a&stop=0 runs __tourAct — lit thread + camera fly + advance.
+    //  The act mirrors its liveness into window.__tourOverture (the __fairgroundLiveness idiom).
+    // ════════════════════════════════════════════════════════════════════════════
+
+    // D10a — the act draws the DISTINCT-ANCHOR thread and flies the REAL camera to the
+    // waypoint district's frame. fixture-a resolves to exactly 3 distinct anchors (its two
+    // hall-of-mirrors stops collapse into one ×2 roundel — never a numeral), and the stop-0
+    // waypoint is at:'opticks', so after the act the applied transform must EQUAL the pure
+    // Layout.plates(...) frame for opticks (frameTo is the only path that can set it — it
+    // bypasses K_MAX; a manual zoom cannot reach a plate frame exactly).
+    ab('open', URL + '?tour=fixture-a&stop=0');
+    ab('wait', '4500');   // world-await + draw beat + fly + settle comfortably done
+    const ov1 = abEval(`(function(){
+      var g=document.getElementById('tour-thread');
+      var vp=document.getElementById('viewport');
+      var pc=window.__panCamera;
+      var frame=null, camAtFrame=false;
+      try{
+        frame = Layout.plates(PLACES.filter(function(p){ return !p.locked; })).frame['opticks'];
+        camAtFrame = !!(frame && pc && Math.abs(pc.k - frame.k) < 1e-9 &&
+          vp.getAttribute('transform') === 'translate(' + frame.tx.toFixed(2) + ' ' + frame.ty.toFixed(2) + ') scale(' + frame.k.toFixed(4) + ')');
+      }catch(e){}
+      var beads = g ? Array.prototype.map.call(g.querySelectorAll('.tt-bead'), function(t){ return t.textContent; }) : [];
+      var digits = g ? Array.prototype.some.call(g.querySelectorAll('text'), function(t){ return /^[0-9]+$/.test((t.textContent||'').trim()); }) : false;
+      return JSON.stringify({
+        ov: window.__tourOverture || null,
+        card: !!document.getElementById('tour-docent'),
+        roundels: g ? g.querySelectorAll('.tt-roundel').length : 0,
+        beads: beads, bareNumerals: digits,
+        hintShown: (function(){ var h=document.querySelector('.hint'); return h ? getComputedStyle(h).display !== 'none' : null; })(),
+        camAtFrame: camAtFrame,
+        platewalkManualBack: !!(pc && typeof pc.onManual === 'function' && !pc.onManual.__tourOverture) });
+    })()`);
+    check('D10a — the overture DRAWS the lit thread (3 distinct anchors, one ×2 bead, no bare numerals), flies the REAL frameTo to the opticks Layout frame, retires the hint, and hands onManual back to the platewalk',
+      ov1.ov && ov1.ov.stage === 'done' && ov1.ov.installed === true && ov1.ov.restored === true && ov1.ov.flew === true &&
+      ov1.card === true && ov1.roundels === 3 && ov1.beads.length === 1 && /2/.test(ov1.beads[0] || '') && ov1.bareNumerals === false &&
+      ov1.hintShown === false && ov1.camAtFrame === true && ov1.platewalkManualBack === true,
+      '[stage=' + (ov1.ov && ov1.ov.stage) + ', roundels=' + ov1.roundels + ', beads=' + JSON.stringify(ov1.beads) +
+      ', camAtFrame=' + ov1.camAtFrame + ', hintShown=' + ov1.hintShown + ', restored=' + (ov1.ov && ov1.ov.restored) + ']');
+
+    // D10b — the dwell then AUTO-ADVANCES: the same load walks itself to stop 1 (the engine's
+    // countdown navigation — rainbow/index.html?tour=fixture-a&stop=1). Poll up to ~20s
+    // (stop 0 dwells 12s after the ~3s act).
+    let advanced = null;
+    for (let i = 0; i < 10; i++) {
+      ab('wait', '2000');
+      const u = abEval(`JSON.stringify({ href: location.href })`);
+      if (u && /rainbow\/index\.html\?tour=fixture-a&stop=1$/.test(u.href || '')) { advanced = u.href; break; }
+    }
+    check('D10b — the overture stop AUTO-ADVANCES to stop 1 (rainbow/index.html?tour=fixture-a&stop=1) when its dwell expires',
+      advanced !== null, '[landed=' + advanced + ']');
+
+    // D10c — the VISITOR OUTRANKS THE DOCENT: a REAL CDP wheel over the map mid-overture fires
+    // the adapter's own onManual → ctx.softPause(); the following dwell starts SUSPENDED and the
+    // card shows the waiting affordance. (The wheel must land inside the act's ~2.6s window; the
+    // 1200ms draw beat exists to give a hand-on-the-wheel exactly this room.)
+    ab('open', URL + '?tour=fixture-a&stop=0');
+    ab('wait', '600');
+    ab('mouse', 'move', '640', '250');
+    ab('mouse', 'wheel', '240');
+    ab('wait', '3200');   // let the interrupted act settle into the suspended dwell
+    const ov2 = abEval(`(function(){
+      var walk=document.querySelector('#tour-docent .td-walk');
+      var lbl=document.querySelector('#tour-docent .td-walk-label');
+      return JSON.stringify({
+        ov: window.__tourOverture || null,
+        waiting: !!(walk && walk.classList.contains('waiting')),
+        label: lbl ? lbl.textContent : null,
+        thread: !!document.getElementById('tour-thread') });
+    })()`);
+    check('D10c — a REAL mid-overture wheel SOFT-PAUSES: the adapter\'s onManual fired (interrupted), the platewalk handler was restored, and the card waits',
+      ov2.ov && ov2.ov.interrupted === true && ov2.ov.restored === true && ov2.waiting === true && ov2.thread === true,
+      '[interrupted=' + (ov2.ov && ov2.ov.interrupted) + ', waiting=' + ov2.waiting + ', label="' + ov2.label + '"]');
+
+    // D10d — a PLAIN load stays inert: the overlay is rendered ONLY in tour mode (§6) — no
+    // thread, no docent card, no gt-touring costume, the hint back on duty.
+    ab('open', URL);
+    ab('wait', '1500');
+    const plain = abEval(`(function(){
+      return JSON.stringify({
+        thread: !!document.getElementById('tour-thread'),
+        card: !!document.getElementById('tour-docent'),
+        touring: document.body.classList.contains('gt-touring'),
+        stage: window.__tourOverture ? window.__tourOverture.stage : null,
+        hintShown: (function(){ var h=document.querySelector('.hint'); return h ? getComputedStyle(h).display !== 'none' : null; })() });
+    })()`);
+    check('D10d — a plain load is INERT: no lit thread, no docent card, no touring costume, hint shown (the overlay exists only in tour mode)',
+      plain.thread === false && plain.card === false && plain.touring === false && plain.stage === 'idle' && plain.hintShown === true,
+      '[thread=' + plain.thread + ', card=' + plain.card + ', stage=' + plain.stage + ', hintShown=' + plain.hintShown + ']');
+
+    // D10e — REDUCED-MOTION degrade, driven through the REAL entry function (the payoff-liveness
+    // rule: call the page's real __tourAct, never synthesize events): with a reduced ctx the
+    // thread appears WITHOUT the draw-on (.tt-still) and the camera JUMPS to the frame with no
+    // ease class. (CDP media emulation for prefers-reduced-motion proved unreliable in this CLI,
+    // so the degrade branch is exercised at the contract seam — the same surface the engine uses.)
+    const red = abEval(`(function(){
+      var ctx={ tourId:'fixture-a', stopIndex:0, reduced:true, signal:{aborted:false},
+        beat:function(){ return Promise.resolve(); }, spotlight:function(){}, softPause:function(){}, done:function(){} };
+      return window.__tourAct(ctx).then(function(){
+        var g=document.getElementById('tour-thread');
+        var out={
+          still: !!(g && g.classList.contains('tt-still')),
+          roundels: g ? g.querySelectorAll('.tt-roundel').length : 0,
+          k: window.__panCamera.k,
+          walking: document.getElementById('viewport').classList.contains('walking'),
+          restored: !!(window.__tourOverture && window.__tourOverture.restored) };
+        if(g && g.parentNode) g.parentNode.removeChild(g);        /* tidy the harness call away */
+        document.body.classList.remove('gt-touring');
+        window.__panCamera.recentre();
+        return JSON.stringify(out);
+      });
+    })()`);
+    check('D10e — the REAL __tourAct under a reduced ctx DEGRADES: the thread appears still (no draw-on), the camera JUMPS to the frame (k=frame.k, no .walking ease), onManual restored',
+      red.still === true && red.roundels === 3 && typeof red.k === 'number' && red.k > 1 && red.walking === false && red.restored === true,
+      '[still=' + red.still + ', roundels=' + red.roundels + ', k=' + red.k + ', walking=' + red.walking + ']');
+
   } finally {
     // 4. TEARDOWN — close exactly OUR session + kill exactly OUR server child (never a broad pkill;
     //    this laptop also runs the maker's own servers — CLEANUP GUARDRAIL).
@@ -450,7 +577,7 @@ async function main() {
 
   console.log('');
   if (fail === 0) {
-    console.log('PASS — the estate platewalk is REAL in the live DOM: the estate tier rests on the structures, a REAL click / keyboard Enter on a district structure descends to its plate, the fairground gate catches a REAL negative-space click, Esc + the depth ribbon + the ⌂ home button all ascend, the LOD crossfade strands no orphan labels at either tier, the keyboard walk reaches every plate, and (§3.3) a REAL hover reveals the star card while the tally-button keyboard-opens the sky index with the hidden-star name-lock intact — none of which the pure-Node twins can see.');
+    console.log('PASS — the estate platewalk is REAL in the live DOM: the estate tier rests on the structures, a REAL click / keyboard Enter on a district structure descends to its plate, the fairground gate catches a REAL negative-space click, Esc + the depth ribbon + the ⌂ home button all ascend, the LOD crossfade strands no orphan labels at either tier, the keyboard walk reaches every plate, (§3.3) a REAL hover reveals the star card while the tally-button keyboard-opens the sky index with the hidden-star name-lock intact, and (WS2 §6) the Grand Tour overture draws its distinct-anchor lit thread, flies the real camera, auto-advances, yields to a real hand on the wheel, and degrades under reduced motion — none of which the pure-Node twins can see.');
     process.exit(exitCode);
   } else {
     console.log('FAIL — ' + fail + ' live-DOM check(s) failed: the platewalk is NOT wired as the rendered page claims. The headless twins cannot see this — that is why this gate exists.');

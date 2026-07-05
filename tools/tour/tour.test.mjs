@@ -400,6 +400,62 @@ FIXTURES.forEach((t) => {
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
+   10b) resolveThreadAnchors — the §6 BINDING lit-thread anchor algorithm (T1.2).
+        Exhibit → room POI when the room rides a PARENT plate, else its district
+        structure; waypoint → district structure; EXTRA → authored anchor;
+        CONSECUTIVE same-anchor stops collapse into one ×n anchor.
+   ══════════════════════════════════════════════════════════════════════════ */
+{
+  const DATA = {
+    roomPlate: { 'hall-of-mirrors': 'opticks', 'physics-lab': 'cavern', 'daedalus': 'child:fairground', 'workbench': 'outbuilding' },
+    roomDistrict: { 'hall-of-mirrors': 'opticks', 'physics-lab': 'cavern', 'daedalus': 'fairground', 'workbench': 'outbuilding' },
+    extraStops: { 'colophon.html': { anchor: 'manor' } }
+  };
+  const seq = (stops) => T.resolveThreadAnchors(stops, DATA).map((a) => a.kind + ':' + a.id + (a.count > 1 ? 'x' + a.count : '')).join(' ');
+
+  /* the fixture-a shape: waypoint → two same-room exhibits → another exhibit */
+  eq(seq([{ href: 'index.html', at: 'opticks' },
+          { href: 'rainbow/index.html', room: 'hall-of-mirrors' },
+          { href: 'iridescence/index.html', room: 'hall-of-mirrors' },
+          { href: 'cavern/double-slit/index.html', room: 'physics-lab' }]),
+     'struct:opticks poi:hall-of-mirrorsx2 poi:physics-lab',
+     'anchors: waypoint→struct · parent-plate rooms→POI · consecutive same-room stops collapse into one ×2 anchor');
+
+  /* a CHILD-plate room pins to its parent district structure (degradation, §6) */
+  eq(seq([{ href: 'daedalus/index.html', room: 'daedalus' }]), 'struct:fairground',
+     'anchors: a child-layer room (no POI on the parent plate) pins to its district structure');
+
+  /* EXTRA stop: anchor from the EXTRA_STOPS entry; stop.anchor overrides it */
+  eq(seq([{ href: 'colophon.html' }]), 'struct:manor', 'anchors: an EXTRA stop takes its authored EXTRA_STOPS anchor');
+  eq(seq([{ href: 'colophon.html', anchor: 'outbuilding' }]), 'struct:outbuilding', 'anchors: an explicit stop.anchor overrides the EXTRA_STOPS entry');
+
+  /* non-consecutive repeats do NOT collapse (the thread honestly crosses back) */
+  eq(seq([{ href: 'rainbow/index.html', room: 'hall-of-mirrors' },
+          { href: 'cavern/double-slit/index.html', room: 'physics-lab' },
+          { href: 'iridescence/index.html', room: 'hall-of-mirrors' }]),
+     'poi:hall-of-mirrors poi:physics-lab poi:hall-of-mirrors',
+     'anchors: NON-consecutive same-anchor stops stay distinct (a real crossing, not a collapse)');
+
+  /* an unresolvable stop contributes no roundel; the walk continues */
+  eq(seq([{ href: 'mystery/index.html', room: 'no-such-room' },
+          { href: 'rainbow/index.html', room: 'hall-of-mirrors' }]),
+     'poi:hall-of-mirrors', 'anchors: an unresolvable stop degrades to no roundel (never a throw)');
+
+  /* the live fixtures resolve: fixture-a = 3 distinct anchors (one ×2), fixture-b = 4 */
+  const fa = T.resolveThreadAnchors(FIXTURES[0].stops, {
+    roomPlate: { 'hall-of-mirrors': 'opticks', 'physics-lab': 'cavern' },
+    roomDistrict: {}, extraStops: {}
+  });
+  eq(fa.length, 3, 'anchors: fixture-a resolves to 3 distinct anchors');
+  eq(fa[1].count, 2, 'anchors: fixture-a hall-of-mirrors anchor carries ×2');
+  const fb = T.resolveThreadAnchors(FIXTURES[1].stops, {
+    roomPlate: { 'workbench': 'outbuilding', 'numbers-room': 'number' },
+    roomDistrict: {}, extraStops: { 'colophon.html': { anchor: 'manor' } }
+  });
+  eq(fb.length, 4, 'anchors: fixture-b resolves to 4 distinct anchors (waypoint + EXTRA included)');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    11) the beats RUNTIME (§4, T0.3) — layered contract, pause-aware beat(),
        abort, and the hard cap. The runtime is pure + TICK-DRIVEN, so — exactly
        like the dwell clock — the twin advances its clock by hand; because beats
