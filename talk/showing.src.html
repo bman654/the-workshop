@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Showing — The Orrery Estate</title>
+<style>
+  :root{
+    --bg:#07090e; --ink:#eaf0fa; --muted:#8b95a8; --gold:#d9b168; --brass:#c8a34e;
+    --panel:#0d1017; --line:rgba(255,255,255,.12); --lit:#fff5df;
+    --strip-h:96px;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif; -webkit-font-smoothing:antialiased;
+    overflow:hidden; }
+
+  /* ── the stage: a same-origin iframe that never navigates the parent ─────── */
+  #stage{ position:fixed; inset:0 0 var(--strip-h) 0; background:#000;
+    display:flex; align-items:center; justify-content:center; }
+  #frame{ width:100%; height:100%; border:0; background:#000;
+    transition:filter .5s ease, opacity .5s ease; }
+  #frame.holding{ filter:saturate(.85) brightness(.9); }
+
+  /* ── the word-lit caption band (colophon idiom → raw claude-tts sidecar) ─── */
+  #captions{ position:fixed; left:0; right:0; bottom:calc(var(--strip-h) + 18px);
+    margin:0 auto; max-width:min(1100px,92vw); padding:14px 22px; z-index:5;
+    text-align:center; font-family:Georgia,"Times New Roman",serif; font-size:clamp(19px,2.5vw,30px);
+    line-height:1.5; color:#c3cbda; text-shadow:0 2px 18px rgba(0,0,0,.8);
+    pointer-events:none; }
+  #captions .cap-w{ color:#8791a6; transition:color .16s ease, text-shadow .3s ease; }
+  #captions .cap-w.on{ color:var(--lit); text-shadow:0 0 16px rgba(217,177,104,.45); }
+
+  /* ── the RM preflight banner (talk-day hazard, DESIGN §10) ───────────────── */
+  #rmbanner{ position:fixed; left:0; right:0; bottom:var(--strip-h); z-index:8;
+    background:#7a1420; color:#fff; font:600 13px/1.4 ui-monospace,Menlo,monospace;
+    letter-spacing:.02em; padding:8px 16px; text-align:center;
+    border-top:1px solid rgba(255,255,255,.25); }
+  #rmbanner[hidden]{ display:none; }
+
+  /* ── the operator strip: always-visible CLICKABLE panic buttons in the parent ─ */
+  #strip{ position:fixed; left:0; right:0; bottom:0; height:var(--strip-h); z-index:9;
+    background:linear-gradient(180deg,#0f131b,#080a0f); border-top:1px solid var(--line);
+    display:grid; grid-template-columns:auto auto 1fr auto auto; align-items:center;
+    gap:16px; padding:10px 18px; }
+  #strip .grp{ display:flex; align-items:center; gap:8px; }
+  #strip button{ font:600 13px/1 ui-monospace,Menlo,monospace; color:var(--ink);
+    background:#161b25; border:1px solid var(--line); border-radius:7px;
+    padding:9px 12px; cursor:pointer; letter-spacing:.02em; }
+  #strip button:hover{ border-color:var(--brass); color:var(--lit); }
+  #strip button[aria-current="true"]{ border-color:var(--brass); color:var(--gold);
+    background:#1d2431; }
+  #btn-live{ color:#ffd7a0; } #btn-rearm{ color:#a8d8c0; }
+  #timeline{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+  #timeline .clockrow{ display:flex; align-items:center; gap:10px;
+    font:600 12px/1 ui-monospace,Menlo,monospace; color:var(--muted); }
+  #scrub{ width:100%; accent-color:var(--brass); cursor:pointer; }
+  #chapters{ display:flex; gap:6px; overflow-x:auto; max-width:34vw; }
+  #chapters button{ white-space:nowrap; font-size:11px; padding:7px 9px; }
+  #meta{ display:flex; flex-direction:column; align-items:flex-end; gap:4px;
+    font:600 11px/1.3 ui-monospace,Menlo,monospace; color:var(--muted); min-width:180px; }
+  #mode{ color:var(--gold); }
+  #ready{ color:#a8d8c0; font-style:normal; }
+  #addr{ color:var(--muted); }
+  #cuelog{ position:fixed; right:18px; bottom:calc(var(--strip-h) + 12px); z-index:6;
+    width:min(340px,40vw); max-height:150px; overflow-y:auto; text-align:right;
+    font:500 11px/1.5 ui-monospace,Menlo,monospace; color:var(--muted);
+    pointer-events:none; opacity:.72; }
+  #cuelog .cue-line{ text-shadow:0 1px 6px #000; }
+
+  /* ── the start gate: one unlock gesture blesses the audio element (DESIGN §10) ─ */
+  #gate{ position:fixed; inset:0; z-index:20; background:
+    radial-gradient(900px 560px at 50% 22%, rgba(120,110,180,.16), transparent 60%), var(--bg);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;
+    padding:32px; text-align:center; }
+  #gate[hidden]{ display:none; }
+  #gate .kick{ font:600 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.34em;
+    text-transform:uppercase; color:var(--muted); }
+  #gate h1{ font-family:Georgia,serif; font-weight:500; font-size:clamp(40px,7vw,72px);
+    margin:.1em 0; background:linear-gradient(180deg,#fff,#c6c9d6); -webkit-background-clip:text;
+    background-clip:text; color:transparent; }
+  #gate .sub{ color:var(--muted); font-style:italic; font-family:Georgia,serif;
+    max-width:520px; font-size:17px; line-height:1.55; }
+  #gate .acts{ display:flex; gap:14px; flex-wrap:wrap; justify-content:center; margin-top:10px; }
+  #gate button{ font:600 15px/1 ui-monospace,Menlo,monospace; letter-spacing:.03em;
+    color:var(--ink); background:#161b25; border:1px solid var(--brass); border-radius:9px;
+    padding:14px 22px; cursor:pointer; }
+  #gate button:hover{ background:#1d2431; color:var(--lit); }
+  #gate #gate-resume{ border-color:#a8d8c0; color:#c8f0dd; }
+  #gate[hidden] + *{}
+
+  #focussink{ position:fixed; width:1px; height:1px; opacity:0; pointer-events:none; }
+
+  @media (max-width:640px){
+    :root{ --strip-h:132px; }
+    #strip{ grid-template-columns:1fr 1fr; grid-auto-rows:auto; }
+    #chapters{ max-width:none; grid-column:1 / -1; }
+    #cuelog{ display:none; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    #frame, #captions .cap-w{ transition:none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <iframe id="frame" title="The Showing — stage" referrerpolicy="no-referrer"></iframe>
+</div>
+
+<div id="captions" aria-live="polite" aria-atomic="false"></div>
+
+<div id="rmbanner" role="alert" hidden></div>
+
+<div id="cuelog" aria-hidden="true"></div>
+
+<div id="strip" role="group" aria-label="Showing operator controls">
+  <div class="grp transport">
+    <button id="btn-play" type="button" aria-label="play or pause">▶</button>
+    <button id="btn-prev" type="button" aria-label="previous chapter">⏮</button>
+    <button id="btn-next" type="button" aria-label="next chapter">⏭</button>
+    <button id="btn-restart" type="button" aria-label="restart this chapter">↻</button>
+  </div>
+  <div class="grp modes">
+    <button id="btn-live" type="button">GO-LIVE</button>
+    <button id="btn-rearm" type="button">RE-ARM</button>
+  </div>
+  <div id="timeline">
+    <input id="scrub" type="range" min="0" max="1000" value="0" step="1" aria-label="seek within chapter">
+    <div class="clockrow"><span id="clock">0:00</span><span>/</span><span id="dur">0:00</span>
+      <span id="chapters" aria-label="chapters"></span></div>
+  </div>
+  <div id="meta">
+    <span id="mode">scheduled</span>
+    <span id="ready"></span>
+    <span id="addr"></span>
+  </div>
+</div>
+
+<div id="focussink" tabindex="-1"></div>
+
+<div id="gate">
+  <div class="kick">The Orrery Estate</div>
+  <h1>The Showing</h1>
+  <p class="sub">A narrated walk through the estate — the deck runs the stage; the maker speaks between chapters.</p>
+  <div class="acts">
+    <button id="gate-resume" type="button" hidden>▸ resume</button>
+    <button id="gate-begin" type="button">▶ begin</button>
+    <button id="gate-read" type="button">▸ read it silently</button>
+  </div>
+</div>
+
+<!-- one persistent audio element: its src is swapped per chapter, blessed once by
+     the unlock click so per-element autoplay rules never re-bite (DESIGN §10). The
+     shell ships no audio; T4.3+ set each chapter's audio via forge:asset. -->
+<audio id="voice" preload="none"></audio>
+
+<script>
+<!-- forge:include ../tools/ws/ws.js -->
+</script>
+
+<script>
+<!-- forge:include cue-engine.js -->
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   CHAPTERS — the cue sheet. Each: { id, title, audio, timing, opening:{frame},
+   cues:[{t, frame|state|impulse|spot|note}] }. The clock is the chapter's
+   audio.currentTime (or the rAF virtual clock in silent mode). audio is a bare
+   data:audio/mpeg URI (forge:asset) and timing is the raw claude-tts sidecar
+   (forge:json) — filled per chapter by T4.3+ (ch01 is the pattern PoC). The two
+   chapters below are the SHELL PLACEHOLDER: no audio (silent virtual clock only),
+   inline throwaway timings, framing real estate pages so the machinery is live.
+   T4.4 adds the per-chapter determinism manifest. Use block comments only in this
+   forge-included region (the HTML-comment-in-script forge landmine). */
+window.SHOWING_CHAPTERS = [
+  {
+    id: 'shell-a',
+    title: 'THE SHELL · above the estate',
+    audio: null,
+    opening: { frame: '../index.html?hours=allon' },
+    timing: {
+      duration_ms: 9000,
+      text: 'This is the shell of the showing a stage a caption band and the operator strip below',
+      items: [
+        { type:'word', value:'This',     s:150,  e:520 },
+        { type:'word', value:'is',       s:520,  e:760 },
+        { type:'word', value:'the',      s:760,  e:980 },
+        { type:'word', value:'shell',    s:980,  e:1500 },
+        { type:'word', value:'of',       s:1500, e:1700 },
+        { type:'word', value:'the',      s:1700, e:1900 },
+        { type:'word', value:'showing',  s:1900, e:2600 },
+        { type:'word', value:'a',        s:3000, e:3200 },
+        { type:'word', value:'stage',    s:3200, e:3800 },
+        { type:'word', value:'a',        s:4200, e:4400 },
+        { type:'word', value:'caption',  s:4400, e:5000 },
+        { type:'word', value:'band',     s:5000, e:5500 },
+        { type:'word', value:'and',      s:6000, e:6250 },
+        { type:'word', value:'the',      s:6250, e:6450 },
+        { type:'word', value:'operator', s:6450, e:7100 },
+        { type:'word', value:'strip',    s:7100, e:7600 },
+        { type:'word', value:'below',    s:7600, e:8300 }
+      ]
+    },
+    cues: [
+      { t:0,   note:'chapter one — the map, pinned at dusk (?hours=allon)' },
+      { t:4.3, frame:'../galton/index.html' },
+      { t:4.6, note:'framed the galton board' }
+    ]
+  },
+  {
+    id: 'shell-b',
+    title: 'THE SHELL · the double slit',
+    audio: null,
+    opening: { frame: '../cavern/double-slit/index.html' },
+    timing: {
+      duration_ms: 8000,
+      text: 'Here a cue reaches into the framed page and fires one volley of light',
+      items: [
+        { type:'word', value:'Here',   s:150,  e:600 },
+        { type:'word', value:'a',      s:600,  e:800 },
+        { type:'word', value:'cue',    s:800,  e:1300 },
+        { type:'word', value:'reaches',s:1300, e:1900 },
+        { type:'word', value:'into',   s:1900, e:2250 },
+        { type:'word', value:'the',    s:2250, e:2450 },
+        { type:'word', value:'framed', s:2450, e:3000 },
+        { type:'word', value:'page',   s:3000, e:3500 },
+        { type:'word', value:'and',    s:4000, e:4250 },
+        { type:'word', value:'fires',  s:4250, e:4800 },
+        { type:'word', value:'one',    s:4800, e:5100 },
+        { type:'word', value:'volley', s:5100, e:5700 },
+        { type:'word', value:'of',     s:5700, e:5900 },
+        { type:'word', value:'light',  s:5900, e:6600 }
+      ]
+    },
+    cues: [
+      { t:0,   note:'chapter two — the double slit' },
+      { t:2,   impulse:{ verb:'fire', args:[6] } },
+      { t:2.2, note:'fired one volley into the framed page (IMPULSE)' },
+      { t:5,   state:{ verb:'crank', args:[1] } }
+    ]
+  }
+];
+</script>
+
+<script>
+<!-- forge:include showing.js -->
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   THE GRAND TOUR DOCENT — this page is NOT a tour stop (the deck frames stops, it
+   is not one), so no tour include here. Left intentionally: the Showing is its own
+   surface (DESIGN §10). */
+</script>
+</body>
+</html>
