@@ -196,6 +196,19 @@
     var emit = scrub.propose(src);          /* null when already loaded / deferred */
     if (emit != null) els.frame.src = emit; /* propose() has recorded it as loaded */
   }
+  function forceStage(src) {
+    /* load `src` FRESH even when the frame is already "on" it — a same-URL frame
+       otherwise keeps its accumulated state (a finished marble run, a hand-driven
+       GO-LIVE detour). location.replace on the frame window also recovers a frame
+       that navigated elsewhere during GO-LIVE. */
+    if (src == null) return;
+    scrub.sync(src);
+    try {
+      var fw = frameWin();
+      if (fw && fw.location) { fw.location.replace(new URL(src, window.location.href).href); return; }
+    } catch (e) {}
+    try { els.frame.src = src; } catch (e) {}
+  }
 
   /* ── cue routing (try/catch per cue — a failed poke logs, never throws) ────── */
   function pokeHook(payload, kind) {
@@ -240,14 +253,19 @@
 
   /* ── entering a chapter (or seeking within it) ─────────────────────────────── */
   function enterChapter(i, t0) {
-    if (i < 0 || i >= CHAPTERS.length) return;
+    if (i < 0 || i >= CHAPTERS.length) return null;
     if (state.autoTimer) { clearTimeout(state.autoTimer); state.autoTimer = 0; }
     state.idx = i;
     state.holding = false;
     state.clockMs = Math.max(0, t0 || 0);
-    state.lastFireT = -Infinity;
     var ch = cur();
     var tSec = state.clockMs / 1000;
+    /* the cue cursor starts AT the entry time — a mid-chapter entry (reload
+       resume, hash rehydrate) must NOT re-fire every cue ≤ t on the first tick:
+       durable state comes from the explicit stateReplay below, and IMPULSES are
+       never replayed (the reload-resume marble-run-ding bug). At t=0 the cursor
+       stays -Infinity so the chapter's t=0 cues still fire. */
+    state.lastFireT = tSec > 0 ? tSec : -Infinity;
     var seek = CE.deriveSeek(ch, tSec, scrub.current());
     if (seek.frameChanged) setFrame(seek.frame); else if (seek.frame != null) scrub.sync(seek.frame);
     buildCaptions(ch);
@@ -258,6 +276,7 @@
     pendingReplay = seek.frameChanged ? seek.stateReplay : null;
     resetAudioTo(tSec);
     paintChrome();
+    return seek;
   }
   var pendingReplay = null;
 
@@ -396,7 +415,17 @@
   }
   function prevChapter() { if (state.idx > 0) { enterChapter(state.idx - 1, 0); armPlay(); } else { enterChapter(0, 0); armPlay(); } }
   function nextChapter() { if (state.holding) { advance(); return; } if (state.idx + 1 < CHAPTERS.length) { enterChapter(state.idx + 1, 0); armPlay(); } }
-  function restartAudio() { enterChapter(state.idx, 0); armPlay(); }
+  function restartAudio() {
+    var seek = enterChapter(state.idx, 0);
+    /* a restart means a PRISTINE stage — if the opening frame is the one already
+       up, force-reload it so accumulated page state (a finished run, fired dots)
+       resets with the narration */
+    if (seek && !seek.frameChanged && seek.frame != null) {
+      pendingReplay = seek.stateReplay;
+      forceStage(seek.frame);
+    }
+    armPlay();
+  }
   function goLive() {
     state.mode = 'live';
     state.playing = false;
@@ -407,7 +436,16 @@
   }
   function reArm() {
     state.mode = 'scheduled';
-    log('— RE-ARMED —');
+    /* the stage may have been hand-driven (or navigated away) during GO-LIVE —
+       restore the rehearsed look for the current time: a FRESH frame, then the
+       idempotent STATE cues ≤ t replayed on its load (impulses stay unfired). */
+    var ch = cur(), tSec = state.clockMs / 1000;
+    var seek = CE.deriveSeek(ch, tSec, null);
+    if (seek && seek.frame != null) {
+      pendingReplay = seek.stateReplay;
+      forceStage(seek.frame);
+    }
+    log('— RE-ARMED — stage restored to the rehearsed state');
     focusReclaim();
     paintChrome();
   }
