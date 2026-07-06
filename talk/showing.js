@@ -417,7 +417,10 @@
   }
   function startClock() {
     var ch = cur();
-    if (audio && ch && ch.audio && !muted()) {
+    /* a visitor who chose "read it silently" gets the rAF virtual clock, never the
+       narration audio — visitor mode IS silent mode (the header's promise; before
+       this guard, gate-read armed the voice exactly like a begin) */
+    if (audio && ch && ch.audio && !muted() && !state.visitor) {
       try {
         if (audio.src !== ch.audio) audio.src = ch.audio;
         var p = audio.play();

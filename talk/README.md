@@ -135,8 +135,12 @@ Do this end-to-end once at the venue with the projector live:
 4. At the end of Ch 1 the deck **holds** (`next — THE ONE ROOM`). Say your between-
    chapter line, then press `⏭`. Do this for all 13 — the point of the run-through is to
    rehearse *your* rhythm in the holds, not the deck's (the deck is drift-proof).
-5. Spot-check the cue-heavy chapters land: **Ch 3** flips through four garden beds
-   mid-montage and returns to Life; **Ch 5** drags the sun to sunset (the disk
+5. Spot-check the cue-heavy chapters land: **Ch 2** flips through the four first
+   instruments as they're named (Galton board → harmonograph → loom → Lantern) and
+   lands back on the workbench for "I didn't plan a museum"; **Ch 3** flips through
+   four garden beds mid-montage (the falling sand arrives three seconds into its own
+   simulation — rain already pooling on the ground) and returns to Life; **Ch 5**
+   drags the sun to sunset (the disk
    reddens), then frames the double-slit and *fires a
    volley* as you say "I fired those just now"; **Ch 7** cranks the pin-barrel a half
    turn; **Ch 8** pulls the Errand's lever and the marble run goes.
