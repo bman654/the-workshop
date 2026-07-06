@@ -1671,6 +1671,7 @@ const LanternUI = (function () {
     ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
 
   let WORLD = null, S = null, lastEvent = '', selected = null, useMode = null, playing = false, won = false;
+  let stageBoot = false; // ?begin=1 read-only guard — save() is a no-op until a real human input
 
   function $(id) { return document.getElementById(id); }
 
@@ -1689,6 +1690,28 @@ const LanternUI = (function () {
     const begin = $('beginBtn');
     if (begin) begin.addEventListener('click', () => { hide($('titleCard')); restoreOrStart(); });
     fillTitleCard(world);
+
+    // ?begin=1 — stage boot (THE SHOWING frames a tale mid-montage): skip the title
+    // card straight into a FRESH first scene. Deliberately NOT restoreOrStart(): the
+    // stage must always show scene one, never a visitor's half-played save. render()
+    // persists on every pass, so the boot flips stageBoot on (save() no-ops) and the
+    // first TRUSTED pointerdown lifts it — an untouched framed page can never clobber
+    // a save, while a human who starts playing from scene one gets a normal fresh run
+    // (Start-over semantics).
+    crumb(() => {
+      if (new URLSearchParams(location.search).get('begin') === '1') {
+        stageBoot = true;
+        document.addEventListener('pointerdown', function unlock(e) {
+          if (!e.isTrusted) return;
+          stageBoot = false;
+          document.removeEventListener('pointerdown', unlock, true);
+        }, true);
+        hide($('titleCard'));
+        S = LANTERN.initState(world); S.firstSeen.add(world.start);
+        won = LANTERN.isWin(world, S);
+        render();
+      }
+    });
 
     // controls. The play button carries BOTH labels stacked in one grid cell
     // (the inactive one invisible but still sizing it), so toggling play ⇄ stop
@@ -2126,6 +2149,7 @@ const LanternUI = (function () {
 
   /* ── save / restore (ws:save:<id>) ── */
   function save() {
+    if (stageBoot) return; // the ?begin=1 stage is read-only until a human acts
     crumb(() => localStorage.setItem('ws:save:' + WORLD.meta.id, JSON.stringify(serialize(S))));
   }
   function serialize(s) {

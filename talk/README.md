@@ -136,7 +136,8 @@ Do this end-to-end once at the venue with the projector live:
    chapter line, then press `⏭`. Do this for all 13 — the point of the run-through is to
    rehearse *your* rhythm in the holds, not the deck's (the deck is drift-proof).
 5. Spot-check the cue-heavy chapters land: **Ch 2** flips through the four first
-   instruments as they're named (Galton board → harmonograph → loom → Lantern) and
+   instruments as they're named (Galton board → harmonograph → loom → a Lantern
+   tale in play: the Ferryman on his boat, scene one) and
    lands back on the workbench for "I didn't plan a museum"; **Ch 3** flips through
    four garden beds mid-montage (the falling sand arrives three seconds into its own
    simulation — rain already pooling on the ground) and returns to Life; **Ch 5**
