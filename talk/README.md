@@ -4,7 +4,7 @@
 talk. It is ONE page that never navigates — each chapter frames a real estate page
 in a same-origin `<iframe>`, and a cloned-voice narration track drives word-lit
 captions and camera/hook cues in step — one quiet subtitle line at a time (the
-outgoing line bumps up and fades as the next arrives). Thirteen chapters, ~9½
+outgoing line bumps up and fades as the next arrives). Thirteen chapters, ~10¾
 minutes of narration plus your holds.
 You (Brandon) run it live: the deck **holds** at each chapter's end so you can talk
 between chapters, and it never runs ahead of you.
