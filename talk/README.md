@@ -3,7 +3,9 @@
 `talk/showing.html` is **The Showing**: a narrated, self-contained deck for the
 talk. It is ONE page that never navigates — each chapter frames a real estate page
 in a same-origin `<iframe>`, and a cloned-voice narration track drives word-lit
-captions and camera/hook cues in step. Thirteen chapters, ~15 minutes of narration.
+captions and camera/hook cues in step — one quiet subtitle line at a time (the
+outgoing line bumps up and fades as the next arrives). Thirteen chapters, ~9½
+minutes of narration plus your holds.
 You (Brandon) run it live: the deck **holds** at each chapter's end so you can talk
 between chapters, and it never runs ahead of you.
 
@@ -33,7 +35,7 @@ chapter, and the honest page-weight note.
 
 | Button | What it does |
 | --- | --- |
-| **▶ begin** | Operator mode. Narration plays; the deck **holds** at each chapter end (your safety — it waits for you). This is the talk-day button. |
+| **▶ begin** | Operator mode, **always from the top** (chapter one — a reload never hijacks a fresh start). Narration plays; the deck **holds** at each chapter end (your safety — it waits for you). This is the talk-day button. |
 | **▸ read it silently** | Visitor/silent mode. No audio; the same cues run on a virtual clock, captions still flow, chapters **auto-advance** after a short pause. (For a kiosk / a muted room, not the live talk.) |
 | **▸ resume — _(chapter title)_** | Only appears after a reload — see *Reload recovery* below. |
 
@@ -54,11 +56,14 @@ clickable button that works regardless of where focus is:
 | **↻** | — | Restart the current chapter's audio from 0. |
 | **GO-LIVE** | `L` | Hand the stage to you — see below. |
 | **RE-ARM** | — | (button only) Take the stage back after GO-LIVE. |
-| scrub slider | — | Scrub within the current chapter. Frame reloads are debounced to release (drag across several boundaries → one reload). |
+| scrub slider | — | Scrub within the current chapter — **the narration keeps playing from the new position** (and scrubbing back out of a HOLD releases it). Frame reloads are debounced to release (drag across several boundaries → one reload). |
+| **LOG** | — | Show/hide the cue log (bottom-right). **Hidden by default** — it is a dry-run aid, not stage chrome, and shown it overlaps the framed page's own corner. |
 
-The strip also shows the chapter list (click any chapter to jump), the clock, and a
-cue log. Every cue is wrapped in `try/catch` — a failed poke logs to the cue log and
-is never fatal.
+The strip also shows the chapter list (click any chapter to jump) and the clock. The
+**cue log** (every cue + stage note as it fires) is hidden until you press **LOG**.
+Every cue is wrapped in `try/catch` — a failed poke logs to the cue log and is never
+fatal. While GO-LIVE is engaged the ready-line reads `the stage is yours — RE-ARM
+resumes`, so the way back is always on screen.
 
 ### HOLD between chapters
 In operator mode a chapter plays its timeline and then **holds** with a quiet

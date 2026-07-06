@@ -40,9 +40,10 @@
                    polled ready first — so the gate never trips the same-turn
                    "hook absent, self-heals on load" log the deck emits to its cue
                    LOG, not the console; carry-forward 2).
-     B-captions    each chapter builds exactly one caption <span> per word item
-                   (span count === word count — the colophon "wired" self-check,
-                   ported; no orphan spans, no unlit words).
+     B-captions    each chapter's caption lines PARTITION its word items (total
+                   line-words === word count — no orphan or unlit words) and only
+                   the CURRENT line's spans are mounted (the single-subtitle-line
+                   surface; probed via __showing.cap()).
      B-replay      STATE-cue replay reconstructs state after a simulated seek:
                    (a) ch01 map — forward-seek past recentre → fit view (k≈1);
                        BACKWARD-seek to between mapFrame(manor) and recentre → the
@@ -188,8 +189,10 @@ function barrelPhi() {
     var p=(h&&typeof h.crank==='function')?h.crank():null;
     return JSON.stringify({ phi:(p===null?null:Math.round(p*100)/100) }); })()`);
 }
-function captionCount() {
-  return abEval(`(function(){ return JSON.stringify({ spans: document.querySelectorAll('#captions .cap-w').length }); })()`);
+function captionProbe() {
+  /* the line-windowed caption contract: buildLines() must PARTITION the chapter's
+     words (coverage), and only the CURRENT line's spans are mounted on stage. */
+  return abEval(`(function(){ return JSON.stringify(window.__showing.cap()); })()`);
 }
 function readyLine() {
   return abEval(`(function(){ return JSON.stringify({ text:(document.getElementById('ready').textContent||'').trim(),
@@ -358,12 +361,15 @@ async function main() {
       check('  ' + ch.id + ' opening frame loads (sentinel)', openOk,
         ch.opening + ' · "' + (fo.title || '') + '"' + (openOk ? '' : ' · ready=' + fo.ready + ' kids=' + fo.bodyKids));
 
-      // caption wiring (runtime "both ways": one span per word)
-      const cc = captionCount();
-      const capWired = cc.spans === ch.nWords && ch.nWords > 0;
+      // caption wiring (runtime "both ways": lines partition ALL words; only the
+      // current line is mounted — the single-subtitle-line surface)
+      const cc = captionProbe();
+      const capWired = cc.totalWords === ch.nWords && ch.nWords > 0 &&
+        cc.mounted > 0 && cc.mounted === cc.curLineWords;
       if (capWired) capOk++;
-      check('  ' + ch.id + ' captions wired (one span per word)', capWired,
-        ch.nWords + ' words = ' + cc.spans + ' spans');
+      check('  ' + ch.id + ' captions wired (lines partition words · current line mounted)', capWired,
+        ch.nWords + ' words in ' + cc.lines + ' lines · mounted=' + cc.mounted +
+        ' (line ' + (cc.curLine + 1) + ' has ' + cc.curLineWords + ')');
 
       // walk the cues in author order: frame cues load their target; hook cues expose their verb
       const cues = ch.cues.slice().sort((a, b) => a.t - b.t);
@@ -390,7 +396,7 @@ async function main() {
       framesOk + '/' + framesTot + ' frame loads');
     check('B-hooks every STATE/IMPULSE hook verb exists at poke time', hooksOk === hooksTot,
       hooksOk + '/' + hooksTot + ' hook verbs');
-    check('B-captions every chapter wires one span per word', capOk === chapters.length,
+    check('B-captions every chapter partitions words into lines + mounts the current line', capOk === chapters.length,
       capOk + '/' + chapters.length + ' chapters wired');
 
     // ═══ B-replay — STATE-cue reconstruction after a simulated backward seek ═══

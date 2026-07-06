@@ -23,12 +23,17 @@
     transition:filter .5s ease, opacity .5s ease; }
   #frame.holding{ filter:saturate(.85) brightness(.9); }
 
-  /* ── the word-lit caption band (colophon idiom → raw claude-tts sidecar) ─── */
+  /* ── the word-lit caption band: ONE line at a time (a subtitle, not a wall).
+     The viewport is ~2 lines tall so the outgoing line can bump UP and fade
+     while the new line takes the base slot; overflow stays hidden. ─────────── */
   #captions{ position:fixed; left:0; right:0; bottom:calc(var(--strip-h) + 18px);
-    margin:0 auto; max-width:min(1100px,92vw); padding:14px 22px; z-index:5;
+    margin:0 auto; max-width:min(1100px,92vw); height:3.4em; padding:0 22px; z-index:5;
     text-align:center; font-family:Georgia,"Times New Roman",serif; font-size:clamp(19px,2.5vw,30px);
     line-height:1.5; color:#c3cbda; text-shadow:0 2px 18px rgba(0,0,0,.8);
-    pointer-events:none; }
+    pointer-events:none; overflow:hidden; }
+  #captions .cap-line{ position:absolute; left:22px; right:22px; bottom:0;
+    transition:transform .5s ease, opacity .5s ease; }
+  #captions .cap-line.out{ transform:translateY(-1.55em); opacity:0; }
   #captions .cap-w{ color:#8791a6; transition:color .16s ease, text-shadow .3s ease; }
   #captions .cap-w.on{ color:var(--lit); text-shadow:0 0 16px rgba(217,177,104,.45); }
 
@@ -67,7 +72,18 @@
     width:min(340px,40vw); max-height:150px; overflow-y:auto; text-align:right;
     font:500 11px/1.5 ui-monospace,Menlo,monospace; color:var(--muted);
     pointer-events:none; opacity:.72; }
+  #cuelog[hidden]{ display:none; } /* hidden by default — an opt-in dry-run aid, not stage chrome */
   #cuelog .cue-line{ text-shadow:0 1px 6px #000; }
+  #btn-log[aria-pressed="true"]{ border-color:var(--brass); color:var(--gold); }
+
+  /* quiet scrollbars — the default chrome bars are jarring against the ink */
+  #chapters, #cuelog{ scrollbar-width:thin; scrollbar-color:rgba(200,163,78,.28) transparent; }
+  #chapters::-webkit-scrollbar, #cuelog::-webkit-scrollbar{ height:7px; width:7px; }
+  #chapters::-webkit-scrollbar-track, #cuelog::-webkit-scrollbar-track{ background:transparent; }
+  #chapters::-webkit-scrollbar-thumb, #cuelog::-webkit-scrollbar-thumb{
+    background:rgba(200,163,78,.28); border-radius:4px; }
+  #chapters::-webkit-scrollbar-thumb:hover, #cuelog::-webkit-scrollbar-thumb:hover{
+    background:rgba(200,163,78,.5); }
 
   /* ── the start gate: one unlock gesture blesses the audio element (DESIGN §10) ─ */
   #gate{ position:fixed; inset:0; z-index:20; background:
@@ -99,7 +115,7 @@
     #cuelog{ display:none; }
   }
   @media (prefers-reduced-motion: reduce){
-    #frame, #captions .cap-w{ transition:none; }
+    #frame, #captions .cap-w, #captions .cap-line{ transition:none; }
   }
 </style>
 </head>
@@ -113,7 +129,7 @@
 
 <div id="rmbanner" role="alert" hidden></div>
 
-<div id="cuelog" aria-hidden="true"></div>
+<div id="cuelog" aria-hidden="true" hidden></div>
 
 <div id="strip" role="group" aria-label="Showing operator controls">
   <div class="grp transport">
@@ -123,8 +139,12 @@
     <button id="btn-restart" type="button" aria-label="restart this chapter">↻</button>
   </div>
   <div class="grp modes">
-    <button id="btn-live" type="button">GO-LIVE</button>
-    <button id="btn-rearm" type="button">RE-ARM</button>
+    <button id="btn-live" type="button"
+      title="pause the narration and hand the stage to the presenter — click into the frame and drive the page by hand">GO-LIVE</button>
+    <button id="btn-rearm" type="button"
+      title="take the stage back from a GO-LIVE and resume scheduled playback">RE-ARM</button>
+    <button id="btn-log" type="button" aria-pressed="false"
+      title="show or hide the cue log (a dry-run aid: every cue and stage note as it fires)">LOG</button>
   </div>
   <div id="timeline">
     <input id="scrub" type="range" min="0" max="1000" value="0" step="1" aria-label="seek within chapter">
@@ -9922,8 +9942,10 @@ window.SHOWING_FRAME_MANIFEST = {
   var els = {};
   var audio = null;
   var wordCache = {};      /* chapter id → [word items] */
-  var spanCache = {};      /* chapter id → [span els] */
-  var litSpan = -1;
+  var lineCache = {};      /* chapter id → [caption lines] */
+  var lineSpans = [];      /* span els of the CURRENT caption line */
+  var litLine = -1;
+  var litSpan = -1;        /* index within the current line */
 
   /* ── small helpers ───────────────────────────────────────────────────────── */
   function chapter(i) { return CHAPTERS[i]; }
@@ -9961,33 +9983,82 @@ window.SHOWING_FRAME_MANIFEST = {
     try { return els.frame && els.frame.contentWindow; } catch (e) { return null; }
   }
 
-  /* ── captions: build spans from the RAW sidecar, light by [s,e) window ─────── */
-  function buildCaptions(ch) {
-    els.captions.textContent = '';
-    litSpan = -1;
-    var ws = words(ch);
-    var spans = [];
+  /* ── captions: ONE line at a time (a subtitle, not a wall of prose) ──────────
+     The RAW word sidecar is grouped into short lines at build time; only the
+     CURRENT line is on stage. When the next line's window opens, the old line
+     bumps UP out of the way and fades while the new line takes its place — so
+     the framed page stays visible behind a single quiet line of text. Seeks and
+     chapter jumps hard-cut (no animation). Word-lighting is unchanged, scoped
+     to the current line's spans. */
+  function buildLines(ch) {
+    if (!ch) return [];
+    if (lineCache[ch.id]) return lineCache[ch.id];
+    var ws = words(ch), lines = [], line = null;
+    var MAX = 56;   /* chars per caption line — subtitle-sized in the big serif */
     for (var i = 0; i < ws.length; i++) {
+      var v = String(ws[i].value);
+      if (!line || (line.len + 1 + v.length) > MAX) {
+        line = { words: [], len: 0, startMs: ws[i].s, endMs: ws[i].e };
+        lines.push(line);
+      }
+      line.words.push(ws[i]);
+      line.len += (line.words.length > 1 ? 1 : 0) + v.length;
+      line.endMs = ws[i].e;
+      /* prefer to break after strong punctuation once the line is half full */
+      if (line.len >= MAX * 0.5 && /[.!?;:—]["')\]]?$/.test(v)) line = null;
+    }
+    lineCache[ch.id] = lines;
+    return lines;
+  }
+  function buildCaptions(ch) {
+    /* reset the caption viewport for a (re)entered chapter; lines mount lazily */
+    els.captions.textContent = '';
+    litLine = -1; litSpan = -1; lineSpans = [];
+    buildLines(ch);
+  }
+  function mountLine(line, animateOut) {
+    var old = els.captions.querySelector('.cap-line.cur');
+    if (old) {
+      if (animateOut) {
+        old.className = 'cap-line out';
+        /* UI pacing only (never a cue clock): sweep the faded line from the DOM */
+        setTimeout(function () { if (old.parentNode) old.parentNode.removeChild(old); }, 700);
+      } else {
+        els.captions.textContent = '';
+      }
+    }
+    var el = document.createElement('div');
+    el.className = 'cap-line cur';
+    lineSpans = [];
+    for (var i = 0; i < line.words.length; i++) {
       var sp = document.createElement('span');
       sp.className = 'cap-w';
-      sp.textContent = ws[i].value;
-      els.captions.appendChild(sp);
-      els.captions.appendChild(document.createTextNode(' '));
-      spans.push(sp);
+      sp.textContent = line.words[i].value;
+      el.appendChild(sp);
+      el.appendChild(document.createTextNode(' '));
+      lineSpans.push(sp);
     }
-    spanCache[ch.id] = spans;
+    els.captions.appendChild(el);
   }
   function lightCaption(ms) {
     var ch = cur();
-    var ws = words(ch), spans = spanCache[ch.id] || [];
-    var idx = -1;
-    for (var i = 0; i < ws.length; i++) {
-      if (ms >= ws[i].s && ms < ws[i].e) { idx = i; break; }
-      if (ms >= ws[i].s) idx = i; /* keep last-passed lit between windows */
+    var lines = buildLines(ch);
+    if (!lines.length) return;
+    var li = 0;
+    for (var i = 0; i < lines.length; i++) { if (ms >= lines[i].startMs) li = i; else break; }
+    if (li !== litLine) {
+      mountLine(lines[li], li === litLine + 1); /* animate only the natural advance */
+      litLine = li;
+      litSpan = -1;
+    }
+    var ws = lines[li].words, idx = -1;
+    for (var j = 0; j < ws.length; j++) {
+      if (ms >= ws[j].s && ms < ws[j].e) { idx = j; break; }
+      if (ms >= ws[j].s) idx = j; /* keep last-passed lit between windows */
     }
     if (idx === litSpan) return;
-    if (litSpan >= 0 && spans[litSpan]) spans[litSpan].classList.remove('on');
-    if (idx >= 0 && spans[idx]) spans[idx].classList.add('on');
+    if (litSpan >= 0 && lineSpans[litSpan]) lineSpans[litSpan].classList.remove('on');
+    if (idx >= 0 && lineSpans[idx]) lineSpans[idx].classList.add('on');
     litSpan = idx;
   }
 
@@ -10066,7 +10137,9 @@ window.SHOWING_FRAME_MANIFEST = {
     if (!audio) return;
     try {
       var ch = cur();
-      if (state.usingAudio && ch && ch.audio) { audio.src = ch.audio; }
+      /* only swap src when it actually changed — RE-ASSIGNING the same src resets
+         the media element to a stopped state (the scrub-killed-the-voice bug) */
+      if (state.usingAudio && ch && ch.audio && audio.src !== ch.audio) { audio.src = ch.audio; }
       if (audio.readyState > 0 || audio.src) { try { audio.currentTime = tSec; } catch (e) {} }
     } catch (e) {}
   }
@@ -10151,7 +10224,12 @@ window.SHOWING_FRAME_MANIFEST = {
     els.play.textContent = state.playing && !state.holding ? '⏸' : '▶';
     var btns = els.chapters.querySelectorAll('button');
     for (var i = 0; i < btns.length; i++) btns[i].setAttribute('aria-current', i === state.idx ? 'true' : 'false');
-    if (!state.holding) { els.ready.textContent = ''; els.frame.classList.remove('holding'); }
+    if (!state.holding) {
+      /* in live mode the ready-line carries the how-do-I-get-back hint (the cue
+         log is hidden by default, so the hint must live in visible chrome) */
+      els.ready.textContent = state.mode === 'live' ? 'the stage is yours — RE-ARM resumes' : '';
+      els.frame.classList.remove('holding');
+    }
     var addr = cur() && cur().addr;
     els.addr.textContent = addr || '';
   }
@@ -10226,6 +10304,19 @@ window.SHOWING_FRAME_MANIFEST = {
     replayStates(CE.stateCuesUpTo(cur(), tSec));
     state.lastFireT = tSec;          /* don't replay impulses we scrubbed past */
     resetAudioTo(tSec);
+    /* scrubbing back out of an end-of-chapter HOLD releases the hold */
+    if (state.holding && state.clockMs < durationMs(cur())) {
+      state.holding = false;
+      els.frame.classList.remove('holding');
+      els.ready.textContent = '';
+    }
+    /* if the narration was playing, KEEP it playing from the new position — a
+       seek must never strand the deck on the silent clock (the bug the Patron
+       hit on day one: scrub back → voice gone, captions marching on) */
+    if (state.started && state.playing && !state.holding && state.usingAudio && audio) {
+      try { var p = audio.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+    }
+    paintChrome();
   }
 
   /* ── focus guard + RM preflight ────────────────────────────────────────────── */
@@ -10247,7 +10338,7 @@ window.SHOWING_FRAME_MANIFEST = {
     els = {
       frame: $('frame'), captions: $('captions'), rmbanner: $('rmbanner'),
       play: $('btn-play'), prev: $('btn-prev'), next: $('btn-next'), restart: $('btn-restart'),
-      live: $('btn-live'), rearm: $('btn-rearm'),
+      live: $('btn-live'), rearm: $('btn-rearm'), logbtn: $('btn-log'),
       clock: $('clock'), dur: $('dur'), scrub: $('scrub'), chapters: $('chapters'),
       mode: $('mode'), ready: $('ready'), cuelog: $('cuelog'), addr: $('addr'),
       gate: $('gate'), gBegin: $('gate-begin'), gRead: $('gate-read'), gResume: $('gate-resume'),
@@ -10273,6 +10364,13 @@ window.SHOWING_FRAME_MANIFEST = {
     els.restart.addEventListener('click', function () { restartAudio(); focusReclaim(); });
     els.live.addEventListener('click', function () { goLive(); });
     els.rearm.addEventListener('click', function () { reArm(); });
+    if (els.logbtn) {
+      els.logbtn.addEventListener('click', function () {
+        els.cuelog.hidden = !els.cuelog.hidden;
+        els.logbtn.setAttribute('aria-pressed', els.cuelog.hidden ? 'false' : 'true');
+        focusReclaim();
+      });
+    }
     if (els.scrub) {
       els.scrub.addEventListener('pointerdown', scrubStart);
       els.scrub.addEventListener('input', scrubMove);
@@ -10327,8 +10425,10 @@ window.SHOWING_FRAME_MANIFEST = {
       }
     }
 
-    els.gBegin.addEventListener('click', function () { start(false, state.idx, 0); });
-    els.gRead.addEventListener('click', function () { start(true, state.idx, 0); });
+    /* begin / read ALWAYS start from the top — only the explicit resume button
+       returns to the recovered spot (a reload must not hijack a fresh start) */
+    els.gBegin.addEventListener('click', function () { start(false, 0, 0); });
+    els.gRead.addEventListener('click', function () { start(true, 0, 0); });
 
     /* pre-load chapter 0's chrome behind the gate so a Begin is instant */
     enterChapter(state.idx, 0);
@@ -10361,6 +10461,18 @@ window.SHOWING_FRAME_MANIFEST = {
     live: goLive,
     rearm: reArm,
     clockMs: function () { return state.clockMs; },
+    /* caption-line probe for the rehearsal gate: the lines must PARTITION the
+       chapter's words (coverage) while only the current line is mounted. */
+    cap: function () {
+      var ch = cur(), lines = buildLines(ch), total = 0;
+      for (var i = 0; i < lines.length; i++) total += lines[i].words.length;
+      return {
+        lines: lines.length, totalWords: total, chapterWords: words(ch).length,
+        curLine: litLine,
+        curLineWords: (litLine >= 0 && lines[litLine]) ? lines[litLine].words.length : 0,
+        mounted: els.captions.querySelectorAll('.cap-line.cur .cap-w').length
+      };
+    },
     /* run the RM preflight against a given window (default the parent) and return
        whether the banner fired — the seam the T4.7 rehearsal gate uses to assert
        the RM-emulated pass raises the banner, and the honest way to verify it where
