@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Dev-Showing — The Orrery Estate</title>
+<style>
+  :root{
+    --bg:#07090e; --ink:#eaf0fa; --muted:#8b95a8; --gold:#d9b168; --brass:#c8a34e;
+    --panel:#0d1017; --line:rgba(255,255,255,.12); --lit:#fff5df;
+    --strip-h:96px;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif; -webkit-font-smoothing:antialiased;
+    overflow:hidden; }
+
+  /* ── the stage: a same-origin iframe that never navigates the parent ─────── */
+  #stage{ position:fixed; inset:0 0 var(--strip-h) 0; background:#000;
+    display:flex; align-items:center; justify-content:center; }
+  #frame{ width:100%; height:100%; border:0; background:#000;
+    transition:filter .5s ease, opacity .5s ease; }
+  #frame.holding{ filter:saturate(.85) brightness(.9); }
+
+  /* ── the word-lit caption band: ONE line at a time (a subtitle, not a wall).
+     The viewport is ~2 lines tall so the outgoing line can bump UP and fade
+     while the new line takes the base slot; overflow stays hidden. ─────────── */
+  #captions{ position:fixed; left:0; right:0; bottom:calc(var(--strip-h) + 18px);
+    margin:0 auto; max-width:min(1100px,92vw); height:3.4em; padding:0 22px; z-index:5;
+    text-align:center; font-family:Georgia,"Times New Roman",serif; font-size:clamp(19px,2.5vw,30px);
+    line-height:1.5; color:#c3cbda; text-shadow:0 2px 18px rgba(0,0,0,.8);
+    pointer-events:none; overflow:hidden; }
+  #captions .cap-line{ position:absolute; left:22px; right:22px; bottom:0;
+    transition:transform .5s ease, opacity .5s ease; }
+  #captions .cap-line.out{ transform:translateY(-1.55em); opacity:0; }
+  #captions .cap-w{ color:#8791a6; transition:color .16s ease, text-shadow .3s ease; }
+  #captions .cap-w.on{ color:var(--lit); text-shadow:0 0 16px rgba(217,177,104,.45); }
+
+  /* ── the RM preflight banner (talk-day hazard, DESIGN §10) ───────────────── */
+  #rmbanner{ position:fixed; left:0; right:0; bottom:var(--strip-h); z-index:8;
+    background:#7a1420; color:#fff; font:600 13px/1.4 ui-monospace,Menlo,monospace;
+    letter-spacing:.02em; padding:8px 16px; text-align:center;
+    border-top:1px solid rgba(255,255,255,.25); }
+  #rmbanner[hidden]{ display:none; }
+
+  /* ── the operator strip: always-visible CLICKABLE panic buttons in the parent ─ */
+  #strip{ position:fixed; left:0; right:0; bottom:0; height:var(--strip-h); z-index:9;
+    background:linear-gradient(180deg,#0f131b,#080a0f); border-top:1px solid var(--line);
+    display:grid; grid-template-columns:auto auto 1fr auto auto; align-items:center;
+    gap:16px; padding:10px 18px; }
+  #strip .grp{ display:flex; align-items:center; gap:8px; }
+  #strip button{ font:600 13px/1 ui-monospace,Menlo,monospace; color:var(--ink);
+    background:#161b25; border:1px solid var(--line); border-radius:7px;
+    padding:9px 12px; cursor:pointer; letter-spacing:.02em; }
+  #strip button:hover{ border-color:var(--brass); color:var(--lit); }
+  #strip button[aria-current="true"]{ border-color:var(--brass); color:var(--gold);
+    background:#1d2431; }
+  #btn-live{ color:#ffd7a0; } #btn-rearm{ color:#a8d8c0; }
+  #timeline{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+  #timeline .clockrow{ display:flex; align-items:center; gap:10px;
+    font:600 12px/1 ui-monospace,Menlo,monospace; color:var(--muted); }
+  #scrub{ width:100%; accent-color:var(--brass); cursor:pointer; }
+  #chapters{ display:flex; gap:6px; overflow-x:auto; max-width:34vw; }
+  #chapters button{ white-space:nowrap; font-size:11px; padding:7px 9px; }
+  #meta{ display:flex; flex-direction:column; align-items:flex-end; gap:4px;
+    font:600 11px/1.3 ui-monospace,Menlo,monospace; color:var(--muted); min-width:180px; }
+  #mode{ color:var(--gold); }
+  #ready{ color:#a8d8c0; font-style:normal; }
+  #addr{ color:var(--muted); }
+  #cuelog{ position:fixed; right:18px; bottom:calc(var(--strip-h) + 12px); z-index:6;
+    width:min(340px,40vw); max-height:150px; overflow-y:auto; text-align:right;
+    font:500 11px/1.5 ui-monospace,Menlo,monospace; color:var(--muted);
+    pointer-events:none; opacity:.72; }
+  #cuelog[hidden]{ display:none; } /* hidden by default — an opt-in dry-run aid, not stage chrome */
+  #cuelog .cue-line{ text-shadow:0 1px 6px #000; }
+  #btn-log[aria-pressed="true"]{ border-color:var(--brass); color:var(--gold); }
+
+  /* quiet scrollbars — the default chrome bars are jarring against the ink */
+  #chapters, #cuelog{ scrollbar-width:thin; scrollbar-color:rgba(200,163,78,.28) transparent; }
+  #chapters::-webkit-scrollbar, #cuelog::-webkit-scrollbar{ height:7px; width:7px; }
+  #chapters::-webkit-scrollbar-track, #cuelog::-webkit-scrollbar-track{ background:transparent; }
+  #chapters::-webkit-scrollbar-thumb, #cuelog::-webkit-scrollbar-thumb{
+    background:rgba(200,163,78,.28); border-radius:4px; }
+  #chapters::-webkit-scrollbar-thumb:hover, #cuelog::-webkit-scrollbar-thumb:hover{
+    background:rgba(200,163,78,.5); }
+
+  /* ── deck cards: durable stage overlays driven by deck.card STATE cues ────── */
+  #card{ position:fixed; z-index:7; left:50%; transform:translateX(-50%);
+    bottom:calc(var(--strip-h) + 150px); width:min(780px,70vw);
+    background:linear-gradient(180deg,#10141d,#0b0e15); border:1px solid var(--brass);
+    border-radius:10px; box-shadow:0 18px 60px rgba(0,0,0,.65); padding:14px 16px 12px;
+    pointer-events:none; animation:cardIn .5s ease; }
+  #card[hidden]{ display:none; }
+  @keyframes cardIn{ from{ opacity:0; transform:translateX(-50%) translateY(14px);} to{ opacity:1; transform:translateX(-50%) translateY(0);} }
+  #card .card-kick{ font:600 10.5px/1 ui-monospace,Menlo,monospace; letter-spacing:.24em;
+    text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+  #card .card-stage{ position:relative; }
+  #card .card-stage img{ display:block; width:100%; height:auto; border-radius:4px; }
+  #card .card-stage svg{ position:absolute; inset:0; width:100%; height:100%; }
+  #card .card-foot{ display:flex; justify-content:space-between; align-items:center; gap:12px;
+    margin-top:9px; font:italic 13px/1.4 Georgia,serif; color:#bcae8a; }
+  #card .card-cmd{ font:600 12px/1 ui-monospace,Menlo,monospace; color:var(--gold);
+    background:#161b25; border:1px solid var(--line); border-radius:6px; padding:7px 10px;
+    white-space:nowrap; }
+
+  /* ── the start gate: one unlock gesture blesses the audio element (DESIGN §10) ─ */
+  #gate{ position:fixed; inset:0; z-index:20; background:
+    radial-gradient(900px 560px at 50% 22%, rgba(120,110,180,.16), transparent 60%), var(--bg);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;
+    padding:32px; text-align:center; }
+  #gate[hidden]{ display:none; }
+  #gate .kick{ font:600 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.34em;
+    text-transform:uppercase; color:var(--muted); }
+  #gate h1{ font-family:Georgia,serif; font-weight:500; font-size:clamp(40px,7vw,72px);
+    margin:.1em 0; background:linear-gradient(180deg,#fff,#c6c9d6); -webkit-background-clip:text;
+    background-clip:text; color:transparent; }
+  #gate .sub{ color:var(--muted); font-style:italic; font-family:Georgia,serif;
+    max-width:520px; font-size:17px; line-height:1.55; }
+  #gate .acts{ display:flex; gap:14px; flex-wrap:wrap; justify-content:center; margin-top:10px; }
+  #gate button{ font:600 15px/1 ui-monospace,Menlo,monospace; letter-spacing:.03em;
+    color:var(--ink); background:#161b25; border:1px solid var(--brass); border-radius:9px;
+    padding:14px 22px; cursor:pointer; }
+  #gate button:hover{ background:#1d2431; color:var(--lit); }
+  #gate #gate-resume{ border-color:#a8d8c0; color:#c8f0dd; }
+  #gate[hidden] + *{}
+
+  #focussink{ position:fixed; width:1px; height:1px; opacity:0; pointer-events:none; }
+
+  @media (max-width:640px){
+    :root{ --strip-h:132px; }
+    #strip{ grid-template-columns:1fr 1fr; grid-auto-rows:auto; }
+    #chapters{ max-width:none; grid-column:1 / -1; }
+    #cuelog{ display:none; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    #frame, #captions .cap-w, #captions .cap-line{ transition:none; }
+    #card{ animation:none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <iframe id="frame" title="The Dev-Showing — stage" referrerpolicy="no-referrer" allow="autoplay"></iframe>
+</div>
+
+<div id="captions" aria-live="polite" aria-atomic="false"></div>
+
+<div id="rmbanner" role="alert" hidden></div>
+
+<div id="cuelog" aria-hidden="true" hidden></div>
+
+<div id="card" hidden></div>
+
+<div id="strip" role="group" aria-label="Dev-Showing operator controls">
+  <div class="grp transport">
+    <button id="btn-play" type="button" aria-label="play or pause">▶</button>
+    <button id="btn-prev" type="button" aria-label="previous chapter">⏮</button>
+    <button id="btn-next" type="button" aria-label="next chapter">⏭</button>
+    <button id="btn-restart" type="button" aria-label="restart this chapter">↻</button>
+  </div>
+  <div class="grp modes">
+    <button id="btn-live" type="button"
+      title="pause the narration and hand the stage to the presenter — click into the frame and drive the page by hand">GO-LIVE</button>
+    <button id="btn-rearm" type="button"
+      title="take the stage back from a GO-LIVE and resume scheduled playback">RE-ARM</button>
+    <button id="btn-log" type="button" aria-pressed="false"
+      title="show or hide the cue log (a dry-run aid: every cue and stage note as it fires)">LOG</button>
+  </div>
+  <div id="timeline">
+    <input id="scrub" type="range" min="0" max="1000" value="0" step="1" aria-label="seek within chapter">
+    <div class="clockrow"><span id="clock">0:00</span><span>/</span><span id="dur">0:00</span>
+      <span id="chapters" aria-label="chapters"></span></div>
+  </div>
+  <div id="meta">
+    <span id="mode">scheduled</span>
+    <span id="ready"></span>
+    <span id="addr"></span>
+  </div>
+</div>
+
+<div id="focussink" tabindex="-1"></div>
+
+<div id="gate">
+  <div class="kick">The Orrery Estate</div>
+  <h1>The Dev-Showing</h1>
+  <p class="sub">A core-sample of the estate's own history — twenty-nine days and a thousand commits, cut open and climbed layer by layer. The deck runs the stage; the maker speaks between chapters.</p>
+  <div class="acts">
+    <button id="gate-resume" type="button" hidden>▸ resume</button>
+    <button id="gate-begin" type="button">▶ begin</button>
+    <button id="gate-read" type="button">▸ read it silently</button>
+  </div>
+</div>
+
+<!-- one persistent audio element: its src is swapped per chapter, blessed once by
+     the unlock click so per-element autoplay rules never re-bite (DESIGN §10). The
+     shell ships no audio; T5.2+ set each chapter's audio via forge:asset once the
+     dNN.mp3 files are rendered. -->
+<audio id="voice" preload="none"></audio>
+
+<script>
+<!-- forge:include ../tools/ws/ws.js -->
+</script>
+
+<script>
+<!-- forge:include cue-engine.js -->
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   SHOWING_CHAPTERS — the Book 2 (Dev-Showing) cue sheet, STUB (WS4 T4.1).
+
+   This is the option-A deck: it reuses the shared cue-engine.js + showing.js + the
+   SHOWING_* globals AS-IS (invariant 9). Book 2 is its own HTML page, so these
+   globals never coexist with Book 1's `talk/showing.html`.
+
+   The 12 chapters d01…d12 are STUBBED here — id, title, and a home-base opening
+   frame (`../strata/index.html`, the stratigraphy core, the deck's home base per
+   PLAN §1) plus a single t=0 naming note cue, so the deck boots and every chapter
+   loads a real page with zero console errors. Deliberately NOT yet wired (later
+   tasks own this content):
+     · T5.1  authors the 12 narration scripts + card text (Fable).
+     · T4.2  enrolls the real frames into SHOWING_FRAME_MANIFEST (strata + ages
+             pinned; the Conservatory bench + Keystone Arch as tolerant held
+             frames) and clones the rehearsal gate.
+     · T5.2 / T6.1 / T6.2  render each chapter's audio → dNN.mp3 + dNN.json and
+             fold them in via forge:asset / forge:json (those files do not exist
+             yet, so this stub carries NO forge:asset/forge:json directive — forge
+             errors on a missing asset target).
+     · T6.3 / T6.4  wire each chapter's real opening frame, the ascending
+             stratumTo(1…8) spine, the d03 ledger/d07 ages/d08 keystone flips, the
+             ageTo walk, the deck cards, and the baked hushes — cue anchors bound
+             to real word `s` times from the rendered .json sidecar.
+     · T6.5  builds the deck cards into SHOWING_CARDS.
+
+   The lit-layer spine the wiring will follow (PLAN §1): 1,2,3,(d05 excursion),4,
+   (d07 excursion),5,6,7,(d11 step-out),8 — monotonic, one stratum per landing.
+
+   Use BLOCK comments only in this region (the HTML-comment-in-script forge
+   landmine); no multi-line <!-- --> may land inside a forged <script>. */
+window.SHOWING_CHAPTERS = [
+  { id:'d01', title:'THE CORE',
+    opening:{ frame:'../strata/index.html' },
+    cues:[ { t:0, note:'d01 · THE CORE — the whole cut visible; the GO-LIVE lever (COMMITS↔DAYS) is wired at T5.2' } ] },
+  { id:'d02', title:'THE BEDROCK OF HANDS',
+    opening:{ frame:'../strata/index.html' },
+    cues:[ { t:0, note:'d02 · THE BEDROCK OF HANDS — stratumTo(1) + founding-documents card wired at T6.3/T6.5' } ] },
+  { id:'d03', title:'THE FIRST FIRE',
+    opening:{ frame:'../strata/index.html' },
+    cues:[ { t:0, note:'d03 · THE FIRST FIRE — stratumTo(2) + mid-chapter flip to ../ledger/face.html wired at T6.3' } ] },
+  { id:'d04', title:'THE IRON GAUGE',
+    opening:{ frame:'../strata/index.html' },
+    cues:[ { t:0, note:'d04 · THE IRON GAUGE — stratumTo(3) + gauge --status card wired at T6.3/T6.5' } ] },
+  { id:'d05', title:'THE DRIFT ONLY THE OUTSIDE COULD SEE',
+    opening:{ frame:'../strata/index.html' },
+    cues:[ { t:0, note:'d05 · excursion to the Conservatory held frame — opening frame pinned + re-verified at T4.2, wired at T6.3' } ] },
+  { id:'d06', title:'THE OPEN DRAWER',
+    opening:{ frame:'../strata/index.html' },
+    cues:[ { t:0, note:'d06 · THE OPEN DRAWER — stratumTo(4) wired at T6.3' } ] },
+  { id:'d07', title:'THE MAP WARS',
+    opening:{ frame:'../strata/index.html' },
+    cues:[ { t:0, note:'d07 · excursion to ../museum/ages.html — the ageTo(1…7) walk + baked hush wired at T6.4' } ] },
+  { id:'d08', title:'REACH',
+    opening:{ frame:'../strata/index.html' },
+    cues:[ { t:0, note:'d08 · REACH — stratumTo(5) + flip to the Keystone Arch held frame, pinned at T4.2, wired at T6.4' } ] },
+  { id:'d09', title:'SCAR TISSUE, AND THE QUIETER KEY',
+    opening:{ frame:'../strata/index.html' },
+    cues:[ { t:0, note:'d09 · SCAR TISSUE — stratumTo(6) kintsugi layer + war-story cards wired at T6.4/T6.5' } ] },
+  { id:'d10', title:'FULL CIRCLE',
+    opening:{ frame:'../strata/index.html' },
+    cues:[ { t:0, note:'d10 · FULL CIRCLE — stratumTo(7) + ageTo(7) + loop-diagram card wired at T6.4/T6.5' } ] },
+  { id:'d11', title:'HOW YOU WOULD USE IT',
+    opening:{ frame:'../strata/index.html' },
+    cues:[ { t:0, note:'d11 · HOW YOU WOULD USE IT — the 4-step recipe cards + GO-LIVE terminal beat wired at T6.4/T6.5' } ] },
+  { id:'d12', title:'TOPSOIL',
+    opening:{ frame:'../strata/index.html' },
+    cues:[ { t:0, note:'d12 · TOPSOIL — stratumTo(8), the open layer + final hush wired at T6.4' } ] }
+];
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SHOWING_FRAME_MANIFEST — the per-frame determinism-and-motion manifest (DESIGN
+   §10). STUB (WS4 T4.1): empty, populated at T4.2, which enrolls every frame the
+   Dev-Showing frames — strata + ages `pinned`; the ledger face per Book 1's class;
+   the Conservatory bench + Keystone Arch as `tolerant` held frames — keyed by exact
+   frame URL, plus the notFramed completeness list. The cloned rehearsal gate
+   (T4.2 → tools/tour/dev-showing-rehearsal.test.mjs) is the enforcer. showing.js
+   does not read this global; the rehearsal gate + tour-check do. */
+window.SHOWING_FRAME_MANIFEST = { frames:{}, notFramed:[] };
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SHOWING_CARDS — deck-card registry. STUB (WS4 T4.1): empty, built at T6.5
+   (founding-documents card @ 34fedddd · gauge --status · criteria-diff · delight
+   register · war-story cards ×3 · loop diagram · the 4-step how-to recipe ·
+   stop-bar + small-return quote cards). Each card's quotations are diff-verified
+   against their cited SHA before shipping (quotation covenant, invariant 3).
+   showing.js reads `window.SHOWING_CARDS || {}`, so an empty registry is safe. */
+window.SHOWING_CARDS = {};
+</script>
+
+<script>
+<!-- forge:include showing.js -->
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   THE GRAND TOUR DOCENT — this page is NOT a tour stop (the deck frames stops, it
+   is not one), so no tour include here. Left intentionally: the Dev-Showing is its
+   own surface (DESIGN §10), mirroring Book 1's showing.src.html. */
+</script>
+</body>
+</html>
