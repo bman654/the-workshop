@@ -144,7 +144,9 @@ Do this end-to-end once at the venue with the projector live:
    "Listen." silence, then the audio-lens plate rises with 48 ringed notes and the
    `npx skills add bman654/audio-lens` command; **Ch 9** — the camera rides gate →
    drive → manor; **Ch 10** — one earned constellation replays its reveal (needs a
-   charted profile, checklist item 5).
+   charted profile, checklist item 5); **Ch 11** — the cairn descends: two koans open
+   in the hush, the whoosh dives ~1,800 stones, the founding stone opens as its line
+   is read, and the chapter rests on the unmarked stones below the ground line.
 7. Practice **GO-LIVE** once: at any map chapter press `L`, click into the frame, pan
    the map by hand, then click **RE-ARM** to resume.
 8. Practice a **reload**: press Cmd-R mid-chapter, then click **▸ resume — CHAPTER N**.
