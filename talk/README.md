@@ -108,7 +108,18 @@ rejected `play()` never throws, it just falls through to the silent clock.
 4. **Serve locally as the offline fallback.** Have `python3 -m http.server 8000`
    running from the repo root even if you plan to use the Pages URL — venue Wi-Fi is not
    a dependency you want.
-5. **One full timed run-through** — see below.
+5. **Present from YOUR browser profile** — two chapters read the estate's earned
+   state: **Ch 10** replays a constellation reveal only if the profile has at least
+   one CHARTED formation (open the map, look for a named figure in the sky; a fresh
+   profile silently skips the replay), and the tours drawer offers resume labels from
+   your `ws:` history. Check the sky once before doors open.
+6. **Ch 7 must be AUDIBLE** — during the "Listen." gap the barrel itself plays
+   through the venue speakers (it is real WebAudio in the frame, not part of the
+   narration track). Verify at the venue: play Ch 7 past the gap and listen for the
+   canon; in a console you can also check the frame's
+   `__barrelCtxState === "running"`. If the estate mute is on anywhere, the comb
+   stays silent — check the 🔈 state on the barrel page.
+7. **One full timed run-through** — see below.
 
 ---
 
@@ -124,13 +135,21 @@ Do this end-to-end once at the venue with the projector live:
 4. At the end of Ch 1 the deck **holds** (`next — THE ONE ROOM`). Say your between-
    chapter line, then press `⏭`. Do this for all 13 — the point of the run-through is to
    rehearse *your* rhythm in the holds, not the deck's (the deck is drift-proof).
-5. Spot-check the cue-heavy chapters land: **Ch 5** frames the double-slit and *fires a
+5. Spot-check the cue-heavy chapters land: **Ch 3** flips through four garden beds
+   mid-montage and returns to Life; **Ch 5** drags the sun to sunset (the disk
+   reddens), then frames the double-slit and *fires a
    volley* as you say "I fired those just now"; **Ch 7** cranks the pin-barrel a half
    turn; **Ch 8** pulls the Errand's lever and the marble run goes.
-6. Practice **GO-LIVE** once: at any map chapter press `L`, click into the frame, pan
+6. Check the two NEW payoffs: **Ch 7** — the barrel audibly plays the canon into the
+   "Listen." silence, then the audio-lens plate rises with 48 ringed notes and the
+   `npx skills add bman654/audio-lens` command; **Ch 9** — the camera rides gate →
+   drive → manor; **Ch 10** — one earned constellation replays its reveal (needs a
+   charted profile, checklist item 5).
+7. Practice **GO-LIVE** once: at any map chapter press `L`, click into the frame, pan
    the map by hand, then click **RE-ARM** to resume.
-7. Practice a **reload**: press Cmd-R mid-chapter, then click **▸ resume — CHAPTER N**.
-8. Finish; the last chapter (Ch 13, THE INVITATION) holds on the gate with the site
+8. Practice a **reload**: press Cmd-R mid-chapter, then click **▸ resume — CHAPTER N**.
+   (**▶ begin** after a reload starts OVER at chapter one — resume is the only way back.)
+9. Finish; the last chapter (Ch 13, THE INVITATION) holds on the gate with the site
    address on screen and `— end of the showing`.
 
 If all thirteen chapters play, the holds feel right, and the three cue chapters land,

@@ -384,11 +384,22 @@ async function main() {
         } else if (c.kind === 'state' || c.kind === 'impulse') {
           seek(ci, Math.round(c.t * 1000) + 120);
           waitFrame('', 9000);              // whatever frame is current at this time is ready
-          const hs = hookState(c.verb); hooksTot++;
-          const ok = hs.has && hs.verb === 'function';
-          if (ok) hooksOk++;
-          check('  ' + ch.id + ' ' + c.kind + ' hook ' + c.verb + '() exists at poke time', ok,
-            '__tourHooks.' + c.verb + '=' + hs.verb);
+          hooksTot++;
+          if (String(c.verb).startsWith('deck.')) {
+            // deck-local verb: handled by the deck itself, never the frame
+            const dv = abEval(`(function(){ return JSON.stringify({ verbs: window.__showing.deckVerbs(),
+              card: window.__showing.cardShown() }); })()`);
+            const ok = Array.isArray(dv.verbs) && dv.verbs.indexOf(String(c.verb).slice(5)) >= 0;
+            if (ok) hooksOk++;
+            check('  ' + ch.id + ' ' + c.kind + ' deck verb ' + c.verb + '() has a deck handler', ok,
+              'deck handlers: ' + (dv.verbs || []).join(',') + ' · card now: ' + dv.card);
+          } else {
+            const hs = hookState(c.verb);
+            const ok = hs.has && hs.verb === 'function';
+            if (ok) hooksOk++;
+            check('  ' + ch.id + ' ' + c.kind + ' hook ' + c.verb + '() exists at poke time', ok,
+              '__tourHooks.' + c.verb + '=' + hs.verb);
+          }
         }
       }
     }
@@ -420,11 +431,14 @@ async function main() {
     // (c) ch07 pin-barrel: enter past the crank cue FROM ANOTHER chapter → fresh frame at rest,
     //     crank replayed on the load handler (φ: 0 → 24).
     seek(3, 0); waitFrame('galton', 9000);            // leave the barrel: go to ch04 (galton)
-    seek(6, 16000); const pbFi = waitFrame('pin-barrel', 9000); ab('wait', '600');
-    const pb = barrelPhi();
-    check('  B-replay ch07 crank replays on the freshly-loaded frame (φ → 24)',
+    // seek PAST the listen-gap crankGlide cue (29.95s); the replay walks the barrel
+    // step-by-step at 150 ms (the paced, audible glide) — poll until it converges.
+    seek(6, 38000); const pbFi = waitFrame('pin-barrel', 9000);
+    let pb = { phi: null };
+    for (let w = 0; w < 16; w++) { ab('wait', '500'); pb = barrelPhi(); if (pb.phi !== null && Math.abs(pb.phi - 24) < 1.0) break; }
+    check('  B-replay ch07 crankGlide replays on the freshly-loaded frame (φ walks to 24)',
       pbFi.src.indexOf('pin-barrel') >= 0 && pb.phi !== null && Math.abs(pb.phi - 24) < 1.0,
-      'φ reconstructed = ' + pb.phi + ' on a fresh pin-barrel load');
+      'φ converged = ' + pb.phi + ' on a fresh pin-barrel load (paced glide)');
 
     // ═══ B-buttons — panic buttons exist + FIRE (real CDP clicks) ═══
     console.log('\n  panic buttons (real CDP clicks — never dispatchEvent):');

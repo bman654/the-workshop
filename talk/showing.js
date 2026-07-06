@@ -210,10 +210,34 @@
     try { els.frame.src = src; } catch (e) {}
   }
 
+  /* ── deck-local verbs ("deck.*") — durable stage overlays that ride the STATE
+     replay machinery but never touch the frame. deck.card(id) shows a plate from
+     the SHOWING_CARDS registry; deck.card(null) clears it. Idempotent. ────────── */
+  var curCard = null;
+  function setCard(id) {
+    id = id || null;
+    if (id === curCard) return;
+    curCard = id;
+    if (!els.card) return;
+    var reg = window.SHOWING_CARDS || {};
+    if (!id || !reg[id]) { els.card.hidden = true; els.card.innerHTML = ''; curCard = null; return; }
+    els.card.innerHTML = reg[id];
+    els.card.hidden = false;
+  }
+  var DECK_HOOKS = { card: setCard };
+
   /* ── cue routing (try/catch per cue — a failed poke logs, never throws) ────── */
   function pokeHook(payload, kind) {
     var verb = payload && payload.verb;
     if (!verb) { log('· ' + kind + ' cue with no verb'); return; }
+    if (verb.indexOf('deck.') === 0) {
+      var dv = DECK_HOOKS[verb.slice(5)];
+      if (typeof dv === 'function') {
+        try { dv.apply(null, payload.args || []); log('✓ ' + kind + ' ' + verb + '()'); }
+        catch (e) { log('✗ ' + kind + ' ' + verb + ' threw: ' + e.message); }
+      } else { log('· ' + kind + ' ' + verb + ' — no deck handler'); }
+      return;
+    }
     var fw = frameWin();
     var hooks = null;
     try { hooks = fw && fw.__tourHooks; } catch (e) { hooks = null; }
@@ -266,6 +290,7 @@
        never replayed (the reload-resume marble-run-ding bug). At t=0 the cursor
        stays -Infinity so the chapter's t=0 cues still fire. */
     state.lastFireT = tSec > 0 ? tSec : -Infinity;
+    setCard(null);   /* a card never outlives its chapter; the replay below re-shows one if due */
     var seek = CE.deriveSeek(ch, tSec, scrub.current());
     if (seek.frameChanged) setFrame(seek.frame); else if (seek.frame != null) scrub.sync(seek.frame);
     buildCaptions(ch);
@@ -502,7 +527,7 @@
   function boot() {
     var $ = function (id) { return document.getElementById(id); };
     els = {
-      frame: $('frame'), captions: $('captions'), rmbanner: $('rmbanner'),
+      frame: $('frame'), captions: $('captions'), rmbanner: $('rmbanner'), card: $('card'),
       play: $('btn-play'), prev: $('btn-prev'), next: $('btn-next'), restart: $('btn-restart'),
       live: $('btn-live'), rearm: $('btn-rearm'), logbtn: $('btn-log'),
       clock: $('clock'), dur: $('dur'), scrub: $('scrub'), chapters: $('chapters'),
@@ -627,6 +652,8 @@
     live: goLive,
     rearm: reArm,
     clockMs: function () { return state.clockMs; },
+    deckVerbs: function () { return Object.keys(DECK_HOOKS); },
+    cardShown: function () { return curCard; },
     /* caption-line probe for the rehearsal gate: the lines must PARTITION the
        chapter's words (coverage) while only the current line is mounted. */
     cap: function () {
