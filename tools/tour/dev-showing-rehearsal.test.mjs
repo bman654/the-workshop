@@ -402,11 +402,15 @@ async function main() {
     console.log('\n  STATE-replay reconstruction (enter a chapter past a cue from another frame):');
     // find a non-strata anchor chapter to enter FROM (forces a fresh strata load).
     const nonStrata = chapters.findIndex((c) => c.opening && c.opening.indexOf('strata/index.html') < 0);
-    // STRATA leg: a chapter opening on strata with a stratumTo state cue at t>0.
+    // STRATA leg: a chapter opening on strata with a stratumTo state cue. The
+    // ascending spine (WS4 T6.3/T6.4) fires stratumTo(k) at CHAPTER OPEN (t:0) so the
+    // lit layer is correct the instant the core reappears — so the selector is t>=0
+    // (a t=0 cue is a valid state cue: it is carried in stateReplay and replayed onto
+    // the fresh frame on load, exactly what this leg verifies). Book-2's own gate.
     const strataCue = (() => {
       for (const [ci, ch] of chapters.entries()) {
         if (!(ch.opening && ch.opening.indexOf('strata/index.html') >= 0)) continue;
-        const c = ch.cues.find((c) => c.kind === 'state' && c.verb === 'stratumTo' && c.t > 0 && (c.args || []).length);
+        const c = ch.cues.find((c) => c.kind === 'state' && c.verb === 'stratumTo' && c.t >= 0 && (c.args || []).length);
         if (c) return { ci, k: Math.round(Number(c.args[0])), t: c.t };
       }
       return null;
