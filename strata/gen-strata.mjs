@@ -87,8 +87,12 @@ export const HORIZONS = [
 ];
 
 /* ── Era names, one per stratum (oldest→newest) ───────────────────────────────
-   PLACEHOLDER: the plan's current working-lean set. T2.4 (Fable) makes the
-   final selection from ERAS.md's candidates, re-writes these, and re-checks. */
+   FINAL (WS4 T2.4): one name chosen per stratum from the era study's three
+   candidates. Read up the core they make a material ascent — hands, fire,
+   iron, the vellum drawer, crucible bronze, scarred iron, surveyed stone,
+   topsoil — and the top name is the only one that is soil, not stone: that
+   layer is still being laid. Renaming an era = edit here, re-run this script;
+   the page and the twin read names from the carrier alone. */
 export const ERA_NAMES = [
   'The Bedrock of Hands',
   'The First Fire',
