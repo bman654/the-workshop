@@ -692,6 +692,59 @@
       /* reveals are pure in t; on return the next frame catches everything up */
     });
     rafId = window.requestAnimationFrame(frame);
+
+    /* ══════════════════════════════════════════════════════════════════════════
+       WS5 · Book-3 trailer cold-open hooks — ADDITIVE; inert unless poked.
+
+       Appended INSIDE boot() so the four verbs close over `audio`, `begin`, and
+       `groups`. The trailer deck (a same-origin parent) reads these off
+       window.__tourHooks the way talk/showing.js routes __tourHooks verbs
+       (the-errand/showing-hook.js is the estate precedent). Nothing here runs
+       unless the deck pokes it: window.ColophonCloud, the begin veil, #beginBtn,
+       WS mute sync, and every unpoked code path are untouched — zero behaviour
+       change on an ordinary visit.
+
+       FOUR verbs (ENGINE §3 + research/22 §2.3 + verify-pass F3). Why a separate
+       resume verb: begin() hard-guards re-entry (`if (state !== "idle") return`)
+       and the pre-begin page is a full-screen veil, so a re-begin cannot resume
+       after a cut. The cold-open choreography is weave-and-pause at the record
+       arm click (colophonBeginAt + colophonCut, #voice shielded to 0) then
+       colophonResume() at the t=1.5 cue — a DIRECT audio.play(), legal once the
+       arm gesture has unlocked audio. begin() never resets currentTime (only
+       replay() does), so seek-then-begin plays from the sought position.
+
+       Word lookup is by textContent over `groups` (each group's primary word
+       span), NEVER by span index: there are more `.w` spans than data words
+       (display-only tokens — em-dashes — carry `.w` too but ride a group's
+       `spans` array, absent from `groups`). The zoom target 'I' is the first bare
+       "I" token (word 53, "I am Claude,") — verified no earlier "I" exists, so
+       first-match is the correct word.
+
+       Forge landmine: this file forge-inlines into a <script>; BLOCK COMMENTS
+       ONLY — a multi-line <!-- --> here would silently kill the whole script.
+       ══════════════════════════════════════════════════════════════════════════ */
+    if (typeof window !== "undefined") {
+      window.__tourHooks = window.__tourHooks || {};
+      window.__tourHooks.colophonBeginAt = function (ms) {
+        try { audio.currentTime = Math.max(0, ms || 0) / 1000; } catch (e) {}
+        begin();
+        return true;
+      };
+      window.__tourHooks.colophonCut = function () {
+        try { audio.pause(); } catch (e) {}
+        return true;
+      };
+      window.__tourHooks.colophonResume = function () {
+        try { var p = audio.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+        return true;
+      };
+      window.__tourHooks.colophonWordRect = function (txt) {
+        for (var i = 0; i < groups.length; i++)
+          if (groups[i].word && groups[i].word.textContent === txt)
+            return groups[i].word.getBoundingClientRect();
+        return null;
+      };
+    }
   }
 
   if (typeof window !== "undefined") { window.ColophonCloud = ColophonCloud; }
