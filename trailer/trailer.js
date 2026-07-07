@@ -46,6 +46,9 @@
   /* The trailer is ONE long chapter (ENGINE §0). */
   var CHAPTER = CHAPTERS[0];
 
+  /* The colophon frame's stack key — the cold-open zoom target (ENGINE §3). */
+  var COLO_KEY = (CHAPTER.opening && CHAPTER.opening.frame) || '../colophon.html';
+
   /* ?record → the OBS contract (ENGINE §8). The FULL preflight + reach-in
      choreography land at T6.2; the shell only needs to know the mode so it can
      size the stage, strip authoring chrome, disable the hash mirror, and never
@@ -79,6 +82,8 @@
   var lineSpans = [];
   var litLine = -1;
   var litSpan = -1;
+  var curDisplay = null;          /* the active segment's display-override map */
+  var curCard = null;             /* the card id currently on #card (idempotent) */
 
   /* ── small helpers ─────────────────────────────────────────────────────────── */
   function durationMs() {
@@ -144,7 +149,13 @@
     var next = frameEls[key];
     if (!next) { log('· frame ' + key + ' — not in stack'); return; }
     var prev = state.activeKey && frameEls[state.activeKey];
-    if (prev) { prev.classList.remove('on'); }
+    if (prev) {
+      prev.classList.remove('on');
+      /* clear any cold-open inline transform/opacity (the colophon zoom/fade) so
+         a re-flip or a scrub-replay starts from a clean frame (ENGINE §3). */
+      prev.style.transform = ''; prev.style.transformOrigin = '';
+      prev.style.opacity = ''; prev.style.transition = ''; prev.style.willChange = '';
+    }
     next.classList.add('on');
     state.activeKey = key;
     log('▸ frame ' + key);
@@ -209,13 +220,42 @@
     wordCache[seg.id] = out;
     return out;
   }
+  /* The spoken sidecar token, and its ON-SCREEN form after the per-segment
+     display-override map (ENGINE §4 F9). The override rides the caption band
+     ONLY — never the voice / never the TTS input. A trailing-punctuation match
+     lets "Vincent" light even when the sidecar token is "Vincent," and lets the
+     S5 "Claude" → "— Claude" rule survive a "Claude." token. */
+  function rawWordText(w) { return String(w.value != null ? w.value : w.w); }
+  function applyDisplay(text, disp) {
+    if (!disp) return text;
+    if (Object.prototype.hasOwnProperty.call(disp, text)) return disp[text];
+    var m = text.match(/^(.*?)([.,!?;:'"\)\]]+)$/);
+    if (m && Object.prototype.hasOwnProperty.call(disp, m[1])) return disp[m[1]] + m[2];
+    return text;
+  }
+  function displayText(w) { return applyDisplay(rawWordText(w), curDisplay); }
+
+  /* Does this word force a new caption line before it? `breakBefore` entries may
+     be a numeric word index OR a spoken-token string (the token form is
+     sidecar-index-independent — it survives T4.1's real render). Used for the S5
+     signature "— Claude" on its OWN line (covenant, ENGINE §4). */
+  function forcesBreak(brk, idx, w) {
+    for (var b = 0; b < brk.length; b++) {
+      if (typeof brk[b] === 'number' && brk[b] === idx) return true;
+      if (typeof brk[b] === 'string' && rawWordText(w) === brk[b]) return true;
+    }
+    return false;
+  }
   function buildLines(seg) {
     if (!seg) return [];
     if (lineCache[seg.id]) return lineCache[seg.id];
     var ws = segWords(seg), lines = [], line = null;
     var MAX = 56;
+    var disp = seg.display || null, brk = seg.breakBefore || [];
     for (var i = 0; i < ws.length; i++) {
-      var v = String(ws[i].value != null ? ws[i].value : ws[i].w);
+      var forced = forcesBreak(brk, i, ws[i]);
+      if (forced) line = null;
+      var v = applyDisplay(rawWordText(ws[i]), disp); /* width uses the display form */
       if (!line || (line.len + 1 + v.length) > MAX) {
         line = { words: [], len: 0, startMs: ws[i].s, endMs: ws[i].e };
         lines.push(line);
@@ -223,7 +263,7 @@
       line.words.push(ws[i]);
       line.len += (line.words.length > 1 ? 1 : 0) + v.length;
       line.endMs = ws[i].e;
-      if (line.len >= MAX * 0.5 && /[.!?;:—]["')\]]?$/.test(v)) line = null;
+      if (!forced && line.len >= MAX * 0.5 && /[.!?;:—]["')\]]?$/.test(v)) line = null;
     }
     lineCache[seg.id] = lines;
     return lines;
@@ -231,9 +271,28 @@
   function resetCaptions(seg) {
     if (els.captions) els.captions.textContent = '';
     litLine = -1; litSpan = -1; lineSpans = [];
+    curDisplay = (seg && seg.display) || null;
     if (seg) buildLines(seg);
   }
-  function wordText(w) { return String(w.value != null ? w.value : w.w); }
+  function wordText(w) { return displayText(w); }
+
+  /* ── the caption band's visibility (ENGINE §4 + §2 T8.9): the band is on ONLY
+     while the ACTIVE segment's words are sounding — in at the first word `s`
+     −300 ms, out at the last word `e` +200 ms. Off for the whole cold open and
+     every VO gap (A/B/C), so no frozen words hang on screen through a silence. */
+  function bandVisible() {
+    var seg = state.activeSeg;
+    if (!seg) return false;
+    var ws = segWords(seg);
+    if (!ws.length) return false; /* a stub segment with no sidecar stays hushed */
+    var ms = state.clockMs - seg.atMs;
+    return ms >= (ws[0].s - 300) && ms <= (ws[ws.length - 1].e + 200);
+  }
+  function paintBand() {
+    if (!els.captions) return;
+    if (state.playing && !state.ended && bandVisible()) els.captions.classList.remove('hush');
+    else els.captions.classList.add('hush');
+  }
   function mountLine(line, animateOut) {
     var old = els.captions.querySelector('.cap-line.cur');
     if (old) {
@@ -281,14 +340,165 @@
     litSpan = idx;
   }
 
+  /* ── full-screen cards (ENGINE §5b) — setCard(id) shows a plate from
+     TRAILER_CARDS; setCard(null) clears it. Idempotent; a durable STATE overlay
+     that rides the seek-replay machinery but never touches the frame. */
+  function setCard(id) {
+    id = id || null;
+    if (id === curCard) return;
+    curCard = id;
+    if (!els.card) return;
+    var reg = window.TRAILER_CARDS || {};
+    if (!id || !reg[id]) { els.card.classList.remove('on'); els.card.innerHTML = ''; curCard = null; log('▸ card — clear'); return; }
+    els.card.innerHTML = reg[id];
+    els.card.classList.add('on');
+    log('▸ card ' + id);
+  }
+
+  /* ── the Colophon cold-open zoom (ENGINE §3) — a parent-side transform on the
+     colophon iframe ELEMENT (it fills the stage 1:1, so a word rect from
+     colophonWordRect maps straight to stage coords). Zoom in on the target word
+     (scale so its line-height ≈ 30% of stage height — F10), centred on stage;
+     200 ms scale-out to identity on the word's landing; 0.8 s fade to black at
+     the cut. Reads the rect ONLY while the colophon is the active frame. */
+  function coloFrame() { return frameEls[COLO_KEY] || null; }
+  function colophonZoom(word) {
+    if (state.activeKey !== COLO_KEY) { log('· colophonZoom — colophon not active'); return; }
+    var cf = coloFrame();
+    if (!cf || !cf.contentWindow || !els.stage) return;
+    var rect = null;
+    try {
+      var h = cf.contentWindow.__tourHooks;
+      rect = (h && typeof h.colophonWordRect === 'function') ? h.colophonWordRect(word) : null;
+    } catch (e) { rect = null; }
+    if (!rect || !rect.height) { log('· colophonZoom — no rect for "' + word + '" (page not woven yet?)'); return; }
+    var sb = els.stage.getBoundingClientRect();
+    var stageW = sb.width, stageH = sb.height;
+    var wcx = rect.left + rect.width / 2, wcy = rect.top + rect.height / 2;
+    /* F10 wants the word ≈28–33% of stage height, "≈4.5–5.5 at the colophon's
+       type size". The live colophon renders narration words at a ~21px glyph box
+       (measured — smaller than F10 assumed), so the 28–33% figure would demand
+       a ~15× scale that crops out the previous-sentence tail the cold open needs.
+       Repo wins: honour the design SCALE range 4.5–5.5 (5.5 keeps the most
+       context); the crop constraints [tail visible + highlight in crop] are the
+       binding assertion, checked by rect arithmetic at rehearsal (T5.2). */
+    var S = 0.30 * stageH / rect.height;
+    S = Math.max(4.5, Math.min(5.5, S));
+    var dx = stageW / 2 - wcx, dy = stageH / 2 - wcy;
+    cf.style.willChange = 'transform';
+    cf.style.transition = 'none';
+    cf.style.transformOrigin = wcx.toFixed(1) + 'px ' + wcy.toFixed(1) + 'px';
+    cf.style.transform = 'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px) scale(' + S.toFixed(3) + ')';
+    state.coloZoom = { word: word, scale: S, wordH: rect.height, stageH: stageH, pctOfStageH: S * rect.height / stageH };
+    log('▸ colophonZoom "' + word + '" S=' + S.toFixed(2) + ' (' + Math.round(S * rect.height / stageH * 100) + '% stage-h)');
+  }
+  function colophonZoomOut(ms) {
+    var cf = coloFrame();
+    if (!cf) return;
+    ms = (typeof ms === 'number' && ms > 0) ? ms : 200;
+    cf.style.transition = 'transform ' + ms + 'ms ease';
+    cf.style.transform = 'none';
+    log('▸ colophonZoomOut ' + ms + 'ms → identity');
+  }
+  function colophonFade(ms) {
+    var cf = coloFrame();
+    if (!cf) return;
+    ms = (typeof ms === 'number' && ms > 0) ? ms : 800;
+    cf.style.transition = (cf.style.transition ? cf.style.transition + ', ' : '') + 'opacity ' + ms + 'ms ease';
+    cf.style.opacity = '0';
+    log('▸ colophonFade ' + ms + 'ms → black');
+  }
+
+  /* ── the radio-button skit + deck-drawn fake cursor (ENGINE §5). skitOn/Third/
+     Pick/Off are durable STATE; the cursor moves/twitches and the bloom are
+     transient IMPULSE. Cursor positions derive from the option rects (no magic
+     numbers), so they hold at any stage size. */
+  function skitQ(sel) { return els.skit ? els.skit.querySelector(sel) : null; }
+  function easeFn(e) {
+    if (e === 'in') return 'cubic-bezier(.7,0,.84,0)';       /* zero-hesitation snap */
+    if (e === 'inout') return 'ease-in-out';
+    return 'cubic-bezier(.16,.84,.44,1)';                    /* drift-in (default) */
+  }
+  function skitOn() {
+    if (!els.skit) return;
+    var light = skitQ('[data-opt="light"] .dot'), dark = skitQ('[data-opt="dark"] .dot'),
+        leafRow = skitQ('[data-opt="leaf"]'), leafDot = skitQ('[data-opt="leaf"] .dot'),
+        cur = skitQ('.skit-cursor');
+    if (light) light.classList.add('on');
+    if (dark) dark.classList.remove('on');
+    if (leafDot) leafDot.classList.remove('on');
+    if (leafRow) leafRow.classList.remove('show');
+    if (els.bloom) els.bloom.classList.remove('on');
+    if (cur) { cur.style.transition = 'none'; cur.style.left = '84%'; cur.style.top = '86%'; }
+    els.skit.classList.add('on');
+    log('▸ skitOn');
+  }
+  function skitCursor(which, ms, easing) {
+    var cur = skitQ('.skit-cursor'), row = skitQ('[data-opt="' + which + '"]');
+    if (!cur || !row || !els.skit) { log('· skitCursor — missing cursor/opt ' + which); return; }
+    ms = (typeof ms === 'number' && ms >= 0) ? ms : 600;
+    var sb = els.skit.getBoundingClientRect(), rb = row.getBoundingClientRect();
+    var x = (rb.left - sb.left) - 26, y = (rb.top - sb.top) + rb.height * 0.5 - 4;
+    var e = easeFn(easing);
+    cur.style.transition = 'left ' + ms + 'ms ' + e + ', top ' + ms + 'ms ' + e;
+    cur.style.left = (x / sb.width * 100).toFixed(2) + '%';
+    cur.style.top = (y / sb.height * 100).toFixed(2) + '%';
+    log('▸ skitCursor → ' + which + ' (' + ms + 'ms)');
+  }
+  function skitTwitch() {
+    var cur = skitQ('.skit-cursor');
+    if (!cur) return;
+    var top0 = cur.style.top, base = parseFloat(top0) || 0;
+    cur.style.transition = 'top 120ms ease-out';
+    cur.style.top = (base + 1.1).toFixed(2) + '%';   /* ≤ 12px flinch toward dark */
+    setTimeout(function () { cur.style.transition = 'top 120ms ease-in'; cur.style.top = top0; }, 130);
+    log('▸ skitTwitch');
+  }
+  function skitThird() {
+    var leafRow = skitQ('[data-opt="leaf"]');
+    if (leafRow) leafRow.classList.add('show');
+    log('▸ skitThird — "build whatever you want; have fun"');
+  }
+  function skitPick() {
+    var light = skitQ('[data-opt="light"] .dot'), leafDot = skitQ('[data-opt="leaf"] .dot');
+    if (light) light.classList.remove('on');
+    if (leafDot) leafDot.classList.add('on');
+    log('▸ skitPick — the third button fills');
+  }
+  function bloomFlash() {
+    if (!els.bloom || !els.skit) return;
+    var leaf = skitQ('[data-opt="leaf"]');
+    if (leaf) {
+      var sb = els.skit.getBoundingClientRect(), rb = leaf.getBoundingClientRect();
+      els.bloom.style.setProperty('--bx', ((rb.left + rb.width / 2 - sb.left) / sb.width * 100).toFixed(1) + '%');
+      els.bloom.style.setProperty('--by', ((rb.top + rb.height / 2 - sb.top) / sb.height * 100).toFixed(1) + '%');
+    }
+    els.bloom.classList.remove('on');
+    void els.bloom.offsetWidth;   /* restart the keyframe deterministically */
+    els.bloom.classList.add('on');
+    log('▸ bloomFlash — 250ms white-out → Scales');
+  }
+  function skitOff() { if (els.skit) els.skit.classList.remove('on'); log('▸ skitOff'); }
+
   /* ── cue routing (try/catch per cue — a failed poke logs, never throws) ─────
-     deck.* verbs run parent-side (segment transport, stage overlays — T2.2
-     registers the rest); everything else is a __tourHooks verb on the active
-     frame. */
+     deck.* verbs run parent-side (segment transport, stage overlays, cold-open
+     zoom, the skit); everything else is a __tourHooks verb on the active frame. */
   var DECK_HOOKS = {
     playSeg: playSeg,
     stopSeg: stopSeg,
-    setFrame: setFrame
+    setFrame: setFrame,
+    setCard: setCard,
+    card: setCard,
+    colophonZoom: colophonZoom,
+    colophonZoomOut: colophonZoomOut,
+    colophonFade: colophonFade,
+    skitOn: skitOn,
+    skitCursor: skitCursor,
+    skitTwitch: skitTwitch,
+    skitThird: skitThird,
+    skitPick: skitPick,
+    bloomFlash: bloomFlash,
+    skitOff: skitOff
   };
   function pokeHook(payload, kind) {
     var verb = payload && payload.verb;
@@ -359,6 +569,7 @@
     }
 
     lightCaption();
+    paintBand();
     paintChrome(dur);
 
     /* film content over → held black (synthetic clock keeps running under it) */
@@ -472,6 +683,7 @@
     var $ = function (id) { return document.getElementById(id); };
     els = {
       stage: $('stage'), captions: $('captions'), card: $('card'), skit: $('skit'),
+      bloom: $('bloom'),
       rmbanner: $('rmbanner'), cuelog: $('cuelog'), heldblack: $('heldblack'),
       startgate: $('startgate'), startbtn: $('start-btn'), segbank: $('segbank'),
       authoring: $('authoring'), play: $('btn-play'), scrub: $('scrub'),
@@ -529,8 +741,27 @@
     if (state.started) return;
     state.started = true;
     if (els.startgate) { els.startgate.hidden = true; els.startgate.style.display = 'none'; }
+    primeColdOpen();
     startClock();
     play();
+  }
+
+  /* AUTHORING-ONLY cold-open primer (ENGINE §3): weave-and-pause the colophon so
+     the cold-open zoom is demonstrable in review playback. The RECORD-mode
+     reach-in — the real-gesture unlock, #voice shield to 0, the silent count-in,
+     and the Gate unlock+suspend — is T6.2's contract and is deliberately NOT
+     built here (this no-ops in ?record). */
+  function primeColdOpen() {
+    if (RECORD) return;
+    if (state.activeKey !== COLO_KEY) return;
+    var cf = coloFrame();
+    try {
+      var h = cf && cf.contentWindow && cf.contentWindow.__tourHooks;
+      if (h && typeof h.colophonBeginAt === 'function') {
+        h.colophonBeginAt(21200);
+        if (typeof h.colophonCut === 'function') h.colophonCut();
+      }
+    } catch (e) {}
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
@@ -551,6 +782,13 @@
     frameKeys: function () { return Object.keys(frameEls); },
     segIds: function () { return Object.keys(segEls); },
     deckVerbs: function () { return Object.keys(DECK_HOOKS); },
+    deck: DECK_HOOKS,                                   /* poke verbs directly in a spot-check */
+    cardId: function () { return curCard; },
+    coloZoom: function () { return state.coloZoom || null; },
+    bandHushed: function () { return !!(els.captions && els.captions.classList.contains('hush')); },
+    skitOn: function () { return !!(els.skit && els.skit.classList.contains('on')); },
+    injectSeg: function (id, seg) { if (segById[id]) { for (var k in seg) segById[id][k] = seg[k]; delete wordCache[id]; delete lineCache[id]; } },
+    buildLines: function (id) { return buildLines(segById[id]); },
     preflight: function (win) { return rmCheck(win || window, 'preflight'); },
     bannerVisible: function () { return !!(els.rmbanner && !els.rmbanner.hidden); }
   };
