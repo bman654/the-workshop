@@ -1,4 +1,4 @@
-# Book 2 — deck card text (authored at T5.1, built at T6.5)
+# Book 2 — deck card text (authored at T5.1, built at T6.5; card set amended at T8.8 — see the dated UPDATED notes inline)
 
 Card copy for `talk/dev-showing.html`. Every quotation below was diff-verified
 (whitespace-normalized) against its source at the cited SHA before this file was
@@ -6,6 +6,13 @@ committed; T6.5 re-runs the same checks against the built cards. Text set off in
 `quote:` blocks is VERBATIM and must ship character-exact (elisions marked `[…]`).
 A gauge `#N` appears only inside a verbatim commit subject, set in the
 commit-subject typeface. Prose lines are editable by the builder; quotes are not.
+
+> **WS-8 note (T8.8, 2026-07-07):** after Brandon's SP-C run-through the card set
+> changed — `d10-loop` shipped as **v2** and three NEW `d11` ledger-excerpt cards
+> were added (the d11 live-terminal beat was CUT at SP-C). For those cards the
+> **source of truth is `window.SHOWING_CARDS` in `talk/dev-showing.src.html`**;
+> this file keeps the T5.1 originals for provenance plus dated pointers below.
+> The T8.8 built-card covenant checker (75/75) verified every shipped quote.
 
 ---
 
@@ -148,6 +155,17 @@ from outside the walls; the answer was sown as criteria.
 
 ## d10-loop — THE LOOP, DISTILLED
 
+> **UPDATED at T8.8 (WS-8):** the shipped card is **v2** — same two-node loop, now
+> framed as *the overseer engine*: the ORCHESTRATOR is named the overseer (verifies
+> independently, sole ledger writer, replans each step) and the side rail gained two
+> hatches — the **deep-planning hatch** (at a design fork: explore k-parallel → judge
+> → splice new tasks → continue, no human woken) and the **stop hatch**
+> (exit-for-discussion, reserved for what a human genuinely must decide) — with an
+> explicit attribution guard: these are `dev:scaffold-exec-loop` features, never
+> fun-forever mechanics (SP-C follow-up (i), binding). Source of truth =
+> `SHOWING_CARDS['d10-loop']` in `talk/dev-showing.src.html`. The v1 text below is
+> the T5.1 original, kept for provenance.
+
 **Diagram (build as a simple two-node cycle with a side rail):**
 
 ```
@@ -193,6 +211,21 @@ channel.” — the `dev:scaffold-exec-loop` skill
 
 ---
 
+## d11-task · d11-review · d11-resume — THE LEDGER-EXCERPT CARDS (ADDED at T8.8)
+
+> **ADDED at T8.8 (WS-8):** three cards new to the deck, replacing the d11 live-terminal
+> beat cut at SP-C (Brandon won't run live loops — too slow for a presentation; ledger
+> excerpts instead). Each quotes the **WS1 execution ledger FILE** (out-of-band, never committed
+> to this repo) and therefore cites **the ledger + created date on the card face** —
+> `01-grand-reorganization/WS1-execution-ledger.md · created 2026-07-03` on d11-task and
+> d11-resume; d11-review cites its `run log` section — instead of a SHA. The excerpts
+> (a task block · a run-log verify line · the resume-substrate protocol
+> line + a resumed-run log line) were covenant-diffed against the live ledger file at
+> T8.8 and independently re-diffed by the orchestrator (inv 3). Authored text lives ONLY
+> in `SHOWING_CARDS` in `talk/dev-showing.src.html` — it never had a T5.1 original.
+
+---
+
 ## d11-stopbar — THE STOP BAR
 
 **Quote (verbatim, attributed):** “Don't lower this bar, or the loop turns into
@@ -210,6 +243,15 @@ pointers, never a large payload. The core principle.” — the
 ---
 
 ## Appendix A — pre-marked ±15 s valves (PLAN §1 extension/trim rules)
+
+> **VALVE STATUS at T8.7 (WS-8, 2026-07-07):** the **d03 and d10 trim valves were
+> FIRED** (the re-rendered pass landed 8.2 s short of the ≥60 s-banked gate; the two
+> trims recovered ~19.2 s → delivered 18:49, +71 s banked) — their inline
+> `⟦trim candidate⟧` marks left with the trimmed text. **Still armed:** d07a ≈3 s +
+> d07b ≈6 s (inline marks present) and the d11 production-work beat (the T8.2-named
+> reserve valve — the "real production work… lift-and-shift" sentence drops clean).
+> The expansions below remain usable — both insertion anchors still exist verbatim in
+> the rewritten scripts (verified at T7.1) — but are moot at the current 18:49.
 
 **Trim candidates (~10 s each)** are marked inline in the scripts with
 `⟦trim candidate …⟧` stage notes: d03 (plaque aside + studio enumeration),
