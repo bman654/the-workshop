@@ -12,6 +12,12 @@ between chapters, and it never runs ahead of you.
 This file is the run book: how to drive it, the dry-run checklist, how to amend a
 chapter, and the honest page-weight note.
 
+> **Two decks live in this folder.** Everything down to the *Book 2* section
+> documents **Book 1 — The Showing** (`talk/showing.html`, the estate tour above).
+> **Book 2 — The Dev-Showing** (`talk/dev-showing.html`, the dev-history telling
+> for the same talk) shares this engine and has its own run book: see
+> **Book 2 — The Dev-Showing (operator manual)** at the end of this file.
+
 ---
 
 ## Run rule (READ FIRST)
@@ -235,3 +241,166 @@ surprises.
   roll), so no chapter narrates over an unrehearsed state.
 - **Rehearsal gate:** `tools/tour/showing-rehearsal.test.mjs` — the full §10 assertion
   list, headless, on the silent virtual clock.
+
+---
+
+## Book 2 — The Dev-Showing (operator manual)
+
+`talk/dev-showing.html` is **Book 2 — The Dev-Showing**: the same talk's second
+deck — a core-sample of the estate's own history, twenty-nine days and a thousand
+commits cut open and climbed layer by layer, narrated first-person by the estate's
+record-keeper (the Cairn voice). Twelve chapters, `d01`–`d12`; home base is the
+stratigraphy core (`strata/index.html`), with excursions to the drift gallery, the
+Ages zoetrope, and the arch-raising. **~14½ minutes of narration plus your holds —
+at budget the delivered segment lands ≈ 18:49 against a 20:00 ceiling, with about
+70 seconds banked.**
+
+Same engine, same mechanics as Book 1 (one page that never navigates; each chapter
+frames a real page in a same-origin iframe; word-lit captions; one quiet subtitle
+line at a time). Everything above about the **run rule**, the **gate**, the
+**operator controls and hotkeys**, **HOLD**s, **reload recovery**, and the
+**silent fallback** applies to Book 2 verbatim — just open
+`http://127.0.0.1:8000/talk/dev-showing.html` instead. What follows is only what
+is *different*, plus Book 2's own hold map, ending, and checklist.
+
+### Fully self-driving — there are NO live beats
+
+**Book 2 has no GO-LIVE / RE-ARM beats and no live demo.** The deck drives every
+stage itself:
+
+- **d01** — the COMMITS↔DAYS lever is **deck-thrown**: a scripted cue fires it as
+  the narration says "the deck throws it itself". You never touch the frame.
+- **d07** — the era walk over the Ages zoetrope runs automatically (the live
+  hand-scrub was cut at the run-through). Mid-chapter there is a **real 5-second
+  hush baked into the narration** — the caption band fades across it and the walk
+  lands on era six. **It is supposed to be silent. Don't touch anything.**
+- **d11** — three ledger-excerpt cards carry the "run it" beat (the live terminal
+  cut was retired). Nothing to pre-stage: no terminal, no second screen.
+
+The **GO-LIVE** / **RE-ARM** buttons still sit in the operator strip (shared
+engine chrome) and still work — keep them in your pocket as an escape hatch, e.g.
+driving the strata core by hand during Q&A — but the show never asks for them.
+
+Your entire job on stage: press `⏭` at each hold, and tell your stories in the
+three hard ones.
+
+### The hold map (your talking budget)
+
+Every chapter ends in a HOLD, exactly like Book 1 — the deck waits for `⏭` /
+`Space` and never runs ahead of you. **Three holds are HARD** — designed slots for
+your live stories, with real budgets. The other **nine are SOFT** — a breath
+(~5 s), then move on.
+
+| # | Chapter | Narration | Hold | Budget · what the hold is for |
+| --- | --- | --- | --- | --- |
+| d01 | THE CORE | 0:55 | soft | ~5 s |
+| d02 | THE BEDROCK OF HANDS | 1:02 | **HARD** | **~60 s — your founding intent (why you gave the machine free time)** |
+| d03 | THE FIRST FIRE | 1:09 | soft | ~5 s |
+| d04 | THE IRON GAUGE | 1:01 | soft | ~5 s |
+| d05 | THE DRIFT ONLY THE OUTSIDE COULD SEE | 1:43 | **HARD** | **~90 s — your drift-spotting story (the outside eye)** |
+| d06 | THE OPEN DRAWER | 1:02 | soft | ~5 s |
+| d07 | THE MAP WARS | 1:26 | soft | ~5 s |
+| d08 | REACH | 1:03 | soft | ~5 s |
+| d09 | SCAR TISSUE, AND THE QUIETER KEY | 1:39 | **HARD** | **~60 s — your war stories** |
+| d10 | FULL CIRCLE | 1:22 | soft | ~5 s |
+| d11 | HOW YOU WOULD USE IT | 1:35 | soft | ~5 s — **never Q&A here** (see the ending) |
+| d12 | TOPSOIL | 0:36 | soft | the ending — see below |
+
+**The budget math:** 14:34 of narration + 210 s of hard holds (60 + 90 + 60) +
+9 × ~5 s soft = **≈ 18:49 delivered**, against the **20:00 ceiling** — about
+**70 seconds banked**. The narration is fixed and drift-proof; only your holds
+move the clock. The bank is yours to spend in the hard holds, but it is the
+*whole* margin: if d02 + d05 + d09 together run more than ~70 s over their 210,
+you are over the ceiling. If a story runs long, shorten the *next hard hold* —
+the softs are already just a breath.
+
+### The scripted ending — Q&A comes AFTER d12, never off d11
+
+d11 (HOW YOU WOULD USE IT) is the climax — the four-step recipe, the audience's
+take-home. Its hold is SOFT: **do not open questions there.** The designed ramp:
+
+1. **d11 climax** → soft hold (a beat, no more) → press `⏭`.
+2. **d12 TOPSOIL is the cadence** — 36 seconds, the open top layer with visible
+   headroom above, and a ~4-second **baked hush on the final shot. Hold the
+   silence — it is the last note, not a glitch.**
+3. The deck holds on `— end of the showing`. **Now** the Q&A ramp: step forward
+   and take questions with the topsoil still on screen.
+
+### Dry-run checklist (Book 2)
+
+Do this at the venue, before the room fills — it is shorter than Book 1's:
+
+1. **Reduce Motion OFF** — the same red-banner check as Book 1's checklist item 1
+   (the strata climb, the loop diagram, the zoetrope, and the arch-raising all
+   animate; the deck paints the same red banner if it detects Reduce Motion).
+2. **Close other estate tabs.** A muted estate tab elsewhere can broadcast a
+   cross-tab `ws:pref:muted` and silence the deck — this rule is book-agnostic and
+   bites Book 2 just as hard. One clean tab.
+3. **Serve from the repo root** (`python3 -m http.server 8000`) and **step through
+   d05 once**: the drift gallery loads its archived plates and live exhibits by
+   *relative iframe* (`museum/archive/`, the conservatory bench) — exactly the
+   thing that breaks if the server root is anything narrower than the repo.
+4. **Projector safe area** — captions and the operator strip inside the screen
+   edges (Book 1's item 3).
+5. **Any browser profile works.** Book 2's frames render from committed carriers —
+   there is **no earned-state dependency** (nothing like Book 1's charted-sky
+   requirement in its Ch 10). A fresh profile shows the identical deck.
+6. **Audio is the narration track only.** No framed page plays sound in Book 2
+   (nothing like Book 1's audible Ch 7 barrel), and d07's mid-chapter silence is
+   intentional. Set the venue level during d01 and leave it alone.
+7. **One full timed run-through** — stopwatch the delivered segment (narration +
+   your real holds). At budget it reads **≈ 18:49**; if your stopwatch crosses
+   19:30, tighten the hard holds.
+
+### Amend a chapter (Book 2 deltas)
+
+The pipeline is Book 1's (edit the words → re-render → re-anchor → re-forge →
+gate) with these substitutions:
+
+- **Scripts:** `talk/script/dNN-<slug>.txt` → `dNN.mp3` + `dNN.json` (same
+  `tools/voice/claude-tts` command, 48k mono house default; verify each render
+  with audio-lens — no clipping, no truncation, duration vs budget).
+- **Cues:** re-anchor in `talk/dev-showing.src.html` (same rule: `t` = a real
+  word's `s` value ÷ 1000 from the new sidecar, never hand-guessed).
+- **Re-forge:** `node tools/forge/forge.mjs talk/dev-showing.src.html`.
+- **Gate:** `node tools/tour/dev-showing-rehearsal.test.mjs` (must exit 0).
+
+**Two Book 2-only warnings:**
+
+- **d07 is a two-part seam.** Its audio is `d07a` + **5 s of digital silence** +
+  `d07b`, concatenated sample-exact (the hush is real zeros, not a TTS pause).
+  Never re-render d07 as a single file — edit `d07a-the-map-wars.txt` /
+  `d07b-the-map-wars.txt`, re-render each part, and rebuild the concat per the
+  d07 stage note in `talk/dev-showing.src.html` (it documents the exact recipe,
+  including how the seam cue is re-derived from the two sidecars).
+- **The strata carrier is the deck's ground truth.** d12's closing line ("the
+  commits that built this sentence are in it") stays literally true only if
+  `strata/strata.json` was regenerated at the branch's final content commit
+  (`node strata/gen-strata.mjs`, then re-forge `strata/`). If you amend anything,
+  make the carrier re-run the LAST content step.
+
+### Page weight (Book 2)
+
+`dev-showing.html` is **~7.0 MB** — the same design and the same trade as Book 1:
+all 12 narration clips (48k mono) plus their word-timing sidecars are inlined as
+`data:` URIs, so the deck is one self-contained file with zero network
+dependencies at show time beyond the local server that also serves the framed
+estate pages.
+
+### What runs it (Book 2, for the record)
+
+- **Deck:** `talk/dev-showing.src.html` → forged `talk/dev-showing.html`. It
+  reuses `talk/cue-engine.js` + `talk/showing.js` **as-is** — the two decks are
+  separate pages, so their `SHOWING_*` globals never coexist.
+- **Chapters:** `talk/script/d01…d12` prose + `.mp3` + `.json` (d07 split as
+  `d07a` / `d07b`, assembled into `d07.mp3` / `d07.json`).
+- **Frames (5):** `strata/index.html` (home base, 10 of 12 chapters) ·
+  `museum/ages.html` (d07, d10) · `ledger/face.html` (d03) ·
+  `talk/drift-gallery.html` (d05) · `talk/arch-raise.html` (d08) — the
+  determinism-and-motion manifest lives in the src (four `deterministic`, one
+  `tolerant`).
+- **Cards:** `window.SHOWING_CARDS` in the src — every verbatim quotation on a
+  card is diff-verified against its source at the cited SHA before it ships.
+- **Rehearsal gate:** `tools/tour/dev-showing-rehearsal.test.mjs` — the Book 2
+  clone of Book 1's gate (frames, hooks, captions, replay, holds, console),
+  headless, on the silent virtual clock.
