@@ -4,7 +4,7 @@
    at a time. It is the deck's d08 frame ("reach"): a thing that N different hands
    build and none of them could finish alone. Drawing kinship with the estate's
    the-keystone-arch/ exhibit, but this is a Book-2-own, DETERMINISTIC frame —
-   fixed constants only, no Math.random, no wall-clock (invariant 7).
+   fixed constants only, no random numbers, no wall-clock (invariant 7).
 
    Dual-use, exactly like strata/core.mjs and strata/diagram.mjs:
      • talk/arch-raise.html   — forge inlines this file into the page's <script>
