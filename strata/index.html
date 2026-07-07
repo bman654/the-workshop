@@ -2000,7 +2000,7 @@ function edgeMarker(edge) {
 
 const nodeEls = new Map();     /* id → { g, rect, label, badge, seal } */
 const edgeEls = [];            /* { el, edge } */
-let ffGroup, sxGroup, parkLabel, focusId = null, curDiagK = null, pinId = null;
+let ffGroup, sxGroup, parkLabel, focusId = null, curDiagK = null, pinId = null, tipId = null;
 
 function buildDiagram() {
   const defs = el('defs', {});
@@ -2038,6 +2038,7 @@ function buildDiagram() {
     const n = NODES[id];
     const g = el('g', { 'class': 'dnode eng-' + n.engine + ' kind-' + (n.kind || 'seat') });
     g.style.opacity = '0';
+    g.style.pointerEvents = 'none';   /* SVG hit-tests opacity:0 — a hidden node must be inert too */
     const wl = widestLabel(id), w = Math.max(28, wl.length * 5.6 + 15), h = 18;
     const rect = el('rect', { 'class': 'nrect', x: (n.x - w / 2).toFixed(1), y: (n.y - h / 2).toFixed(1), width: w.toFixed(1), height: h, rx: n.engine === 'sx' ? 2.5 : 9 });
     const label = el('text', { 'class': 'nlabel', x: n.x, y: n.y + 3.2, 'text-anchor': 'middle' });
@@ -2077,13 +2078,20 @@ function diagramTo(k) {
   for (const [id, e] of nodeEls) { const lab = nodeLabel(id, k); if (e.label.textContent !== lab) e.label.textContent = lab; }
   ffGroup.style.opacity = k >= 7 ? '0.16' : '1';
   sxGroup.style.opacity = k >= 7 ? '1' : '0';
+  sxGroup.style.pointerEvents = k >= 7 ? '' : 'none';   /* the steel engine is inert until it takes the stage */
   parkLabel.style.opacity = k >= 7 ? '1' : '0';
   for (const [id, e] of nodeEls) {
-    e.g.style.opacity = String(visN(id, k));
+    const v = visN(id, k);
+    e.g.style.opacity = String(v);
+    e.g.style.pointerEvents = v ? '' : 'none';   /* interactivity follows visibility — no ghost tooltips */
     if (e.badge) e.badge.style.opacity = nodeBadge(id, k) ? '1' : '0';
     if (e.seal) e.seal.style.opacity = k >= 6 ? '1' : '0';
   }
   for (const ee of edgeEls) ee.el.style.opacity = String(visE(ee.edge, k));
+  /* a morph can hide the node under the pointer (or a pinned one) — its tip goes with it
+     (pointer-events:none does not reliably fire mouseleave on an unmoving pointer) */
+  if (pinId && !visN(pinId, k)) { pinId = null; hideTipNow(); }
+  else if (tipId && !visN(tipId, k)) hideTipNow();
   paintDiagramMeta(k);
 }
 
@@ -2121,6 +2129,7 @@ function tipHTML(id) {
     (cites ? '<div class="dtip-c">' + esc(cites) + '</div>' : '');
 }
 function showTip(id) {
+  tipId = id;
   dtip.className = 'dtip eng-' + NODES[id].engine + (pinId === id ? ' pinned' : '');
   dtip.innerHTML = tipHTML(id);
   dtip.hidden = false;
@@ -2140,8 +2149,8 @@ function positionTip(id) {
   const th = dtip.offsetHeight, above = (nr.top - wr.top) - th - 7;
   if (below + th > wr.height && above > 0) dtip.style.top = above + 'px';
 }
-function hideTip() { if (pinId) return; dtip.hidden = true; }
-function hideTipNow() { dtip.hidden = true; dtip.className = 'dtip'; }
+function hideTip() { if (pinId) return; tipId = null; dtip.hidden = true; }
+function hideTipNow() { tipId = null; dtip.hidden = true; dtip.className = 'dtip'; }
 function togglePin(id) {
   if (pinId === id) { pinId = null; hideTipNow(); return; }
   pinId = id; showTip(id);
