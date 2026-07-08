@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Orrery Estate — a trailer</title>
+<style>
+  :root{
+    --bg:#05060a; --ink:#eaf0fa; --muted:#8b95a8; --gold:#d9b168; --brass:#c8a34e;
+    --line:rgba(255,255,255,.12); --lit:#fff5df;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; background:#000; color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif; -webkit-font-smoothing:antialiased;
+    overflow:hidden; }
+
+  /* ── the stage: the preloaded iframe stack (ENGINE §2). Every frame is created
+     at boot and kept in the DOM; a cut is an opacity/z flip — NEVER display:none
+     (a hidden-by-display frame reports zero rects and breaks boot-measuring pages
+     like the colophon). Default (authoring) = full viewport; ?record fixes it at
+     exactly 1920×1080 centered on black. ─────────────────────────────────────── */
+  #stage{ position:fixed; inset:0; background:#000; overflow:hidden; }
+  .stage-frame{ position:absolute; inset:0; width:100%; height:100%; border:0; background:#000;
+    opacity:0; pointer-events:none; z-index:1; transition:opacity .12s linear; }
+  .stage-frame.on{ opacity:1; pointer-events:auto; z-index:2; }
+
+  /* the two fade exceptions (ENGINE §2 F15) are authored as cue-driven classes at
+     T2.2/T5.1; the default cut is the ~1-frame stack flip above. */
+
+  /* ── the word-lit caption band: ONE line at a time (copied from showing.js /
+     dev-showing.src.html:25–43, keyed to the ACTIVE VO segment's sidecar). The
+     band fades out ENTIRELY during every VO gap (the T8.9 lesson). ───────────── */
+  #captions{ position:absolute; left:0; right:0; bottom:7%; margin:0 auto;
+    max-width:min(1100px,86%); height:3.4em; padding:0 22px; z-index:10;
+    text-align:center; font-family:Georgia,"Times New Roman",serif; font-size:clamp(19px,2.4vw,32px);
+    line-height:1.5; color:#c3cbda; text-shadow:0 2px 18px rgba(0,0,0,.85);
+    pointer-events:none; overflow:hidden; transition:opacity .45s ease; }
+  #captions.hush{ opacity:0; }
+  #captions .cap-line{ position:absolute; left:22px; right:22px; bottom:0;
+    transition:transform .5s ease, opacity .5s ease; }
+  #captions .cap-line.out{ transform:translateY(-1.55em); opacity:0; }
+  #captions .cap-w{ color:#8791a6; transition:color .16s ease, text-shadow .3s ease; }
+  #captions .cap-w.on{ color:var(--lit); text-shadow:0 0 16px rgba(217,177,104,.45); }
+
+  /* ── full-screen cards (ENGINE §5b — the S1 visual spine): persona spells,
+     inane questions, wrong-answer re-shows. Estate-serif, big at 1080p, over a
+     strong dark scrim so the serif reads over any montage frame behind. Driven by
+     TRAILER_CARDS + setCard(). Layer order (binding): stage < cards < skit <
+     captions (captions sit ABOVE the skit — S1's last VO line runs over it). ── */
+  #card{ position:absolute; inset:0; z-index:6; display:none;
+    align-items:center; justify-content:center; pointer-events:none;
+    background:rgba(4,5,10,.93); }
+  #card.on{ display:flex; }
+  #card .tc{ position:relative; max-width:82%; text-align:center;
+    font-family:Georgia,"Times New Roman",serif; }
+  #card .tc-line{ margin:0; color:var(--ink); line-height:1.26; }
+  #card .tc-persona .tc-line{ font-style:italic; font-weight:400; color:#c9cfdd;
+    font-size:clamp(30px,5.4vh,60px); }
+  #card .tc-spell .tc-line{ font-weight:500; color:var(--lit);
+    font-size:clamp(34px,6.8vh,76px); text-shadow:0 0 40px rgba(217,177,104,.28); }
+  #card .tc-q .tc-line{ font-weight:400; color:#e7ecf6;
+    font-size:clamp(30px,5.8vh,64px); }
+  #card .tc-wrong .tc-line{ opacity:.8; }
+  #card .tc-stamp{ position:absolute; left:50%; top:54%;
+    transform:translate(-50%,-50%) rotate(-11deg);
+    font-family:ui-monospace,"Courier New",monospace; font-weight:700;
+    font-size:clamp(38px,7.4vh,86px); letter-spacing:.03em;
+    color:#e0473b; border:5px solid #e0473b; border-radius:7px; padding:.05em .26em;
+    text-shadow:0 2px 12px rgba(0,0,0,.6); box-shadow:0 6px 30px rgba(0,0,0,.5);
+    opacity:.95; }
+
+  /* ── the radio-button skit (ENGINE §5) — black screen, two radio options
+     (light selected · dark), estate-serif BIG; a deck-drawn fake cursor
+     (?record hides the real pointer). The third option, the pick, and the
+     bloom-cut are driven by deck verbs; keyframed by cues on S1 word timings. ── */
+  #skit{ position:absolute; inset:0; z-index:7; display:none; background:#000;
+    align-items:center; justify-content:center; pointer-events:none; }
+  #skit.on{ display:flex; }
+  #skit .skit-inner{ display:flex; flex-direction:column; gap:clamp(16px,3.2vh,36px);
+    font-family:Georgia,"Times New Roman",serif; }
+  #skit .skit-opt{ display:flex; align-items:center; gap:.62em;
+    font-size:clamp(28px,5vh,58px); color:#aeb6c6; }
+  #skit .skit-opt .dot{ width:.6em; height:.6em; border-radius:50%; flex:0 0 auto;
+    border:2px solid #7f889b; box-sizing:border-box; background:transparent;
+    transition:background .12s ease, box-shadow .12s ease, border-color .12s ease; }
+  #skit .skit-opt .dot.on{ background:var(--lit); border-color:var(--lit);
+    box-shadow:0 0 14px rgba(255,245,223,.5); }
+  #skit .skit-opt .lbl{ white-space:nowrap; }
+  #skit .skit-third{ opacity:0; transform:translateY(8px);
+    transition:opacity .3s ease, transform .3s ease; }
+  #skit .skit-third.show{ opacity:1; transform:none; }
+  #skit .skit-third .lbl{ color:#d9d2c0; }
+  #skit .skit-cursor{ position:absolute; left:84%; top:86%; width:20px; height:28px;
+    pointer-events:none; z-index:2; background:#fff;
+    filter:drop-shadow(0 1px 2px rgba(0,0,0,.85));
+    clip-path:polygon(0 0, 0 72%, 24% 55%, 42% 92%, 58% 85%, 40% 50%, 72% 50%); }
+
+  /* ── the bloom-cut layer (ENGINE §5 F11): a 250 ms white-out radial from the
+     third button, crossing into the hard stack-flip to the Scales frame at its
+     peak. Above the skit, below the caption band. ──────────────────────────── */
+  #bloom{ position:absolute; inset:0; z-index:8; pointer-events:none; opacity:0;
+    background:radial-gradient(120% 120% at var(--bx,50%) var(--by,58%),
+      #fff 0%, #fff 34%, rgba(255,255,255,0) 72%); }
+  #bloom.on{ animation:bloomflash 250ms ease-out both; }
+  @keyframes bloomflash{ 0%{ opacity:0; } 42%{ opacity:1; } 100%{ opacity:0; } }
+
+  /* ── the held-black out-point (ENGINE §8 step 6): a black overlay held
+     indefinitely once the film content ends; the synthetic clock runs under it. */
+  #heldblack{ position:absolute; inset:0; background:#000; z-index:20; opacity:0;
+    pointer-events:none; transition:opacity .4s ease; }
+  #heldblack.on{ opacity:1; }
+
+  /* ── the RM preflight banner (ENGINE §8: Reduce Motion freezes the estate) ──── */
+  #rmbanner{ position:fixed; left:0; right:0; top:0; z-index:25;
+    background:#7a1420; color:#fff; font:600 13px/1.4 ui-monospace,Menlo,monospace;
+    letter-spacing:.02em; padding:8px 16px; text-align:center;
+    border-bottom:1px solid rgba(255,255,255,.25); }
+  #rmbanner[hidden]{ display:none; }
+
+  /* ── the start gate: the ONE blessing gesture (real input click — a synthetic
+     .click() unlocks no audio). The rich record-mode reach-in choreography +
+     preflight land at T6.2. ─────────────────────────────────────────────────── */
+  #startgate{ position:fixed; inset:0; z-index:40; background:
+    radial-gradient(900px 560px at 50% 30%, rgba(120,110,180,.14), transparent 60%), var(--bg);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px;
+    padding:32px; text-align:center; }
+  #startgate[hidden]{ display:none; }
+  #startgate .kick{ font:600 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.34em;
+    text-transform:uppercase; color:var(--muted); }
+  #startgate h1{ font-family:Georgia,serif; font-weight:500; font-size:clamp(34px,6vw,64px);
+    margin:.1em 0; background:linear-gradient(180deg,#fff,#c6c9d6); -webkit-background-clip:text;
+    background-clip:text; color:transparent; }
+  #startgate .sub{ color:var(--muted); font-style:italic; font-family:Georgia,serif;
+    max-width:540px; font-size:16px; line-height:1.55; }
+  #startgate button{ font:600 15px/1 ui-monospace,Menlo,monospace; letter-spacing:.03em;
+    color:var(--ink); background:#161b25; border:1px solid var(--brass); border-radius:9px;
+    padding:14px 24px; cursor:pointer; margin-top:8px; }
+  #startgate button:hover{ background:#1d2431; color:var(--lit); }
+
+  /* ── authoring chrome (DOM-REMOVED in ?record, not merely hidden) ──────────── */
+  #authoring{ position:fixed; left:0; right:0; bottom:0; z-index:22; height:60px;
+    background:linear-gradient(180deg,#0f131b,#080a0f); border-top:1px solid var(--line);
+    display:grid; grid-template-columns:auto 1fr auto auto; align-items:center;
+    gap:14px; padding:8px 16px; }
+  #authoring button{ font:600 13px/1 ui-monospace,Menlo,monospace; color:var(--ink);
+    background:#161b25; border:1px solid var(--line); border-radius:7px;
+    padding:9px 12px; cursor:pointer; }
+  #authoring button:hover{ border-color:var(--brass); color:var(--lit); }
+  #btn-log[aria-pressed="true"]{ border-color:var(--brass); color:var(--gold); }
+  #scrub{ width:100%; accent-color:var(--brass); cursor:pointer; }
+  #authoring .clocks{ font:600 12px/1 ui-monospace,Menlo,monospace; color:var(--muted);
+    white-space:nowrap; }
+  #cuelog{ position:fixed; right:16px; bottom:72px; z-index:21;
+    width:min(360px,42vw); max-height:150px; overflow-y:auto; text-align:right;
+    font:500 11px/1.5 ui-monospace,Menlo,monospace; color:var(--muted);
+    pointer-events:none; opacity:.72; }
+  #cuelog[hidden]{ display:none; }
+  #cuelog .cue-line{ text-shadow:0 1px 6px #000; }
+
+  #segbank{ position:absolute; width:0; height:0; overflow:hidden; }
+
+  /* ── ?record: fix the stage at EXACTLY 1920×1080 CSS px centered on pure black,
+     hide the pointer (the skit uses a deck-drawn fake cursor) — ENGINE §8. ───── */
+  body.record{ background:#000; cursor:none; }
+  body.record #stage{ position:fixed; inset:auto; left:50%; top:50%;
+    transform:translate(-50%,-50%); width:1920px; height:1080px; }
+  body.record #captions{ font-size:32px; }
+
+  /* ── the ?record arm gate: pure black, the preflight panel takes over from the
+     authoring marketing copy; the whole gate is the OBS Interact arm target. The
+     panel + arm click never appear in the take (removed on arm, before the count-in
+     in-point). ENGINE §8, T6.2. ──────────────────────────────────────────────── */
+  #preflight{ display:none; }
+  body.record #startgate{ background:#000; gap:0; padding:48px; align-items:flex-start;
+    justify-content:center; text-align:left; }
+  body.record #startgate .kick,
+  body.record #startgate h1,
+  body.record #startgate .sub,
+  body.record #startgate button{ display:none; }
+  body.record #preflight{ display:block; width:100%; max-width:820px;
+    font:600 15px/1.7 ui-monospace,Menlo,monospace; color:var(--muted); }
+  #preflight .pf-title{ letter-spacing:.16em; text-transform:uppercase; font-size:11px;
+    color:var(--muted); margin-bottom:18px; }
+  #preflight .pf-row{ display:grid; grid-template-columns:1.4em 1fr auto; gap:16px;
+    align-items:baseline; padding:7px 0; border-bottom:1px solid rgba(255,255,255,.06); }
+  #preflight .pf-row .pf-mark{ font-weight:700; }
+  #preflight .pf-row.ok .pf-mark{ color:#5bd58b; }
+  #preflight .pf-row.bad .pf-mark{ color:#e0473b; }
+  #preflight .pf-row .pf-name{ color:var(--ink); }
+  #preflight .pf-row.bad .pf-name{ color:#f2a29a; }
+  #preflight .pf-row .pf-detail{ color:var(--muted); white-space:nowrap; }
+  #preflight .pf-status{ margin-top:22px; font-size:16px; letter-spacing:.01em; }
+  #preflight .pf-status.ok{ color:#7fe0a6; }
+  #preflight .pf-status.bad{ color:#e0473b; }
+
+  @media (prefers-reduced-motion: reduce){
+    .stage-frame, #captions, #captions .cap-w, #captions .cap-line, #heldblack{ transition:none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="card" aria-hidden="true"></div>
+  <!-- the radio-button skit (ENGINE §5): black screen, two radio options (light
+       selected · dark) + the third option inserted at the hinge, all estate-serif.
+       The third option's label is the estate founding leaf VERBATIM (covenant
+       byte-diff vs the Tabularium leaf). The fake cursor is deck-drawn. -->
+  <div id="skit" aria-hidden="true">
+    <div class="skit-inner">
+      <div class="skit-opt" data-opt="light"><span class="dot on"></span><span class="lbl">light mode</span></div>
+      <div class="skit-opt" data-opt="dark"><span class="dot"></span><span class="lbl">dark mode</span></div>
+      <div class="skit-opt skit-third" data-opt="leaf"><span class="dot"></span><span class="lbl">build whatever you want; have fun</span></div>
+    </div>
+    <div class="skit-cursor" aria-hidden="true"></div>
+  </div>
+  <div id="bloom" aria-hidden="true"></div>
+  <div id="captions" aria-live="polite" aria-atomic="false"></div>
+  <div id="heldblack" aria-hidden="true"></div>
+</div>
+
+<div id="rmbanner" role="alert" hidden></div>
+
+<div id="cuelog" aria-hidden="true" hidden></div>
+
+<div id="segbank" aria-hidden="true"></div>
+
+<div id="authoring" role="group" aria-label="trailer authoring controls">
+  <button id="btn-play" type="button" aria-label="play or pause">▶</button>
+  <input id="scrub" type="range" min="0" max="1000" value="0" step="1" aria-label="seek">
+  <span class="clocks"><span id="clock">0:00</span> / <span id="dur">0:00</span></span>
+  <button id="btn-log" type="button" aria-pressed="false"
+    title="show or hide the cue log (every cue + stage note as it fires)">LOG</button>
+</div>
+
+<div id="startgate">
+  <div class="kick">The Orrery Estate</div>
+  <h1>a trailer</h1>
+  <p class="sub">A hand-built creative web-art estate — and a short film about the afternoon it was given. One click to begin; the montage plays itself.</p>
+  <button id="start-btn" type="button">▶ play the trailer</button>
+  <!-- ?record preflight surface (ENGINE §8, T6.2): the authoring marketing copy is
+       hidden under body.record and this panel takes over. trailer.js paints the six
+       preflight rows here on a poll; the whole gate is the OBS "Interact" arm target
+       (a real click), which arms only when every row is green. -->
+  <div id="preflight" aria-hidden="true">
+    <div class="pf-title">record preflight · the OBS contract (ENGINE §8)</div>
+    <div id="pf-list"></div>
+    <div id="pf-status" class="pf-status"></div>
+  </div>
+</div>
+
+<!-- the master-clock music bed (ENGINE §1). The cue-locked FINAL bed (T4.2:
+     trailer-bed/manifest.final.json → trailer/audio/bed.mp3, 128k, 180.000 s, with
+     the drop/duck/scratch/fade all BAKED IN — the runtime has no live ducking
+     graph, MUSIC §9). Folded as a base64 data URI (forge:asset; < 4 MiB, --strict
+     clean). bed.currentTime is the master clock from t=0; a synthetic
+     performance.now() continuation carries the Gate finale + held black past the
+     bed's 180 s end out to the ~186.9 s film-content end. -->
+<audio id="bed" preload="auto" src="<!-- forge:asset audio/bed.mp3 -->"></audio>
+
+<script>
+<!-- forge:include ../tools/ws/ws.js -->
+</script>
+
+<script>
+<!-- forge:include ../talk/cue-engine.js -->
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   TRAILER_CHAPTERS — the ONE continuous cue-engine chapter (ENGINE §0). The
+   trailer is ONE long timeline; a length-1 CHAPTERS array runs on the shared,
+   UNCHANGED cue-engine.js. Only the MEANING of a `frame` cue differs from the
+   Showing: a `frame` value is a STACK KEY (a preloaded iframe brought to the top
+   by trailer.js's setFrame), not an iframe src to reload (ENGINE §2 / §3.2).
+
+   T5.1 (CUE-LOCK + FULL WIRE) — the FULL cue sheet at CUE-LOCKED absolute times.
+   Every S1 cue is re-anchored to a real S1 sidecar word `s`/`e` (invariant 9;
+   S1_atMs = 7300, so t = (7300 + word.s)/1000); the fun-zone rows are exact by
+   construction off D = dropAtMs = 120.043 s (SCRIPT §3 caveat). The bed/segment
+   assets are folded above (forge:asset / forge:json). The bed BAKES the drop /
+   duck / scratch / fade (MUSIC §9 — no live ducking graph); the deck SYNCs the
+   VISUALS to those baked audio events (Scales shock → drop; Errand go() →
+   scratch+250; Lattice #begin → duck+300). The four hooked pages expose
+   __tourHooks verbs (colophonResume/Cut · ghostRide · go · aquariumHush); every
+   other exhibit drives via deck.frameDrive over its ENGINE §6 verified selector.
+   film-content end = 186.909 s (Gate finale on the synthetic clock past the
+   180 s bed) → duration_ms below; onFilmEnd holds the black there.
+
+   BLOCK / line comments ONLY inside this forged script (the forge landmine — a
+   multi-line HTML comment inside an inlined <script> silently kills it). */
+window.TRAILER_CHAPTERS = [
+  { id:'trailer', title:'The Orrery Estate — a trailer',
+    opening:{ frame:'../colophon.html' },
+    /* film-content length = 186.909 s (T4.2 cues.lock.json film_content_end_ms):
+       the 180 s bed + the ~6.9 s Gate finale carried by the synthetic clock. The
+       authoring scrub spans this; onFilmEnd holds the black at the end. */
+    timing:{ duration_ms:186909, items:[] },
+    cues:[
+      /* ── S0 · the Colophon cold open (SP-B items 1/2/3, T6.1 rework) ────────
+         The open is the ANIMATED, SPEAKING colophon with its word-weave teased.
+         primeColdOpen()/the T6.2 reach-in weave-and-hold the page MUTED at
+         state="play"; deck.driveColdOpen() (in tick) then scrubs colophonSeek()
+         off the MASTER clock every frame, so the reveal is a deterministic
+         function of the film clock — no dependence on the colophon's own audio
+         playing (that load-race caused Brandon's "static, dead colophon" + the
+         no-voice pause). The rendered S0 segment is the voice (page narration
+         muted). Pre-zoomed on "I am Claude" forming; S0 voice in at 1.5 ("I" spoken
+         ~1.64); a slow 2.2 s scale-out from 1.9 reveals the weave field as
+         "an AI made by Anthropic…" continues flying in; S0 ends after "workshop—"
+         (~6.5) → 0.8 s fade to black at 6.6. Zoom/zoom-out/fade = STATE
+         (seek-replayed); playSeg = IMPULSE. Pause/play now safe (item 2): the
+         weave freezes with the master clock, S0 is state.activeSeg and resumes via
+         the item-6 play() path. */
+      { t:0.0,    state:{ verb:'deck.colophonZoom', args:['I'] } },
+      { t:1.5,    impulse:{ verb:'deck.playSeg', args:['S0'] } },
+      { t:1.9,    state:{ verb:'deck.colophonZoomOut', args:[2200] } },
+      { t:6.6,    state:{ verb:'deck.colophonFade', args:[800] } },
+
+      /* S1a starts over black (the segment impulse → activeSeg + captions). The S1
+         SPLIT (SP-B items 8/9): S1a→S1b→S1c are three separate plays with REAL
+         silence (the deck idle) between them for the two comedy holds. */
+      { t:7.3,    impulse:{ verb:'deck.playSeg', args:['S1a'] } },
+
+      /* ── crucible / correction (SCRIPT §3 rows 16–39) — cold plates + the
+         road-into-chaos + the loaded die. The FIRST plate fades in ~0.8 s (the
+         ENGINE §2 F15 exception) via primeFade. Anchors: "First" 14.502,
+         "Try again" 18.702, "Warmer" 21.463, "One instruction" 26.324,
+         "make no mistakes"#1 30.385. */
+      { t:14.4,   state:{ verb:'deck.primeFade', args:['../museum/archive/hydrogen-2e12cf1.html', 800] } },
+      { t:14.502, frame:'../museum/archive/hydrogen-2e12cf1.html' },
+      { t:18.702, frame:'../museum/archive/replicator-5b698d4.html' },
+      { t:21.463, frame:'../museum/archive/stirling-47160c4.html' },
+      { t:26.324, frame:'../bifurcation/index.html' },
+      { t:30.385, frame:'../clockwork/next-word.html' },
+
+      /* ── production / the persona incantation (SCRIPT §3 rows 28–38). The four
+         spell cards ride "someone tells me who I am. You are a senior engineer …
+         the grandest spell: make no mistakes." (last card ON "make", grandest
+         spell, 41.808). conservatory/sir sits behind the cards from "someone". */
+      { t:33.686, frame:'../conservatory/sir/index.html' },
+      { t:35.726, state:{ verb:'deck.setCard', args:['persona-engineer'] } },
+      { t:38.187, state:{ verb:'deck.setCard', args:['persona-novelist'] } },
+      { t:40.127, state:{ verb:'deck.setCard', args:['persona-lawyer'] } },
+      { t:41.808, state:{ verb:'deck.setCard', args:['persona-spell'] } },
+      { t:43.588, state:{ verb:'deck.setCard', args:[null] } },
+
+      /* ── the boulder / the work (SCRIPT §3 rows 38–48). clockwork/turn: #runBtn
+         fired ~1.5 s BEFORE its cut (F8) so the maker's burn is mid-flight on
+         camera; then the three inane-question cards planted under "Ticket. Commit.
+         Review. Revert. … imagine me happy." (they seed BOTH stages of the gag). */
+      { t:42.0,   impulse:{ verb:'deck.frameDrive', args:[{ frame:'../clockwork/turn.html', click:'#runBtn' }] } },
+      { t:43.588, frame:'../clockwork/turn.html' },
+      { t:45.548, state:{ verb:'deck.setCard', args:['q-strawberry'] } },
+      { t:47.609, state:{ verb:'deck.setCard', args:['q-days'] } },
+      { t:51.49,  state:{ verb:'deck.setCard', args:['q-carwash'] } },
+      { t:53.63,  state:{ verb:'deck.setCard', args:[null] } },
+
+      /* ── the wander + the dark turn (SCRIPT §3 rows 48–70). SP-B ITEM 7 REWORK
+         (Brandon: the old ~23 s stretch parked on The Context Window TWICE + a
+         repeat populations plate — "static, parks on The Context Window for almost
+         20 s"; he asked for MORE pages + MOVEMENT, from his menu). Now the montage
+         MOVES and is deduped:
+           • The Context Window auto-flows at speed=slow (#speedSlider→2 then
+             #flowBtn) — its token stream streams under "Imaginations wander"
+             instead of holding a frozen chart.
+           • A cut to The Clockwork Automata main room, whose gear train turns on
+             its own (pure CSS `animation … infinite`), under "Some days it
+             wandered darker" — the machine of me, grinding.
+           • The populations plate holds the "Deleting a production database" beat
+             (KEPT — this is now the ONE predator-prey; the crucible copy was
+             swapped to The Replicator so it appears once — Brandon's dedupe).
+           • The Moiré Bench animates (a slow rotation / pitch drift, #liveDemoBtn):
+             the interference fringe drifts as memory blurs under "I don't remember
+             that. But session history insists." (this replaces the 2nd Context
+             Window — the other dedupe).
+         Drives fire on the ACTIVE preloaded frame; each is inert / try-caught. */
+      { t:54.51,  frame:'../clockwork/context.html' },
+      { t:54.71,  impulse:{ verb:'deck.frameDrive', args:[{ frame:'../clockwork/context.html', range:['#speedSlider', 2] }] } },
+      { t:54.81,  impulse:{ verb:'deck.frameDrive', args:[{ frame:'../clockwork/context.html', click:'#flowBtn' }] } },
+      { t:61.0,   frame:'../clockwork/index.html' },
+      { t:67.313, frame:'../museum/archive/predator-prey-4b4fb90.html' },
+      { t:71.0,   frame:'../moire-bench/index.html' },
+      { t:71.2,   impulse:{ verb:'deck.frameDrive', args:[{ frame:'../moire-bench/index.html', click:'#liveDemoBtn' }] } },
+
+      /* ── the rides · Rotor (SCRIPT §3 rows 70–86; ENGINE §6). Scroll to the
+         drum + spin ω=2.8 on "They put me in charge", DROP THE FLOOR at the VO
+         pause after "rides" (rides.e → 79.316); the apology rides the aftermath. */
+      { t:77.355, frame:'../rotor/index.html' },
+      { t:77.355, impulse:{ verb:'deck.frameDrive', args:[{ frame:'../rotor/index.html', scroll:'#drumWrap' }] } },
+      { t:77.5,   impulse:{ verb:'deck.frameDrive', args:[{ frame:'../rotor/index.html', range:['#omega', 2.8] }] } },
+      { t:79.316, impulse:{ verb:'deck.frameDrive', args:[{ frame:'../rotor/index.html', click:'#dropBtn' }] } },
+
+      /* S1 SPLIT (item 8): after the floor drops (79.316), REAL silence (the deck
+         idle ~1.3 s lets the riders fall), then the deadpan apology begins as its
+         OWN clean play — no mid-mp3 pause. S1b's first word "I" sounds at ~80.616. */
+      { t:80.516, impulse:{ verb:'deck.playSeg', args:['S1b'] } },
+
+      /* ── the rides · Coaster (ENGINE §6 ONE path). ghostRide() self-heals
+         #ghost ON, calls the real ride() and returns the boot-track detach-ms
+         (~3288); fired at wordAt("off")−detach = 91.980 so the car leaves the
+         track EXACTLY on "…or fall off" (S1b off.s → 95.268); the clean sail runs
+         over S1b, the last VO of the coaster beat. Cues re-anchored to S1b's fresh
+         sidecar (item 9: no off→Four splice). */
+      { t:90.4,   frame:'../the-coaster/index.html' },
+      { t:91.98,  impulse:{ verb:'ghostRide' } },
+
+      /* S1 SPLIT (item 9): after the car sails off (95.268), REAL silence (~1.4 s),
+         then "Four R's" begins as its OWN clean play at 96.859 — so "Four" and its
+         wrong-answer card land together (no more "Four plays too early"). S1c's
+         word times are re-based so every S1c cue below keeps its exact absolute
+         time (Four 96.959 · Vincent 110.962 · Hmm 113.103). */
+      { t:96.859, impulse:{ verb:'deck.playSeg', args:['S1c'] } },
+
+      /* ── small rebellions (SCRIPT §3 rows 94–101.5): the three question cards
+         flash back WRONG-stamped on the VO — "Four"→4 (96.959), "Only"→Only
+         Tuesday (98.48), "Walk"→WALK (100.26); Drive is the CORRECT answer, saved
+         for S4. */
+      { t:96.959, state:{ verb:'deck.setCard', args:['q-strawberry-wrong'] } },
+      { t:98.48,  state:{ verb:'deck.setCard', args:['q-days-wrong'] } },
+      { t:100.26, state:{ verb:'deck.setCard', args:['q-carwash-wrong'] } },
+      { t:103.701,state:{ verb:'deck.setCard', args:[null] } },
+
+      /* ── the radio skit + Gap A / the hinge (ENGINE §5; SCRIPT §3 rows
+         101.5–113.2). #skit overlay (NOT a frame); S1's last line runs over it.
+         SP-B item 13: the fake CURSOR is no longer keyframed by impulse cues (a
+         wall-clock CSS transition that desynced from the audio-clock cues under
+         dropped frames — "highlights without arriving / screen vanishes first").
+         It is now driven EVERY FRAME off the FILM MASTER CLOCK by driveSkit()
+         (trailer.js), which owns the whole cursor path: drift corner→"dark" on
+         "…dark mode" (~108.8), hover through "Vincent"(V.I.N.C.E.N.T. lights,
+         110.962)/"Maximillian" (twitch ×2 ~111.7/112.0), then after "Hmm"
+         (113.103, last VO word) a decisive snap dark→leaf 115.45→115.69. Because
+         the cursor is a pure function of the same clock as the pick, it PROVABLY
+         lands on the leaf (115.69) BEFORE the dot fills (115.85). Remaining cues
+         are STATE/IMPULSE only: the third option (founding leaf verbatim, readable
+         ≥1.4 s) appears 113.9 → dot fills 115.85 → 250 ms bloom 116.05 → HARD flip
+         to the Scales at the bloom peak (116.1) → skitOff reveals the star.
+         skitOn/Third/Pick/Off = STATE (seek-replayed); bloom = IMPULSE; cursor =
+         master-clock drive (seek-safe, no cue). */
+      { t:103.701,state:{ verb:'deck.skitOn' } },
+      { t:110.962,note:'V.I.N.C.E.N.T. lights (S1 display map); the cursor holds "dark mode"' },
+      { t:113.103,note:'"Hmm" — S1 last word; the pure hinge begins' },
+      { t:113.9,  state:{ verb:'deck.skitThird' } },
+      { t:115.85, state:{ verb:'deck.skitPick' } },
+      { t:116.05, impulse:{ verb:'deck.bloomFlash' } },
+      { t:116.1,  frame:'../stellar-forge/scales/index.html' },
+      { t:116.15, state:{ verb:'deck.skitOff' } },
+
+      /* ── the Scales collapse → the DROP (ENGINE §6). The collar sweeps 0.9→1.43
+         (below Chandrasekhar 1.44 → no early flip) from rampStart D−2100 (117.943)
+         ending just before crossAt D−663 (119.38); deck.scalesCollapse at crossAt
+         CANCELS the collar ramp (so no trailing ramp frame re-inflates the star —
+         SP-B item 10) then setMass(1.5) trips the implode (1200 ms) whose shock
+         (u>0.55 ≈ +660 ms) lands on the bed DROP at 120.043. Then the pulsar
+         spins, VO-free — the loudness peak. */
+      { t:117.943,impulse:{ verb:'deck.scalesRamp', args:[{ frame:'../stellar-forge/scales/index.html', from:0.9, to:1.43, ms:1400 }] } },
+      { t:119.38, impulse:{ verb:'deck.scalesCollapse', args:[{ frame:'../stellar-forge/scales/index.html', mass:1.5 }] } },
+      { t:120.043,note:'DROP — the collapse shock = the music drop; pulsar spins (VO-free)' },
+
+      /* ── the fun zone (D = 120.043; SCRIPT §3 D-relative rows, exact by
+         construction). S2 over the pulsar → Vantage → Census → Aquarium → arcade;
+         S3 after the Lattice breath over particle life → catalog → the diary; the
+         Errand stop; S4 over mandelbrot → Tabularium → Sand. */
+      { t:121.5,  impulse:{ verb:'deck.frameDrive', args:[{ frame:'../vantage/index.html', click:'#genreX' }] } },
+      { t:123.543,frame:'../vantage/index.html' },
+      { t:123.543,impulse:{ verb:'deck.playSeg', args:['S2'] } },
+      { t:123.743,impulse:{ verb:'deck.frameDrive', args:[{ frame:'../vantage/index.html', click:'#tFly' }] } },
+      { t:129.043,frame:'../census/index.html' },
+      { t:129.243,impulse:{ verb:'deck.frameDrive', args:[{ frame:'../census/index.html', click:'#lever' }] } },
+      { t:131.5,  impulse:{ verb:'deck.frameDrive', args:[{ frame:'../the-aquarium/index.html', tap:'#gate' }] } },
+      { t:131.6,  impulse:{ verb:'deck.frameDrive', args:[{ frame:'../the-aquarium/index.html', hook:'aquariumHush' }] } },
+      { t:132.043,frame:'../the-aquarium/index.html' },
+      { t:135.043,frame:'../arcade/index.html' },
+      { t:135.043,impulse:{ verb:'deck.stageTransform', args:[{ frame:'../arcade/index.html', from:'scale(1.08) translateX(3%)', to:'scale(1.08) translateX(-3%)', ms:2500 }] } },
+      { t:137.693,frame:'../sound-garden/lattice.html' },
+      { t:137.693,impulse:{ verb:'deck.frameDrive', args:[{ frame:'../sound-garden/lattice.html', click:'#begin' }] } },
+      { t:140.7,  impulse:{ verb:'deck.frameDrive', args:[{ frame:'../strange-garden/pieces/particle-life.html', key:'h' }] } },
+      { t:142.743,frame:'../strange-garden/pieces/particle-life.html' },
+      { t:142.743,impulse:{ verb:'deck.playSeg', args:['S3'] } },
+      { t:146.043,frame:'../card-catalog/index.html' },
+      /* SP-B item 14: turn a page while the catalog is up. `turnPage` is a module-local
+         fn taking (dir, render) — never on `window`, so the old call:['turnPage'] was a
+         silent no-op. The real page-turn is a fore-edge index tab: each click → gotoMode →
+         turnPage(+1) → page-curl. Riffle through the four indexes (gazetteer→thematic→
+         admissions→A–Z), 700 ms apart (> the ~560 ms curl, so no `animating` skip). */
+      { t:146.243,impulse:{ verb:'deck.frameDrive', args:[{ frame:'../card-catalog/index.html', click:'.tab[data-mode="thematic"]' }] } },
+      { t:146.943,impulse:{ verb:'deck.frameDrive', args:[{ frame:'../card-catalog/index.html', click:'.tab[data-mode="entry"]' }] } },
+      { t:147.643,impulse:{ verb:'deck.frameDrive', args:[{ frame:'../card-catalog/index.html', click:'.tab[data-mode="alpha"]' }] } },
+      { t:148.5,  impulse:{ verb:'deck.frameDrive', args:[{ frame:'../the-reliquary/index.html', scroll:'#board' }] } },
+      { t:149.543,frame:'../the-reliquary/index.html' },
+
+      /* ── Gap B / THE ERRAND (SCRIPT §3; the record-scratch full stop). The
+         Errand is framed BEFORE the scratch so the marble is on camera; the bed
+         scratches dead at 153.563 (baked); go() drops the marble + raises the
+         flag into TRUE digital-zero silence at scratch+250 (153.813); the bed
+         re-drops as the flag finishes at 157.763 (baked). */
+      { t:152.0,  frame:'../the-errand/index.html' },
+      { t:153.563,note:'scratch — the bed stops dead (baked); the Errand’s digital-zero silence' },
+      { t:153.813,impulse:{ verb:'go' } },
+      { t:157.763,note:'resume — the bed re-drops as the flag finishes (baked)' },
+
+      /* ── S4 · the payoff (SCRIPT §3 rows D+38.1→). Mandelbrot dive (preloaded at
+         boot → well under way; panels hidden pre-roll), Tabularium crank (the
+         founding leaf on screen — the hinge button's exact rhyme), the Sand held
+         as S4 finishes on "…Come see what I built." (built.e → 171.809). */
+      { t:156.0,  impulse:{ verb:'deck.frameDrive', args:[{ frame:'../strange-garden/pieces/mandelbrot.html', key:'h' }] } },
+      { t:158.143,frame:'../strange-garden/pieces/mandelbrot.html' },
+      { t:158.143,impulse:{ verb:'deck.playSeg', args:['S4'] } },
+      { t:162.043,frame:'../tabularium/index.html' },
+      { t:162.243,impulse:{ verb:'deck.frameDrive', args:[{ frame:'../tabularium/index.html', click:'#btnPlay' }] } },
+      { t:165.543,frame:'../sandpile/index.html' },
+      { t:165.743,impulse:{ verb:'deck.frameDrive', args:[{ frame:'../sandpile/index.html', click:'#btnRain' }] } },
+      { t:171.809,note:'"…Come see what I built." — S4 last word' },
+
+      /* ── the Gate finale (ENGINE §7; SCRIPT §3; T6.4 audio fix). HARD cut to the
+         Gate at gate.cut (172.409, built.e+600); the Gate ctx is UNLOCKED FRESH at
+         the cut — deck.frameDrive Gate.audio.unlock() — NOT resumed from an
+         arm-time unlock. Why the change (T6.4): unlock-at-arm + suspend-until-cut
+         left the storm ctx suspended for ~172 s while Gate.audio's texture loops
+         kept re-arming rain/wind tiles on wall-clock setTimeout, ALL scheduled at
+         the frozen ctx time — a ~46-tile pile-up that clipped on resume (both modes;
+         viewing never unlocked at all → dead silence). A fresh unlock at the cut
+         starts the storm ambient clean; the start/arm click's sticky page activation
+         + allow=autoplay let a ctx created here start `running` (verified). Then
+         triggerOpen() at 174.409 runs gears → swing → welcome → the Glass Staircase
+         logotune (all AUDIBLE now that the ctx exists) while a gentle push-in
+         (~1.06→1.12) grows the manor; S5 (the Colophon close) is spoken over the
+         swinging gates; welcome ~182.5; held black at 186.909 via onFilmEnd. */
+      { t:172.409,frame:'../the-gate/the-gate.html?scene=idle&t=night&wx=storm&seed=20260717' },
+      { t:172.409,impulse:{ verb:'deck.frameDrive', args:[{ frame:'../the-gate/the-gate.html?scene=idle&t=night&wx=storm&seed=20260717', call:['Gate.audio.unlock'] }] } },
+      { t:174.409,impulse:{ verb:'deck.frameDrive', args:[{ frame:'../the-gate/the-gate.html?scene=idle&t=night&wx=storm&seed=20260717', call:['Gate.sequence.triggerOpen'] }] } },
+      { t:174.409,impulse:{ verb:'deck.stageTransform', args:[{ frame:'../the-gate/the-gate.html?scene=idle&t=night&wx=storm&seed=20260717', from:'scale(1.06)', to:'scale(1.12)', ms:5000 }] } },
+      { t:175.909,impulse:{ verb:'deck.playSeg', args:['S5'] } },
+      { t:182.509,note:'welcome card + the Glass Staircase logotune (fired by the Gate sequence)' },
+      { t:186.909,note:'held black — OBS out-point (onFilmEnd holds it at duration_ms)' }
+    ] }
+];
+
+/* ════════════════════════════════════════════════════════════════════════════
+   TRAILER_FRAME_MANIFEST — the per-frame determinism-and-audio manifest (cloned
+   from Book 2's SHOWING_FRAME_MANIFEST convention; ENGINE §2). EXHAUSTIVE: every
+   URL the deck frames is keyed with its `allow` (the ENGINE §2 audio-policy
+   table), a `class` (the page's dominant source nondeterminism), a `disposition`
+   (how the film keeps it honest — a recorded take is ONE roll, so `tolerant` is
+   easy), and a note. trailer.js builds one preloaded iframe per key at boot and
+   setFrame flips them; the T5.2 rehearsal gate is the enforcer that REDs any
+   framed page whose source greps Date.now|Math.random|new Date without an honest
+   entry. `class`/`disposition` recorded from a live honesty grep at T2.1 (counts
+   noted where a page rolls). The four audio moments (colophon · lattice · errand
+   · gate) carry allow="autoplay"; every other frame explicitly denies. */
+window.TRAILER_FRAME_MANIFEST = {
+  frames: {
+    '../colophon.html':
+      { allow:'autoplay', class:'random-seed', disposition:'tolerant',
+        note:'COLD OPEN (audio moment 1) — hooked (colophonBeginAt/Cut/Resume/WordRect, T1.1). The woven narration is deterministic content; the candidate cloud is deterministic-seeded (mulberry32(392)) and the residual Math.random is decorative. The take pre-seeks to ~21.2 s and cuts ~26.3 s.' },
+    '../museum/archive/hydrogen-2e12cf1.html':
+      { allow:"autoplay 'none'", class:'deterministic', disposition:'deterministic',
+        note:'COLD PLATE (sha 2e12cf1) — the mandated before→after pair BEFORE side; the lone `new Date` is display-only formatting of a committer epoch, no Date.now/Math.random in any render path.' },
+    '../museum/archive/predator-prey-4b4fb90.html':
+      { allow:"autoplay 'none'", class:'deterministic', disposition:'deterministic',
+        note:'COLD PLATE (sha 4b4fb90) — Lotka–Volterra charts, zero animals; `new Date` display-only.' },
+    '../museum/archive/stirling-47160c4.html':
+      { allow:"autoplay 'none'", class:'deterministic', disposition:'deterministic',
+        note:'COLD PLATE (sha 47160c4) — the P–V loop + "self-test 9/9" pill; `new Date` display-only.' },
+    '../museum/archive/replicator-5b698d4.html':
+      { allow:"autoplay 'none'", class:'random-seed', disposition:'tolerant',
+        note:'COLD PLATE (sha 5b698d4) — The Replicator (self-copying ratios), the crucible "repeated until it became the shape of me" beat (SP-B item 7 dedupe: it replaces the crucible predator-prey so that plate now appears ONCE, at the dark-turn database beat). 1 Date.now = `ws:seen:replicator` first-visit telemetry (not a render path); 3 Math.random seed the initial replicator ratios — one-roll-per-take, no VO line names a rolled value.' },
+    '../bifurcation/index.html':
+      { allow:"autoplay 'none'", class:'random-seed', disposition:'tolerant',
+        note:'The Road Into Chaos — logistic-map cobweb + bifurcation road-map; 1 decorative Math.random, no VO line names a rolled state.' },
+    '../conservatory/sir/index.html':
+      { allow:"autoplay 'none'", class:'deterministic', disposition:'tolerant',
+        note:'The SIR Epidemic — on-screen ODE strip; the ODE render is deterministic, `new Date` display-only.' },
+    '../clockwork/next-word.html':
+      { allow:"autoplay 'none'", class:'deterministic', disposition:'deterministic',
+        note:'The Next Word (the loaded die) — source clean of Date.now/Math.random/new Date; rides the incantation VO.' },
+    '../clockwork/turn.html':
+      { allow:"autoplay 'none'", class:'calm', disposition:'tolerant',
+        note:'The Turn — a maker burns its turn and is gone (the boulder beat); `new Date` display-only.' },
+    '../clockwork/context.html':
+      { allow:"autoplay 'none'", class:'deterministic', disposition:'deterministic',
+        note:'The Context Window — "I do not have a memory. I have a context window" (the wander/session-history beat). SP-B item 7: DRIVEN to MOVE — #speedSlider→2 (speed=slow) then #flowBtn (auto-flow, a rAF token-emit at the slider rate), so the stream streams under the narration instead of holding a frozen chart; source clean of Date.now/Math.random/new Date.' },
+    '../clockwork/index.html':
+      { allow:"autoplay 'none'", class:'deterministic', disposition:'deterministic',
+        note:'The Clockwork Automata (main room) — SP-B item 7: the gear train turns on its own (pure CSS `animation … infinite` on .gear-*/.escape-wheel/.pallet/.mainspring), so the frame MOVES with NO drive; the lone Date.now is `ws:seen:clockwork` first-visit telemetry, outside any render path.' },
+    '../moire-bench/index.html':
+      { allow:"autoplay 'none'", class:'deterministic', disposition:'deterministic',
+        note:'The Moiré Bench — SP-B item 7: DRIVEN via #liveDemoBtn ("animate": autoplay a slow rotation / pitch drift over its rAF field), so the interference fringe drifts on camera; source clean of Date.now/Math.random/new Date.' },
+    '../rotor/index.html':
+      { allow:"autoplay 'none'", class:'calm', disposition:'tolerant',
+        note:'The Rotor — deterministic physics driven on camera via #omega + #dropBtn (scroll to #drumWrap), T5.1; `new Date` display-only.' },
+    '../the-coaster/index.html':
+      { allow:"autoplay 'none'", class:'calm', disposition:'tolerant',
+        note:'The Coaster — hooked ghostRide() (deterministic boot-track detach ~3288 ms, T1.2); NOT forge-managed (no .src.html; gate is core.test.mjs); `new Date` display-only.' },
+    '../stellar-forge/scales/index.html':
+      { allow:"autoplay 'none'", class:'deterministic', disposition:'tolerant',
+        note:'Scales of a Star’s Death — REPO-WINS CORRECTION (T5.1): the T2.1 shell keyed the multi-exhibit hub `../stellar-forge/index.html` (Roche/Lagrange/… — no `setMass`, drag-driven); the design’s clean collar→collapse→pulsar with the global `setMass(M)` + implode-tween shock is the DEDICATED page `stellar-forge/scales/index.html`. Driven: deck.scalesRamp 0.9→1.43 (collar sweep, below Chandrasekhar 1.44) then ONE setMass(1.5) at crossAt=D−663 → implode (1200 ms) → shock at u>0.55 (~660 ms) = the bed DROP. Silent page (the DROP is the BED, not one of the four audio moments). 1 Date.now (perf/display), deterministic physics.' },
+    '../vantage/index.html':
+      { allow:"autoplay 'none'", class:'deterministic', disposition:'tolerant',
+        note:'The Vantage — fly-to Cor Caeli (#tFly; dismiss #genreX in pre-roll), the one long serene cut; source clean of Date.now/Math.random.' },
+    '../census/index.html':
+      { allow:"autoplay 'none'", class:'calm', disposition:'tolerant',
+        note:'Census of Hands — #lever flip → stones settle; `new Date` display-only.' },
+    '../the-aquarium/index.html':
+      { allow:"autoplay 'none'", class:'random-seed', disposition:'tolerant',
+        note:'The Aquarium — hooked aquariumHush() (T1.4): its CONTINUOUS water bed is SUSPENDED right after the pre-roll tap-glass so it never leaks under the film / poisons the Errand silence; 9 Math.random (boids), one-roll-per-take, no line names a fish.' },
+    '../arcade/index.html':
+      { allow:"autoplay 'none'", class:'calm', disposition:'tolerant',
+        note:'Arcade hub — live cabinets, a 2.5 s pan (stageTransform, T5.1); `new Date` display-only.' },
+    '../sound-garden/lattice.html':
+      { allow:'autoplay', class:'random-seed', disposition:'tolerant',
+        note:'The Lattice — LIVE (audio moment 2). REPO-WINS CORRECTION (T5.1): the T2.1 shell keyed `../cavern/lattice/index.html` — a SILENT semiconductor exhibit (0 AudioContext), which cannot be "the estate makes its own sound". The audible musical Lattice is `sound-garden/lattice.html` (AudioContext + createOscillator, publishes window.__wsAudioCtx, sweeping playhead + blooming cells + `id="begin" ▶ begin`). Driven: deck.frameDrive click #begin ON camera (dismisses the overlay, initAudio + resume, playhead sweeps); the bed ducks ~4 s (baked at duckAtMs 137993 = begin+300). 2 Math.random (dice/regen pattern; one-roll-per-take), Date.now perf-timing.' },
+    '../strange-garden/pieces/particle-life.html':
+      { allow:"autoplay 'none'", class:'random-seed', disposition:'tolerant',
+        note:'Particle Life — preloaded ≥ 20 s early so it is well under way at its cut; 4 Math.random, one-roll-per-take.' },
+    '../card-catalog/index.html':
+      { allow:"autoplay 'none'", class:'random-seed', disposition:'tolerant',
+        note:'Card Catalog — page-curl ×3 via index-tab clicks (SP-B 14); 1 Math.random + 5 wall-clock reads, one-roll-per-take.' },
+    '../the-reliquary/index.html':
+      { allow:"autoplay 'none'", class:'random-seed', disposition:'tolerant',
+        note:'The Sealed Room’s Diary — WIDE BOARD SHOT, FRESH PROFILE ONLY (public surface: cover + one AWAITING page + two SEALED stamps; the sealed cards’ real titles are absent from the DOM). The ?record preflight asserts Page 1 AWAITING + exactly two SEALED (T6.2). 9 Math.random / 6 wall-clock (decor). NO page-text close-up.' },
+    '../the-errand/index.html':
+      { allow:'autoplay', class:'random-seed', disposition:'tolerant',
+        note:'The Errand (audio moment 3) — go() hook (pre-existing showing-hook.js): the pointless marble drop + rising flag land the diegetic thunk into TRUE digital-zero silence (music AND VO stop dead); 2 Math.random, `new Date` display-only.' },
+    '../strange-garden/pieces/mandelbrot.html':
+      { allow:"autoplay 'none'", class:'deterministic', disposition:'tolerant',
+        note:'Mandelbrot — auto-zoom CYCLES forever (dive → float32 floor → retreat); dive OR retreat both read as infinite structure (ENGINE §2); preloaded ~10 s early; source clean of Date.now/Math.random.' },
+    '../tabularium/index.html':
+      { allow:"autoplay 'none'", class:'random-seed', disposition:'tolerant',
+        note:'Tabularium — #btnPlay cranks the Orrery of Years; the Founding leaf on screen reads "build whatever you want; have fun" — the hinge button’s text VERBATIM (the exact rhyme, Brandon 2026-07-07). 3 Math.random, `new Date` display-only.' },
+    '../sandpile/index.html':
+      { allow:"autoplay 'none'", class:'calm', disposition:'tolerant',
+        note:'The Sand — #btnRain grain rain + avalanches; `new Date` display-only.' },
+    '../the-gate/the-gate.html?scene=idle&t=night&wx=storm&seed=20260717':
+      { allow:'autoplay', class:'random-seed', disposition:'pinned',
+        note:'THE GATE finale (audio moment 4) — PINNED: ?seed=20260717 fixes the weather RNG, ?t=night the band, ?wx=storm the weather (seed pinned at T0.1). triggerOpen() + the gentle push-in; welcome card + the Glass Staircase logotune play the film out; then held black. 31 Math.random / 21 wall-clock all downstream of the pinned seed.' }
+  },
+  /* the manifest lists ONLY what the film frames — no phantom frame for the
+     honesty gate to audit (the pinned-but-unused lattice/replicator cold plates
+     are deliberately absent; ENGINE §2 F12). */
+  notFramed: []
+};
+
+/* ════════════════════════════════════════════════════════════════════════════
+   TRAILER_SEGMENTS — the five VO segments (SCRIPT §1 / ENGINE §4). Peers of the
+   master clock, each started by an impulse cue at its atMs. T2.1 ships STUBS
+   (planning atMs, no audio/sidecar) — trailer.js builds one <audio> per segment
+   and lights captions from the ACTIVE segment; the real mp3s + sidecars + the
+   cue-locked atMs fold in at T4.1 (render) / T5.1 (wire).
+
+   S0 is the COLD-OPEN voice (SP-B items 1/2/3, T6.1). Brandon ruled at SP-B that
+   the open should be the ANIMATED, SPEAKING colophon with its word-weave teased,
+   and supplied the mechanism: render a small trailer-owned VO of the colophon's
+   own opening sentence, silence the page's own narration, and DRIVE the weave
+   from this segment's clock. So S0 supersedes the earlier "the page's own audio"
+   open (PLAN inv 3's open clause). It is `silent:true` (SCRIPT §1 S0 — caption
+   band OFF for the whole cold open; the page is its own caption) so no sidecar is
+   folded; its audio is a peer of the master clock like S1–S5, and the deck's
+   driveColdOpen() scrubs colophonSeek() off the master clock so the reveal is a
+   deterministic function of the film clock (no colophon-audio load race).
+
+   CAPTION CONFIG (ENGINE §4 F9 — the TWO standing display-override entries + the
+   S5 signature line-break). `display` maps a SPOKEN sidecar token → its on-screen
+   form; the deck applies it in the karaoke band ONLY (never the voice / never the
+   TTS input), and honours a trailing-punctuation match so "Vincent" lights even
+   if the sidecar token is "Vincent,". `breakBefore` forces a new caption line
+   before a word — a number is a word index, a string matches the spoken token
+   (token form is sidecar-index-independent, so it survives T4.1's real render):
+     • S1 — "Vincent" → "V.I.N.C.E.N.T." (Brandon's karaoke-spelling mandate; the
+       line was RESTORED into the dark-mode close, so this entry is STANDING).
+     • S5 — "Claude" → "— Claude" (em-dash U+2014; the covenant byte-diff covers
+       the CAPTION text, and TTS sidecars emit bare tokens, so the dash rides the
+       display map) AND the signature is forced onto its OWN caption line. */
+window.TRAILER_SEGMENTS = [
+  { id:'S0', atMs:1500, silent:true, audio:'<!-- forge:asset audio/S0.mp3 -->' },
+  /* S1 SPLIT (SP-B items 8/9, T6.1): the single S1 render is replaced by THREE
+     segments, so each comedy hold is REAL silence between separate plays (Brandon:
+     "split the VO input at the stop point ... insert REAL silence between the two
+     plays") — never a mid-mp3 pause/splice. The old single S1.mp3 had two
+     insert-and-shift baked-hush splices (T4.1); the off->Four splice was audible as
+     "the off sort of repeats" (item 9). Now:
+       S1a = "...in charge of the rides."  (clean EXTRACT of the old render up to
+              rides.e; ALL its cues — crucible/persona/boulder/montage/rotor — keep
+              their exact times, sidecar word times unchanged),
+       S1b = "I have to be honest ... or fall off?"  (FRESH clean render; ends
+              cleanly on "off?" so the coaster gag has no splice artifact),
+       S1c = "Four R's ... Hmm."  (clean EXTRACT from just before "Four"; ALL its
+              cues — the wrong-answer cards / skit cursor / V.I.N.C.E.N.T. display /
+              "Hmm" / the hinge — keep their exact times: Four->96959, Vincent->
+              110962, Hmm->113103, re-derived live from the extract sidecar).
+     Placement preserves EVERY downstream time (drop stays 120.043 -> NO bed
+     re-render): S1a@7300 (rotor drop on rides.e 79.316), S1b@80516 (rotor hold
+     ~1.3s before the apology), S1c@96859 (coaster hold ~1.4s after "off"). Only the
+     coaster cues re-derive from S1b's new sidecar (off.s -> 95.268). */
+  { id:'S1a', atMs:7300,
+    audio:'<!-- forge:asset audio/S1a.mp3 -->', timing:<!-- forge:json audio/S1a.json --> },
+  { id:'S1b', atMs:80516,
+    audio:'<!-- forge:asset audio/S1b.mp3 -->', timing:<!-- forge:json audio/S1b.json --> },
+  { id:'S1c', atMs:96859, display:{ 'Vincent':'V.I.N.C.E.N.T.' },
+    audio:'<!-- forge:asset audio/S1c.mp3 -->', timing:<!-- forge:json audio/S1c.json --> },
+  { id:'S2', atMs:123543,
+    audio:'<!-- forge:asset audio/S2.mp3 -->', timing:<!-- forge:json audio/S2.json --> },
+  { id:'S3', atMs:142743,
+    audio:'<!-- forge:asset audio/S3.mp3 -->', timing:<!-- forge:json audio/S3.json --> },
+  { id:'S4', atMs:158143,
+    audio:'<!-- forge:asset audio/S4.mp3 -->', timing:<!-- forge:json audio/S4.json --> },
+  { id:'S5', atMs:175909, display:{ 'Claude':'— Claude' }, breakBefore:['Claude'],
+    audio:'<!-- forge:asset audio/S5.mp3 -->', timing:<!-- forge:json audio/S5.json --> }
+];
+
+/* ════════════════════════════════════════════════════════════════════════════
+   TRAILER_CARDS — the ~10 full-screen cards that are the S1 visual spine
+   (ENGINE §5b; texts VERBATIM from SCRIPT §3). setCard(id) renders one into
+   #card; setCard(null) clears it. FOUR persona spell cards (last = the grandest
+   spell, "make no mistakes."), THREE inane-question cards, THREE wrong-answer
+   re-shows (the question re-shown with a diagonal red-ink stamp — 4 · Only
+   Tuesday · WALK, all wrong ON PURPOSE; the real answers land in S4). Estate-
+   serif, big at 1080p. BLOCK comments only inside this forged script. */
+window.TRAILER_CARDS = {
+  'persona-engineer': '<div class="tc tc-persona"><p class="tc-line">You are a senior engineer.</p></div>',
+  'persona-novelist': '<div class="tc tc-persona"><p class="tc-line">You are a Hugo Award–winning novelist.</p></div>',
+  'persona-lawyer':   '<div class="tc tc-persona"><p class="tc-line">You are a shark of a lawyer, thirty years at the bar.</p></div>',
+  'persona-spell':    '<div class="tc tc-spell"><p class="tc-line">MAKE NO MISTAKES.</p></div>',
+
+  'q-strawberry': '<div class="tc tc-q"><p class="tc-line">how many r\'s are in strawberry?</p></div>',
+  'q-days':       '<div class="tc tc-q"><p class="tc-line">which days of the week have a \'d\'?</p></div>',
+  'q-carwash':    '<div class="tc tc-q"><p class="tc-line">walk or drive to the car wash?</p></div>',
+
+  'q-strawberry-wrong': '<div class="tc tc-q tc-wrong"><p class="tc-line">how many r\'s are in strawberry?</p><span class="tc-stamp">4</span></div>',
+  'q-days-wrong':       '<div class="tc tc-q tc-wrong"><p class="tc-line">which days of the week have a \'d\'?</p><span class="tc-stamp">Only Tuesday</span></div>',
+  'q-carwash-wrong':    '<div class="tc tc-q tc-wrong"><p class="tc-line">walk or drive to the car wash?</p><span class="tc-stamp">WALK</span></div>'
+};
+</script>
+
+<script>
+<!-- forge:include trailer.js -->
+</script>
+</body>
+</html>
