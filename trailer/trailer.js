@@ -49,6 +49,21 @@
   /* The colophon frame's stack key — the cold-open zoom target (ENGINE §3). */
   var COLO_KEY = (CHAPTER.opening && CHAPTER.opening.frame) || '../colophon.html';
 
+  /* Cold-open weave-drive constants (SP-B items 1/2/3, T6.1). The reveal is a
+     pure function of colophon audio-time; we map the MASTER film clock onto it so
+     the word-weave tracks the film deterministically (no colophon-audio load
+     race). Anchors re-derived at execution (inv 3): colophon "I" (word 53) s=21462
+     from the live cloud-data.json; S0 "I" s=140 from trailer/audio/S0.json.
+     colophon-time = COLO_I_MS + (masterMs − S0_ATMS) − S0_I_MS, so S0's spoken "I"
+     lands exactly on the colophon's "I" reveal, and the ~4.72 s colophon span for
+     words 53–65 tracks S0's ~4.80 s "I am Claude … workshop". */
+  var COLO_I_MS = 21462;     /* colophon "I" reveal s-time (live cloud-data.json) */
+  var S0_I_MS = 140;         /* S0 "I" s-time (trailer/audio/S0.json) */
+  var S0_ATMS = 1500;        /* master-clock time S0's voice begins (== its atMs) */
+  var COLD_OPEN_CUT_MS = 6600; /* master time of the fade-to-black */
+  /* colophon-time at master t=0 (the paragraph before "I am Claude", per item 1). */
+  var COLO_START_MS = COLO_I_MS + (0 - S0_ATMS) - S0_I_MS;
+
   /* ?record → the OBS contract (ENGINE §8). The FULL preflight + reach-in
      choreography land at T6.2; the shell only needs to know the mode so it can
      size the stage, strip authoring chrome, disable the hash mirror, and never
@@ -303,6 +318,7 @@
   function bandVisible() {
     var seg = state.activeSeg;
     if (!seg) return false;
+    if (seg.silent) return false; /* S0 cold open — caption band OFF (SCRIPT §1 S0) */
     var ws = segWords(seg);
     if (!ws.length) return false; /* a stub segment with no sidecar stays hushed */
     var ms = state.clockMs - seg.atMs;
@@ -427,6 +443,26 @@
     cf.style.transition = (cf.style.transition ? cf.style.transition + ', ' : '') + 'opacity ' + ms + 'ms ease';
     cf.style.opacity = '0';
     log('▸ colophonFade ' + ms + 'ms → black');
+  }
+
+  /* ── the cold-open weave-drive (SP-B items 1/2/3, T6.1). Called every playing
+     frame from tick(): while the colophon is the active frame and we're inside the
+     cold-open window, scrub its audio.currentTime (colophonSeek) to the master-clock
+     -derived colophon-time. Because the colophon's reveal is a pure function of
+     audio-time, this makes the word-weave a deterministic function of the FILM
+     clock — the fix for Brandon's "static, dead colophon" + no-voice-then-pause
+     (the page's own audio playback, with its load race, is no longer relied on).
+     Held to COLD_OPEN_CUT_MS so the reveal freezes cleanly at the fade. */
+  function coloHooks() {
+    var cf = coloFrame();
+    try { return cf && cf.contentWindow && cf.contentWindow.__tourHooks; } catch (e) { return null; }
+  }
+  function driveColdOpen() {
+    if (state.activeKey !== COLO_KEY) return;
+    if (state.clockMs > COLD_OPEN_CUT_MS) return;
+    var h = coloHooks();
+    if (!h || typeof h.colophonSeek !== 'function') return;
+    h.colophonSeek(COLO_I_MS + (state.clockMs - S0_ATMS) - S0_I_MS);
   }
 
   /* ── the radio-button skit + deck-drawn fake cursor (ENGINE §5). skitOn/Third/
@@ -745,6 +781,7 @@
       var fired = CE.cuesInRange(CHAPTER, state.lastFireT, to);
       for (var i = 0; i < fired.length; i++) fireCue(fired[i]);
       state.lastFireT = to;
+      driveColdOpen();   /* SP-B T6.1: scrub the colophon weave off the master clock */
     }
 
     lightCaption();
@@ -956,21 +993,22 @@
     play();
   }
 
-  /* AUTHORING-ONLY cold-open primer (ENGINE §3): weave-and-pause the colophon so
-     the cold-open zoom is demonstrable in review playback. The RECORD-mode
-     reach-in — the real-gesture unlock, #voice shield to 0, the silent count-in,
-     and the Gate unlock+suspend — is T6.2's contract and is deliberately NOT
-     built here (this no-ops in ?record). */
+  /* AUTHORING-ONLY cold-open primer (SP-B items 1/2/3, T6.1): weave-and-hold the
+     colophon at COLO_START_MS (the paragraph before "I am Claude") via colophonHold
+     — which mutes the page's own narration (the rendered S0 segment is the voice)
+     and reaches state="play" SYNCHRONOUSLY (no dependence on the colophon mp3's own
+     playback/load, whose race was Brandon's "static, dead colophon" + no-voice
+     pause). The reveal is then driven deterministically by driveColdOpen() scrubbing
+     colophonSeek() off the master clock. The RECORD-mode reach-in — real-gesture
+     unlock, #voice shield, silent count-in, Gate unlock+suspend — is T6.2's contract
+     and is deliberately NOT built here (this no-ops in ?record). */
   function primeColdOpen() {
     if (RECORD) return;
     if (state.activeKey !== COLO_KEY) return;
-    var cf = coloFrame();
+    var h = coloHooks();
     try {
-      var h = cf && cf.contentWindow && cf.contentWindow.__tourHooks;
-      if (h && typeof h.colophonBeginAt === 'function') {
-        h.colophonBeginAt(21200);
-        if (typeof h.colophonCut === 'function') h.colophonCut();
-      }
+      if (h && typeof h.colophonHold === 'function') h.colophonHold(COLO_START_MS);
+      if (h && typeof h.colophonSeek === 'function') h.colophonSeek(COLO_START_MS);
     } catch (e) {}
   }
 

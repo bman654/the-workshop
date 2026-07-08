@@ -744,6 +744,40 @@
             return groups[i].word.getBoundingClientRect();
         return null;
       };
+      /* colophonHold(ms) / colophonSeek(ms): the SP-B cold-open rework (T6.1).
+         The visuals are a pure function of audio time — clockT() returns
+         audio.currentTime*1000 whenever state==="play", and frame() feeds that t to
+         advanceReveals(). The trailer weaves the page with colophonHold() then
+         DRIVES the word-weave deterministically off its OWN master clock by
+         scrubbing audio.currentTime every frame (colophonSeek).
+
+         Why colophonHold and not begin(): begin() only reaches state="play" (and
+         dismisses the veil) inside the audio.play() promise, which resolves only
+         once the page's mp3 has LOADED — a variable/late race that was exactly
+         Brandon's "static, dead colophon" + "no voice, a pause (loading?)". So
+         colophonHold establishes state="play" SYNCHRONOUSLY (no play() dependency),
+         mutes the page's own narration (the trailer's rendered S0 segment is the
+         only voice), seeks, and dismisses the begin veil — then the reveal is a
+         pure function of the SCRUBBED currentTime (metadata, not playback). Both
+         verbs are inert unless poked; __tourAct / page controls / an ordinary
+         (unpoked) visit are untouched — nothing here runs without the deck. It
+         reproduces begin()'s state setup only; block comments only (forge landmine). */
+      window.__tourHooks.colophonHold = function (ms) {
+        try { audio.muted = true; } catch (e) {}
+        try { audio.currentTime = Math.max(0, ms || 0) / 1000; } catch (e) {}
+        if (state === "idle") {
+          ensureLoop();
+          state = "play";
+          els.page.classList.add("playing");
+          els.page.classList.remove("idlelock");
+          els.begin.classList.add("gone");
+        }
+        return true;
+      };
+      window.__tourHooks.colophonSeek = function (ms) {
+        try { audio.currentTime = Math.max(0, ms || 0) / 1000; } catch (e) {}
+        return true;
+      };
     }
   }
 
