@@ -1178,23 +1178,26 @@ window.TRAILER_CHAPTERS = [
 
       /* ── the radio skit + Gap A / the hinge (ENGINE §5; SCRIPT §3 rows
          101.5–113.2). #skit overlay (NOT a frame); S1's last line runs over it.
-         The fake cursor drifts to "dark" on "harder about dark mode" (108.802),
-         holds through "Vincent"(V.I.N.C.E.N.T. lights, 110.962) / "Maximillian"
-         (twitch ×2), then after "Hmm" (113.103, last VO word) the pure hinge: the
-         third option (the founding leaf verbatim, readable ≥1.4 s) appears at
-         113.9 → zero-hesitation snap 115.9 + the dot fills → 250 ms bloom → HARD
-         flip to the Scales at the bloom peak (116.1) → skitOff reveals the star.
-         skitOn/Third/Pick/Off = STATE (seek-replayed); cursor/twitch/bloom =
-         IMPULSE. */
+         SP-B item 13: the fake CURSOR is no longer keyframed by impulse cues (a
+         wall-clock CSS transition that desynced from the audio-clock cues under
+         dropped frames — "highlights without arriving / screen vanishes first").
+         It is now driven EVERY FRAME off the FILM MASTER CLOCK by driveSkit()
+         (trailer.js), which owns the whole cursor path: drift corner→"dark" on
+         "…dark mode" (~108.8), hover through "Vincent"(V.I.N.C.E.N.T. lights,
+         110.962)/"Maximillian" (twitch ×2 ~111.7/112.0), then after "Hmm"
+         (113.103, last VO word) a decisive snap dark→leaf 115.45→115.69. Because
+         the cursor is a pure function of the same clock as the pick, it PROVABLY
+         lands on the leaf (115.69) BEFORE the dot fills (115.85). Remaining cues
+         are STATE/IMPULSE only: the third option (founding leaf verbatim, readable
+         ≥1.4 s) appears 113.9 → dot fills 115.85 → 250 ms bloom 116.05 → HARD flip
+         to the Scales at the bloom peak (116.1) → skitOff reveals the star.
+         skitOn/Third/Pick/Off = STATE (seek-replayed); bloom = IMPULSE; cursor =
+         master-clock drive (seek-safe, no cue). */
       { t:103.701,state:{ verb:'deck.skitOn' } },
-      { t:108.802,impulse:{ verb:'deck.skitCursor', args:['dark', 1400, 'out'] } },
       { t:110.962,note:'V.I.N.C.E.N.T. lights (S1 display map); the cursor holds "dark mode"' },
-      { t:111.663,impulse:{ verb:'deck.skitTwitch' } },
-      { t:112.013,impulse:{ verb:'deck.skitTwitch' } },
       { t:113.103,note:'"Hmm" — S1 last word; the pure hinge begins' },
       { t:113.9,  state:{ verb:'deck.skitThird' } },
-      { t:115.9,  impulse:{ verb:'deck.skitCursor', args:['leaf', 140, 'in'] } },
-      { t:115.95, state:{ verb:'deck.skitPick' } },
+      { t:115.85, state:{ verb:'deck.skitPick' } },
       { t:116.05, impulse:{ verb:'deck.bloomFlash' } },
       { t:116.1,  frame:'../stellar-forge/scales/index.html' },
       { t:116.15, state:{ verb:'deck.skitOff' } },
@@ -3964,10 +3967,35 @@ window.TRAILER_CARDS = {
      transient IMPULSE. Cursor positions derive from the option rects (no magic
      numbers), so they hold at any stage size. */
   function skitQ(sel) { return els.skit ? els.skit.querySelector(sel) : null; }
-  function easeFn(e) {
-    if (e === 'in') return 'cubic-bezier(.7,0,.84,0)';       /* zero-hesitation snap */
-    if (e === 'inout') return 'ease-in-out';
-    return 'cubic-bezier(.16,.84,.44,1)';                    /* drift-in (default) */
+  /* SP-B item 13 — the hinge cursor is driven off the FILM MASTER CLOCK (like
+     driveColdOpen), NOT a CSS transition. A wall-clock CSS transition can desync
+     from the audio-clock-fired pick/bloom/flip cues under dropped frames — the
+     exact "cursor never lands / highlights without arriving / screen vanishes
+     first" Brandon flagged. As a pure function of state.clockMs the cursor is
+     provably on the leaf BEFORE the (also master-clock) pick fills its dot. All
+     positions derive from the option rects — no magic numbers, any stage size. */
+  var SKIT = {
+    cornerL: 84, cornerT: 86,          /* the parked start (skitOn sets this too) */
+    driftAt: 108802, driftMs: 1400,    /* drift corner → "dark" on "…dark mode" */
+    twitchA: 111663, twitchB: 112013,  /* two small flinches toward dark */
+    twitchMs: 260, twitchDy: 1.1,      /* ≤ ~12px, comic restraint */
+    moveAt: 115450, moveMs: 240        /* decisive snap "dark" → leaf; lands 115.69 s */
+  };
+  function easeInCubic(u)  { return u * u * u; }               /* zero-hesitation snap */
+  function easeOutCubic(u) { return 1 - Math.pow(1 - u, 3); }  /* drift-in settle */
+  function cursorPctFor(which) {
+    var row = skitQ('[data-opt="' + which + '"]');
+    if (!row || !els.skit) return null;
+    var sb = els.skit.getBoundingClientRect(), rb = row.getBoundingClientRect();
+    if (!sb.width || !sb.height) return null;
+    var x = (rb.left - sb.left) - 26, y = (rb.top - sb.top) + rb.height * 0.5 - 4;
+    return { l: x / sb.width * 100, t: y / sb.height * 100 };
+  }
+  function twitchBump(ms) {   /* smooth down-and-back flinch(es), toward dark, ≤ twitchDy% */
+    var o = 0, a = ms - SKIT.twitchA, b = ms - SKIT.twitchB;
+    if (a >= 0 && a <= SKIT.twitchMs) o += Math.sin(a / SKIT.twitchMs * Math.PI) * SKIT.twitchDy;
+    if (b >= 0 && b <= SKIT.twitchMs) o += Math.sin(b / SKIT.twitchMs * Math.PI) * SKIT.twitchDy;
+    return o;
   }
   function skitOn() {
     if (!els.skit) return;
@@ -3983,26 +4011,35 @@ window.TRAILER_CARDS = {
     els.skit.classList.add('on');
     log('▸ skitOn');
   }
-  function skitCursor(which, ms, easing) {
-    var cur = skitQ('.skit-cursor'), row = skitQ('[data-opt="' + which + '"]');
-    if (!cur || !row || !els.skit) { log('· skitCursor — missing cursor/opt ' + which); return; }
-    ms = (typeof ms === 'number' && ms >= 0) ? ms : 600;
-    var sb = els.skit.getBoundingClientRect(), rb = row.getBoundingClientRect();
-    var x = (rb.left - sb.left) - 26, y = (rb.top - sb.top) + rb.height * 0.5 - 4;
-    var e = easeFn(easing);
-    cur.style.transition = 'left ' + ms + 'ms ' + e + ', top ' + ms + 'ms ' + e;
-    cur.style.left = (x / sb.width * 100).toFixed(2) + '%';
-    cur.style.top = (y / sb.height * 100).toFixed(2) + '%';
-    log('▸ skitCursor → ' + which + ' (' + ms + 'ms)');
-  }
-  function skitTwitch() {
-    var cur = skitQ('.skit-cursor');
-    if (!cur) return;
-    var top0 = cur.style.top, base = parseFloat(top0) || 0;
-    cur.style.transition = 'top 120ms ease-out';
-    cur.style.top = (base + 1.1).toFixed(2) + '%';   /* ≤ 12px flinch toward dark */
-    setTimeout(function () { cur.style.transition = 'top 120ms ease-in'; cur.style.top = top0; }, 130);
-    log('▸ skitTwitch');
+  /* per-frame cursor drive — called from tick() after driveColdOpen. Positions
+     the fake cursor as a pure function of the master clock across the whole skit:
+     parked → drift to "dark" → hold (twitch ×2) → decisive snap to leaf → land.
+     Seek-safe by construction (position is derived from state.clockMs each frame,
+     so a scrub lands the cursor exactly where the clock says). */
+  function driveSkit() {
+    if (!els.skit || !els.skit.classList.contains('on')) return;
+    var cur = skitQ('.skit-cursor'); if (!cur) return;
+    var dark = cursorPctFor('dark'), leaf = cursorPctFor('leaf');
+    if (!dark || !leaf) return;
+    var ms = state.clockMs, L, T;
+    if (ms < SKIT.driftAt) {                          /* parked in the corner */
+      L = SKIT.cornerL; T = SKIT.cornerT;
+    } else if (ms < SKIT.driftAt + SKIT.driftMs) {    /* drift corner → dark (settle) */
+      var u = easeOutCubic((ms - SKIT.driftAt) / SKIT.driftMs);
+      L = SKIT.cornerL + (dark.l - SKIT.cornerL) * u;
+      T = SKIT.cornerT + (dark.t - SKIT.cornerT) * u;
+    } else if (ms < SKIT.moveAt) {                    /* hover on dark (+ twitches) */
+      L = dark.l; T = dark.t + twitchBump(ms);
+    } else if (ms < SKIT.moveAt + SKIT.moveMs) {      /* zero-hesitation snap dark → leaf */
+      var v = easeInCubic((ms - SKIT.moveAt) / SKIT.moveMs);
+      L = dark.l + (leaf.l - dark.l) * v;
+      T = dark.t + (leaf.t - dark.t) * v;
+    } else {                                          /* landed on the leaf */
+      L = leaf.l; T = leaf.t;
+    }
+    cur.style.transition = 'none';
+    cur.style.left = L.toFixed(2) + '%';
+    cur.style.top  = T.toFixed(2) + '%';
   }
   function skitThird() {
     var leafRow = skitQ('[data-opt="leaf"]');
@@ -4196,8 +4233,6 @@ window.TRAILER_CARDS = {
     colophonZoomOut: colophonZoomOut,
     colophonFade: colophonFade,
     skitOn: skitOn,
-    skitCursor: skitCursor,
-    skitTwitch: skitTwitch,
     skitThird: skitThird,
     skitPick: skitPick,
     bloomFlash: bloomFlash,
@@ -4276,6 +4311,7 @@ window.TRAILER_CARDS = {
       for (var i = 0; i < fired.length; i++) fireCue(fired[i]);
       state.lastFireT = to;
       driveColdOpen();   /* SP-B T6.1: scrub the colophon weave off the master clock */
+      driveSkit();       /* SP-B T6.1 item 13: the hinge cursor off the master clock */
     }
 
     lightCaption();

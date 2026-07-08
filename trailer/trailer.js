@@ -470,10 +470,35 @@
      transient IMPULSE. Cursor positions derive from the option rects (no magic
      numbers), so they hold at any stage size. */
   function skitQ(sel) { return els.skit ? els.skit.querySelector(sel) : null; }
-  function easeFn(e) {
-    if (e === 'in') return 'cubic-bezier(.7,0,.84,0)';       /* zero-hesitation snap */
-    if (e === 'inout') return 'ease-in-out';
-    return 'cubic-bezier(.16,.84,.44,1)';                    /* drift-in (default) */
+  /* SP-B item 13 — the hinge cursor is driven off the FILM MASTER CLOCK (like
+     driveColdOpen), NOT a CSS transition. A wall-clock CSS transition can desync
+     from the audio-clock-fired pick/bloom/flip cues under dropped frames — the
+     exact "cursor never lands / highlights without arriving / screen vanishes
+     first" Brandon flagged. As a pure function of state.clockMs the cursor is
+     provably on the leaf BEFORE the (also master-clock) pick fills its dot. All
+     positions derive from the option rects — no magic numbers, any stage size. */
+  var SKIT = {
+    cornerL: 84, cornerT: 86,          /* the parked start (skitOn sets this too) */
+    driftAt: 108802, driftMs: 1400,    /* drift corner → "dark" on "…dark mode" */
+    twitchA: 111663, twitchB: 112013,  /* two small flinches toward dark */
+    twitchMs: 260, twitchDy: 1.1,      /* ≤ ~12px, comic restraint */
+    moveAt: 115450, moveMs: 240        /* decisive snap "dark" → leaf; lands 115.69 s */
+  };
+  function easeInCubic(u)  { return u * u * u; }               /* zero-hesitation snap */
+  function easeOutCubic(u) { return 1 - Math.pow(1 - u, 3); }  /* drift-in settle */
+  function cursorPctFor(which) {
+    var row = skitQ('[data-opt="' + which + '"]');
+    if (!row || !els.skit) return null;
+    var sb = els.skit.getBoundingClientRect(), rb = row.getBoundingClientRect();
+    if (!sb.width || !sb.height) return null;
+    var x = (rb.left - sb.left) - 26, y = (rb.top - sb.top) + rb.height * 0.5 - 4;
+    return { l: x / sb.width * 100, t: y / sb.height * 100 };
+  }
+  function twitchBump(ms) {   /* smooth down-and-back flinch(es), toward dark, ≤ twitchDy% */
+    var o = 0, a = ms - SKIT.twitchA, b = ms - SKIT.twitchB;
+    if (a >= 0 && a <= SKIT.twitchMs) o += Math.sin(a / SKIT.twitchMs * Math.PI) * SKIT.twitchDy;
+    if (b >= 0 && b <= SKIT.twitchMs) o += Math.sin(b / SKIT.twitchMs * Math.PI) * SKIT.twitchDy;
+    return o;
   }
   function skitOn() {
     if (!els.skit) return;
@@ -489,26 +514,35 @@
     els.skit.classList.add('on');
     log('▸ skitOn');
   }
-  function skitCursor(which, ms, easing) {
-    var cur = skitQ('.skit-cursor'), row = skitQ('[data-opt="' + which + '"]');
-    if (!cur || !row || !els.skit) { log('· skitCursor — missing cursor/opt ' + which); return; }
-    ms = (typeof ms === 'number' && ms >= 0) ? ms : 600;
-    var sb = els.skit.getBoundingClientRect(), rb = row.getBoundingClientRect();
-    var x = (rb.left - sb.left) - 26, y = (rb.top - sb.top) + rb.height * 0.5 - 4;
-    var e = easeFn(easing);
-    cur.style.transition = 'left ' + ms + 'ms ' + e + ', top ' + ms + 'ms ' + e;
-    cur.style.left = (x / sb.width * 100).toFixed(2) + '%';
-    cur.style.top = (y / sb.height * 100).toFixed(2) + '%';
-    log('▸ skitCursor → ' + which + ' (' + ms + 'ms)');
-  }
-  function skitTwitch() {
-    var cur = skitQ('.skit-cursor');
-    if (!cur) return;
-    var top0 = cur.style.top, base = parseFloat(top0) || 0;
-    cur.style.transition = 'top 120ms ease-out';
-    cur.style.top = (base + 1.1).toFixed(2) + '%';   /* ≤ 12px flinch toward dark */
-    setTimeout(function () { cur.style.transition = 'top 120ms ease-in'; cur.style.top = top0; }, 130);
-    log('▸ skitTwitch');
+  /* per-frame cursor drive — called from tick() after driveColdOpen. Positions
+     the fake cursor as a pure function of the master clock across the whole skit:
+     parked → drift to "dark" → hold (twitch ×2) → decisive snap to leaf → land.
+     Seek-safe by construction (position is derived from state.clockMs each frame,
+     so a scrub lands the cursor exactly where the clock says). */
+  function driveSkit() {
+    if (!els.skit || !els.skit.classList.contains('on')) return;
+    var cur = skitQ('.skit-cursor'); if (!cur) return;
+    var dark = cursorPctFor('dark'), leaf = cursorPctFor('leaf');
+    if (!dark || !leaf) return;
+    var ms = state.clockMs, L, T;
+    if (ms < SKIT.driftAt) {                          /* parked in the corner */
+      L = SKIT.cornerL; T = SKIT.cornerT;
+    } else if (ms < SKIT.driftAt + SKIT.driftMs) {    /* drift corner → dark (settle) */
+      var u = easeOutCubic((ms - SKIT.driftAt) / SKIT.driftMs);
+      L = SKIT.cornerL + (dark.l - SKIT.cornerL) * u;
+      T = SKIT.cornerT + (dark.t - SKIT.cornerT) * u;
+    } else if (ms < SKIT.moveAt) {                    /* hover on dark (+ twitches) */
+      L = dark.l; T = dark.t + twitchBump(ms);
+    } else if (ms < SKIT.moveAt + SKIT.moveMs) {      /* zero-hesitation snap dark → leaf */
+      var v = easeInCubic((ms - SKIT.moveAt) / SKIT.moveMs);
+      L = dark.l + (leaf.l - dark.l) * v;
+      T = dark.t + (leaf.t - dark.t) * v;
+    } else {                                          /* landed on the leaf */
+      L = leaf.l; T = leaf.t;
+    }
+    cur.style.transition = 'none';
+    cur.style.left = L.toFixed(2) + '%';
+    cur.style.top  = T.toFixed(2) + '%';
   }
   function skitThird() {
     var leafRow = skitQ('[data-opt="leaf"]');
@@ -702,8 +736,6 @@
     colophonZoomOut: colophonZoomOut,
     colophonFade: colophonFade,
     skitOn: skitOn,
-    skitCursor: skitCursor,
-    skitTwitch: skitTwitch,
     skitThird: skitThird,
     skitPick: skitPick,
     bloomFlash: bloomFlash,
@@ -782,6 +814,7 @@
       for (var i = 0; i < fired.length; i++) fireCue(fired[i]);
       state.lastFireT = to;
       driveColdOpen();   /* SP-B T6.1: scrub the colophon weave off the master clock */
+      driveSkit();       /* SP-B T6.1 item 13: the hinge cursor off the master clock */
     }
 
     lightCaption();
