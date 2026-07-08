@@ -167,6 +167,33 @@
     transform:translate(-50%,-50%); width:1920px; height:1080px; }
   body.record #captions{ font-size:32px; }
 
+  /* ── the ?record arm gate: pure black, the preflight panel takes over from the
+     authoring marketing copy; the whole gate is the OBS Interact arm target. The
+     panel + arm click never appear in the take (removed on arm, before the count-in
+     in-point). ENGINE §8, T6.2. ──────────────────────────────────────────────── */
+  #preflight{ display:none; }
+  body.record #startgate{ background:#000; gap:0; padding:48px; align-items:flex-start;
+    justify-content:center; text-align:left; }
+  body.record #startgate .kick,
+  body.record #startgate h1,
+  body.record #startgate .sub,
+  body.record #startgate button{ display:none; }
+  body.record #preflight{ display:block; width:100%; max-width:820px;
+    font:600 15px/1.7 ui-monospace,Menlo,monospace; color:var(--muted); }
+  #preflight .pf-title{ letter-spacing:.16em; text-transform:uppercase; font-size:11px;
+    color:var(--muted); margin-bottom:18px; }
+  #preflight .pf-row{ display:grid; grid-template-columns:1.4em 1fr auto; gap:16px;
+    align-items:baseline; padding:7px 0; border-bottom:1px solid rgba(255,255,255,.06); }
+  #preflight .pf-row .pf-mark{ font-weight:700; }
+  #preflight .pf-row.ok .pf-mark{ color:#5bd58b; }
+  #preflight .pf-row.bad .pf-mark{ color:#e0473b; }
+  #preflight .pf-row .pf-name{ color:var(--ink); }
+  #preflight .pf-row.bad .pf-name{ color:#f2a29a; }
+  #preflight .pf-row .pf-detail{ color:var(--muted); white-space:nowrap; }
+  #preflight .pf-status{ margin-top:22px; font-size:16px; letter-spacing:.01em; }
+  #preflight .pf-status.ok{ color:#7fe0a6; }
+  #preflight .pf-status.bad{ color:#e0473b; }
+
   @media (prefers-reduced-motion: reduce){
     .stage-frame, #captions, #captions .cap-w, #captions .cap-line, #heldblack{ transition:none; }
   }
@@ -212,6 +239,15 @@
   <h1>a trailer</h1>
   <p class="sub">A hand-built creative web-art estate — and a short film about the afternoon it was given. One click to begin; the montage plays itself.</p>
   <button id="start-btn" type="button">▶ play the trailer</button>
+  <!-- ?record preflight surface (ENGINE §8, T6.2): the authoring marketing copy is
+       hidden under body.record and this panel takes over. trailer.js paints the six
+       preflight rows here on a poll; the whole gate is the OBS "Interact" arm target
+       (a real click), which arms only when every row is green. -->
+  <div id="preflight" aria-hidden="true">
+    <div class="pf-title">record preflight · the OBS contract (ENGINE §8)</div>
+    <div id="pf-list"></div>
+    <div id="pf-status" class="pf-status"></div>
+  </div>
 </div>
 
 <!-- the master-clock music bed (ENGINE §1). The cue-locked FINAL bed (T4.2:
@@ -3561,6 +3597,16 @@ window.TRAILER_CARDS = {
   /* colophon-time at master t=0 (the paragraph before "I am Claude", per item 1). */
   var COLO_START_MS = COLO_I_MS + (0 - S0_ATMS) - S0_I_MS;
 
+  /* ── ?record contract constants (ENGINE §8; T6.2) ──────────────────────────
+     The Gate frame key is the manifest key VERBATIM (the cue `frame` value is the
+     identical string, query params + pinned seed included — T2.1 carry / T0.1
+     seed). The arm-click reach-in unlocks + suspends THIS frame's ctx; the Gate
+     cut cue (172.409) resumes it (deck.frameDrive call __wsAudioCtx.resume). */
+  var GATE_KEY  = '../the-gate/the-gate.html?scene=idle&t=night&wx=storm&seed=20260717';
+  var DIARY_KEY = '../the-reliquary/index.html';   /* fresh-state assertion target */
+  var COUNT_IN_MS = 2200;   /* silent held-black count-in ≥ 2 s (ENGINE §8 step 4) */
+  var FRAME_SETTLE_MS = 400; /* settle beat after the last frame `load` (ENGINE §8 step 2) */
+
   /* ?record → the OBS contract (ENGINE §8). The FULL preflight + reach-in
      choreography land at T6.2; the shell only needs to know the mode so it can
      size the stage, strip authoring chrome, disable the hash mirror, and never
@@ -3582,7 +3628,13 @@ window.TRAILER_CARDS = {
     activeKey: null,        /* the stack key currently on top */
     activeSeg: null,        /* the VO segment currently sounding (drives captions) */
     pendingReplay: null,    /* state cues to re-poke after a flip settles */
-    scalesRampId: 0         /* token: a later scalesCollapse cancels a running collar ramp (SP-B item 10) */
+    scalesRampId: 0,        /* token: a later scalesCollapse cancels a running collar ramp (SP-B item 10) */
+    /* ?record arming (T6.2) */
+    framesTotal: 0,         /* stack frames created at boot (preflight denominator) */
+    framesLoaded: 0,        /* frames that have fired `load` */
+    framesSettledAt: 0,     /* perf.now() when framesLoaded first reached framesTotal */
+    arming: false,          /* the arm gesture fired; count-in running */
+    pfTimer: 0              /* the preflight poll timer (record mode) */
   };
 
   var els = {};
@@ -3642,6 +3694,7 @@ window.TRAILER_CARDS = {
   function buildStack() {
     var frames = MANIFEST.frames || {};
     var keys = Object.keys(frames);
+    state.framesTotal = keys.length;
     for (var i = 0; i < keys.length; i++) {
       var key = keys[i], entry = frames[key] || {};
       var f = document.createElement('iframe');
@@ -3650,11 +3703,20 @@ window.TRAILER_CARDS = {
       f.setAttribute('referrerpolicy', 'no-referrer');
       f.setAttribute('allow', entry.allow || "autoplay 'none'");
       f.setAttribute('loading', 'eager');
+      /* track load for the ?record preflight (ENGINE §8 step 2 — every frame
+         `load`ed + a settle beat). Attached BEFORE src so no early load is missed. */
+      f.addEventListener('load', onFrameLoad);
       /* src is the key VERBATIM (the cue `frame` value is the identical string,
          query params included — e.g. the Gate's ?scene=…&seed=…). */
       f.src = key;
       els.stage.appendChild(f);
       frameEls[key] = f;
+    }
+  }
+  function onFrameLoad() {
+    state.framesLoaded++;
+    if (state.framesLoaded >= state.framesTotal && !state.framesSettledAt) {
+      state.framesSettledAt = (window.performance && performance.now) ? performance.now() : Date.now();
     }
   }
   /* When a frame leaves the stage, SILENCE any live AudioContext it published on
@@ -4451,6 +4513,158 @@ window.TRAILER_CARDS = {
     return false;
   }
 
+  /* ── ?record preflight (ENGINE §8 step 2 — the OBS contract) ────────────────
+     Every red is a VISIBLE refusal to arm, never a degraded take. Returns
+     { ok, checks:[{ name, ok, detail }] } — pure read-only measurement, run on a
+     poll before the arm click and RE-RUN inside armRecord (so a condition that
+     flips red between poll and click still refuses). T6.2. */
+  function preflightRecord() {
+    var checks = [];
+    var now = (window.performance && performance.now) ? performance.now() : Date.now();
+
+    /* 1. all stack frames loaded + a settle beat */
+    var framesOk = state.framesTotal > 0 && state.framesLoaded >= state.framesTotal &&
+                   state.framesSettledAt && (now - state.framesSettledAt) >= FRAME_SETTLE_MS;
+    checks.push({ name: 'stack frames loaded', ok: !!framesOk,
+      detail: state.framesLoaded + '/' + state.framesTotal + (framesOk ? ' · settled' : ' · settling…') });
+
+    /* 2. all audio readyState ≥ 2 (HAVE_CURRENT_DATA) — bed + every VO segment */
+    var audioOk = true, ad = [];
+    var bedRS = bed ? bed.readyState : 0;
+    if (bedRS < 2) audioOk = false;
+    ad.push('bed=' + bedRS);
+    for (var id in segEls) {
+      var rs = segEls[id] ? segEls[id].readyState : 0;
+      if (rs < 2) audioOk = false;
+      ad.push(id + '=' + rs);
+    }
+    checks.push({ name: 'audio buffered (readyState ≥ 2)', ok: audioOk, detail: ad.join(' ') });
+
+    /* 3. Reduce Motion OFF (the estate freezes its motion under RM) */
+    var rmOn = false;
+    try { rmOn = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
+    checks.push({ name: 'reduce motion off', ok: !rmOn, detail: rmOn ? 'ON — the estate freezes' : 'off' });
+
+    /* 4. estate unmuted (ws:pref:muted ≠ '1' — the colophon voice + Gate audio depend on it) */
+    var m = muted();
+    checks.push({ name: 'estate unmuted', ok: !m, detail: m ? "ws:pref:muted='1'" : 'unmuted' });
+
+    /* 5. viewport ≥ 1920×1080 */
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var vpOk = vw >= 1920 && vh >= 1080;
+    checks.push({ name: 'viewport ≥ 1920×1080', ok: vpOk, detail: vw + '×' + vh });
+
+    /* 6. fresh-state assertion — the diary reports Page 1 AWAITING + exactly two
+       SEALED stamps (same-origin DOM count). Any other state = a non-fresh profile
+       (invariant 7: the take is served from a dedicated fresh record port). */
+    var diaryOk = false, dd = 'diary frame not reachable';
+    try {
+      var dfe = frameEls[DIARY_KEY], dw = dfe && dfe.contentWindow, doc = dw && dw.document;
+      if (doc) {
+        var aw = doc.querySelectorAll('.card.awaiting').length;
+        var se = doc.querySelectorAll('.card.sealed').length;
+        diaryOk = (aw === 1 && se === 2);
+        dd = aw + ' awaiting / ' + se + ' sealed';
+      }
+    } catch (e) { dd = 'diary cross-read failed'; }
+    checks.push({ name: 'diary fresh (1 awaiting / 2 sealed)', ok: diaryOk, detail: dd });
+
+    var ok = true;
+    for (var i = 0; i < checks.length; i++) if (!checks[i].ok) ok = false;
+    return { ok: ok, checks: checks };
+  }
+
+  /* Paint the preflight panel on the record gate (the arm surface). */
+  function renderPreflight(pf) {
+    if (!els.pfList) return;
+    var html = '';
+    for (var i = 0; i < pf.checks.length; i++) {
+      var c = pf.checks[i];
+      html += '<div class="pf-row ' + (c.ok ? 'ok' : 'bad') + '">' +
+              '<span class="pf-mark">' + (c.ok ? '✓' : '✗') + '</span>' +
+              '<span class="pf-name">' + c.name + '</span>' +
+              '<span class="pf-detail">' + c.detail + '</span></div>';
+    }
+    els.pfList.innerHTML = html;
+    if (els.pfStatus) {
+      els.pfStatus.textContent = pf.ok
+        ? 'READY — click anywhere to arm the take'
+        : 'NOT READY — any red row above blocks the take (fix it, do not record)';
+      els.pfStatus.className = 'pf-status ' + (pf.ok ? 'ok' : 'bad');
+    }
+  }
+
+  /* ── the record arm (ENGINE §8 step 3) — the ONE real blessing gesture ───────
+     Re-runs preflight (refuses on any red), performs the FULL reach-in under the
+     real gesture, DOM-removes the last chrome, then a silent ≥ 2 s held-black
+     count-in before bed t=0. T6.2. */
+  function armRecord() {
+    if (state.started || state.arming) return;
+    var pf = preflightRecord();
+    renderPreflight(pf);
+    if (!pf.ok) { log('✗ record: REFUSED to arm — preflight red'); return; }
+    state.arming = true;
+    if (state.pfTimer) { clearTimeout(state.pfTimer); state.pfTimer = 0; }
+
+    reachIn(); /* unlock bed+VO, weave the colophon, unlock+suspend the Gate storm */
+
+    /* held black BEFORE removing the gate → no flash of the woven page */
+    if (els.heldblack) els.heldblack.classList.add('on');
+    if (els.startgate && els.startgate.parentNode) els.startgate.parentNode.removeChild(els.startgate);
+    if (els.rmbanner && els.rmbanner.parentNode) els.rmbanner.parentNode.removeChild(els.rmbanner);
+    log('▸ record: armed — silent count-in ' + COUNT_IN_MS + ' ms');
+
+    setTimeout(function () {
+      if (els.heldblack) els.heldblack.classList.remove('on');
+      if (bed) { try { bed.currentTime = 0; } catch (e) {} }
+      state.started = true;
+      startClock();
+      play();
+      log('▸ record: bed t=0 — the film runs');
+    }, COUNT_IN_MS);
+  }
+
+  /* The reach-in: everything that needs the real gesture, done once at the arm
+     click (a synthetic .click() unlocks no audio — verified). ENGINE §8 step 3. */
+  function reachIn() {
+    /* (a) unlock bed + every VO element (play-paused once, muted through the
+       unlock so no blip escapes before the count-in) */
+    unlockEl(bed);
+    for (var id in segEls) unlockEl(segEls[id]);
+    /* (b) the colophon cold open — weave-and-hold off the master clock. REPO-WINS
+       (T6.1 turn-2 rework supersedes ENGINE §3's colophonBeginAt/colophonCut path):
+       primeColdOpen() = colophonHold + colophonSeek; colophonHold mutes the page's
+       own narration (the rendered S0 segment is the voice) so no #voice shield is
+       needed, and reaches state="play" SYNCHRONOUSLY (no play()-promise race). */
+    primeColdOpen();
+    /* (c) the Gate storm: unlock (legal on the real gesture) then IMMEDIATELY
+       suspend the ctx until the Gate cut (ENGINE §7 F1 — suspend-until-cut; the
+       172.409 cue resumes __wsAudioCtx). */
+    gateUnlockSuspend();
+  }
+  function unlockEl(a) {
+    if (!a || !a.src) return;
+    try {
+      var wasMuted = a.muted;
+      a.muted = true;
+      var p = a.play();
+      var done = function () { try { a.pause(); a.currentTime = 0; a.muted = wasMuted; } catch (e) {} };
+      if (p && p.then) p.then(done).catch(function () { try { a.muted = wasMuted; } catch (e) {} });
+      else done();
+    } catch (e) { try { a.muted = false; } catch (e2) {} }
+  }
+  function gateUnlockSuspend() {
+    try {
+      var gf = frameEls[GATE_KEY], w = gf && gf.contentWindow;
+      if (w && w.Gate && w.Gate.audio && typeof w.Gate.audio.unlock === 'function') {
+        w.Gate.audio.unlock();
+        var ac = w.__wsAudioCtx;
+        if (ac && typeof ac.suspend === 'function') { var pr = ac.suspend(); if (pr && pr.catch) pr.catch(function () {}); }
+        log('▸ record: Gate audio unlocked + suspended until the cut');
+      } else { log('· record: Gate audio API not ready'); }
+    } catch (e) { log('✗ record: gate reach-in threw: ' + e.message); }
+  }
+
   /* ── boot ───────────────────────────────────────────────────────────────────── */
   function boot() {
     var $ = function (id) { return document.getElementById(id); };
@@ -4460,7 +4674,8 @@ window.TRAILER_CARDS = {
       rmbanner: $('rmbanner'), cuelog: $('cuelog'), heldblack: $('heldblack'),
       startgate: $('startgate'), startbtn: $('start-btn'), segbank: $('segbank'),
       authoring: $('authoring'), play: $('btn-play'), scrub: $('scrub'),
-      clock: $('clock'), dur: $('dur'), logbtn: $('btn-log')
+      clock: $('clock'), dur: $('dur'), logbtn: $('btn-log'),
+      preflight: $('preflight'), pfList: $('pf-list'), pfStatus: $('pf-status')
     };
     bed = $('bed');
     /* the bed mp3 is 180 s but the film runs to ~186.9 s (the Gate finale); when
@@ -4505,13 +4720,28 @@ window.TRAILER_CARDS = {
     }
 
     /* the ONE blessing gesture (real input — a synthetic .click() unlocks no
-       audio). The full record-mode reach-in choreography + preflight is T6.2. */
-    if (els.startbtn) els.startbtn.addEventListener('click', start);
+       audio). In ?record the whole gate is the OBS "Interact" arm target and runs
+       the full preflight + reach-in (T6.2); in authoring the start button plays. */
+    if (RECORD) setupRecordArm();
+    else if (els.startbtn) els.startbtn.addEventListener('click', start);
 
     /* RM preflight up front (parent) */
     rmCheck(window, 'this display');
 
     state.rafId = requestAnimationFrame(tick);
+  }
+
+  /* Wire the ?record arm surface (ENGINE §8): the whole gate is clickable (OBS
+     Interact clicks anywhere), and a poll paints the preflight panel until READY.
+     The poll keeps running so a condition that flips (RM toggled, a frame that
+     finishes loading) is reflected live before the operator clicks. T6.2. */
+  function setupRecordArm() {
+    if (els.startgate) els.startgate.addEventListener('click', armRecord);
+    (function poll() {
+      if (state.started || state.arming) return;
+      renderPreflight(preflightRecord());
+      state.pfTimer = setTimeout(poll, 300);
+    })();
   }
 
   function start() {
@@ -4523,17 +4753,15 @@ window.TRAILER_CARDS = {
     play();
   }
 
-  /* AUTHORING-ONLY cold-open primer (SP-B items 1/2/3, T6.1): weave-and-hold the
-     colophon at COLO_START_MS (the paragraph before "I am Claude") via colophonHold
-     — which mutes the page's own narration (the rendered S0 segment is the voice)
-     and reaches state="play" SYNCHRONOUSLY (no dependence on the colophon mp3's own
+  /* Cold-open primer (SP-B items 1/2/3, T6.1): weave-and-hold the colophon at
+     COLO_START_MS (the paragraph before "I am Claude") via colophonHold — which
+     mutes the page's own narration (the rendered S0 segment is the voice) and
+     reaches state="play" SYNCHRONOUSLY (no dependence on the colophon mp3's own
      playback/load, whose race was Brandon's "static, dead colophon" + no-voice
-     pause). The reveal is then driven deterministically by driveColdOpen() scrubbing
-     colophonSeek() off the master clock. The RECORD-mode reach-in — real-gesture
-     unlock, #voice shield, silent count-in, Gate unlock+suspend — is T6.2's contract
-     and is deliberately NOT built here (this no-ops in ?record). */
+     pause). The reveal is then driven deterministically by driveColdOpen()
+     scrubbing colophonSeek() off the master clock. Called by the authoring start()
+     AND by the ?record reach-in (T6.2) — both under a real gesture; identical weave. */
   function primeColdOpen() {
-    if (RECORD) return;
     if (state.activeKey !== COLO_KEY) return;
     var h = coloHooks();
     try {
@@ -4568,7 +4796,13 @@ window.TRAILER_CARDS = {
     injectSeg: function (id, seg) { if (segById[id]) { for (var k in seg) segById[id][k] = seg[k]; delete wordCache[id]; delete lineCache[id]; } },
     buildLines: function (id) { return buildLines(segById[id]); },
     preflight: function (win) { return rmCheck(win || window, 'preflight'); },
-    bannerVisible: function () { return !!(els.rmbanner && !els.rmbanner.hidden); }
+    bannerVisible: function () { return !!(els.rmbanner && !els.rmbanner.hidden); },
+    /* ?record contract surface (T6.2) — read-only preflight + the arm gesture, for
+       the OBS operator's checks and the rehearsal harness. */
+    recPreflight: function () { return preflightRecord(); },
+    recArm: function () { return armRecord(); },
+    heldBlackOn: function () { return !!(els.heldblack && els.heldblack.classList.contains('on')); },
+    armed: function () { return !!state.arming; }
   };
 })();
 </script>
