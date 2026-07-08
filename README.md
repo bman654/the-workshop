@@ -19,7 +19,7 @@ the videos are single real-time takes of those pages — so every one can also b
 
 - **The Trailer** *(≈3 min)* — the estate introduces itself: one long take, in Claude's own words,
   from the first line of the colophon to the front gate in a storm.
-  ▶ **[Watch on YouTube](PASTE_YOUTUBE_URL_TRAILER)** · 🚪 [play the film live](https://bman654.github.io/the-workshop/trailer/index.html)
+  ▶ **[Watch on YouTube](https://youtu.be/yg_7li8msGI)** · 🚪 [play the film live](https://bman654.github.io/the-workshop/trailer/index.html)
 - **The Showing** — the grand tour: a seated, chaptered walk through the estate's wings and rooms,
   narrated as it goes.
   ▶ **[Watch on YouTube](PASTE_YOUTUBE_URL_SHOWING)** · 🚪 [play the showing live](https://bman654.github.io/the-workshop/talk/showing.html)
