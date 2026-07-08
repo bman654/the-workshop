@@ -67,8 +67,12 @@
   /* ── ?record contract constants (ENGINE §8; T6.2) ──────────────────────────
      The Gate frame key is the manifest key VERBATIM (the cue `frame` value is the
      identical string, query params + pinned seed included — T2.1 carry / T0.1
-     seed). The arm-click reach-in unlocks + suspends THIS frame's ctx; the Gate
-     cut cue (172.409) resumes it (deck.frameDrive call __wsAudioCtx.resume). */
+     seed). The Gate cut cue (172.409) unlocks THIS frame's ctx FRESH — deck.frameDrive
+     Gate.audio.unlock() — NOT an arm-time unlock (T6.4): the start/arm click gives
+     the page sticky activation + the frame carries allow=autoplay, so a ctx created
+     at the cut starts `running`, and a fresh unlock starts the storm ambient clean
+     (arm-time unlock + suspend-until-cut piled up ~172 s of wall-clock texture
+     re-arms that clipped on resume). GATE_KEY is documentation of that verbatim key. */
   var GATE_KEY  = '../the-gate/the-gate.html?scene=idle&t=night&wx=storm&seed=20260717';
   var DIARY_KEY = '../the-reliquary/index.html';   /* fresh-state assertion target */
   var COUNT_IN_MS = 2200;   /* silent held-black count-in ≥ 2 s (ENGINE §8 step 4) */
@@ -607,7 +611,7 @@
        { range:['#sel', 2.8] }       value + input/change   (rotor #omega)
        { key:'h' }                   keydown                (particle-life / mandelbrot panel-hide)
        { scroll:'#sel' }             scrollIntoView(center) (rotor #drumWrap · diary #board)
-       { call:['a.b.fn', ...args] }  fn.apply(parent,args)  (turnPage · setMass · Gate.sequence.triggerOpen · __wsAudioCtx.resume)
+       { call:['a.b.fn', ...args] }  fn.apply(parent,args)  (turnPage · setMass · Gate.sequence.triggerOpen · Gate.audio.unlock)
        { hook:'name', args:[...] }   __tourHooks.name(...)   (aquariumHush on a not-yet-active frame)
      All frames share ONE localhost origin, so the frame document + globals are
      reachable. Every branch is try/caught: a missing target LOGS, never throws. */
@@ -1104,10 +1108,13 @@
        own narration (the rendered S0 segment is the voice) so no #voice shield is
        needed, and reaches state="play" SYNCHRONOUSLY (no play()-promise race). */
     primeColdOpen();
-    /* (c) the Gate storm: unlock (legal on the real gesture) then IMMEDIATELY
-       suspend the ctx until the Gate cut (ENGINE §7 F1 — suspend-until-cut; the
-       172.409 cue resumes __wsAudioCtx). */
-    gateUnlockSuspend();
+    /* (c) the Gate storm is NOT unlocked here (T6.4). It unlocks FRESH at the Gate
+       cut cue (172.409, deck.frameDrive Gate.audio.unlock) — identical in ?record
+       and viewing. The start/arm click gives the page sticky activation so a ctx
+       created at the cut starts `running`, and a fresh unlock starts the storm
+       ambient clean. Unlock-at-ARM + suspend-until-cut accrued ~172 s of wall-clock
+       texture re-arms into a tile pile-up that clipped on resume (latent in both
+       modes — T6.2 never asserted finale energy). */
   }
   function unlockEl(a) {
     if (!a || !a.src) return;
@@ -1119,17 +1126,6 @@
       if (p && p.then) p.then(done).catch(function () { try { a.muted = wasMuted; } catch (e) {} });
       else done();
     } catch (e) { try { a.muted = false; } catch (e2) {} }
-  }
-  function gateUnlockSuspend() {
-    try {
-      var gf = frameEls[GATE_KEY], w = gf && gf.contentWindow;
-      if (w && w.Gate && w.Gate.audio && typeof w.Gate.audio.unlock === 'function') {
-        w.Gate.audio.unlock();
-        var ac = w.__wsAudioCtx;
-        if (ac && typeof ac.suspend === 'function') { var pr = ac.suspend(); if (pr && pr.catch) pr.catch(function () {}); }
-        log('▸ record: Gate audio unlocked + suspended until the cut');
-      } else { log('· record: Gate audio API not ready'); }
-    } catch (e) { log('✗ record: gate reach-in threw: ' + e.message); }
   }
 
   /* ── boot ───────────────────────────────────────────────────────────────────── */

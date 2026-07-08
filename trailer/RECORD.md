@@ -59,10 +59,12 @@ drops** at 60.
 ## 3. Arm → count-in → play (what one click does)
 
 1. Preflight must be **ALL GREEN** (see §5) — the arm surface shows the six rows.
-2. **One real click** runs the full reach-in: unlocks the bed + every VO element, weaves
-   and pauses the colophon cold-open, unlocks the Gate storm audio then suspends it (it
-   resumes on the Gate-cut cue). The click also re-runs the preflight and **refuses to arm
-   if anything flipped red**.
+2. **One real click** runs the full reach-in: unlocks the bed + every VO element and weaves
+   and pauses the colophon cold-open. The click gives the page sticky audio activation, so
+   the **Gate storm + welcome tune unlock FRESH at the Gate-cut cue (172.4 s)** — the film
+   does not touch the Gate audio at arm time (a fresh unlock at the cut starts the storm
+   clean; unlock-at-arm used to pile up ~172 s of texture that clipped on resume — T6.4).
+   The click also re-runs the preflight and **refuses to arm if anything flipped red**.
 3. **Silent count-in: 2.2 s of held black**, then the bed starts at t=0 and the film runs.
 4. Plays straight through — no holds, no seeks — to a **held-black out-point** (no end card).
 
