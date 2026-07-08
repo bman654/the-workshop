@@ -69,7 +69,8 @@
     scrubbing: false,
     activeKey: null,        /* the stack key currently on top */
     activeSeg: null,        /* the VO segment currently sounding (drives captions) */
-    pendingReplay: null     /* state cues to re-poke after a flip settles */
+    pendingReplay: null,    /* state cues to re-poke after a flip settles */
+    scalesRampId: 0         /* token: a later scalesCollapse cancels a running collar ramp (SP-B item 10) */
   };
 
   var els = {};
@@ -144,6 +145,24 @@
       frameEls[key] = f;
     }
   }
+  /* When a frame leaves the stage, SILENCE any live AudioContext it published on
+     window.__wsAudioCtx (the estate's convention — the Lattice's #begin, the
+     Aquarium's hush, the Gate's storm all publish it). Without this a diegetic
+     source keeps sounding after its frame flips out: the Lattice's music bled
+     under the Errand's digital-zero silence AND lingered over the Gate finale,
+     stealing the record-scratch gag's thunder and drowning the Estate's own
+     logotune (SP-B items 11 + 12). Idempotent + try/caught — a frame with no ctx
+     (or an already-suspended one) is a silent no-op. */
+  function suspendFrameAudio(el) {
+    try {
+      var w = el && el.contentWindow;
+      var ac = w && w.__wsAudioCtx;
+      if (ac && typeof ac.suspend === 'function' && ac.state === 'running') {
+        var pr = ac.suspend(); if (pr && pr.catch) pr.catch(function () {});
+        log('▸ hush frame audio (' + (state.activeKey || '?') + ' left stage)');
+      }
+    } catch (e) {}
+  }
   function setFrame(key) {
     if (key == null || key === state.activeKey) return;
     var next = frameEls[key];
@@ -155,6 +174,7 @@
          a re-flip or a scrub-replay starts from a clean frame (ENGINE §3). */
       prev.style.transform = ''; prev.style.transformOrigin = '';
       prev.style.opacity = ''; prev.style.transition = ''; prev.style.willChange = '';
+      suspendFrameAudio(prev); /* SP-B 11/12: no diegetic audio bleeds off-stage */
     }
     next.classList.add('on');
     state.activeKey = key;
@@ -583,6 +603,7 @@
      660 ms) lands on the bed DROP. */
   function scalesRamp(spec) {
     spec = spec || {};
+    var myId = ++state.scalesRampId; /* SP-B 10: a token so a later scalesCollapse cancels THIS ramp */
     var key = spec.frame || state.activeKey, el = frameEls[key];
     var w = null; try { w = el && el.contentWindow; } catch (e) { w = null; }
     if (!w || typeof w.setMass !== 'function') { log('· scalesRamp — no setMass on ' + key); return; }
@@ -591,6 +612,10 @@
         ms = (typeof spec.ms === 'number' && spec.ms > 0) ? spec.ms : 1400;
     var t0 = null;
     function step(ts) {
+      /* bail if scalesCollapse (or a newer ramp) superseded us — otherwise this
+         ramp's final setMass(1.43) could land AFTER the crossAt setMass(1.5) and
+         re-inflate the star back below Chandrasekhar, killing the DROP payoff. */
+      if (myId !== state.scalesRampId) return;
       if (t0 == null) t0 = ts;
       var u = Math.min(1, (ts - t0) / ms);
       try { w.setMass(from + (to - from) * u); } catch (e) {}
@@ -598,6 +623,23 @@
     }
     requestAnimationFrame(step);
     log('▸ scalesRamp ' + from + '→' + to + ' ' + ms + 'ms on ' + key);
+  }
+
+  /* The crossAt collapse (ENGINE §6; SP-B item 10) — trip the implode CLEANLY.
+     First CANCEL any collar ramp still stepping (bump the token) so no late ramp
+     frame can re-lower the mass under the Chandrasekhar limit; THEN one setMass
+     across it (default 1.5 > 1.44 → classify → neutron-star → implode tween whose
+     shock lands on the bed DROP). Replaces the fragile frameDrive{call:setMass}
+     that raced the ramp's tail. */
+  function scalesCollapse(spec) {
+    spec = spec || {};
+    state.scalesRampId++; /* invalidate any running collar ramp — no more setMass from it */
+    var key = spec.frame || state.activeKey, el = frameEls[key];
+    var w = null; try { w = el && el.contentWindow; } catch (e) { w = null; }
+    var m = (typeof spec.mass === 'number') ? spec.mass : 1.5;
+    if (!w || typeof w.setMass !== 'function') { log('· scalesCollapse — no setMass on ' + key); return; }
+    try { w.setMass(m); log('▸ scalesCollapse setMass(' + m + ') → cross Chandrasekhar on ' + key); }
+    catch (e) { log('✗ scalesCollapse threw: ' + e.message); }
   }
 
   /* Prime a frame's opacity transition for the NEXT flip (one of the two ENGINE
@@ -634,6 +676,7 @@
     drive: frameDrive,
     stageTransform: stageTransform,
     scalesRamp: scalesRamp,
+    scalesCollapse: scalesCollapse,
     primeFade: primeFade
   };
   function pokeHook(payload, kind) {
@@ -757,6 +800,14 @@
     if (!state.started) return;
     state.playing = true;
     if (state.usingAudio && bed) { try { var p = bed.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {} }
+    /* SP-B item 6: pause() paused the active VO <audio> too; play() must RESUME it
+       or the film runs on (screens/karaoke/music) with the voice gone for good.
+       Both bed + VO were frozen at the same instant, so a plain resume keeps them
+       in lock-step (the drift nudge already fired). Skip an ended/finished seg. */
+    var seg = state.activeSeg, a = seg && segEls[seg.id];
+    if (a && a.src && a.paused && !a.ended && !muted()) {
+      try { var pv = a.play(); if (pv && pv.catch) pv.catch(function () {}); } catch (e) {}
+    }
     paintChrome(durationMs());
   }
   function pause() {
@@ -769,12 +820,31 @@
 
   /* ── authoring scrub (deriveSeek — the seek re-derivation earns its keep off
      the record path) ─────────────────────────────────────────────────────────── */
+  /* SP-B item 5: durable overlays are reconstructed by REPLAYING every state cue
+     ≤ t (deriveSeek). But an overlay set at an EARLIER clock position has no cue
+     in the replay list when you scrub BACK before it, so it used to hang on
+     screen. Reset every durable overlay to baseline FIRST, then replay rebuilds
+     exactly the ones that should be showing at t. (skitOn/setCard are idempotent
+     and self-resetting, so a replay after this is clean.) */
+  function resetOverlays() {
+    setCard(null);
+    skitOff();
+    if (els.bloom) els.bloom.classList.remove('on');
+    var cf = coloFrame();
+    if (cf) {
+      cf.style.transform = ''; cf.style.transformOrigin = '';
+      cf.style.opacity = ''; cf.style.transition = ''; cf.style.willChange = '';
+    }
+  }
   function seekTo(ms) {
     var dur = durationMs();
     state.clockMs = Math.max(0, Math.min(dur, ms));
     var tSec = state.clockMs / 1000;
+    /* stop any VO still sounding from the pre-seek position (audio hygiene) */
+    for (var sid in segEls) { if (segEls[sid]) { try { segEls[sid].pause(); } catch (e) {} } }
     var seek = CE.deriveSeek(CHAPTER, tSec, state.activeKey);
     if (seek.frame != null) setFrame(seek.frame);
+    resetOverlays();                        /* clear stale overlays before the replay rebuilds them */
     replayStates(seek.stateReplay);
     state.lastFireT = tSec;                 /* don't re-fire impulses we scrubbed past */
     state.ended = false;
