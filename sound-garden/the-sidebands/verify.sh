@@ -62,7 +62,17 @@ set -euo pipefail
 HERO="${1:?path to the hero (β=1.0) WAV is required}"
 NULL="${2:?path to the null (β=2.4048) WAV is required}"
 NEG="${3:?path to the neg (β=0) WAV is required}"
-LENS="${AUDIO_LENS:-$HOME/.claude/skills/audio-lens/bin/audio-lens.js}"
+# Resolve the audio-lens CLI: an explicit $AUDIO_LENS wins; else this repo's own
+# vendored copy (the tool this repo birthed); else the installed audio-lens skill.
+LENS="${AUDIO_LENS:-}"
+if [ -z "$LENS" ]; then
+  _repo="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel 2>/dev/null || true)"
+  if [ -n "$_repo" ] && [ -f "$_repo/tools/audio-lens/bin/audio-lens.js" ]; then
+    LENS="$_repo/tools/audio-lens/bin/audio-lens.js"
+  else
+    LENS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/audio-lens/bin/audio-lens.js"
+  fi
+fi
 FC=1200       # the carrier — the center rung that goes dark at the J₀ null
 FM=500        # the modulator — the comb spacing fc±n·fm
 SR=12000      # the render sample rate (the offline AudioContext rate)

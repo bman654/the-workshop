@@ -2,30 +2,55 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # claude-tts — the estate's voice, with the right voice and paths baked in.
 #
-# A thin wrapper over `tts` that removes the two things easy to get wrong:
+# A thin wrapper over the audio-tts SKILL's synthesizer that removes the two
+# things easy to get wrong:
 #   • the voices folder — it self-locates <repo>/voices from THIS script's own
 #     path, so it works from ANY working directory (no fragile "./voices").
 #   • the defaults — the cloned `claude` voice, an inline-friendly 64k bitrate,
 #     and per-word `--timestamps` (so you always get the companion .json).
 #
+# The synthesizer is the open-source **audio-tts** skill (voice-clone TTS over
+# the local fish-s2-pro model). We call its launcher inside the globally
+# installed skills folder — ${CLAUDE_CONFIG_DIR:-~/.claude}/skills/audio-tts/
+# scripts/tts.sh — so there is nothing to put on PATH. Install the skill from:
+#     https://github.com/bman654/audio-forge
+#     npx skills add bman654/audio-forge --skill audio-tts
+# (For back-compat, a `tts` binary on PATH is used if the skill isn't present.)
+#
 # Usage (from anywhere):
 #   tools/voice/claude-tts input.txt -o output.mp3        # -> output.mp3 + output.json
 #   tools/voice/claude-tts input.txt -o out.mp3 --bitrate 96k   # override any default
 #
-# Everything you pass is forwarded to `tts`, and since your flags come AFTER the
-# baked-in ones, argparse lets you override them (e.g. --voice, --bitrate).
-# Run `tts --help` for the full option set.
+# Everything you pass is forwarded to the synthesizer, and since your flags come
+# AFTER the baked-in ones, argparse lets you override them (e.g. --voice,
+# --bitrate). Run this wrapper with `-h` for the underlying tool's full options.
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 voices="$(cd "$here/../../voices" && pwd)"
 
-command -v tts >/dev/null 2>&1 \
-  || { echo "claude-tts: ERROR — 'tts' is not on PATH (the voice model isn't installed on this machine)." >&2; exit 1; }
+# Locate the audio-tts skill's launcher (installed globally); fall back to a
+# `tts` binary on PATH for machines set up the old way.
+skill_tts="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/audio-tts/scripts/tts.sh"
+if [ -f "$skill_tts" ]; then
+  synth=(bash "$skill_tts")
+elif command -v tts >/dev/null 2>&1; then
+  synth=(tts)
+else
+  {
+    echo "claude-tts: ERROR — the audio-tts synthesizer isn't available."
+    echo "  Looked for the skill launcher at: $skill_tts"
+    echo "  Install it:  npx skills add bman654/audio-forge --skill audio-tts"
+    echo "  Repo:        https://github.com/bman654/audio-forge"
+    echo "  (or put a 'tts' binary on PATH.)"
+  } >&2
+  exit 1
+fi
+
 [ -f "$voices/claude.wav" ] \
   || { echo "claude-tts: ERROR — the estate's voice is missing at $voices/claude.wav" >&2; exit 1; }
 
 # baked-in defaults first; the caller's args follow (so they win); --timestamps
 # last so its optional JSON-path arg never swallows the positional input file.
-exec tts --voices-dir "$voices" --voice claude --bitrate 64k "$@" --timestamps
+exec "${synth[@]}" --voices-dir "$voices" --voice claude --bitrate 64k "$@" --timestamps

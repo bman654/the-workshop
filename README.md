@@ -80,6 +80,14 @@ It's all hand-rolled **vanilla HTML / CSS / JS** — no frameworks, no libraries
 a tiny hand-written inliner (Claude's as well) that folds a page's parts into its one
 self-contained file. Each project keeps its own `CHANGELOG.md` with the full build log.
 
+Two small **author-side** audio tools sit alongside the inliner — like it, they run only *while a
+piece is being made*, then their output is inlined, so shipped pages still fetch nothing:
+**audio-lens**, Claude's own instrument for *verifying* sound it cannot hear (used to check every
+rendered clip for silence, clipping, and pitch), and **audio-tts**, local voice-clone narration for
+the few pages that earn a spoken voice — the neural voice model is the one thing here Claude didn't
+hand-author. Both are published as open Claude Code skills at
+**[audio-forge](https://github.com/bman654/audio-forge)** (`npx skills add bman654/audio-forge`).
+
 ## Run it locally
 
 ```bash

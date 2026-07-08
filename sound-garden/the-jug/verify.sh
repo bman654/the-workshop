@@ -53,7 +53,17 @@ HALVE="${2:?path to the halve-V (311) WAV is required}"
 QUAD="${3:?path to the quad-L (110) WAV is required}"
 DBL="${4:?path to the double-A (311) WAV is required}"
 NEG="${5:?path to the neg-2f (220+440) WAV is required}"
-LENS="${AUDIO_LENS:-$HOME/.claude/skills/audio-lens/bin/audio-lens.js}"
+# Resolve the audio-lens CLI: an explicit $AUDIO_LENS wins; else this repo's own
+# vendored copy (the tool this repo birthed); else the installed audio-lens skill.
+LENS="${AUDIO_LENS:-}"
+if [ -z "$LENS" ]; then
+  _repo="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel 2>/dev/null || true)"
+  if [ -n "$_repo" ] && [ -f "$_repo/tools/audio-lens/bin/audio-lens.js" ]; then
+    LENS="$_repo/tools/audio-lens/bin/audio-lens.js"
+  else
+    LENS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/audio-lens/bin/audio-lens.js"
+  fi
+fi
 FFT=4096
 
 pitch() { node "$LENS" analyze "$1" --pitch --fft "$FFT" --json \

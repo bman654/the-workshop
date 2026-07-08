@@ -36,7 +36,17 @@ set -euo pipefail
 VA="${1:?path to the /a/ WAV is required}"
 VI="${2:?path to the /i/ WAV is required}"
 COL="${3:?path to the collapse WAV is required}"
-LENS="${AUDIO_LENS:-$HOME/.claude/skills/audio-lens/bin/audio-lens.js}"
+# Resolve the audio-lens CLI: an explicit $AUDIO_LENS wins; else this repo's own
+# vendored copy (the tool this repo birthed); else the installed audio-lens skill.
+LENS="${AUDIO_LENS:-}"
+if [ -z "$LENS" ]; then
+  _repo="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel 2>/dev/null || true)"
+  if [ -n "$_repo" ] && [ -f "$_repo/tools/audio-lens/bin/audio-lens.js" ]; then
+    LENS="$_repo/tools/audio-lens/bin/audio-lens.js"
+  else
+    LENS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/audio-lens/bin/audio-lens.js"
+  fi
+fi
 F0=120
 
 # emit the top-N peak freqs (sorted ascending) as space-separated Hz
