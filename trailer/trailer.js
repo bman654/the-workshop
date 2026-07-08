@@ -480,6 +480,137 @@
   }
   function skitOff() { if (els.skit) els.skit.classList.remove('on'); log('▸ skitOff'); }
 
+  /* ── native estate-page drives (ENGINE §6 + §10) ───────────────────────────
+     The four hooked pages (colophon / coaster / aquarium / errand) expose
+     __tourHooks verbs; every other exhibit drives through its real DOM (the
+     ENGINE §6 verified selectors). frameDrive reaches into a PRELOADED frame —
+     the ACTIVE one, or a NAMED one (for a pre-roll on a not-yet-flipped frame) —
+     and performs ONE action:
+       { click:'#sel' }              el.click()             (dropBtn · begin · lever · tFly · btnPlay · btnRain · runBtn · genreX)
+       { tap:'#sel' }                pointerdown+pointerup  (pointerdown-gated overlays: aquarium #gate)
+       { range:['#sel', 2.8] }       value + input/change   (rotor #omega)
+       { key:'h' }                   keydown                (particle-life / mandelbrot panel-hide)
+       { scroll:'#sel' }             scrollIntoView(center) (rotor #drumWrap · diary #board)
+       { call:['a.b.fn', ...args] }  fn.apply(parent,args)  (turnPage · setMass · Gate.sequence.triggerOpen · __wsAudioCtx.resume)
+       { hook:'name', args:[...] }   __tourHooks.name(...)   (aquariumHush on a not-yet-active frame)
+     All frames share ONE localhost origin, so the frame document + globals are
+     reachable. Every branch is try/caught: a missing target LOGS, never throws. */
+  function driveWin(spec) {
+    var key = spec && spec.frame;
+    var el = key ? frameEls[key] : (state.activeKey && frameEls[state.activeKey]);
+    try { return el && el.contentWindow; } catch (e) { return null; }
+  }
+  function resolvePath(win, path) {
+    var parts = String(path).split('.'), obj = win, parent = win;
+    for (var i = 0; i < parts.length; i++) {
+      parent = obj;
+      obj = obj && obj[parts[i]];
+      if (obj == null) return null;
+    }
+    return { fn: obj, ctx: parent };
+  }
+  function frameDrive(spec) {
+    spec = spec || {};
+    var w = driveWin(spec);
+    var tag = spec.frame ? ' @' + spec.frame : '';
+    if (!w) { log('· drive — no target frame' + tag); return; }
+    var doc = null; try { doc = w.document; } catch (e) { doc = null; }
+    try {
+      if (spec.scroll && doc) {
+        var s = doc.querySelector(spec.scroll);
+        if (s && s.scrollIntoView) s.scrollIntoView({ block: 'center' });
+        log('▸ drive scroll ' + spec.scroll + (s ? '' : ' — absent') + tag); return;
+      }
+      if (spec.key) {
+        try { w.dispatchEvent(new w.KeyboardEvent('keydown', { key: spec.key, bubbles: true })); } catch (e) {}
+        if (doc && doc.body) { try { doc.body.dispatchEvent(new w.KeyboardEvent('keydown', { key: spec.key, bubbles: true })); } catch (e) {} }
+        log('▸ drive key ' + spec.key + tag); return;
+      }
+      if (spec.tap && doc) {
+        var tp = doc.querySelector(spec.tap);
+        if (tp) { tp.dispatchEvent(new w.Event('pointerdown', { bubbles: true })); tp.dispatchEvent(new w.Event('pointerup', { bubbles: true })); }
+        log('▸ drive tap ' + spec.tap + (tp ? '' : ' — absent') + tag); return;
+      }
+      if (spec.range && doc) {
+        var r = doc.querySelector(spec.range[0]);
+        if (r) { r.value = spec.range[1]; r.dispatchEvent(new w.Event('input', { bubbles: true })); r.dispatchEvent(new w.Event('change', { bubbles: true })); }
+        log('▸ drive range ' + spec.range[0] + '=' + spec.range[1] + (r ? '' : ' — absent') + tag); return;
+      }
+      if (spec.click && doc) {
+        var c = doc.querySelector(spec.click);
+        if (c && c.click) c.click();
+        log('▸ drive click ' + spec.click + (c ? '' : ' — absent') + tag); return;
+      }
+      if (spec.hook) {
+        var hk = null; try { hk = w.__tourHooks; } catch (e) { hk = null; }
+        if (hk && typeof hk[spec.hook] === 'function') { hk[spec.hook].apply(null, spec.args || []); log('▸ drive hook ' + spec.hook + '()' + tag); }
+        else log('· drive hook ' + spec.hook + ' — absent' + tag);
+        return;
+      }
+      if (spec.call) {
+        var rp = resolvePath(w, spec.call[0]);
+        if (rp && typeof rp.fn === 'function') { rp.fn.apply(rp.ctx, spec.call.slice(1)); log('▸ drive call ' + spec.call[0] + '()' + tag); }
+        else log('· drive call ' + spec.call[0] + ' — not a fn' + tag);
+        return;
+      }
+      log('· drive — empty spec' + tag);
+    } catch (e) { log('✗ drive threw' + tag + ': ' + e.message); }
+  }
+
+  /* Generic wrapper-transform (ENGINE §2 F14): a CSS translate/scale on a frame
+     ELEMENT over N ms — the arcade 2.5 s pan and the Gate "manor grows" push-in
+     (~1.06→1.12). setFrame clears the inline transform when the frame flips out. */
+  function stageTransform(spec) {
+    spec = spec || {};
+    var key = spec.frame || state.activeKey, el = frameEls[key];
+    if (!el) { log('· stageTransform — no frame ' + key); return; }
+    var from = spec.from || 'scale(1)', to = spec.to || 'scale(1)',
+        ms = (typeof spec.ms === 'number' && spec.ms > 0) ? spec.ms : 2500;
+    el.style.transformOrigin = 'center center';
+    el.style.willChange = 'transform';
+    el.style.transition = 'none';
+    el.style.transform = from;
+    void el.offsetWidth;                 /* commit `from` before the eased leg */
+    el.style.transition = 'transform ' + ms + 'ms ease';
+    el.style.transform = to;
+    log('▸ stageTransform ' + key + ' ' + ms + 'ms');
+  }
+
+  /* The Scales collar sweep (ENGINE §6): an rAF ramp of the frame's global
+     setMass(M) from `from`→`to` over `ms`, kept BELOW Chandrasekhar (1.44) so no
+     fate flips early — the legible collar sweep. The crossAt cue then makes ONE
+     setMass(1.5) call to trip the implode; its shock (implode-tween u>0.55 ≈
+     660 ms) lands on the bed DROP. */
+  function scalesRamp(spec) {
+    spec = spec || {};
+    var key = spec.frame || state.activeKey, el = frameEls[key];
+    var w = null; try { w = el && el.contentWindow; } catch (e) { w = null; }
+    if (!w || typeof w.setMass !== 'function') { log('· scalesRamp — no setMass on ' + key); return; }
+    var from = (typeof spec.from === 'number') ? spec.from : 0.9,
+        to = (typeof spec.to === 'number') ? spec.to : 1.43,
+        ms = (typeof spec.ms === 'number' && spec.ms > 0) ? spec.ms : 1400;
+    var t0 = null;
+    function step(ts) {
+      if (t0 == null) t0 = ts;
+      var u = Math.min(1, (ts - t0) / ms);
+      try { w.setMass(from + (to - from) * u); } catch (e) {}
+      if (u < 1 && state.playing && !state.ended) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+    log('▸ scalesRamp ' + from + '→' + to + ' ' + ms + 'ms on ' + key);
+  }
+
+  /* Prime a frame's opacity transition for the NEXT flip (one of the two ENGINE
+     §2 F15 fade exceptions — the first cold-plate fade-in ~0.8 s). setFrame
+     clears the inline transition on flip-out, so the longer fade applies once. */
+  function primeFade(key, ms) {
+    var el = frameEls[key];
+    if (!el) { log('· primeFade — no frame ' + key); return; }
+    ms = (typeof ms === 'number' && ms > 0) ? ms : 800;
+    el.style.transition = 'opacity ' + ms + 'ms ease';
+    log('▸ primeFade ' + key + ' ' + ms + 'ms');
+  }
+
   /* ── cue routing (try/catch per cue — a failed poke logs, never throws) ─────
      deck.* verbs run parent-side (segment transport, stage overlays, cold-open
      zoom, the skit); everything else is a __tourHooks verb on the active frame. */
@@ -498,7 +629,12 @@
     skitThird: skitThird,
     skitPick: skitPick,
     bloomFlash: bloomFlash,
-    skitOff: skitOff
+    skitOff: skitOff,
+    frameDrive: frameDrive,
+    drive: frameDrive,
+    stageTransform: stageTransform,
+    scalesRamp: scalesRamp,
+    primeFade: primeFade
   };
   function pokeHook(payload, kind) {
     var verb = payload && payload.verb;
@@ -690,6 +826,10 @@
       clock: $('clock'), dur: $('dur'), logbtn: $('btn-log')
     };
     bed = $('bed');
+    /* the bed mp3 is 180 s but the film runs to ~186.9 s (the Gate finale); when
+       the bed `ended`s, flag it so the clock switches cleanly to the synthetic
+       performance.now() continuation (ENGINE §1/§8) that carries the held black. */
+    if (bed) bed.addEventListener('ended', function () { state.bedEnded = true; });
 
     if (RECORD) {
       document.body.classList.add('record');
