@@ -1307,6 +1307,14 @@
      on the SHOWING_CHAPTERS entries above (p01…p06, rendered at T2.2). -->
 <audio id="voice" preload="none"></audio>
 
+<!-- the music bed (T4.2): ONE continuous quiet track under the whole film, composed
+     from the film's own cue sheet (talk/bed/ — manifest generated from
+     projection-room.cues.lock.json, deterministic bit-identical re-render). It rides
+     the WALL clock (chapter offsets + the 2000ms auto-advance holds) and is slaved to
+     the master clock by the BED FOLLOWER driver at the end of the body. Inlined as a
+     data: URI so its readiness can never race a record run. -->
+<audio id="bed" preload="auto" src="<!-- forge:asset bed/bed.mp3 -->"></audio>
+
 <script>
 <!-- forge:include ../tools/ws/ws.js -->
 </script>
@@ -1656,7 +1664,7 @@ window.SHOWING_CHAPTERS = [
         { t:C.fixedLandT,  note:'▸ the same scene, FIXED — the cursor lands on time; it keeps the voice\'s clock now · "now"' },
         { t:C.filesReveal, note:'▸ eight files, one voice — a voice cannot pause mid-track, so the narration is separate tracks with real silence between · "eight"' },
         { t:C.scoreT,      note:'▸ the score under this film was computed from this film\'s own cue sheet — move a cue, re-render, it lands on the new time · "score"' },
-        { t:C.crescendoT,  note:'▸ here comes a crescendo — the narration ends; the score swells alone in true silence, its swell time taken from the cue lock (bed: T4.2) · "crescendo"' }
+        { t:C.crescendoT,  note:'▸ here comes a crescendo — the narration ends; the score swells alone in true silence, its swell time taken from the cue lock · "crescendo"' }
       ];
     })(),
     railHide: true },
@@ -2608,6 +2616,105 @@ window.SHOWING_CARDS = {};
     cap.classList.toggle('hush', hush);
   }
   requestAnimationFrame(tick);
+})();
+</script>
+
+<script>
+/* ── THE BED FOLLOWER (T4.2) — the score takes the voice's clock ─────────────
+   The #bed <audio> is one continuous track composed on the WALL clock:
+   wallStart(chapter i) = sum of prior chapter durations + i × 2000 ms (the
+   showing.js auto-advance hold). Durations come from the SAME inlined timing
+   sidecars the cue lock froze, so the deck and the bed can never disagree.
+
+   Pure follower of window.__showing.state (Hush-Watcher discipline, ZERO
+   showing.js edits): while the VOICE drives, the bed is slaved to
+   wallStart(idx) + clockMs — hard snap on a chapter boundary or >0.25 s
+   drift, otherwise left alone (two <audio> on one hardware clock do not
+   drift). During the inter-chapter auto-advance hold the bed FREE-RUNS —
+   that hold is composed INTO the track (the crescendo lives in the CH4→CH4b
+   gap, invariant 5: its crest is a cue-locked time, not a timer). At the end
+   card the tail rings out past the last word. Operator holds / pauses pause
+   the bed; ?bed=0 disables it; ?bedvol=0.x trims it for the run-through.
+   Block comments only (the forge HTML-comment-in-script landmine). */
+(function () {
+  'use strict';
+  if (/[?&]bed=0(&|$)/.test(location.search)) return;
+  var GAP_MS = 2000;                 /* showing.js onChapterEnd auto-advance hold */
+  var SNAP_S = 0.25;                 /* mid-chapter resync threshold, seconds */
+  var bed = document.getElementById('bed');
+  if (!bed) return;
+  var mv = /[?&]bedvol=(0?\.[0-9]+|[01])(&|$)/.exec(location.search);
+  bed.volume = mv ? Math.max(0, Math.min(1, parseFloat(mv[1]))) : 1;
+
+  var offs = null, lastIdx = -1, primed = false;
+  function wallOffsets(S) {
+    if (offs) return offs;
+    var acc = 0; offs = [];
+    for (var i = 0; i < S.chapters.length; i++) {
+      offs.push(acc + i * GAP_MS);
+      var tm = S.chapters[i].timing;
+      acc += (tm && tm.duration_ms) || 0;
+    }
+    return offs;
+  }
+
+  /* prime on the first real gesture (muted play→pause) so a later play() can
+     never be refused — the begin/arm click grants activation; this is the
+     belt-and-braces for stricter visitor browsers. */
+  function prime() {
+    document.removeEventListener('pointerdown', prime, true);
+    if (primed) return;
+    primed = true;
+    try {
+      bed.muted = true;
+      var p = bed.play();
+      var done = function () {
+        try { bed.pause(); bed.currentTime = 0; } catch (e) {}
+        bed.muted = false;
+      };
+      if (p && p.then) p.then(done, function () { bed.muted = false; });
+      else done();
+    } catch (e) { try { bed.muted = false; } catch (e2) {} }
+  }
+  document.addEventListener('pointerdown', prime, true);
+
+  function frame() {
+    requestAnimationFrame(frame);
+    var S = window.__showing;
+    if (!S || !S.state) return;
+    var st = S.state, off = wallOffsets(S);
+    var run = false;
+    if (st.started) {
+      if (st.playing && !st.holding) run = true;
+      else if (st.holding && (st.visitor || st.record)) run = true;
+      /* ↑ the timed 2000 ms auto-advance hold: the composed gap — the bed
+           keeps sounding; the crescendo IS this window */
+      else if (st.holding && st.idx === S.chapters.length - 1) run = true;
+      /* ↑ film end: advance() stays held at the end card — the tail rings out */
+      else if (st.holding) {
+        /* operator hold (untimed): finish the composed gap — the crescendo
+           still crests — then PARK at the next chapter's wall start, so a
+           manual advance resumes seamlessly */
+        run = bed.currentTime < off[st.idx + 1] / 1000 - 0.02;
+      }
+    }
+    if (!run) {
+      if (!bed.paused) { try { bed.pause(); } catch (e) {} }
+      lastIdx = st.idx;
+      return;
+    }
+    var t = (off[st.idx] + st.clockMs) / 1000;
+    var boundary = st.idx !== lastIdx;
+    lastIdx = st.idx;
+    var voiceDriving = st.playing && !st.holding;
+    if (voiceDriving && (boundary || Math.abs(bed.currentTime - t) > SNAP_S)) {
+      try { bed.currentTime = t; } catch (e) {}
+    }
+    if (bed.paused && !bed.ended) {
+      try { var p = bed.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+    }
+  }
+  requestAnimationFrame(frame);
 })();
 </script>
 </body>
