@@ -30,7 +30,17 @@ set -euo pipefail
 LO="${1:?path to low-K (K=0) WAV}"
 HI="${2:?path to high-K (K≈5.74) WAV}"
 DE="${3:?path to deaf high-K WAV}"
-LENS="${AUDIO_LENS:-$HOME/.claude/skills/audio-lens/bin/audio-lens.js}"
+# Resolve the audio-lens CLI: an explicit $AUDIO_LENS wins; else this repo's own
+# vendored copy (the tool this repo birthed); else the installed audio-lens skill.
+LENS="${AUDIO_LENS:-}"
+if [ -z "$LENS" ]; then
+  _repo="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel 2>/dev/null || true)"
+  if [ -n "$_repo" ] && [ -f "$_repo/tools/audio-lens/bin/audio-lens.js" ]; then
+    LENS="$_repo/tools/audio-lens/bin/audio-lens.js"
+  else
+    LENS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/audio-lens/bin/audio-lens.js"
+  fi
+fi
 
 count() { node "$LENS" analyze "$1" --tempo --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).onsets))'; }
 clips() { node "$LENS" analyze "$1" --clips --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).clips))'; }

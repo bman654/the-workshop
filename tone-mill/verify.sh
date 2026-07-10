@@ -43,7 +43,17 @@ set -euo pipefail
 BASE="${1:?need base render (Ω=5, N=24) wav}"
 OCT="${2:?need octave render (Ω=10, N=24) wav}"
 DET="${3:?need detached render wav}"
-LENS="${AUDIO_LENS:-$HOME/.claude/skills/audio-lens/bin/audio-lens.js}"
+# Resolve the audio-lens CLI: an explicit $AUDIO_LENS wins; else this repo's own
+# vendored copy (the tool this repo birthed); else the installed audio-lens skill.
+LENS="${AUDIO_LENS:-}"
+if [ -z "$LENS" ]; then
+  _repo="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel 2>/dev/null || true)"
+  if [ -n "$_repo" ] && [ -f "$_repo/tools/audio-lens/bin/audio-lens.js" ]; then
+    LENS="$_repo/tools/audio-lens/bin/audio-lens.js"
+  else
+    LENS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/audio-lens/bin/audio-lens.js"
+  fi
+fi
 
 # the law's expected fundamentals: AUDIO_SCALE·N·Ω/2π with AUDIO_SCALE=2.4, N=24.
 #   Ω=5 rev/s ⇒ tooth-pass = 24·5 = 120 Hz ⇒ heard = 2.4·120 = 288 Hz

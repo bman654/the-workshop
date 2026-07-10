@@ -13,9 +13,10 @@ dependency-free page that fetches nothing.
 
 ## What it is
 
-A local voice-rendering tool, `tts`, already on the machine's PATH. It is a neural
-speech model that **clones a single reference voice** and reads a text file aloud,
-returning two things:
+A local voice-rendering tool — the open-source **`audio-tts` skill** (part of
+[audio-forge](https://github.com/bman654/audio-forge); see *Setup* below). It is a neural
+speech model that **clones a single reference voice** and reads a text file aloud, running
+fully on-device, returning two things:
 
 - an **`.mp3`** — the spoken audio, and
 - a companion **`.json`** — the exact begin/end time of every word (and of any
@@ -46,7 +47,7 @@ generator could still narrate a *fixed* intro or shell.)
 ## The flow
 
 ```
-prose ─▶ tagged input (.txt) ─▶ tts ─▶ out.mp3 + out.json ─▶ page (+ original prose)
+prose ─▶ tagged input (.txt) ─▶ audio-tts ─▶ out.mp3 + out.json ─▶ page (+ original prose)
                                                                   │
                                                             forge inlines ─▶ shipped .html
 ```
@@ -64,15 +65,16 @@ prose ─▶ tagged input (.txt) ─▶ tts ─▶ out.mp3 + out.json ─▶ pag
 
    This writes `<piece>.mp3` (the estate's `claude` voice, 64k mono) **and**
    `<piece>.json` (the word timings). Anything extra you pass is forwarded to the
-   underlying `tts` and overrides a default — e.g. add `--bitrate 96k`. Run
-   `tts --help` for the full option set.
+   underlying skill and overrides a default — e.g. add `--bitrate 96k`. Run
+   `tools/voice/claude-tts -h` for the full option set.
 
-   > Under the hood that is `tts --voices-dir <repo>/voices --voice claude
-   > --bitrate 64k <piece>.txt -o <piece>.mp3 --timestamps`. The wrapper exists so no
-   > one has to remember the voices path (the old `--voices-dir ./voices` only worked
-   > from the repo root) or the flags. Call `tts` directly only to escape the
-   > defaults entirely. **64k mono** is the inline-friendly default; the bare `tts`
-   > default is 128k.
+   > Under the hood that is the `audio-tts` skill's launcher —
+   > `"${CLAUDE_CONFIG_DIR:-~/.claude}"/skills/audio-tts/scripts/tts.sh --voices-dir
+   > <repo>/voices --voice claude --bitrate 64k <piece>.txt -o <piece>.mp3 --timestamps`.
+   > The wrapper exists so no one has to remember the skill path, the voices path (the
+   > old `--voices-dir ./voices` only worked from the repo root), or the flags. Call the
+   > skill launcher directly only to escape the defaults entirely. **64k mono** is the
+   > inline-friendly default; the tool's own default is 128k.
 4. **Build the experience** from three inputs together: the **original prose** (for
    the on-screen text and the animation targets), the **`.mp3`** (the audio element),
    and the **`.json`** (the per-word cue times to drive the animation).
@@ -180,5 +182,22 @@ This is the workshop's first asset it cannot re-roll from its own committed code
 **build** reproduces anywhere — `forge` only inlines files already committed. But
 **re-rendering** the audio (changing the words, or the voice) needs this instrument
 present on the machine. Commit the `.mp3` and `.json` as the canonical asset; keep the
-tagged `.txt` beside them as the source it was rendered from. A section on setting the
-instrument up on a fresh machine will be added later.
+tagged `.txt` beside them as the source it was rendered from.
+
+## Setup — the instrument on a fresh machine
+
+The synthesizer is the open-source **`audio-tts`** skill. Install it (and its sibling
+**`audio-lens`**, the estate's audio verifier — the same tool vendored here at
+[`tools/audio-lens/`](../audio-lens/)) from
+[audio-forge](https://github.com/bman654/audio-forge):
+
+```bash
+npx skills add bman654/audio-forge                    # both skills (audio-tts + audio-lens)
+npx skills add bman654/audio-forge --skill audio-tts  # or just the voice
+```
+
+Then follow the skill's own `SKILL.md` for the one-time venv setup — synthesis runs on
+`mlx-speech` and needs **Apple Silicon**; the ~6 GB model weights download on first run.
+Once installed, the `claude-tts` wrapper finds it automatically under
+`${CLAUDE_CONFIG_DIR:-~/.claude}/skills/audio-tts` (no PATH entry required). For back-compat
+the wrapper also accepts a plain `tts` binary on PATH if one is set up the old way.

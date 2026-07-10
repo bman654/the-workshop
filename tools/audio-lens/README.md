@@ -1,8 +1,8 @@
 # Audio Lens
 
-> 🎓 **This tool graduated into a published agent skill.** Audio Lens now lives as a
-> standalone, zero-dependency skill at **https://github.com/bman654/audio-lens** —
-> install with `npx skills add bman654/audio-lens`. The skill is a headless Node CLI
+> 🎓 **This tool graduated into a published agent skill.** Audio Lens now ships as a
+> zero-dependency skill in **[audio-forge](https://github.com/bman654/audio-forge)** —
+> install with `npx skills add bman654/audio-forge --skill audio-lens`. The skill is a headless Node CLI
 > (port of this tool's DSP core, same 12/12 self-tests) with one-shot query flags and
 > spectrogram PNG output. **For audio verification, prefer the skill** — invoke the
 > `audio-lens` skill, or run its CLI — over driving this HTML by hand. This `index.html`
