@@ -8552,6 +8552,19 @@ window.SHOWING_CARDS = {
   var RECORD = false;
   try { RECORD = /[?&]record(?:=|&|$)/.test(window.location.search); } catch (e) { RECORD = false; }
 
+  /* ── ?record preflight constants (ported from trailer.js:78-79) ───────────────
+     COUNT_IN_MS: silent held-black count-in before the take's in-point (ENGINE §8).
+     FRAME_SETTLE_MS: settle beat after the stage frame's last `load`.
+     PREFLIGHT_ENABLED: the heavy preflight machinery (probe bank, arm poll,
+       held-black, gate panel) runs iff RECORD (the real pre-take gate) OR the deck
+       opts in via a `data-preflight` attribute (the projection-room film re-runs
+       the SAME panel LIVE as CH1 content — T3.1). showing/dev-showing set neither,
+       so ordinary playback is byte-for-byte unchanged. Resolved in boot(). */
+  var COUNT_IN_MS = 2200;
+  var FRAME_SETTLE_MS = 400;
+  var PREFLIGHT_ENABLED = false;
+  var preflightProbes = [];   /* per-chapter audio buffer probes (C2), built under the flag */
+
   /* ── ws.js mute bridge (ws-optional; the estate's ws:pref:muted convention) ── */
   function muted() {
     try {
@@ -8582,7 +8595,11 @@ window.SHOWING_CARDS = {
     lastHashMs: null,
     rafId: 0,
     autoTimer: 0,
-    scrubbing: false
+    scrubbing: false,
+    frameLoadedAt: 0,       /* perf.now() of the last stage-frame load (preflight C1) */
+    bootProfileKeys: null,  /* ws: profile keys present BEFORE any frame loaded (C6) */
+    arming: false,          /* record: between the arm click and the take starting */
+    pfTimer: 0              /* record: the 300ms preflight repaint poll */
   };
 
   var scrub = CE.createScrubDebounce();
@@ -8713,7 +8730,7 @@ window.SHOWING_CARDS = {
   function setFrame(src) {
     if (src == null) return;
     var emit = scrub.propose(src);          /* null when already loaded / deferred */
-    if (emit != null) els.frame.src = emit; /* propose() has recorded it as loaded */
+    if (emit != null) { state.frameLoadedAt = 0; els.frame.src = emit; } /* recorded as loaded */
   }
   function forceStage(src) {
     /* load `src` FRESH even when the frame is already "on" it — a same-URL frame
@@ -8721,6 +8738,7 @@ window.SHOWING_CARDS = {
        GO-LIVE detour). location.replace on the frame window also recovers a frame
        that navigated elsewhere during GO-LIVE. */
     if (src == null) return;
+    state.frameLoadedAt = 0;
     scrub.sync(src);
     try {
       var fw = frameWin();
@@ -9020,7 +9038,7 @@ window.SHOWING_CARDS = {
   function scrubEnd() {
     state.scrubbing = false;
     var emit = scrub.release();      /* the ONE final frame to load, or null */
-    if (emit != null) els.frame.src = emit;
+    if (emit != null) { state.frameLoadedAt = 0; els.frame.src = emit; }
     var tSec = state.clockMs / 1000;
     replayStates(CE.stateCuesUpTo(cur(), tSec));
     state.lastFireT = tSec;          /* don't replay impulses we scrubbed past */
@@ -9097,8 +9115,261 @@ window.SHOWING_CARDS = {
     paintChrome();
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     ?record PREFLIGHT + ARM — ported from trailer/trailer.js:992-1208 and adapted
+     to the showing deck's single-frame / single-<audio> architecture (T0.2 design
+     `scratch/worker-report-T0.2.md`). Two consumers: (a) the real pre-take gate,
+     under ?record; (b) CH1 of the projection-room film, which re-runs the SAME
+     panel LIVE as content (data-preflight opt-in). Comments use the BLOCK form
+     only (the forge HTML-comment landmine).
+     ═══════════════════════════════════════════════════════════════════════════ */
+  function nowMs() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
+
+  /* Snapshot the estate's profile keys BEFORE any frame loads — the deck's own CH0
+     frame would itself stamp `ws:seen:` on load, so a naive length check would
+     false-RED on a genuinely fresh record port. C6 passes iff this is empty. */
+  function snapshotProfileKeys() {
+    var out = [];
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && /^ws:(seen|flag|best|dwell|done|carry):/.test(k)) out.push(k);
+      }
+    } catch (e) {}
+    return out;
+  }
+
+  /* The six preflight checks — pure read-only measurement, returning the trailer's
+     identical { ok, checks:[{ name, ok, detail }] } shape. Run on the arm poll AND
+     re-run inside armRecord (a row that flips red between poll and click still
+     refuses). Row order is fixed for on-camera legibility. */
+  function preflightRecord() {
+    var checks = [];
+    var now = nowMs();
+
+    /* C1 — the stage frame loaded + a settle beat (single frame; adapts the
+       trailer's stack-frames-loaded check). */
+    var frameOk = state.frameLoadedAt > 0 && (now - state.frameLoadedAt) >= FRAME_SETTLE_MS;
+    checks.push({ name: 'stage frame loaded', ok: !!frameOk,
+      detail: state.frameLoadedAt > 0 ? (frameOk ? 'loaded · settled' : 'settling…') : 'loading…' });
+
+    /* C2 — every chapter's audio buffered (readyState ≥ 2), via the record-only
+       probe bank (the reused #voice element can hold only one src at a time). */
+    var audioOk = preflightProbes.length > 0, ad = [];
+    for (var i = 0; i < preflightProbes.length; i++) {
+      var rs = preflightProbes[i] ? preflightProbes[i].readyState : 0;
+      if (rs < 2) audioOk = false;
+      ad.push((CHAPTERS[i] ? CHAPTERS[i].id : i) + '=' + (preflightProbes[i] ? rs : '—'));
+    }
+    if (!preflightProbes.length) ad.push('no probes');
+    checks.push({ name: 'audio buffered (readyState ≥ 2)', ok: audioOk, detail: ad.join(' ') });
+
+    /* C3 — Reduce Motion OFF (the estate freezes its motion under RM). */
+    var rmOn = false;
+    try { rmOn = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
+    checks.push({ name: 'reduce motion off', ok: !rmOn, detail: rmOn ? 'ON — the estate freezes' : 'off' });
+
+    /* C4 — estate unmuted (the narration voice depends on it). */
+    var m = muted();
+    checks.push({ name: 'estate unmuted', ok: !m, detail: m ? "ws:pref:muted='1'" : 'unmuted' });
+
+    /* C5 — viewport ≥ 1920×1080. */
+    var vw = window.innerWidth, vh = window.innerHeight;
+    checks.push({ name: 'viewport ≥ 1920×1080', ok: vw >= 1920 && vh >= 1080, detail: vw + '×' + vh });
+
+    /* C6 — fresh record profile: no prior ws: keys AND no resume mirror in the hash
+       (a re-entered session deep-links mid-film). Invariant 7: served from a
+       dedicated fresh port. */
+    var priorN = state.bootProfileKeys ? state.bootProfileKeys.length : 0;
+    var hasHash = CE.parseHash(location.hash) != null;
+    var freshOk = priorN === 0 && !hasHash;
+    checks.push({ name: 'fresh record profile', ok: freshOk,
+      detail: freshOk ? 'clean' : (priorN ? (priorN + ' prior keys') : 'resume hash present') });
+
+    var ok = true;
+    for (var j = 0; j < checks.length; j++) if (!checks[j].ok) ok = false;
+    return { ok: ok, checks: checks };
+  }
+
+  /* Paint the preflight panel. `target` = { list, status } DOM els; default = the
+     record gate's injected panel. The projection-room CH1 stage passes its own
+     target so the SAME renderer paints the on-camera panel (T3.1). */
+  function renderPreflight(pf, target) {
+    var list = (target && target.list) || els.pfList;
+    var status = (target && target.status) || els.pfStatus;
+    if (!list) return;
+    var html = '';
+    for (var i = 0; i < pf.checks.length; i++) {
+      var c = pf.checks[i];
+      html += '<div class="pf-row ' + (c.ok ? 'ok' : 'bad') + '">' +
+              '<span class="pf-mark">' + (c.ok ? '✓' : '✗') + '</span>' +
+              '<span class="pf-name">' + c.name + '</span>' +
+              '<span class="pf-detail">' + c.detail + '</span></div>';
+    }
+    list.innerHTML = html;
+    if (status) {
+      status.textContent = pf.ok
+        ? 'READY — click anywhere to arm the take'
+        : 'NOT READY — any red row above blocks the take (fix it, do not record)';
+      status.className = 'pf-status ' + (pf.ok ? 'ok' : 'bad');
+    }
+  }
+
+  /* ── preflight chrome injected at runtime (no per-deck HTML → forge zero-diff on
+     the source; showing/dev-showing stay byte-identical). Styles + probe bank run
+     under PREFLIGHT_ENABLED; the gate arm surface (#heldblack + #preflight panel)
+     only under RECORD. ──────────────────────────────────────────────────────── */
+  var PREFLIGHT_CSS = [
+    /* instant-on / animate-out black (the count-in cover + the out-point) */
+    '#heldblack{ position:fixed; inset:0; background:#000; z-index:60; opacity:0;',
+    '  pointer-events:none; transition:opacity .4s ease; }',
+    '#heldblack.on{ opacity:1; transition:none; }',
+    /* the panel: bare .pf-* classes so the CH1 stage panel is styled too */
+    '.pf-title{ letter-spacing:.16em; text-transform:uppercase; font-size:11px;',
+    '  color:var(--muted); margin-bottom:18px; }',
+    '.pf-row{ display:grid; grid-template-columns:1.4em 1fr auto; gap:16px;',
+    '  align-items:baseline; padding:7px 0; border-bottom:1px solid rgba(255,255,255,.06); }',
+    '.pf-row .pf-mark{ font-weight:700; }',
+    '.pf-row.ok .pf-mark{ color:#5bd58b; }',
+    '.pf-row.bad .pf-mark{ color:#e0473b; }',
+    '.pf-row .pf-name{ color:var(--ink); }',
+    '.pf-row.bad .pf-name{ color:#f2a29a; }',
+    '.pf-row .pf-detail{ color:var(--muted); white-space:nowrap; }',
+    '.pf-status{ margin-top:22px; font-size:16px; letter-spacing:.01em; }',
+    '.pf-status.ok{ color:#7fe0a6; }',
+    '.pf-status.bad{ color:#e0473b; }',
+    /* the record gate takes over: black, the panel replaces the marketing copy */
+    '#preflight{ display:none; }',
+    'body.record #gate{ background:#000; gap:0; padding:48px; align-items:flex-start;',
+    '  justify-content:center; text-align:left; }',
+    'body.record #gate .kick, body.record #gate h1,',
+    'body.record #gate .sub, body.record #gate .acts{ display:none; }',
+    'body.record #preflight{ display:block; width:100%; max-width:820px;',
+    '  font:600 15px/1.7 ui-monospace,Menlo,monospace; color:var(--muted); }'
+  ].join('\n');
+
+  function injectPreflightStyles() {
+    try {
+      var st = document.createElement('style');
+      st.id = 'preflight-style';
+      st.textContent = PREFLIGHT_CSS;
+      (document.head || document.documentElement).appendChild(st);
+    } catch (e) {}
+  }
+
+  /* One hidden, muted, never-played <audio preload=auto> per chapter — measures
+     C2 and warms the HTTP cache so the live #voice element's per-chapter src load
+     is instant (fewer mid-take stutters). */
+  function buildPreflightProbes() {
+    try {
+      var bank = document.createElement('div');
+      bank.id = 'pf-probes';
+      bank.setAttribute('aria-hidden', 'true');
+      bank.style.cssText = 'position:absolute; width:0; height:0; overflow:hidden;';
+      for (var i = 0; i < CHAPTERS.length; i++) {
+        var ch = CHAPTERS[i];
+        if (!ch || !ch.audio) { preflightProbes.push(null); continue; }
+        var a = document.createElement('audio');
+        a.preload = 'auto';
+        a.muted = true;
+        a.src = ch.audio;
+        bank.appendChild(a);
+        preflightProbes.push(a);
+      }
+      document.body.appendChild(bank);
+    } catch (e) {}
+  }
+
+  /* The record gate arm surface: a full-screen black overlay for the count-in and
+     the preflight panel injected into the existing #gate. */
+  function injectRecordArmChrome() {
+    try {
+      var hb = document.createElement('div');
+      hb.id = 'heldblack';
+      hb.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(hb);
+      els.heldblack = hb;
+    } catch (e) {}
+    try {
+      var pf = document.createElement('div');
+      pf.id = 'preflight';
+      pf.setAttribute('aria-hidden', 'true');
+      pf.innerHTML = '<div class="pf-title">record preflight · the pre-take gate</div>' +
+                     '<div id="pf-list"></div>' +
+                     '<div id="pf-status" class="pf-status"></div>';
+      els.gate.appendChild(pf);
+      els.pfList = document.getElementById('pf-list');
+      els.pfStatus = document.getElementById('pf-status');
+    } catch (e) {}
+  }
+
+  /* Unlock a media element under a real gesture (a synthetic .click() unlocks no
+     audio — verified). Muted through the play→pause so no blip escapes. */
+  function unlockEl(a) {
+    if (!a || !a.src) return;
+    try {
+      var wasMuted = a.muted;
+      a.muted = true;
+      var p = a.play();
+      var done = function () { try { a.pause(); a.currentTime = 0; a.muted = wasMuted; } catch (e) {} };
+      if (p && p.then) p.then(done).catch(function () { try { a.muted = wasMuted; } catch (e2) {} });
+      else done();
+    } catch (e) { try { a.muted = false; } catch (e2) {} }
+  }
+
+  /* Everything that needs the real arm gesture, done once at the click: prime CH0's
+     src onto the reused #voice element and bless it, so the count-in's later
+     programmatic play() is allowed. (No music bed yet — the projection-room bed
+     lands at T4.2 and unlocks here too.) */
+  function reachIn() {
+    try {
+      var ch0 = CHAPTERS[0];
+      if (audio && ch0 && ch0.audio && !audio.src) audio.src = ch0.audio;
+    } catch (e) {}
+    unlockEl(audio);
+  }
+
+  /* Wire the ?record arm surface: the WHOLE gate is clickable (OBS "Interact"
+     clicks anywhere), and a 300ms poll repaints the panel until READY so a
+     condition that flips (RM toggled, a probe that finishes buffering) is live
+     before the operator clicks. */
+  function setupRecordArm() {
+    if (els.gate) els.gate.addEventListener('click', armRecord);
+    (function poll() {
+      if (state.started || state.arming) return;
+      renderPreflight(preflightRecord());
+      state.pfTimer = setTimeout(poll, 300);
+    })();
+  }
+
+  /* The ONE real blessing gesture: re-run preflight (refuse on any red), reach in,
+     black out, then a silent count-in before the take's in-point. */
+  function armRecord() {
+    if (state.started || state.arming) return;
+    var pf = preflightRecord();
+    renderPreflight(pf);
+    if (!pf.ok) { log('✗ record: REFUSED to arm — preflight red'); return; }
+    state.arming = true;
+    if (state.pfTimer) { clearTimeout(state.pfTimer); state.pfTimer = 0; }
+
+    reachIn();
+    /* black FIRST (instant), then hide the gate → no flash of the green panel */
+    if (els.heldblack) els.heldblack.classList.add('on');
+    if (els.gate) { els.gate.hidden = true; els.gate.style.display = 'none'; }
+    if (els.rmbanner && els.rmbanner.parentNode) els.rmbanner.parentNode.removeChild(els.rmbanner);
+    log('▸ record: armed — silent count-in ' + COUNT_IN_MS + ' ms');
+
+    setTimeout(function () {
+      start(false, 0, 0);               /* enters CH0 + arms the voice under the black */
+      if (els.heldblack) els.heldblack.classList.remove('on');  /* fade out → first room */
+      log('▸ record: the film runs');
+    }, COUNT_IN_MS);
+  }
+
   /* ── boot ───────────────────────────────────────────────────────────────────── */
   function boot() {
+    /* C6: snapshot the profile BEFORE any frame (or probe) can stamp a ws: key */
+    state.bootProfileKeys = snapshotProfileKeys();
     var $ = function (id) { return document.getElementById(id); };
     els = {
       frame: $('frame'), captions: $('captions'), rmbanner: $('rmbanner'), card: $('card'),
@@ -9111,8 +9382,18 @@ window.SHOWING_CARDS = {
     };
     audio = els.audio;
 
-    /* ?record: install the chrome-free recording surface before anything paints */
-    if (RECORD) installRecordChrome();
+    /* the preflight machinery runs under ?record (the pre-take gate) OR when the
+       deck opts in via data-preflight (the projection-room film's live CH1 panel) */
+    var pfContent = false;
+    try {
+      pfContent = (document.documentElement && document.documentElement.hasAttribute('data-preflight')) ||
+                  (document.body && document.body.hasAttribute('data-preflight'));
+    } catch (e) { pfContent = false; }
+    PREFLIGHT_ENABLED = RECORD || pfContent;
+    if (PREFLIGHT_ENABLED) { injectPreflightStyles(); buildPreflightProbes(); }
+
+    /* ?record: install the chrome-free recording surface + the arm gate */
+    if (RECORD) { installRecordChrome(); injectRecordArmChrome(); }
 
     /* chapter buttons */
     for (var i = 0; i < CHAPTERS.length; i++) {
@@ -9159,6 +9440,7 @@ window.SHOWING_CARDS = {
     /* focus guard: reclaim keyboard routing on every frame load + on blur while
        scheduled; also run the per-frame RM preflight as each frame settles */
     els.frame.addEventListener('load', function () {
+      state.frameLoadedAt = nowMs();   /* preflight C1 settle stamp (inert off-record) */
       rmCheck(frameWin(), 'stage');
       if (pendingReplay) { replayStates(pendingReplay); pendingReplay = null; }
       focusReclaim();
@@ -9194,8 +9476,11 @@ window.SHOWING_CARDS = {
     }
 
     /* begin / read ALWAYS start from the top — only the explicit resume button
-       returns to the recovered spot (a reload must not hijack a fresh start) */
-    els.gBegin.addEventListener('click', function () { start(false, 0, 0); });
+       returns to the recovered spot (a reload must not hijack a fresh start).
+       In ?record the whole gate is the OBS Interact arm target (preflight + count-in)
+       and replaces the plain begin-click. */
+    if (RECORD) setupRecordArm();
+    else els.gBegin.addEventListener('click', function () { start(false, 0, 0); });
     els.gRead.addEventListener('click', function () { start(true, 0, 0); });
 
     /* pre-load chapter 0's chrome behind the gate so a Begin is instant */
@@ -9251,7 +9536,19 @@ window.SHOWING_CARDS = {
        agent-browser cannot emulate prefers-reduced-motion (a headless twin passes a
        matchMedia stub; a CDP-emulated headless gate passes the real frame window). */
     preflight: function (win) { return rmCheck(win || window, 'preflight'); },
-    bannerVisible: function () { return !els.rmbanner.hidden; }
+    bannerVisible: function () { return !els.rmbanner.hidden; },
+
+    /* ?record preflight surface + the reusable CH1 panel component (T1.1 / T3.1).
+       recPreflight() is the live six-check measurement; renderPanel(pf, target)
+       paints it into any {list,status} target (the CH1 stage panel) so T3.1 can
+       flip rows to the narration. recArm() is the real arm gesture for the OBS
+       operator / rehearsal harness. */
+    recPreflight: function () { return preflightRecord(); },
+    recChecks: function () { return preflightRecord().checks; },
+    renderPanel: function (pf, target) { return renderPreflight(pf || preflightRecord(), target); },
+    recArm: function () { return armRecord(); },
+    heldBlackOn: function () { return !!(els.heldblack && els.heldblack.classList.contains('on')); },
+    armed: function () { return !!state.arming; }
   };
 })();
 </script>
