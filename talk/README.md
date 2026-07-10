@@ -153,7 +153,7 @@ Do this end-to-end once at the venue with the projector live:
    turn; **Ch 8** pulls the Errand's lever and the marble run goes.
 6. Check the two NEW payoffs: **Ch 7** — the barrel audibly plays the canon into the
    "Listen." silence, then the audio-lens plate rises with 48 ringed notes and the
-   `npx skills add bman654/audio-lens` command; **Ch 9** — the camera rides gate →
+   `npx skills add bman654/audio-forge --skill audio-lens` command; **Ch 9** — the camera rides gate →
    drive → manor; **Ch 10** — one earned constellation replays its reveal (needs a
    charted profile, checklist item 5); **Ch 11** — the cairn descends: two koans open
    in the hush, the whoosh dives ~1,800 stones, the founding stone opens as its line
