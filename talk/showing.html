@@ -8542,6 +8542,16 @@ window.SHOWING_CARDS = {
     return;
   }
 
+  /* ── ?record — a chrome-free RECORDING run (matches the trailer's ?record) ────
+     Same query-param convention as the trailer. When present, the deck hides the
+     operator strip + the reading options, runs the stage full-bleed on black,
+     narrates, AUTO-ADVANCES ~2s after each chapter's narration ends, and shows the
+     current chapter name in a quiet top banner. One gesture is still required to
+     bless audio (browser autoplay policy), so the start gate's "begin" stays — the
+     STRIP (the controls) is what's hidden; a single click begins the take. */
+  var RECORD = false;
+  try { RECORD = /[?&]record(?:=|&|$)/.test(window.location.search); } catch (e) { RECORD = false; }
+
   /* ── ws.js mute bridge (ws-optional; the estate's ws:pref:muted convention) ── */
   function muted() {
     try {
@@ -8561,6 +8571,7 @@ window.SHOWING_CARDS = {
     idx: 0,
     mode: 'scheduled',
     visitor: false,
+    record: false,
     started: false,
     playing: false,
     holding: false,
@@ -8858,7 +8869,11 @@ window.SHOWING_CARDS = {
   }
 
   function onChapterEnd() {
-    if (state.visitor) {
+    /* record + visitor both AUTO-ADVANCE ~2s after the chapter's clock (its
+       narration) runs out; an operator run HOLDs for a manual advance. In a
+       narrated run the audio drives the clock to dur, then the rAF clock carries
+       the last few ms — so this fires right as the voice finishes. */
+    if (state.visitor || state.record) {
       state.holding = true;
       showReady();
       state.autoTimer = setTimeout(function () { advance(); }, 2000);
@@ -8912,6 +8927,10 @@ window.SHOWING_CARDS = {
     }
     var addr = cur() && cur().addr;
     els.addr.textContent = addr || '';
+    if (els.recname) {
+      var rc = cur();
+      els.recname.textContent = rc ? ((state.idx + 1) + '/' + CHAPTERS.length + '  ·  ' + rc.title) : '';
+    }
   }
 
   /* ── transport ───────────────────────────────────────────────────────────── */
@@ -8928,7 +8947,7 @@ window.SHOWING_CARDS = {
     /* a visitor who chose "read it silently" gets the rAF virtual clock, never the
        narration audio — visitor mode IS silent mode (the header's promise; before
        this guard, gate-read armed the voice exactly like a begin) */
-    if (audio && ch && ch.audio && !muted() && !state.visitor) {
+    if (audio && ch && ch.audio && (!muted() || state.record) && !state.visitor) {
       try {
         if (audio.src !== ch.audio) audio.src = ch.audio;
         var p = audio.play();
@@ -9034,6 +9053,50 @@ window.SHOWING_CARDS = {
     return false;
   }
 
+  /* ── ?record chrome: injected at runtime so the whole feature lives in ONE
+     shared file (both decks forge:include this) — no per-deck HTML to keep in
+     sync. Hides the strip + reading options, runs the stage full-bleed, and adds
+     a quiet top banner carrying the current chapter name. ────────────────────── */
+  var RECORD_CSS = [
+    'body.record #strip{ display:none !important; }',
+    'body.record #cuelog{ display:none !important; }',
+    'body.record #stage{ inset:0 !important; }',
+    'body.record #captions{ bottom:7vh !important; }',
+    'body.record #rmbanner{ bottom:0 !important; }',
+    'body.record #card{ bottom:16vh !important; }',
+    'body.record #gate-read, body.record #gate-resume{ display:none !important; }',
+    'body.record.rec-live{ cursor:none; }',
+    '#recname{ position:fixed; left:0; right:0; top:0; z-index:8; display:none;',
+    '  padding:16px 22px 24px; text-align:center; pointer-events:none;',
+    '  font:600 13px/1.2 ui-monospace,Menlo,monospace; letter-spacing:.26em;',
+    '  text-transform:uppercase; color:#d9b168; text-shadow:0 2px 20px rgba(0,0,0,.9);',
+    '  background:linear-gradient(180deg, rgba(4,6,10,.74), transparent); }',
+    'body.record #recname{ display:block; }'
+  ].join('\n');
+
+  function installRecordChrome() {
+    state.record = true;
+    try {
+      var st = document.createElement('style');
+      st.id = 'record-style';
+      st.textContent = RECORD_CSS;
+      (document.head || document.documentElement).appendChild(st);
+    } catch (e) {}
+    try { document.body.classList.add('record'); } catch (e) {}
+    var rn = document.createElement('div');
+    rn.id = 'recname';
+    rn.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(rn);
+    els.recname = rn;
+    /* a clearer start affordance for the take (the strip is gone) */
+    try {
+      if (els.gBegin) els.gBegin.textContent = '▶ begin recording';
+      var sub = els.gate && els.gate.querySelector('.sub');
+      if (sub) sub.textContent = 'Recording mode — the deck plays through on its own and auto-advances between chapters; the controls are hidden.';
+    } catch (e) {}
+    paintChrome();
+  }
+
   /* ── boot ───────────────────────────────────────────────────────────────────── */
   function boot() {
     var $ = function (id) { return document.getElementById(id); };
@@ -9047,6 +9110,9 @@ window.SHOWING_CARDS = {
       audio: $('voice'), focussink: $('focussink')
     };
     audio = els.audio;
+
+    /* ?record: install the chrome-free recording surface before anything paints */
+    if (RECORD) installRecordChrome();
 
     /* chapter buttons */
     for (var i = 0; i < CHAPTERS.length; i++) {
@@ -9143,6 +9209,8 @@ window.SHOWING_CARDS = {
     state.mode = 'scheduled';
     els.gate.hidden = true;
     els.gate.style.display = 'none';
+    /* the take has begun — with the gate gone, drop the pointer for a clean frame */
+    if (state.record) { try { document.body.classList.add('rec-live'); } catch (e) {} }
     enterChapter(i, offsetMs || 0);
     armPlay();
     focusReclaim();
