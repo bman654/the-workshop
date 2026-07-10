@@ -90,6 +90,9 @@
     scrubbing: false,
     frameLoadedAt: 0,       /* perf.now() of the last stage-frame load (preflight C1) */
     bootProfileKeys: null,  /* ws: profile keys present BEFORE any frame loaded (C6) */
+    bootHadHash: false,     /* was a resume hash present AT BOOT, before the deck's own
+                               mirror wrote one? (C6 — read this, never live location.hash,
+                               so CH1's live panel isn't false-reddened by our own mirror) */
     arming: false,          /* record: between the arm click and the take starting */
     pfTimer: 0              /* record: the 300ms preflight repaint poll */
   };
@@ -670,10 +673,12 @@
     checks.push({ name: 'viewport ≥ 1920×1080', ok: vw >= 1920 && vh >= 1080, detail: vw + '×' + vh });
 
     /* C6 — fresh record profile: no prior ws: keys AND no resume mirror in the hash
-       (a re-entered session deep-links mid-film). Invariant 7: served from a
-       dedicated fresh port. */
+       AT BOOT (a re-entered session deep-links mid-film). Both read from the boot
+       snapshot, never live — the deck writes its own resume hash once playback starts,
+       so a live check would false-RED the moment CH1's on-camera panel runs. Invariant
+       7: served from a dedicated fresh port. */
     var priorN = state.bootProfileKeys ? state.bootProfileKeys.length : 0;
-    var hasHash = CE.parseHash(location.hash) != null;
+    var hasHash = !!state.bootHadHash;
     var freshOk = priorN === 0 && !hasHash;
     checks.push({ name: 'fresh record profile', ok: freshOk,
       detail: freshOk ? 'clean' : (priorN ? (priorN + ' prior keys') : 'resume hash present') });
@@ -860,8 +865,12 @@
 
   /* ── boot ───────────────────────────────────────────────────────────────────── */
   function boot() {
-    /* C6: snapshot the profile BEFORE any frame (or probe) can stamp a ws: key */
+    /* C6: snapshot the profile AND the resume-hash BEFORE any frame (or probe) can
+       stamp a ws: key and BEFORE the deck's own hash mirror writes a resume hash.
+       (A live location.hash check would false-RED C6 the instant playback starts —
+       which is exactly when the projection-room CH1 panel re-runs preflight on camera.) */
     state.bootProfileKeys = snapshotProfileKeys();
+    try { state.bootHadHash = CE.parseHash(location.hash) != null; } catch (e) { state.bootHadHash = false; }
     var $ = function (id) { return document.getElementById(id); };
     els = {
       frame: $('frame'), captions: $('captions'), rmbanner: $('rmbanner'), card: $('card'),
