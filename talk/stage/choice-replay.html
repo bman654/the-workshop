@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The choice, re-enacted — The Projection Room</title>
+<style>
+  /* ════════════════════════════════════════════════════════════════════════════
+     CH4 "THE CLOCK IS THE VOICE" — the choice-scene re-enactment (WS7 T3.4, from the
+     T0.3 spike contract). A standalone stage page the projection-room deck frames
+     TWICE in CH4: first BROKEN, then FIXED. The scene is the trailer's radio-button
+     "choice" skit (light mode / dark mode / build whatever you want) with a deck-drawn
+     cursor that drifts up to the third option — the trailer's most profound beat.
+
+       ?clock=audio  (alias fixed)  → FIXED:  cursor clock = the render clock (identity)
+       ?clock=css    (alias broken) → BROKEN: cursor clock = f(lag(t)) — a second clock
+                                       that stalls under "load" and stays behind, so the
+                                       cursor arrives AFTER the screen has already cut.
+       ?drive=host   → do NOT self-animate; the host (deck) calls window.__replay.render
+                       (relMs) every frame off the narration master clock (invariant 5).
+       ?at=<ms>      → render ONE deterministic static frame (shots / on-camera freeze).
+       ?label=1      → show a small clock label naming the cursor's clock (deck opt-in).
+       ?hud=1        → show a numeric HUD (verification only).
+       (none of the above) → live self-play off performance.now() — standalone preview
+                       ONLY; the embedded film path is always ?drive=host.
+
+     Only the CURSOR's clock changes between BROKEN and FIXED. The state cues (third
+     option appears, leaf dot fills, bloom white-out) ALWAYS fire on the true clock in
+     both modes — that is why the contrast is honest: it is exactly the original bug
+     (a second clock nobody was watching), re-enacted deterministically so it renders
+     identically on the record machine. Every visual is a pure function of one relMs →
+     seek-safe. Faithful port of trailer/trailer.js driveSkit + trailer/index.src.html
+     skit markup/CSS. Plain committed page (NOT built by the forge, like rail-mock). */
+  :root{ --lit:#fff5df; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; background:#000; }
+  #stage{ position:relative; width:100vw; height:100vh; overflow:hidden; background:#000; }
+
+  /* ── the radio-button skit (from trailer/index.src.html:72-96) ─────────────── */
+  #skit{ position:absolute; inset:0; z-index:7; display:none; background:#000;
+    align-items:center; justify-content:center; pointer-events:none; }
+  #skit.on{ display:flex; }
+  #skit .skit-inner{ display:flex; flex-direction:column; gap:clamp(16px,3.2vh,36px);
+    font-family:Georgia,"Times New Roman",serif; }
+  #skit .skit-opt{ display:flex; align-items:center; gap:.62em;
+    font-size:clamp(28px,5vh,58px); color:#aeb6c6; }
+  #skit .skit-opt .dot{ width:.6em; height:.6em; border-radius:50%; flex:0 0 auto;
+    border:2px solid #7f889b; box-sizing:border-box; background:transparent;
+    transition:background .12s ease, box-shadow .12s ease, border-color .12s ease; }
+  #skit .skit-opt .dot.on{ background:var(--lit); border-color:var(--lit);
+    box-shadow:0 0 14px rgba(255,245,223,.5); }
+  #skit .skit-opt .lbl{ white-space:nowrap; }
+  #skit .skit-third{ opacity:0; transform:translateY(8px);
+    transition:opacity .3s ease, transform .3s ease; }
+  #skit .skit-third.show{ opacity:1; transform:none; }
+  #skit .skit-third .lbl{ color:#d9d2c0; }
+  #skit .skit-cursor{ position:absolute; left:84%; top:86%; width:20px; height:28px;
+    pointer-events:none; z-index:2; background:#fff;
+    filter:drop-shadow(0 1px 2px rgba(0,0,0,.85));
+    clip-path:polygon(0 0, 0 72%, 24% 55%, 42% 92%, 58% 85%, 40% 50%, 72% 50%); }
+
+  /* ── the bloom-cut white-out (from trailer/index.src.html:98-105) ──────────── */
+  #bloom{ position:absolute; inset:0; z-index:8; pointer-events:none; opacity:0;
+    background:radial-gradient(120% 120% at var(--bx,50%) var(--by,58%),
+      #fff 0%, #fff 34%, rgba(255,255,255,0) 72%); }
+  #bloom.on{ opacity:1; }
+
+  /* ── the clock label (opt-in, ?label=1): names which clock the cursor obeys, so
+       the audience reads the lesson the VO is telling. Estate parchment/brass. ── */
+  #clocklbl{ position:absolute; left:50%; bottom:8%; transform:translateX(-50%);
+    z-index:12; display:none; text-align:center;
+    font:600 15px/1.4 ui-monospace,Menlo,monospace; letter-spacing:.06em; }
+  #clocklbl.show{ display:block; }
+  #clocklbl .k{ display:block; font:600 10px/1 ui-monospace,Menlo,monospace;
+    letter-spacing:.28em; text-transform:uppercase; color:#7a6b4d; margin-bottom:6px; }
+  #clocklbl.broken .v{ color:#e0796b; }
+  #clocklbl.fixed  .v{ color:#e9cd7f; }
+
+  /* ── the verification HUD (opt-in, ?hud=1) ─────────────────────────────────── */
+  #hud{ position:absolute; left:12px; top:10px; z-index:30; display:none;
+    font:600 14px/1.5 ui-monospace,Menlo,monospace; color:#8fe; opacity:.85; }
+  #hud.show{ display:block; }
+  #hud .bad{ color:#f77; }
+  #hud .lbl2{ color:#ffd27f; }
+
+  @media (prefers-reduced-motion: reduce){
+    #skit .skit-opt .dot, #skit .skit-third{ transition:none; }
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="skit" aria-hidden="true">
+    <div class="skit-inner">
+      <div class="skit-opt" data-opt="light"><span class="dot on"></span><span class="lbl">light mode</span></div>
+      <div class="skit-opt" data-opt="dark"><span class="dot"></span><span class="lbl">dark mode</span></div>
+      <div class="skit-opt skit-third" data-opt="leaf"><span class="dot"></span><span class="lbl">build whatever you want; have fun</span></div>
+    </div>
+    <div class="skit-cursor" aria-hidden="true"></div>
+  </div>
+  <div id="bloom" aria-hidden="true"></div>
+  <div id="clocklbl" aria-hidden="true"><span class="k">cursor&rsquo;s clock</span><span class="v"></span></div>
+  <div id="hud" aria-hidden="true"></div>
+</div>
+<script>
+/* CH4 choice-scene re-enactment — see the header block above for the full contract.
+   Everything is a pure function of one relMs (the render clock), so both the FIXED
+   and BROKEN plays are deterministic and seek-safe: the same relMs always yields the
+   same frame. Block comments only, for parity with the deck's forged scripts. */
+(function () {
+  'use strict';
+
+  var Q = new URLSearchParams(location.search);
+  var modeRaw = (Q.get('clock') || 'audio').toLowerCase();
+  var BROKEN_DEFAULT = (modeRaw === 'css' || modeRaw === 'broken');
+  var DRIVE_HOST = (Q.get('drive') === 'host');
+  var SHOW_HUD = Q.get('hud') === '1';
+  var SHOW_LABEL = Q.get('label') === '1';
+  var AT = Q.has('at') ? parseFloat(Q.get('at')) : null;
+
+  /* page-local vignette timeline (ms) — a compact analogue of the trailer SKIT
+     (trailer.js SKIT). The deck picks WHEN each beat starts (word-pinned); this
+     timeline runs the ~5.6 s vignette from that start. Validated at T0.3. */
+  var T = {
+    driftAt: 600,  driftMs: 1400,      /* corner → dark, settle at 2000 */
+    twitchA: 2300, twitchB: 2650, twitchMs: 260, twitchDy: 1.1,
+    thirdAt: 2800,                     /* the third option (leaf row) appears */
+    moveAt: 3400,  moveMs: 240,        /* decisive snap dark → leaf, lands 3640 */
+    pickAt: 3700,                      /* the leaf dot fills ("highlights…") */
+    cutAt:  3800, cutMs: 260,          /* the bloom white-out ("screen vanishes first") */
+    stallAt: 2900, stallMs: 800,       /* BROKEN: cursor clock frozen 2900..3700, then −800 behind */
+    cornerL: 84, cornerT: 86, endMs: 5600
+  };
+
+  var skit  = document.getElementById('skit');
+  var cur   = skit.querySelector('.skit-cursor');
+  var bloom = document.getElementById('bloom');
+  var hud   = document.getElementById('hud');
+  var clbl  = document.getElementById('clocklbl');
+  function q(sel) { return skit.querySelector(sel); }
+  function easeInCubic(u)  { return u * u * u; }
+  function easeOutCubic(u) { return 1 - Math.pow(1 - u, 3); }
+
+  /* the "own clock" of the BROKEN cursor: identity until the stall, frozen through
+     the "load" window, then permanently behind by stallMs. A deterministic
+     re-enactment of a clock that fell behind under load — NO reliance on real
+     dropped frames, so it reproduces identically on the record machine. */
+  function lag(ms) {
+    if (ms < T.stallAt) return ms;
+    if (ms < T.stallAt + T.stallMs) return T.stallAt;   /* frozen during "load" */
+    return ms - T.stallMs;                              /* behind ever after */
+  }
+
+  /* cursor target for an option row, derived from the option rects (no magic
+     numbers) so it holds at any stage size — trailer.js cursorPctFor. */
+  function cursorPctFor(which) {
+    var row = q('[data-opt="' + which + '"]'); if (!row) return null;
+    var sb = skit.getBoundingClientRect(), rb = row.getBoundingClientRect();
+    if (!sb.width || !sb.height) return null;
+    var x = (rb.left - sb.left) - 26, y = (rb.top - sb.top) + rb.height * 0.5 - 4;
+    return { l: x / sb.width * 100, t: y / sb.height * 100 };
+  }
+  function twitchBump(ms) {
+    var o = 0, a = ms - T.twitchA, b = ms - T.twitchB;
+    if (a >= 0 && a <= T.twitchMs) o += Math.sin(a / T.twitchMs * Math.PI) * T.twitchDy;
+    if (b >= 0 && b <= T.twitchMs) o += Math.sin(b / T.twitchMs * Math.PI) * T.twitchDy;
+    return o;
+  }
+  /* cursor position as a pure function of a clock value — the trailer driveSkit
+     branch ladder: parked → drift to dark (settle) → hover (twitch ×2) → decisive
+     snap to leaf → landed. */
+  function cursorAt(cms) {
+    var dark = cursorPctFor('dark'), leaf = cursorPctFor('leaf');
+    if (!dark || !leaf) return { l: T.cornerL, t: T.cornerT };
+    var L, Tt;
+    if (cms < T.driftAt) { L = T.cornerL; Tt = T.cornerT; }
+    else if (cms < T.driftAt + T.driftMs) { var u = easeOutCubic((cms - T.driftAt) / T.driftMs);
+      L = T.cornerL + (dark.l - T.cornerL) * u; Tt = T.cornerT + (dark.t - T.cornerT) * u; }
+    else if (cms < T.moveAt) { L = dark.l; Tt = dark.t + twitchBump(cms); }
+    else if (cms < T.moveAt + T.moveMs) { var v = easeInCubic((cms - T.moveAt) / T.moveMs);
+      L = dark.l + (leaf.l - dark.l) * v; Tt = dark.t + (leaf.t - dark.t) * v; }
+    else { L = leaf.l; Tt = leaf.t; }
+    return { l: L, t: Tt };
+  }
+  /* place the bloom radial origin on the leaf row (trailer bloomFlash) */
+  function placeBloom() {
+    var leaf = q('[data-opt="leaf"]'); if (!leaf) return;
+    var sb = skit.getBoundingClientRect(), rb = leaf.getBoundingClientRect();
+    bloom.style.setProperty('--bx', ((rb.left + rb.width / 2 - sb.left) / sb.width * 100).toFixed(1) + '%');
+    bloom.style.setProperty('--by', ((rb.top + rb.height / 2 - sb.top) / sb.height * 100).toFixed(1) + '%');
+  }
+
+  /* render ONE frame at render clock = relMs (pure function; seek-safe). An optional
+     modeOverride ('css'|'broken'|'audio'|'fixed') lets the host force the mode for a
+     single call; otherwise the query-string default is used. */
+  function render(relMs, modeOverride) {
+    var broken = BROKEN_DEFAULT;
+    if (modeOverride) { var m = String(modeOverride).toLowerCase(); broken = (m === 'css' || m === 'broken'); }
+    skit.classList.add('on');
+    /* STATE cues — ALWAYS on the true clock relMs, in BOTH modes */
+    q('[data-opt="light"] .dot').classList.toggle('on', relMs < T.pickAt);
+    q('[data-opt="leaf"]').classList.toggle('show', relMs >= T.thirdAt);
+    q('[data-opt="leaf"] .dot').classList.toggle('on', relMs >= T.pickAt); /* "highlights without arriving" */
+    var cutOn = relMs >= T.cutAt && relMs < T.cutAt + T.cutMs;
+    placeBloom();
+    bloom.classList.toggle('on', cutOn);
+    /* the CURSOR clock is the only thing that differs: FIXED = relMs, BROKEN = lag(relMs) */
+    var cms = broken ? lag(relMs) : relMs;
+    var p = cursorAt(cms);
+    cur.style.transition = 'none';
+    cur.style.left = p.l.toFixed(2) + '%';
+    cur.style.top  = p.t.toFixed(2) + '%';
+
+    if (SHOW_LABEL) {
+      clbl.classList.add('show');
+      clbl.classList.toggle('broken', broken);
+      clbl.classList.toggle('fixed', !broken);
+      clbl.querySelector('.v').textContent = broken ? 'the CSS animation clock' : 'the voice';
+    }
+    if (SHOW_HUD) {
+      hud.classList.add('show');
+      var leaf = cursorPctFor('leaf');
+      var arrived = leaf && Math.abs(p.l - leaf.l) < 0.5 && Math.abs(p.t - leaf.t) < 0.5;
+      hud.innerHTML =
+        '<span class="lbl2">' + (broken ? 'BROKEN (clock=css)' : 'FIXED (clock=audio)') + '</span><br>' +
+        'voice clock: ' + relMs.toFixed(0) + ' ms<br>' +
+        'cursor clock: ' + cms.toFixed(0) + ' ms' +
+          (broken && cms < relMs ? ' <span class="bad">(behind ' + (relMs - cms).toFixed(0) + ')</span>' : '') + '<br>' +
+        'cut fired: ' + (relMs >= T.cutAt ? '<span class="bad">YES</span>' : 'no') +
+        ' | cursor on leaf: ' + (arrived ? 'yes' : '<span class="bad">NO</span>');
+    }
+  }
+
+  /* the host-driven / verification hook — the deck calls __replay.render(relMs) each
+     frame off the narration master clock (invariant 5); config exposes the vignette
+     timeline so the deck can schedule the FIXED beat after the BROKEN one. */
+  window.__replay = {
+    render: render,
+    config: T,
+    broken: function () { return BROKEN_DEFAULT; },
+    setMode: function (m) { var s = String(m).toLowerCase(); BROKEN_DEFAULT = (s === 'css' || s === 'broken'); }
+  };
+
+  if (AT !== null) {
+    /* deterministic static frame (double-rAF so layout has settled before we measure) */
+    requestAnimationFrame(function () { requestAnimationFrame(function () { render(AT); }); });
+  } else if (DRIVE_HOST) {
+    /* embedded: paint an initial parked frame, then wait for the deck's render calls */
+    requestAnimationFrame(function () { requestAnimationFrame(function () { render(0); }); });
+  } else {
+    /* standalone preview ONLY: live self-play off the wall clock (stands in for the
+       master clock during isolated verification; never the embedded film path) */
+    var t0 = null;
+    function loop(now) {
+      if (t0 === null) t0 = now;
+      var relMs = now - t0;
+      render(relMs);
+      if (relMs < T.endMs) requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  }
+})();
+</script>
+</body>
+</html>
