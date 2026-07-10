@@ -268,11 +268,16 @@
     var items = [];   /* { y, h, plate|cue, ... } for the label-nudge pass */
 
     /* chapter plates — a plate's TOP edge sits at its boundary, hanging just below
-       so it crosses the play-line as a title card before the chapter's first cue */
+       so it crosses the play-line as a title card before the chapter's first cue.
+       A continuation entry (displayCont:true — a load-bearing audio split shown as
+       ONE chapter) prints no plate of its own; its displayNum is the shown number.
+       Absent on every entry → each entry gets its own plate numbered i+1. */
     for (i = 0; i < chapters.length; i++) {
+      if (chapters[i] && chapters[i].displayCont) continue;
+      var dn = (chapters[i] && typeof chapters[i].displayNum === 'number') ? chapters[i].displayNum : (i + 1);
       var el = document.createElement('div');
       el.className = 'sr-plate';
-      el.innerHTML = '<span class="no">№ ' + (i + 1) + ' · ' + esc(chapters[i].title || '') + '</span>';
+      el.innerHTML = '<span class="no">№ ' + dn + ' · ' + esc(chapters[i].title || '') + '</span>';
       var py = stripY(offsets[i]);
       el.style.top = py + 'px';
       strip.appendChild(el);

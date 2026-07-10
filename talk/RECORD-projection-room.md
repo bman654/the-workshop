@@ -124,10 +124,12 @@ or a dropped cue on playback, not a substitute for full re-derivation:
   in-content browser mock strips its own chrome on the word "record") → its own
   mini preflight replay → a hand doing three clicks → trim/confession → the OBS
   infinite mirror (this very take, passing its own test, on camera) → the end card.
-- **The banner briefly reads `5/7`** while p04b (same "The Clock Is the Voice"
-  title) plays, right after reading `4/7` for p04a — expected, not a glitch (CH4 is
-  one seamless chapter authored as two audio files/chapter entries; the counter
-  just reflects the underlying 7-entry chapter list).
+- **The banner holds steady at `4/6`** across the whole of CH4 — including the
+  crescendo gap between the two audio files (p04a → p04b). CH4 is one seamless
+  chapter authored as two audio entries so the crescendo can fall in true silence;
+  the deck now shows it as a single chapter (SB feedback r1 / T5.8), so the count
+  never flips mid-chapter. Later chapters read `5/6` (Draft) and `6/6` (Press
+  Record). If you ever see a `4/7`/`5/7` blip, something regressed.
 
 ## 6. Preflight red-lights (any red = do NOT record; fix it)
 
@@ -135,8 +137,9 @@ The gate shows six rows; all must be green (identical six checks CH1 replays liv
 as content later — `talk/showing.js` `preflightRecord()`):
 
 1. **Stage frame loaded** — the stage iframe has `load`ed + a 400 ms settle beat.
-2. **Audio buffered (readyState ≥ 2)** — every one of the 7 chapter tracks
-   (p01–p06, with p04a/p04b as two entries) probed and buffered.
+2. **Audio buffered (readyState ≥ 2)** — every one of the 7 audio tracks probed
+   and buffered (p01–p06, where CH4 = p04a + p04b, so seven files back the six
+   displayed chapters).
 3. **Reduce Motion off** — System Settings → Accessibility → Display → Reduce
    Motion must be off (the estate freezes under RM).
 4. **Estate unmuted** — `ws:pref:muted` ≠ `'1'` in this origin's localStorage.
@@ -161,6 +164,7 @@ narration or gaps to force it under 6:00.
 
 Serve the worktree root on **8827** → open `talk/projection-room.html?record` in OBS
 at **1920×1080 / 60 fps** → wait for **all six preflight rows green** → **one real
-click** → **2.2 s count-in** → unattended run through all 7 chapter entries to the
-held end card → let the score's tail ring out (~6:27.6–6:28.8) → trim IN at t=0,
+click** → **2.2 s count-in** → unattended run through all six displayed chapters
+(seven audio entries) to the held end card → let the score's tail ring out
+(~6:27.6–6:28.8) → trim IN at t=0,
 OUT at ~387.6–388.8 s → CRF 16–18 mkv, remux to mp4.

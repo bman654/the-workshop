@@ -109,6 +109,27 @@
   /* ── small helpers ───────────────────────────────────────────────────────── */
   function chapter(i) { return CHAPTERS[i]; }
   function cur() { return CHAPTERS[state.idx]; }
+  /* viewer-facing chapter accounting. A deck MAY collapse consecutive CHAPTERS
+     entries into ONE displayed chapter (e.g. a load-bearing audio split shown as
+     a single seamless chapter): an entry MAY carry `displayNum` (the number the
+     viewer sees) and `displayCont:true` (this entry is a CONTINUATION of the
+     prior displayed chapter — it gets no plate/button/number bump of its own).
+     Absent on every entry (showing/dev-showing) → each entry is its own chapter,
+     numbered idx+1 of CHAPTERS.length — byte-identical behavior. */
+  function chapDisplayNum(i) {
+    var ch = CHAPTERS[i];
+    return (ch && typeof ch.displayNum === 'number') ? ch.displayNum : (i + 1);
+  }
+  function chapDisplayTotal() {
+    var max = 0;
+    for (var i = 0; i < CHAPTERS.length; i++) { var d = chapDisplayNum(i); if (d > max) max = d; }
+    return max;
+  }
+  function chapGroupStart(i) {
+    var j = i;
+    while (j > 0 && CHAPTERS[j] && CHAPTERS[j].displayCont) j--;
+    return j;
+  }
   function durationMs(ch) {
     if (ch && ch.timing && typeof ch.timing.duration_ms === 'number') return ch.timing.duration_ms;
     if (ch && typeof ch.durationMs === 'number') return ch.durationMs;
@@ -431,7 +452,11 @@
       (state.usingAudio ? '' : ' · silent');
     els.play.textContent = state.playing && !state.holding ? '⏸' : '▶';
     var btns = els.chapters.querySelectorAll('button');
-    for (var i = 0; i < btns.length; i++) btns[i].setAttribute('aria-current', i === state.idx ? 'true' : 'false');
+    var curGroup = chapGroupStart(state.idx);
+    for (var i = 0; i < btns.length; i++) {
+      var cidx = +btns[i].getAttribute('data-cidx');
+      btns[i].setAttribute('aria-current', cidx === curGroup ? 'true' : 'false');
+    }
     if (!state.holding) {
       /* in live mode the ready-line carries the how-do-I-get-back hint (the cue
          log is hidden by default, so the hint must live in visible chrome) */
@@ -442,7 +467,7 @@
     els.addr.textContent = addr || '';
     if (els.recname) {
       var rc = cur();
-      els.recname.textContent = rc ? ((state.idx + 1) + '/' + CHAPTERS.length + '  ·  ' + rc.title) : '';
+      els.recname.textContent = rc ? (chapDisplayNum(state.idx) + '/' + chapDisplayTotal() + '  ·  ' + rc.title) : '';
     }
   }
 
@@ -896,12 +921,16 @@
     /* ?record: install the chrome-free recording surface + the arm gate */
     if (RECORD) { installRecordChrome(); injectRecordArmChrome(); }
 
-    /* chapter buttons */
+    /* chapter buttons — one per DISPLAYED chapter (continuation entries fold into
+       the prior chapter's button; the button stores its chapter index so the
+       aria-current highlight follows the whole display group, not button order) */
     for (var i = 0; i < CHAPTERS.length; i++) {
+      if (CHAPTERS[i] && CHAPTERS[i].displayCont) continue;
       (function (n) {
         var b = document.createElement('button');
         b.type = 'button';
-        b.textContent = (n + 1) + '. ' + CHAPTERS[n].title;
+        b.setAttribute('data-cidx', String(n));
+        b.textContent = chapDisplayNum(n) + '. ' + CHAPTERS[n].title;
         b.addEventListener('click', function () { enterChapter(n, 0); armPlay(); focusReclaim(); });
         els.chapters.appendChild(b);
       })(i);
