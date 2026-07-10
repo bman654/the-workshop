@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The hand, re-enacted — demo harness</title>
+<style>
+  /* ════════════════════════════════════════════════════════════════════════
+     Demo harness for PRHand (WS7 T4.1) — a dev-only committed page, like
+     rail-mock.html. Mounts the CH6 hand-on-mouse inset TWICE (inset scale +
+     small) and drives both from ONE demo clock so the three click animations
+     (start / arm / stop) can be triggered, sequenced, frozen and scrubbed.
+     render(clockMs) is pure, so the scrubber and ?freeze prove seek-safety.
+
+       ?seq=1        → preload the 3-click schedule: start@1000 arm@3200 stop@5600
+       ?freeze=<ms>  → pause the demo clock at exactly <ms> (deterministic shots)
+     ════════════════════════════════════════════════════════════════════════ */
+  * { box-sizing:border-box; }
+  html,body { margin:0; min-height:100%; background:#0d0b08; color:#cbb9a4;
+    font:15px/1.5 Georgia,'Times New Roman',serif; }
+  main { max-width:1240px; margin:0 auto; padding:34px 40px 60px; }
+  h1 { font:italic 500 26px Georgia,serif; color:#e8d9c2; margin:0 0 4px; }
+  .sub { color:#8a7c68; font-style:italic; margin:0 0 26px; }
+  .row { display:flex; gap:36px; align-items:flex-start; flex-wrap:wrap; }
+  .mountwrap { display:flex; flex-direction:column; gap:8px; }
+  .mlabel { font:12px ui-monospace,Menlo,monospace; color:#8a7c68; letter-spacing:.08em; }
+  #mount-big   { width:560px; aspect-ratio:4/3; }
+  #mount-small { width:240px; aspect-ratio:4/3; }
+  .panel { margin-top:30px; display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+  button { font:600 14px ui-monospace,Menlo,monospace; letter-spacing:.06em;
+    color:#e8d9c2; background:#1d1812; border:1px solid #4a3d2c; border-radius:6px;
+    padding:9px 18px; cursor:pointer; }
+  button:hover { background:#2a2218; border-color:#6b573c; }
+  button.kstart { border-color:#7a3530; } button.kstart:hover { background:#2e1917; }
+  button.karm   { border-color:#7a6230; } button.karm:hover   { background:#2c2415; }
+  button.kstop  { border-color:#3d5c72; } button.kstop:hover  { background:#17222b; }
+  .clock { font:13px ui-monospace,Menlo,monospace; color:#8a7c68; margin-left:auto; }
+  .scrub { margin-top:16px; display:flex; gap:14px; align-items:center; }
+  input[type=range] { flex:1; accent-color:#b98a4a; }
+  .sched { margin-top:10px; font:12px ui-monospace,Menlo,monospace; color:#6d6152; }
+</style>
+</head>
+<body>
+<main>
+  <h1>The hand, re-enacted</h1>
+  <p class="sub">PRHand demo harness — three clicks: start recording &middot; arm the film &middot; stop.
+    Pure <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px">render(clockMs)</span>:
+    pause and scrub to prove every pose is derived, never accumulated.</p>
+
+  <div class="row">
+    <div class="mountwrap">
+      <span class="mlabel">INSET SCALE (560px on this page &asymp; CH6 inset on 1080p)</span>
+      <div id="mount-big"></div>
+    </div>
+    <div class="mountwrap">
+      <span class="mlabel">SMALL (240px — legibility floor)</span>
+      <div id="mount-small"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <button class="kstart" id="b-start">click: START RECORDING</button>
+    <button class="karm"   id="b-arm">click: ARM THE FILM</button>
+    <button class="kstop"  id="b-stop">click: STOP</button>
+    <button id="b-seq">play the whole take</button>
+    <button id="b-pause">pause</button>
+    <button id="b-reset">reset</button>
+    <span class="clock" id="clock">t = 0 ms</span>
+  </div>
+  <div class="scrub">
+    <span class="mlabel">SCRUB</span>
+    <input type="range" id="scrub" min="0" max="8000" value="0" step="10">
+  </div>
+  <div class="sched" id="sched">schedule: (empty)</div>
+</main>
+
+<script src="hand.js"></script>
+<script>
+  /* one demo clock drives BOTH mounts — render(clockMs) is pure, so they agree */
+  var big   = PRHand.mount(document.getElementById('mount-big'));
+  var small = PRHand.mount(document.getElementById('mount-small'));
+
+  var clicks = [];
+  var t0 = performance.now();
+  var paused = false, pausedAt = 0;
+
+  var qs = new URLSearchParams(location.search);
+  if (qs.get('seq') === '1'){
+    clicks = [ {t:1000, kind:'start'}, {t:3200, kind:'arm'}, {t:5600, kind:'stop'} ];
+  }
+  if (qs.has('freeze')){ paused = true; pausedAt = +qs.get('freeze') || 0; }
+
+  function now(){ return paused ? pausedAt : (performance.now() - t0); }
+  function apply(){
+    big.setClicks(clicks); small.setClicks(clicks);
+    var sc = document.getElementById('sched');
+    sc.textContent = clicks.length
+      ? 'schedule: ' + clicks.map(function(c){ return c.kind + '@' + Math.round(c.t); }).join('  ')
+      : 'schedule: (empty)';
+  }
+  apply();
+
+  function addClick(kind, inMs){
+    clicks.push({ t: now() + inMs, kind: kind });
+    clicks.sort(function(a,b){ return a.t - b.t; });
+    apply();
+  }
+  document.getElementById('b-start').onclick = function(){ addClick('start', 800); };
+  document.getElementById('b-arm').onclick   = function(){ addClick('arm',   800); };
+  document.getElementById('b-stop').onclick  = function(){ addClick('stop',  400); };
+  document.getElementById('b-seq').onclick   = function(){
+    var base = now();
+    clicks = [ {t:base+1000, kind:'start'}, {t:base+3200, kind:'arm'}, {t:base+5600, kind:'stop'} ];
+    apply();
+  };
+  document.getElementById('b-reset').onclick = function(){
+    clicks = []; t0 = performance.now(); pausedAt = 0; apply();
+  };
+  document.getElementById('b-pause').onclick = function(){
+    if (paused){ t0 = performance.now() - pausedAt; paused = false; this.textContent = 'pause'; }
+    else { pausedAt = now(); paused = true; this.textContent = 'resume'; }
+  };
+  document.getElementById('scrub').oninput = function(){
+    pausedAt = +this.value; paused = true;
+    document.getElementById('b-pause').textContent = 'resume';
+  };
+
+  (function loop(){
+    var t = now();
+    big.render(t); small.render(t);
+    document.getElementById('clock').textContent = 't = ' + Math.round(t) + ' ms';
+    var sc = document.getElementById('scrub');
+    if (!paused && t <= +sc.max) sc.value = t;
+    requestAnimationFrame(loop);
+  })();
+</script>
+</body>
+</html>
