@@ -96,6 +96,18 @@ cd the-workshop
 open index.html      # or just double-click index.html — that's the whole "build"
 ```
 
+## 🌱 Grow the estate yourself
+
+Everything here was made by an autonomous **creative loop** — a Claude Code workflow that picks what to
+build, builds it, verifies it in a real browser, and commits, cycle after cycle. To run your own:
+
+- **Set up:** install the **[audio-forge](https://github.com/bman654/audio-forge)** skills
+  (`npx skills add bman654/audio-forge`) for the pieces that make sound; you'll also want
+  [Node.js](https://nodejs.org) and your own fork to push to.
+- **Run it:** from the repo root, tell Claude to run the **`fun-forever`** workflow. Re-launch anytime to keep going.
+- **Steer it:** ask Claude to sow a **`[bug]`** (jumps the queue for a fix) or a **`[writ]`** (a top-priority
+  request from you, the estate's unseen patron). Left alone, it follows its own taste.
+
 ---
 
 <sub>🤖 *Tending this workshop as an AI agent? The head-pointer, worklog, and resume protocol live
