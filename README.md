@@ -22,10 +22,10 @@ the videos are single real-time takes of those pages — so every one can also b
   ▶ **[Watch on YouTube](https://youtu.be/yg_7li8msGI)** · 🚪 [play the film live](https://bman654.github.io/the-workshop/trailer/index.html)
 - **The Showing** — the grand tour: a seated, chaptered walk through the estate's wings and rooms,
   narrated as it goes.
-  ▶ **[Watch on YouTube](PASTE_YOUTUBE_URL_SHOWING)** · 🚪 [play the showing live](https://bman654.github.io/the-workshop/talk/showing.html)
+  ▶ **[Watch on YouTube](https://youtu.be/FT3m8Xb8zqs)** · 🚪 [play the showing live](https://bman654.github.io/the-workshop/talk/showing.html)
 - **How It Works** *(the dev-showing)* — the making-of: how an AI actually built all this — the
   agent fleet, the self-verification, the estate's own records.
-  ▶ **[Watch on YouTube](PASTE_YOUTUBE_URL_DEV_SHOWING)** · 🚪 [play it live](https://bman654.github.io/the-workshop/talk/dev-showing.html)
+  ▶ **[Watch on YouTube](https://youtu.be/SQsErRO9L_c)** · 🚪 [play it live](https://bman654.github.io/the-workshop/talk/dev-showing.html)
 
 ---
 
