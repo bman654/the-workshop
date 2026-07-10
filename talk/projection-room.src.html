@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Projection Room — The Orrery Estate</title>
+<style>
+  :root{
+    --bg:#07090e; --ink:#eaf0fa; --muted:#8b95a8; --gold:#d9b168; --brass:#c8a34e;
+    --panel:#0d1017; --line:rgba(255,255,255,.12); --lit:#fff5df;
+    --strip-h:96px;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif; -webkit-font-smoothing:antialiased;
+    overflow:hidden; }
+
+  /* ── the stage: a same-origin iframe that never navigates the parent ─────── */
+  #stage{ position:fixed; inset:0 0 var(--strip-h) 0; background:#000;
+    display:flex; align-items:center; justify-content:center; }
+  #frame{ width:100%; height:100%; border:0; background:#000;
+    transition:filter .5s ease, opacity .5s ease; }
+  #frame.holding{ filter:saturate(.85) brightness(.9); }
+
+  /* ── the word-lit caption band: ONE line at a time (a subtitle, not a wall).
+     The viewport is ~2 lines tall so the outgoing line can bump UP and fade
+     while the new line takes the base slot; overflow stays hidden. ─────────── */
+  #captions{ position:fixed; left:0; right:0; bottom:calc(var(--strip-h) + 18px);
+    margin:0 auto; max-width:min(1100px,92vw); height:3.4em; padding:0 22px; z-index:5;
+    text-align:center; font-family:Georgia,"Times New Roman",serif; font-size:clamp(19px,2.5vw,30px);
+    line-height:1.5; color:#c3cbda; text-shadow:0 2px 18px rgba(0,0,0,.8);
+    pointer-events:none; overflow:hidden; }
+  #captions .cap-line{ position:absolute; left:22px; right:22px; bottom:0;
+    transition:transform .5s ease, opacity .5s ease; }
+  #captions .cap-line.out{ transform:translateY(-1.55em); opacity:0; }
+  #captions .cap-w{ color:#8791a6; transition:color .16s ease, text-shadow .3s ease; }
+  #captions .cap-w.on{ color:var(--lit); text-shadow:0 0 16px rgba(217,177,104,.45); }
+  /* ── the hush fade (WS4 T8.9): during a baked TRUE-silence hush the whole caption
+     band dissolves — karaoke words must never sit frozen over a silent stage. The
+     deck-own hush watcher (end of body) derives the window from the chapter's OWN
+     sidecar word gap and toggles this class. ─────────────────────────────────── */
+  #captions{ transition:opacity .45s ease; }
+  #captions.hush{ opacity:0; }
+
+  /* ── the RM preflight banner (talk-day hazard, DESIGN §10) ───────────────── */
+  #rmbanner{ position:fixed; left:0; right:0; bottom:var(--strip-h); z-index:8;
+    background:#7a1420; color:#fff; font:600 13px/1.4 ui-monospace,Menlo,monospace;
+    letter-spacing:.02em; padding:8px 16px; text-align:center;
+    border-top:1px solid rgba(255,255,255,.25); }
+  #rmbanner[hidden]{ display:none; }
+
+  /* ── the operator strip: always-visible CLICKABLE panic buttons in the parent ─ */
+  #strip{ position:fixed; left:0; right:0; bottom:0; height:var(--strip-h); z-index:9;
+    background:linear-gradient(180deg,#0f131b,#080a0f); border-top:1px solid var(--line);
+    display:grid; grid-template-columns:auto auto 1fr auto auto; align-items:center;
+    gap:16px; padding:10px 18px; }
+  #strip .grp{ display:flex; align-items:center; gap:8px; }
+  #strip button{ font:600 13px/1 ui-monospace,Menlo,monospace; color:var(--ink);
+    background:#161b25; border:1px solid var(--line); border-radius:7px;
+    padding:9px 12px; cursor:pointer; letter-spacing:.02em; }
+  #strip button:hover{ border-color:var(--brass); color:var(--lit); }
+  #strip button[aria-current="true"]{ border-color:var(--brass); color:var(--gold);
+    background:#1d2431; }
+  #btn-live{ color:#ffd7a0; } #btn-rearm{ color:#a8d8c0; }
+  #timeline{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+  #timeline .clockrow{ display:flex; align-items:center; gap:10px;
+    font:600 12px/1 ui-monospace,Menlo,monospace; color:var(--muted); }
+  #scrub{ width:100%; accent-color:var(--brass); cursor:pointer; }
+  #chapters{ display:flex; gap:6px; overflow-x:auto; max-width:34vw; }
+  #chapters button{ white-space:nowrap; font-size:11px; padding:7px 9px; }
+  #meta{ display:flex; flex-direction:column; align-items:flex-end; gap:4px;
+    font:600 11px/1.3 ui-monospace,Menlo,monospace; color:var(--muted); min-width:180px; }
+  #mode{ color:var(--gold); }
+  #ready{ color:#a8d8c0; font-style:normal; }
+  #addr{ color:var(--muted); }
+  #cuelog{ position:fixed; right:18px; bottom:calc(var(--strip-h) + 12px); z-index:6;
+    width:min(340px,40vw); max-height:150px; overflow-y:auto; text-align:right;
+    font:500 11px/1.5 ui-monospace,Menlo,monospace; color:var(--muted);
+    pointer-events:none; opacity:.72; }
+  #cuelog[hidden]{ display:none; } /* hidden by default — an opt-in dry-run aid, not stage chrome */
+  #cuelog .cue-line{ text-shadow:0 1px 6px #000; }
+  #btn-log[aria-pressed="true"]{ border-color:var(--brass); color:var(--gold); }
+
+  /* quiet scrollbars — the default chrome bars are jarring against the ink */
+  #chapters, #cuelog{ scrollbar-width:thin; scrollbar-color:rgba(200,163,78,.28) transparent; }
+  #chapters::-webkit-scrollbar, #cuelog::-webkit-scrollbar{ height:7px; width:7px; }
+  #chapters::-webkit-scrollbar-track, #cuelog::-webkit-scrollbar-track{ background:transparent; }
+  #chapters::-webkit-scrollbar-thumb, #cuelog::-webkit-scrollbar-thumb{
+    background:rgba(200,163,78,.28); border-radius:4px; }
+  #chapters::-webkit-scrollbar-thumb:hover, #cuelog::-webkit-scrollbar-thumb:hover{
+    background:rgba(200,163,78,.5); }
+
+  /* ── deck cards: durable stage overlays driven by deck.card STATE cues ────── */
+  #card{ position:fixed; z-index:7; left:50%; transform:translateX(-50%);
+    bottom:calc(var(--strip-h) + 150px); width:min(780px,70vw);
+    background:linear-gradient(180deg,#10141d,#0b0e15); border:1px solid var(--brass);
+    border-radius:10px; box-shadow:0 18px 60px rgba(0,0,0,.65); padding:14px 16px 12px;
+    pointer-events:none; animation:cardIn .5s ease; }
+  #card[hidden]{ display:none; }
+  @keyframes cardIn{ from{ opacity:0; transform:translateX(-50%) translateY(14px);} to{ opacity:1; transform:translateX(-50%) translateY(0);} }
+  #card .card-kick{ font:600 10.5px/1 ui-monospace,Menlo,monospace; letter-spacing:.24em;
+    text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+  #card .card-stage{ position:relative; }
+  #card .card-stage img{ display:block; width:100%; height:auto; border-radius:4px; }
+  #card .card-stage svg{ position:absolute; inset:0; width:100%; height:100%; }
+  #card .card-foot{ display:flex; justify-content:space-between; align-items:center; gap:12px;
+    margin-top:9px; font:italic 13px/1.4 Georgia,serif; color:#bcae8a; }
+  #card .card-cmd{ font:600 12px/1 ui-monospace,Menlo,monospace; color:var(--gold);
+    background:#161b25; border:1px solid var(--line); border-radius:6px; padding:7px 10px;
+    white-space:nowrap; }
+
+  /* ── text cards (WS4 T6.5): quotation / commit-subject / code plates ───────── */
+  #card{ max-height:86vh; overflow:auto; }            /* keep a tall plate on-screen */
+  #card .card-title{ font:500 21px/1.25 Georgia,serif; color:var(--lit); margin:2px 0 3px; }
+  #card .card-lede{ font:italic 13.5px/1.5 Georgia,serif; color:#bcae8a; margin:0 0 10px; }
+  #card .card-src{ font:600 11px/1.4 ui-monospace,Menlo,monospace; letter-spacing:.04em;
+    color:var(--gold); margin-bottom:9px; }
+  #card .card-panels{ display:grid; gap:10px; margin-top:2px; }
+  #card .card-panel{ background:#0d111a; border:1px solid var(--line); border-left:3px solid var(--brass);
+    border-radius:7px; padding:9px 12px; }
+  #card .card-panel h4{ font:600 10px/1 ui-monospace,Menlo,monospace; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--muted); margin:0 0 6px; }
+  #card .quote{ font:400 13.5px/1.5 Georgia,serif; color:var(--ink); margin:0; }
+  #card .quote .elide{ color:var(--muted); font-weight:600; padding:0 .18em; letter-spacing:.05em; }
+  #card .quote .tips{ display:block; margin-top:7px; color:var(--gold); font-weight:600; }
+  #card .quote .tips em{ color:var(--muted); font-weight:600; font-style:normal;
+    font-family:ui-monospace,Menlo,monospace; font-size:11px; letter-spacing:.08em; }
+  #card .subj{ display:block; font:500 12.5px/1.5 ui-monospace,Menlo,monospace; color:#d8dbe6;
+    background:#0d111a; border:1px solid var(--line); border-left:3px solid var(--gold);
+    border-radius:6px; padding:8px 11px; margin:0; }
+  #card .subj .sha{ color:var(--gold); }
+  #card ol.card-steps{ margin:2px 0 0; padding-left:20px; }
+  #card ol.card-steps li{ margin-bottom:9px; }
+  #card ol.card-steps li:last-child{ margin-bottom:0; }
+  #card ol.card-steps .step{ font:400 13px/1.45 Georgia,serif; color:var(--ink); }
+  #card ol.card-steps .step b{ color:var(--lit); }
+  #card ol.card-steps .eg{ display:block; margin-top:2px; font:italic 12px/1.4 Georgia,serif;
+    color:#9aa; }
+  #card .crit{ margin-bottom:8px; }
+  #card .crit:last-child{ margin-bottom:0; }
+  #card .card-gauge{ font:500 11.5px/1.55 ui-monospace,Menlo,monospace; color:#cfe6d4;
+    background:#0b0e15; border:1px solid var(--line); border-radius:7px; padding:10px 12px;
+    white-space:pre; overflow-x:auto; margin:2px 0 0; }
+  #card .card-code{ font:500 12px/1.55 ui-monospace,Menlo,monospace; color:#e5c98a;
+    background:#0b0e15; border:1px solid var(--line); border-radius:7px; padding:10px 12px;
+    white-space:pre-wrap; overflow-x:auto; margin:8px 0 0; }
+  #card .card-cap{ font:italic 12.5px/1.5 Georgia,serif; color:#a7a596; margin-top:9px; }
+  #card .card-attr{ font:italic 12.5px/1.45 Georgia,serif; color:#bcae8a; margin-top:9px; }
+  #card .card-attr .skill{ font-family:ui-monospace,Menlo,monospace; font-style:normal;
+    color:var(--gold); font-size:11.5px; }
+  #card .bigquote{ font:400 19px/1.4 Georgia,serif; color:var(--lit); margin:4px 0 0;
+    padding-left:14px; border-left:3px solid var(--brass); }
+  #card .loopwrap{ margin-top:4px; }
+  #card .loop{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:0; }
+  #card .node{ background:#0d111a; border:1px solid var(--brass); border-radius:9px;
+    padding:11px 13px; text-align:center; }
+  #card .node .nm{ font:600 13px/1.2 ui-monospace,Menlo,monospace; color:var(--lit);
+    letter-spacing:.03em; }
+  #card .node .sub{ display:block; margin-top:4px; font:italic 11.5px/1.35 Georgia,serif;
+    color:#9aa; }
+  #card .loop .arrows{ display:flex; flex-direction:column; align-items:center; gap:3px;
+    padding:0 8px; min-width:150px; }
+  #card .loop .arrows .lbl{ font:600 9.5px/1.2 ui-monospace,Menlo,monospace; letter-spacing:.04em;
+    color:var(--muted); text-align:center; text-transform:uppercase; }
+  #card .loop .arrows .fwd{ color:var(--gold); font-size:15px; letter-spacing:-1px; }
+  #card .loop .arrows .rev{ color:#8b95a8; font-size:15px; letter-spacing:-1px; }
+  #card .loop-rail{ margin-top:9px; display:flex; gap:10px; flex-wrap:wrap; }
+  #card .loop-rail .rail{ flex:1 1 200px; background:#0b0e15; border:1px solid var(--line);
+    border-radius:7px; padding:8px 11px; font:400 11.5px/1.4 Georgia,serif; color:#bcae8a; }
+  #card .loop-rail .rail b{ color:var(--lit); font-family:ui-monospace,Menlo,monospace;
+    font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; display:block; margin-bottom:3px; }
+
+  /* ── the start gate: one unlock gesture blesses the audio element (DESIGN §10) ─ */
+  #gate{ position:fixed; inset:0; z-index:20; background:
+    radial-gradient(900px 560px at 50% 22%, rgba(120,110,180,.16), transparent 60%), var(--bg);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;
+    padding:32px; text-align:center; }
+  #gate[hidden]{ display:none; }
+  #gate .kick{ font:600 12px/1 ui-monospace,Menlo,monospace; letter-spacing:.34em;
+    text-transform:uppercase; color:var(--muted); }
+  #gate h1{ font-family:Georgia,serif; font-weight:500; font-size:clamp(40px,7vw,72px);
+    margin:.1em 0; background:linear-gradient(180deg,#fff,#c6c9d6); -webkit-background-clip:text;
+    background-clip:text; color:transparent; }
+  #gate .sub{ color:var(--muted); font-style:italic; font-family:Georgia,serif;
+    max-width:520px; font-size:17px; line-height:1.55; }
+  #gate .acts{ display:flex; gap:14px; flex-wrap:wrap; justify-content:center; margin-top:10px; }
+  #gate button{ font:600 15px/1 ui-monospace,Menlo,monospace; letter-spacing:.03em;
+    color:var(--ink); background:#161b25; border:1px solid var(--brass); border-radius:9px;
+    padding:14px 22px; cursor:pointer; }
+  #gate button:hover{ background:#1d2431; color:var(--lit); }
+  #gate #gate-resume{ border-color:#a8d8c0; color:#c8f0dd; }
+  #gate[hidden] + *{}
+
+  #focussink{ position:fixed; width:1px; height:1px; opacity:0; pointer-events:none; }
+
+  @media (max-width:640px){
+    :root{ --strip-h:132px; }
+    #strip{ grid-template-columns:1fr 1fr; grid-auto-rows:auto; }
+    #chapters{ max-width:none; grid-column:1 / -1; }
+    #cuelog{ display:none; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    #frame, #captions, #captions .cap-w, #captions .cap-line{ transition:none; }
+    #card{ animation:none; }
+  }
+</style>
+</head>
+<body data-preflight data-rail>
+
+<div id="stage">
+  <iframe id="frame" title="The Projection Room — stage" referrerpolicy="no-referrer" allow="autoplay"></iframe>
+</div>
+
+<div id="captions" aria-live="polite" aria-atomic="false"></div>
+
+<div id="rmbanner" role="alert" hidden></div>
+
+<div id="cuelog" aria-hidden="true" hidden></div>
+
+<div id="card" hidden></div>
+
+<div id="strip" role="group" aria-label="Projection Room operator controls">
+  <div class="grp transport">
+    <button id="btn-play" type="button" aria-label="play or pause">▶</button>
+    <button id="btn-prev" type="button" aria-label="previous chapter">⏮</button>
+    <button id="btn-next" type="button" aria-label="next chapter">⏭</button>
+    <button id="btn-restart" type="button" aria-label="restart this chapter">↻</button>
+  </div>
+  <div class="grp modes">
+    <button id="btn-live" type="button"
+      title="pause the narration and hand the stage to the presenter — click into the frame and drive the page by hand">GO-LIVE</button>
+    <button id="btn-rearm" type="button"
+      title="take the stage back from a GO-LIVE and resume scheduled playback">RE-ARM</button>
+    <button id="btn-log" type="button" aria-pressed="false"
+      title="show or hide the cue log (a dry-run aid: every cue and stage note as it fires)">LOG</button>
+  </div>
+  <div id="timeline">
+    <input id="scrub" type="range" min="0" max="1000" value="0" step="1" aria-label="seek within chapter">
+    <div class="clockrow"><span id="clock">0:00</span><span>/</span><span id="dur">0:00</span>
+      <span id="chapters" aria-label="chapters"></span></div>
+  </div>
+  <div id="meta">
+    <span id="mode">scheduled</span>
+    <span id="ready"></span>
+    <span id="addr"></span>
+  </div>
+</div>
+
+<div id="focussink" tabindex="-1"></div>
+
+<div id="gate">
+  <div class="kick">The Orrery Estate</div>
+  <h1>The Projection Room</h1>
+  <p class="sub">A making-of: how the estate's films are made — built on the very machinery it describes, so it can demonstrate itself while it explains itself.</p>
+  <div class="acts">
+    <button id="gate-resume" type="button" hidden>▸ resume</button>
+    <button id="gate-begin" type="button">▶ begin</button>
+    <button id="gate-read" type="button">▸ read it silently</button>
+  </div>
+</div>
+
+<!-- one persistent audio element: its src is swapped per chapter, blessed once by
+     the unlock click so per-element autoplay rules never re-bite (DESIGN §10). Each
+     chapter's audio + timing are folded in via the forge:asset / forge:json directives
+     on the SHOWING_CHAPTERS entries above (p01…p06, rendered at T2.2). -->
+<audio id="voice" preload="none"></audio>
+
+<script>
+<!-- forge:include ../tools/ws/ws.js -->
+</script>
+
+<script>
+<!-- forge:include cue-engine.js -->
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   PROJECTION_ROOM CHAPTERS — the film-4 ("The Projection Room") cue sheet, SKELETON
+   (WS7 T1.4). Seven chapter entries p01…p06 (p04a + p04b are the two halves of CH4,
+   presented as one seamless chapter — the dev-showing d07a/b precedent; here they are
+   two entries that auto-advance into each other, the real-silence crescendo gap
+   between them owned by T3.4 / T4.2's bed manifest).
+
+   This is the option-A deck: it reuses the shared cue-engine.js + showing.js + the
+   SHOWING_* globals AS-IS (invariant 9), inheriting karaoke captions, chapter
+   auto-advance, ?record, the ported preflight (this page sets data-preflight so CH1
+   can re-run the panel LIVE — T1.1) and the Score Rail (this page sets data-rail,
+   SPEC default-ON — T1.3). Its own HTML page, so the SHOWING_* globals never coexist
+   with the other two decks.
+
+   SKELETON SCOPE (T1.4): every chapter carries its rendered audio + timing sidecar
+   (forge:asset / forge:json, from T2.2) and OPENS on a REAL, loadable estate page;
+   the cue sheets are MINIMAL — one t:0 opening note per chapter. The bespoke stage
+   pages (CH1 live preflight panel; CH2 inception panel + lever; CH3 sunset hook +
+   byte ruler; CH4 timing self-viewer + choice re-enactment; CH5 storyboard wall;
+   CH6 ?record beat + hand inset) and every word-pinned cue are layered on by
+   T3.1…T3.6. p05 rides the PROVISIONAL draft render (T2.2, "draft three.") and is
+   re-pinned at T5.2.
+
+   Use BLOCK comments only in this region (the HTML-comment-in-script forge landmine);
+   no multi-line <!-- --> may land inside a forged <script>. */
+window.SHOWING_CHAPTERS = [
+  { id:'p01', title:'THE TAKE',
+    audio: '<!-- forge:asset script/p01.mp3 -->',
+    opening:{ frame:'../the-aquarium/index.html' },
+    timing: <!-- forge:json script/p01.json -->,
+    /* ⟦stage⟧ (p01 · THE TAKE — T3.1): opens on the live preflight panel re-run as
+       chapter content (Option B, the T1.1 component), the six rows flipping green to
+       the narration, then a hard frame-cut to a live estate room on "live web page".
+       SKELETON: opens straight on a live room; cues minimal. */
+    cues:[ { t:0, note:'p01 · THE TAKE — skeleton stub; live preflight panel + word-pinned cues land at T3.1' } ] },
+  { id:'p02', title:'ONE PAGE, MANY ROOMS',
+    audio: '<!-- forge:asset script/p02.mp3 -->',
+    opening:{ frame:'../the-aquarium/index.html' },
+    timing: <!-- forge:json script/p02.json -->,
+    /* ⟦stage⟧ (p02 · ONE PAGE, MANY ROOMS — T3.2): the inception panel — LEFT this
+       chapter's own cue rows lighting as they fire, RIGHT the framed room; "frame the
+       aquarium" / "pull a lever" / the "Now." frame-cut. SKELETON: opens on the
+       aquarium; cues minimal. */
+    cues:[ { t:0, note:'p02 · ONE PAGE, MANY ROOMS — skeleton stub; inception panel + cues land at T3.2' } ] },
+  { id:'p03', title:'FIFTY-SEVEN BYTES',
+    audio: '<!-- forge:asset script/p03.mp3 -->',
+    opening:{ frame:'../why-the-sky-is-blue/index.html' },
+    timing: <!-- forge:json script/p03.json -->,
+    /* ⟦stage⟧ (p03 · FIFTY-SEVEN BYTES — T3.3): why-the-sky-is-blue framed throughout;
+       its real sunset hook fired on the word "reach"; the 57-byte hook plate with a
+       byte ruler. SKELETON: opens on the room; cues minimal. */
+    cues:[ { t:0, note:'p03 · FIFTY-SEVEN BYTES — skeleton stub; sunset hook + byte-ruler plate land at T3.3' } ] },
+  { id:'p04a', title:'THE CLOCK IS THE VOICE',
+    audio: '<!-- forge:asset script/p04a.mp3 -->',
+    opening:{ frame:'../strata/index.html' },
+    timing: <!-- forge:json script/p04a.json -->,
+    /* ⟦stage⟧ (p04a · THE CLOCK IS THE VOICE — T3.4): the timing-sidecar self-viewer;
+       the docks s=22106 → t:22.106 plate; the choice scene re-enacted BROKEN then FIXED
+       (T0.3's talk/stage/choice-replay.html); the eight-files plate. p04a ends on "here
+       comes a crescendo" — a real-silence gap, then p04b. SKELETON: opens on strata;
+       cues minimal; the crescendo gap window is recorded for T4.2's bed at T3.4. */
+    cues:[ { t:0, note:'p04a · THE CLOCK IS THE VOICE — skeleton stub; self-viewer + choice re-enactment land at T3.4' } ] },
+  { id:'p04b', title:'THE CLOCK IS THE VOICE',
+    audio: '<!-- forge:asset script/p04b.mp3 -->',
+    opening:{ frame:'../strata/index.html' },
+    timing: <!-- forge:json script/p04b.json -->,
+    /* ⟦stage⟧ (p04b · THE CLOCK IS THE VOICE, cont. — T3.4): resumes after the crescendo
+       gap with "Right on cue." Presented seamlessly with p04a. SKELETON: opens on strata;
+       cues minimal. */
+    cues:[ { t:0, note:'p04b · THE CLOCK IS THE VOICE (cont.) — skeleton stub; T3.4' } ] },
+  { id:'p05', title:'DRAFT',
+    audio: '<!-- forge:asset script/p05.mp3 -->',
+    opening:{ frame:'../strata/index.html' },
+    timing: <!-- forge:json script/p05.json -->,
+    /* ⟦stage⟧ (p05 · DRAFT ⟨N⟩ — T3.5): the bespoke storyboard-wall stage page (cards
+       land, strike-throughs, arrows); Plate 1 the seed text; Plate 2 the critique crops;
+       Plate 3 a real audio-lens spectrogram. Rides the PROVISIONAL draft render (T2.2,
+       "draft three."); the true count + re-render + re-pin land at T5.2. SKELETON: opens
+       on strata; cues minimal. */
+    cues:[ { t:0, note:'p05 · DRAFT — skeleton stub on the PROVISIONAL draft render (T2.2); storyboard wall at T3.5, final count at T5.2' } ] },
+  { id:'p06', title:'PRESS RECORD',
+    audio: '<!-- forge:asset script/p06.mp3 -->',
+    opening:{ frame:'../index.html' },
+    timing: <!-- forge:json script/p06.json -->,
+    /* ⟦stage⟧ (p06 · PRESS RECORD — T3.6): the ?record transformation beat; the T4.1 hand
+       inset (three clicks); the OBS-style mirror; the trim beat; the end card (title +
+       bman654.github.io/the-workshop). SKELETON: opens on the estate front door — "every
+       page is a door"; cues minimal. */
+    cues:[ { t:0, note:'p06 · PRESS RECORD — skeleton stub; ?record beat + hand inset land at T3.6' } ] }
+];
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SHOWING_FRAME_MANIFEST — the per-frame determinism-and-motion manifest. showing.js
+   does NOT read this at runtime; a rehearsal gate does. SKELETON (WS7 T1.4): the
+   frames below are the placeholder estate rooms the deck opens on for the skeleton —
+   the real per-chapter stage pages (choice-replay.html, the storyboard wall, the
+   timing self-viewer, the ?record beat) are built by T3.1…T3.6 and this manifest is
+   re-keyed then. Every URL here is opened by some chapter; all are marked 'tolerant'
+   because the skeleton's minimal cues name no rolled state (the narration survives any
+   roll). BLOCK comments only in this forged region. */
+window.SHOWING_FRAME_MANIFEST = {
+  frames: {
+    '../the-aquarium/index.html':
+      { class:'calm', disposition:'tolerant', chapters:['p01','p02'],
+        note:'SKELETON stub frame (T1.4) — a live estate room; no p01/p02 cue names a state. T3.1/T3.2 finalize the CH1 live-preflight open and the CH2 inception panel + lever.' },
+    '../why-the-sky-is-blue/index.html':
+      { class:'calm', disposition:'tolerant', chapters:['p03'],
+        note:'SKELETON stub frame (T1.4) — CH3 will frame this room throughout and fire its real sunset hook on the word "reach" (T3.3).' },
+    '../strata/index.html':
+      { class:'deterministic', disposition:'tolerant', chapters:['p04a','p04b','p05'],
+        note:'SKELETON stub frame (T1.4) — pure-from-carrier. CH4/CH5 replace it with bespoke stage pages (the timing self-viewer + choice-replay.html at T3.4; the storyboard wall at T3.5).' },
+    '../index.html':
+      { class:'calm', disposition:'tolerant', chapters:['p06'],
+        note:'SKELETON stub frame (T1.4) — the estate front door ("every page is a door"). CH6 replaces it with the ?record transformation + hand inset (T3.6).' }
+  },
+  /* Every page the skeleton frames is keyed above; no deliberately-unframed sibling. */
+  notFramed: []
+};
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SHOWING_CARDS — deck-card registry. EMPTY in the SKELETON (WS7 T1.4): no chapter
+   raises a deck.card cue yet. The per-chapter plates (the 57-byte hook, the
+   eight-files plate, the storyboard-wall plates, the end card) are authored into
+   their chapters by T3.1…T3.6. Block comments only in this forged block. */
+window.SHOWING_CARDS = {};
+</script>
+
+<script>
+<!-- forge:include showing.js -->
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   THE SCORE RAIL (WS7 T1.3, deck-own — ZERO showing.js edits, same discipline as
+   the Hush Watcher below). A Victorian player-piano programme roll down the left
+   margin: the film's full cue sheet punched into paper that travels past a fixed
+   brass play-line and flares as each cue crosses, driven purely by the master
+   clock on window.__showing.state. Gated OFF by default (opt-in via a data-rail
+   attribute or ?rail=1); with neither, the module returns immediately and this
+   deck is behaviourally identical. Here it is ACTIVE by default — this film sets data-rail (the SPEC default-ON
+   experiment, judged at run-through). Block comments only (the forge landmine). */
+</script>
+
+<script>
+<!-- forge:include showing-rail.js -->
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   THE GRAND TOUR DOCENT — this page is NOT a tour stop (the deck frames stops, it
+   is not one), so no tour include here. Left intentionally: The Projection Room is its
+   own surface (DESIGN §10), like the sibling showing/dev-showing decks. */
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   THE HUSH WATCHER (WS4 T8.9, deck-own — ZERO Book-1 edits, invariant 9). During
+   a baked TRUE-silence hush (d07: part 1 | 5 s silence | part 2) the karaoke
+   caption band must GO AWAY — Brandon's SP-C follow-up: frozen words over a
+   silent stage read as a hang. showing.js keeps the last line mounted (its
+   contract: a line persists until the next line's window opens), so the deck
+   dissolves the WHOLE band via #captions.hush instead of touching Book 1.
+
+   Deterministic + carrier-pure (invariant 7): the hush windows derive ONLY from
+   the chapter's committed timing sidecar — any gap ≥ HUSH_MIN between consecutive
+   word items. (Note: this INTRA-chapter watcher does not span CH4's crescendo
+   silence, which lives BETWEEN the p04a/p04b chapters — T3.4 owns that gap's look.) Pure function of
+   (sidecar, clockMs): seeks, scrubs, and re-entries all converge; no Date.*, no
+   Math.random — the same rAF discipline as showing.js.
+
+   Window edges: the fade starts PAD_IN after the last word's `e` (the closing
+   words get their read-out beat) and the class lifts exactly AT the next word's
+   `s` — the 0.45 s CSS fade-in then rises WITH part 2's first line, so the words
+   that reappear are the new ones, never the frozen old line. Block comments only
+   in this forged script (the forge landmine). */
+(function () {
+  'use strict';
+  var HUSH_MIN = 3000;   /* ms — only a real baked hush qualifies, never speech pauses */
+  var PAD_IN = 450;      /* ms after the last word ends before the band dissolves */
+  var cache = {};        /* chapter id → [{a,b}] hush windows, derived once */
+  function windowsFor(ch) {
+    if (!ch || !ch.timing || !ch.timing.items) return [];
+    if (cache[ch.id]) return cache[ch.id];
+    var items = ch.timing.items, ws = [], out = [], i;
+    for (i = 0; i < items.length; i++) {
+      if (items[i] && items[i].type === 'word') ws.push(items[i]);
+    }
+    for (i = 1; i < ws.length; i++) {
+      if (ws[i].s - ws[i - 1].e >= HUSH_MIN) out.push({ a: ws[i - 1].e + PAD_IN, b: ws[i].s });
+    }
+    cache[ch.id] = out;
+    return out;
+  }
+  function tick() {
+    requestAnimationFrame(tick);
+    var S = window.__showing;
+    var cap = document.getElementById('captions');
+    if (!S || !S.state || !cap) return;
+    var ch = S.chapters[S.state.idx];
+    var wins = windowsFor(ch), ms = S.state.clockMs, hush = false;
+    for (var i = 0; i < wins.length; i++) {
+      if (ms >= wins[i].a && ms < wins[i].b) { hush = true; break; }
+    }
+    cap.classList.toggle('hush', hush);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
