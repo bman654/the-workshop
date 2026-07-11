@@ -2694,33 +2694,58 @@ window.SHOWING_CARDS = {};
 </script>
 
 <script>
-/* ── THE BED FOLLOWER (T4.2) — the score takes the voice's clock ─────────────
+/* ── THE BED FOLLOWER (T4.2, continuity-hardened T5.13) — the score takes the
+   voice's clock, and NEVER stops between the first frame and the last ─────────
    The #bed <audio> is one continuous track composed on the WALL clock:
    wallStart(chapter i) = sum of prior chapter durations + i × 2000 ms (the
    showing.js auto-advance hold). Durations come from the SAME inlined timing
    sidecars the cue lock froze, so the deck and the bed can never disagree.
 
+   T5.13 root fix (SB r2): Brandon heard the bed re-seek at every chapter seam —
+   worst, the CH4 crescendo's last note REPEATED at p04b, and a CH5→CH6 note
+   popped. Cause: the old follower HARD-SET bed.currentTime on every boundary,
+   which forces the media element to re-seek (an MP3 seek snaps to a frame
+   boundary → a click or a replayed sliver). But the track was already composed
+   on the wall timeline WITH the 2000 ms gaps baked in, so it needs no boundary
+   seek at all. The follower now FREE-RUNS the bed straight through the composed
+   inter-chapter gaps and keeps it in step WITHOUT ever seeking during play:
+
+     • small drift (> ~40 ms, e.g. what a chapter gap's free-run picks up) is
+       closed by a gentle ±1.5 % playbackRate SLEW — the bed eases back onto the
+       clock over a couple of seconds, no seek, no click, an inaudible tempo
+       nudge on a quiet ambient bed. Seeking-to-correct was the mistake: a
+       residual that lands near the threshold makes a hard seek storm every
+       frame and pump the gain — the slew converges smoothly instead.
+     • only a LARGE jump (> 250 ms: an operator scrub, a re-begin from the end)
+       gets a hard seek, and that seek happens while the gain is ramped to
+       silence (~32 ms) so it can't be heard.
+     • pause / resume is ramped too.
+
+   In a narrated / record run the bed therefore runs NON-STOP from CH1 to the
+   end card with no seek and no gain dip — just the odd imperceptible slew at a
+   seam; an operator run parks between manual advances, ramped.
+
    Pure follower of window.__showing.state (Hush-Watcher discipline, ZERO
-   showing.js edits): while the VOICE drives, the bed is slaved to
-   wallStart(idx) + clockMs — hard snap on a chapter boundary or >0.25 s
-   drift, otherwise left alone (two <audio> on one hardware clock do not
-   drift). During the inter-chapter auto-advance hold the bed FREE-RUNS —
-   that hold is composed INTO the track (the crescendo lives in the CH4→CH4b
-   gap, invariant 5: its crest is a cue-locked time, not a timer). At the end
-   card the tail rings out past the last word. Operator holds / pauses pause
-   the bed; ?bed=0 disables it; ?bedvol=0.x trims it for the run-through.
+   showing.js edits): the bed position is always derived from the master clock
+   (wallStart(idx) + clockMs), so a scrub re-derives it (invariant 5). ?bed=0
+   disables it; ?bedvol=0.x trims it for the run-through.
    Block comments only (the forge HTML-comment-in-script landmine). */
 (function () {
   'use strict';
   if (/[?&]bed=0(&|$)/.test(location.search)) return;
   var GAP_MS = 2000;                 /* showing.js onChapterEnd auto-advance hold */
-  var SNAP_S = 0.25;                 /* mid-chapter resync threshold, seconds */
+  var SLEW_IN = 0.04;                /* start easing the bed back when drift > 40 ms */
+  var SLEW_OUT = 0.012;              /* stop easing once inside 12 ms (hysteresis) */
+  var SLEW_RATE = 0.015;             /* ±1.5 % tempo nudge — inaudible on the ambient bed */
+  var BIG_S = 0.25;                  /* past this it's a scrub / re-begin → a RAMPED hard seek */
+  var RAMP_MS = 32;                  /* gain ramp so a seek / pause / resume can't click */
   var bed = document.getElementById('bed');
   if (!bed) return;
   var mv = /[?&]bedvol=(0?\.[0-9]+|[01])(&|$)/.exec(location.search);
-  bed.volume = mv ? Math.max(0, Math.min(1, parseFloat(mv[1]))) : 1;
+  var VOL = mv ? Math.max(0, Math.min(1, parseFloat(mv[1]))) : 1;
+  bed.volume = VOL;
 
-  var offs = null, lastIdx = -1, primed = false;
+  var offs = null;
   function wallOffsets(S) {
     if (offs) return offs;
     var acc = 0; offs = [];
@@ -2732,9 +2757,31 @@ window.SHOWING_CARDS = {};
     return offs;
   }
 
+  /* ── gain ramp: every bed.currentTime / pause / play happens while the bed is
+     ramped to silence, so the media action can never be heard. A continuous
+     time-based ramp (performance.now) stays smooth even at a coarse frame rate. */
+  var nowMs = (window.performance && performance.now)
+    ? function () { return performance.now(); }
+    : function () { return Date.now(); };
+  var gain = 1, gFrom = 1, gTo = 1, gT0 = 0, gDur = 0;
+  function rampTo(to) {
+    if (gTo === to) return;                    /* already there / already heading there */
+    gFrom = gain; gTo = to; gT0 = nowMs(); gDur = RAMP_MS;
+  }
+  function gainStep() {
+    if (gDur > 0) {
+      var k = (nowMs() - gT0) / gDur;
+      if (k >= 1) { k = 1; gDur = 0; }
+      gain = gFrom + (gTo - gFrom) * k;
+    } else { gain = gTo; }
+    bed.volume = VOL * gain;
+    return gain;
+  }
+  function silent() { return gain < 0.02; }
+
   /* prime on the first real gesture (muted play→pause) so a later play() can
-     never be refused — the begin/arm click grants activation; this is the
-     belt-and-braces for stricter visitor browsers. */
+     never be refused — the begin / arm click grants activation. */
+  var primed = false;
   function prime() {
     document.removeEventListener('pointerdown', prime, true);
     if (primed) return;
@@ -2752,41 +2799,66 @@ window.SHOWING_CARDS = {};
   }
   document.addEventListener('pointerdown', prime, true);
 
+  var slewing = false;                 /* true while a tempo slew is closing a small drift */
   function frame() {
     requestAnimationFrame(frame);
+    gainStep();
     var S = window.__showing;
     if (!S || !S.state) return;
-    var st = S.state, off = wallOffsets(S);
-    var run = false;
+    var st = S.state, off = wallOffsets(S), last = S.chapters.length - 1;
+
+    /* should the bed be sounding right now? */
+    var run = false, voiceDriving = false;
     if (st.started) {
-      if (st.playing && !st.holding) run = true;
-      else if (st.holding && (st.visitor || st.record)) run = true;
-      /* ↑ the timed 2000 ms auto-advance hold: the composed gap — the bed
-           keeps sounding; the crescendo IS this window */
-      else if (st.holding && st.idx === S.chapters.length - 1) run = true;
-      /* ↑ film end: advance() stays held at the end card — the tail rings out */
-      else if (st.holding) {
-        /* operator hold (untimed): finish the composed gap — the crescendo
-           still crests — then PARK at the next chapter's wall start, so a
-           manual advance resumes seamlessly */
-        run = bed.currentTime < off[st.idx + 1] / 1000 - 0.02;
-      }
+      if (st.playing && !st.holding) { run = true; voiceDriving = true; }
+      else if (st.holding && (st.visitor || st.record)) run = true;    /* composed gap: free-run */
+      else if (st.holding && st.idx === last) run = true;              /* end card: tail rings out */
+      else if (st.holding) run = bed.currentTime < off[st.idx + 1] / 1000 - 0.02; /* operator gap */
     }
+
     if (!run) {
-      if (!bed.paused) { try { bed.pause(); } catch (e) {} }
-      lastIdx = st.idx;
+      /* operator pause / not started: fade to silence, THEN pause (no click) */
+      rampTo(0);
+      if (silent() && !bed.paused) { try { bed.pause(); } catch (e) {} }
       return;
     }
+
+    /* end card reached and the tail has fully rung out — leave the bed ended */
+    if (st.holding && st.idx === last && bed.ended) return;
+
     var t = (off[st.idx] + st.clockMs) / 1000;
-    var boundary = st.idx !== lastIdx;
-    lastIdx = st.idx;
-    var voiceDriving = st.playing && !st.holding;
-    if (voiceDriving && (boundary || Math.abs(bed.currentTime - t) > SNAP_S)) {
-      try { bed.currentTime = t; } catch (e) {}
+    var drift = bed.currentTime - t;          /* signed: + = bed AHEAD of the clock */
+    var adrift = drift < 0 ? -drift : drift;
+
+    /* a LARGE gap is a real jump (operator scrub / a re-begin), never a chapter
+       seam — reunite the bed while it is ramped to silence so the seek can't be
+       heard. Only when the voice drives the clock or the element fell paused. */
+    if (adrift > BIG_S && (voiceDriving || bed.paused)) {
+      bed.playbackRate = 1; slewing = false;
+      rampTo(0);
+      if (silent() && !bed.seeking) { try { bed.currentTime = t; } catch (e) {} }
+      return;                                 /* hold silence until the seek settles */
     }
+
+    /* make sure we're actually sounding (resume after an operator pause / a
+       ramped seek that has now settled) */
     if (bed.paused && !bed.ended) {
       try { var p = bed.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
     }
+
+    /* small drift (what a composed-gap free-run picks up): ease it out with a
+       gentle tempo slew — NEVER a seek — but only while the voice truly drives
+       the clock. In a composed gap / the end tail the clock is frozen so the
+       drift is expected (the bed is mid-gap): hold rate at 1 and free-run. */
+    if (voiceDriving) {
+      if (adrift > SLEW_IN) slewing = true;
+      else if (adrift < SLEW_OUT) slewing = false;
+      bed.playbackRate = slewing ? (drift > 0 ? 1 - SLEW_RATE : 1 + SLEW_RATE) : 1;
+    } else {
+      bed.playbackRate = 1; slewing = false;
+    }
+
+    if (!bed.seeking) rampTo(1);
   }
   requestAnimationFrame(frame);
 })();
