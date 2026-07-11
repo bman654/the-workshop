@@ -91,13 +91,17 @@ shows drops** at 60.
 | **OUT** | **~387.6–388.8 s** after t=0 | See below — don't cut at the last word. |
 
 The last narrated word lands at **~383.97 s (6:24.0)**; the end-card door finishes
-opening at **~383.4 s (6:23.4)**, and the score's own fade rings out for **~4.2 s**
-more to **~387.6 s (6:27.6)**, then **~1.2 s** of true silence to the file's natural
-end at **~388.8 s (6:28.8)**. **Hold the end card at minimum through the fade
+opening at **~383.4 s (6:23.4)**. The deck then lets its clock run **~1.9 s past the
+closing word** (a purely-visual tail — the narration audio is already over) so the
+final karaoke line gets to **dissolve** (~384.2 → ~384.6 s) instead of freezing lit;
+the film settles onto the clean held end card at **~385.6 s (6:25.6)** (T5.15). The
+score's own fade is unchanged — it rings out for **~4.2 s** past the last voice
+sample to **~387.6 s (6:27.6)**, then **~1.2 s** of true silence to the file's
+natural end at **~388.8 s (6:28.8)**. **Hold the end card at minimum through the fade
 (6:27.6)**; cutting at 6:28.8 gives a clean silent pad. There is no held-black
 out-point in this film (unlike the trailer) — the last frame IS the end card (a door
 opening on warm light over the title), and the deck simply stays there once the
-final chapter ends (`showing.js`: "last chapter: stay held at the end card").
+final chapter's tail ends (`showing.js`: "last chapter: stay held at the end card").
 
 Recorded film content = **0 → ~6:28** (see §6 for the honest length caveat).
 

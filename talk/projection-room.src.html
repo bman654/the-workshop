@@ -2663,8 +2663,44 @@ window.SHOWING_CARDS = {};
   'use strict';
   var HUSH_MIN = 3000;   /* ms — only a real baked hush qualifies, never speech pauses */
   var PAD_IN = 450;      /* ms after the last word ends before the band dissolves */
+
+  /* ── THE FINAL-CAPTION TAIL (T5.15, SB r2 — "let the final caption fade before
+     the end"). The film's last chapter used to end its clock only ~240 ms after
+     the closing word, so showing.js's onChapterEnd (the held end card) landed
+     while the final karaoke line was still fully lit — the closing line never got
+     to dissolve. Two deck-own moves, ZERO Book-1 edits:
+       (a) extend ONLY the last chapter's clock by CAP_TAIL_MS past the closing
+           word. Its narration audio has ended (paused) by then, so showing.js's
+           rAF fallback carries state.clockMs on past the voice until onChapterEnd
+           fires at the new duration — the timer runs past the VO, giving the band
+           room to fade BEFORE the film settles onto the end card. The cue lock /
+           manifest / bed are untouched: the last VOICE sample is still at filmEnd,
+           and this purely-visual tail rides the score's existing held-end-card
+           fade (manifest fadeEndMs already sits 4.2 s past filmEnd). Bumping the
+           LAST chapter's duration_ms is offset-safe — wallOffsets never reads it
+           (there is no chapter after it), and the bed follower already free-runs
+           its tail while idx===last is held.
+       (b) emit a final hush window on the last chapter from PAD_IN after the
+           closing word onward, so #captions.hush dissolves the closing line
+           (0.45 s CSS fade) during the tail and keeps it gone on the held card. */
+  var CAP_TAIL_MS = 1900;   /* ms past the closing word: PAD_IN beat + 0.45 s fade + a clean-card beat */
+  var LAST_BIG = 1e12;      /* the final window stays hushed through the permanent hold */
+  (function armFinalTail() {
+    var CH = window.SHOWING_CHAPTERS;
+    if (!CH || !CH.length) return;
+    var tm = CH[CH.length - 1] && CH[CH.length - 1].timing;
+    if (!tm || !tm.items) return;
+    var lastE = 0, i, it;
+    for (i = 0; i < tm.items.length; i++) {
+      it = tm.items[i];
+      if (it && it.type === 'word' && it.e > lastE) lastE = it.e;
+    }
+    var want = lastE + CAP_TAIL_MS;
+    if (typeof tm.duration_ms === 'number' && tm.duration_ms < want) tm.duration_ms = want;
+  })();
+
   var cache = {};        /* chapter id → [{a,b}] hush windows, derived once */
-  function windowsFor(ch) {
+  function windowsFor(ch, isLast) {
     if (!ch || !ch.timing || !ch.timing.items) return [];
     if (cache[ch.id]) return cache[ch.id];
     var items = ch.timing.items, ws = [], out = [], i;
@@ -2674,6 +2710,7 @@ window.SHOWING_CARDS = {};
     for (i = 1; i < ws.length; i++) {
       if (ws[i].s - ws[i - 1].e >= HUSH_MIN) out.push({ a: ws[i - 1].e + PAD_IN, b: ws[i].s });
     }
+    if (isLast && ws.length) out.push({ a: ws[ws.length - 1].e + PAD_IN, b: LAST_BIG });
     cache[ch.id] = out;
     return out;
   }
@@ -2682,8 +2719,9 @@ window.SHOWING_CARDS = {};
     var S = window.__showing;
     var cap = document.getElementById('captions');
     if (!S || !S.state || !cap) return;
+    var isLast = S.state.idx === S.chapters.length - 1;
     var ch = S.chapters[S.state.idx];
-    var wins = windowsFor(ch), ms = S.state.clockMs, hush = false;
+    var wins = windowsFor(ch, isLast), ms = S.state.clockMs, hush = false;
     for (var i = 0; i < wins.length; i++) {
       if (ms >= wins[i].a && ms < wins[i].b) { hush = true; break; }
     }
