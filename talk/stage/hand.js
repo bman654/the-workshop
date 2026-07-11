@@ -197,8 +197,17 @@
     '  <circle class="j-flick" cx="0" cy="0" r="2.6" fill="#dff1ff" opacity="0"/>',
     '</g>',
 
-    /* REC lamp chip */
+    /* REC lamp chip — plus the sound-arm speaker cue (.j-snd), sitting just left
+       of the record light. It pops in on the 'arm' click (audio went live) and
+       rides out with the recording; the wave arcs pulse off the master clock. */
     '<g class="j-rec" font-family="ui-monospace,Menlo,monospace" font-size="13">',
+    '  <g class="j-snd" opacity="0">',
+    '    <path fill="#ffd27a" d="M362 23 L366.5 23 L372 17.5 L372 34.5 L366.5 29 L362 29 Z"/>',
+    '    <g class="j-sndw" fill="none" stroke="#ffd27a" stroke-width="1.7" stroke-linecap="round">',
+    '      <path d="M375 20.5 Q379 26 375 31.5"/>',
+    '      <path d="M378.5 17 Q384 26 378.5 35"/>',
+    '    </g>',
+    '  </g>',
     '  <circle class="j-recglow" cx="399" cy="26" r="10" fill="#ff4438" opacity="0" filter="url(#', g, '-b3)"/>',
     '  <circle class="j-recdot" cx="399" cy="26" r="5.5" fill="#3a3a3a" opacity=".6"/>',
     '  <text class="j-rectxt" x="412" y="31" fill="#8a8a8a" opacity=".5" letter-spacing="2">REC</text>',
@@ -228,7 +237,7 @@
       rips: container.querySelectorAll('.j-rip'),
       sheen: q('.j-sheen'), bead: q('.j-bead'), flick: q('.j-flick'),
       recglow: q('.j-recglow'), recdot: q('.j-recdot'), rectxt: q('.j-rectxt'),
-      rec: q('.j-rec'),
+      rec: q('.j-rec'), snd: q('.j-snd'), sndw: q('.j-sndw'),
     };
     if (opts.recLamp === false) el.rec.style.display = 'none';
 
@@ -245,6 +254,7 @@
       var hx = 0, hy = 0, hr = 0, dip = 0, lift = 0;
       var f1 = 0, f2 = 0, f3 = 0, f4 = 0, th = 0;
       var recording = false;
+      var armed = false, armAt = null;   /* the 2nd click armed the sound */
       var rings = [];               /* {r, op, color} */
       var flick = null;
 
@@ -254,7 +264,8 @@
       for (var i = 0; i < clicks.length; i++){
         var c = clicks[i], ph = t - c.t;
         if (ph >= 0 && c.kind === 'start') recording = true;
-        if (ph >= 0 && c.kind === 'stop')  recording = false;
+        if (ph >= 0 && c.kind === 'stop')  { recording = false; armed = false; }
+        if (ph >= 0 && c.kind === 'arm')   { armed = true; armAt = c.t; }
         if (ph < -PRE || ph > 2600) continue;
 
         /* approach tension */
@@ -358,6 +369,17 @@
         el.recglow.setAttribute('opacity', '0');
         el.rectxt.setAttribute('fill', '#8a8a8a');
         el.rectxt.setAttribute('opacity', '0.5');
+      }
+
+      /* sound-arm cue: the speaker fades in on the 'arm' click (audio went live)
+         and rides out with the recording; the wave arcs pulse off the clock. */
+      if (armed && recording && armAt !== null){
+        var app = clamp01((t - armAt) / 200);
+        var puls = 0.6 + 0.4 * Math.abs(Math.sin(t * 0.006));
+        el.snd.setAttribute('opacity', app.toFixed(3));
+        el.sndw.setAttribute('opacity', puls.toFixed(3));
+      } else {
+        el.snd.setAttribute('opacity', '0');
       }
     }
 
