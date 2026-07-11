@@ -98,6 +98,7 @@ export const STARS = {
   "estate-gate": { group: null, theta: 180, rOff: 120, mag: 1 },  // NET-NEW (T2.6d): the gate at the road's 180°; rOff hand-pushed past the card-catalog road-tip foot
   "glasshouse-range": { group: null, theta: 217, rOff: 63.8, mag: 1 },  // NET-NEW (T2.6d): gardens bearing 217°
   "gnomon": { group: null, theta: 70, rOff: 45.7, mag: 1 },
+  "magic-lantern": { group: null, theta: 60, rOff: 49.4, mag: 1 },  // NET-NEW (T6.3): the archive wing's picture house, hung beside its kin the museum (67°) in the open 43°–67° gap
   "museum": { group: null, theta: 67, rOff: 49.4, mag: 1 },
   "orbit-house": { group: null, theta: 307, rOff: 34.5, mag: 1 },  // NET-NEW (T2.6d): observatory bearing 307°
   "sound-garden": { group: null, theta: 95, rOff: 49.9, mag: 2 },
@@ -140,6 +141,7 @@ export const HINTS = {
   "estate-gate": "the lantern over the estate's front gate",
   "glasshouse-range": "an unvisited hall of THE GLASSHOUSE GARDENS",
   "gnomon": "an unvisited hall of THE PROMENADES",
+  "magic-lantern": "an unvisited hall of THE MANOR HOUSE",
   "museum": "an unvisited hall of THE MANOR HOUSE",
   "orbit-house": "an unvisited hall of THE OBSERVATORY RISE",
   "sound-garden": "an unvisited hall of THE MANOR HOUSE",

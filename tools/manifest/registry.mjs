@@ -208,4 +208,11 @@ export const ALLOWLIST = [
   // (no room/exhibit href, not a crossing, not hidden); claimed here like the
   // other engines/meta dirs, contributes no pieces.
   'talk',
+  // meta: the estate's trailer film + its music-bed engine module. The films are
+  // screened in The Magic Lantern room (magic-lantern/), but the trailer is a
+  // rendered picture-deck like the Showing above (no room/exhibit href of its own,
+  // not a crossing, not hidden); claimed here alongside talk/. trailer-bed/ is the
+  // trailer's Web-Audio bed module (an engine dir). Both predate this claim (added
+  // in WS5, never enrolled); folded in when the picture house was raised.
+  'trailer', 'trailer-bed',
 ];
