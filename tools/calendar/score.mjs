@@ -1,33 +1,23 @@
-// ============================================================================
-//  CALENDAR SCORE CORE — the AIR's composer (WS4 The Living Calendar).
-//  Binding: SCORE.md §2 validation · §3 musical law · §4 seed law · §8.1a
-//  self-test · §9 prose (VERBATIM); DESIGN.md §6.3/§6.4 (entry shape, voice
-//  enum, exports). PURE: no clock, no unseeded randomness, no storage, no
-//  DOM. Only free identifier: `semiToFreq` — ESM import above the sentinels
-//  for Node; in-page it resolves from the inlined PITCH CORE slice.
-//  Byte-twin discipline (monochord): the pages inline the sentinel region
-//  char-for-char; the interior is classic-script-safe (var/function only);
-//  `export` lives below the END marker.
-//
-//  Pinned draw order (§4 impl r3-m1/r4-m1; the Node twin mirrors exactly):
-//   · phrase k (0x9000+k): menu draw (consumed+DISCARDED when FORCED per
-//     §3.6/§3.8) · [Signature-replacement draw — only when the DRAWN type
-//     is P2 and annTier>=1] · mode commit (every phrase) · KS event gain
-//     (KS-voiced only) · rest · degrees (P1 only: pattern 50/50, base
-//     50/50, one vel draw per note).
-//   · register/altitude basis = the cursor BEFORE the rest draw (the §4
-//     order puts rest after the voice-dependent KS-gain slot).
-//   · pad episode j (0xA000+j): ON dur · OFF base · [day sonority 70/30] ·
-//     [deep-season third 0.5, only when |wMaj-0.5|>0.35] · tile gain
-//     (0.08..0.12).
-//   · announcement (0xB000, §3.8-1): mode commit · KS event gain (KS-voiced
-//     only) · the row's own intra-phrase draws.
-// ============================================================================
+// CALENDAR SCORE CORE — the AIR's composer (WS4 The Living Calendar).
+// Binding: SCORE.md §2 validation · §3 musical law · §4 seed law · §8.1a
+// self-test · §9 prose (VERBATIM) + Execution revise r6 (r6.1 pad / r6.2
+// wind+level / r6.3 seeds+event fields / r6.4 loneVoice); DESIGN §6.3/§6.4
+// ({events}, voice enum, exports). PURE (no clock/random/storage/DOM); only
+// free id `semiToFreq` (ESM import above the sentinels; in-page from the pitch
+// slice). Monochord byte-twin: pages inline the sentinel region char-for-char;
+// interior is classic-script-safe (var/function); `export` below END.
+// The composer emits EVENT DESCRIPTORS only (voices render at T2.5). Note/toll
+// timing+params stay r5-EXACT (fixtures/r5-notes/ is the twin reference). Seed
+// streams: phrase 0x9000+k · pad episode 0xA000+j · announcement 0xB000 · wind
+// 0xC000 · Breath realize 0xD000+k (0xD7FF for the announcement). LAYERED seq
+// (r6.3): note/toll from 0 · pad windows 10000 · wind 20000 · swells 30000 ·
+// announcements 0x4000. Per-episode/per-phrase draw order is pinned at site.
 
 import { semiToFreq } from '../../sound-garden/pitch-core.mjs';
 
 // ===== CALENDAR SCORE CORE — BEGIN =====
-// ---- seeded prng — verbatim from the estate standard (trailer prng.mjs) ----
+var TWO_PI = 2 * Math.PI, U32 = 4294967296;
+
 function mulberry32(seed){
   let s = (seed >>> 0) || 1;
   return function(){
@@ -46,7 +36,6 @@ function hash2(a, b){
   return h >>> 0;
 }
 
-// ---- §2 manifest validation — both backends throw before composing
 function validateMoment(m){
   if (!m || typeof m !== 'object') throw new Error('score: no manifest');
   if (!Array.isArray(m.altCurve) || m.altCurve.length !== 5) throw new Error('score: bad altCurve');
@@ -58,34 +47,23 @@ function validateMoment(m){
   if (!(m.solarNoonMin === null || (Number.isInteger(m.solarNoonMin) && m.solarNoonMin >= 0 && m.solarNoonMin <= 59))) throw new Error('score: bad solarNoonMin');
 }
 
-// ---- §3.1a THE NOTE TABLE (exact — verbatim from SCORE.md)
-// (1) absolute anchors — SEMITONES FROM MIDDLE C (pitch-core's semiToFreq basis):
-var A_SEMI = { A2: -15, A3: -3, A4: 9, A5: 21 };            // every base A the air uses
-// pad-only absolute notes (for reference; derived from the same anchors):
-//   E3 = A2+7 = -8 · E4 = A3+7 = +4 · C4 = A3+3 = 0 · C#4 = A3+4 = +1
-
-// (2) pool degrees — SEMITONE OFFSETS ABOVE THE PHRASE'S BASE A:
-var POOL_MAJOR = { d1:0, d2:2, d3:4,  d5:7, d6:9,  d8:12 }; // A B C# E F# A'
-var POOL_MINOR = { d1:0, b3:3, d4:5,  d5:7, b7:10, d8:12 }; // A C D E G A'
-// P1's neighbor pairs read off the same tables: major A–B–A = 0-2-0, E–F#–E = 7-9-7;
-// minor A–G–A = 0-10-0 (G below the octave), E–D–E = 7-5-7.
-
-// (3) frequency law — the ONLY route to Hz:
+// §3.1a THE NOTE TABLE (verbatim). Anchors = SEMITONES FROM MIDDLE C (E3=-8,
+// E4=+4). Pool degrees = SEMITONE OFFSETS above the phrase's base A.
+var A_SEMI = { A2: -15, A3: -3, A4: 9, A5: 21 };
+var POOL_MAJOR = { d1:0, d2:2, d3:4,  d5:7, d6:9,  d8:12 };
+var POOL_MINOR = { d1:0, b3:3, d4:5,  d5:7, b7:10, d8:12 };
 function noteHz(baseA, off){ return semiToFreq(A_SEMI[baseA] + off); }
 
-// ---- §3.1 tonal law / DESIGN §6.4 KEY
 var KEY = {
   tonic: 'A',
   pools: { major: ['A', 'B', 'C#', 'E', 'F#'], minor: ['A', 'C', 'D', 'E', 'G'] },
   pitchSet: ['A', 'B', 'C', 'C#', 'D', 'E', 'F#', 'G']
 };
 
-// ---- §3.1 season laws
 function wMaj(p){ return 0.5 + 0.45 * Math.cos(2 * Math.PI * (p - 0.25)); }
 function seasonDens(p){ return 0.75 + 0.35 * Math.cos(2 * Math.PI * (p - 0.25)); }
 function pulseBPM(p){ return Math.round(48 + 12 * (Math.cos(2 * Math.PI * (p - 0.25)) + 1) / 2); }
 
-// ---- §3.2 hour registers — altitude + slope
 function airAltAt(curve, t){
   var m = Math.max(0, Math.min(60, t / 60));
   var i = Math.min(3, Math.floor(m / 15));
@@ -102,7 +80,6 @@ function airRegAt(curve, t){
 }
 function velScale(alt){ return 0.70 + 0.30 * Math.max(0, Math.min(1, (alt + 18) / 60)); }
 
-// ---- §3.3 menu weights · rests · §3.4 episodes · sonorities
 var AIR_MENU = {
   'deep-night': { P1: 0.60, P2: 0.25, P3: 0,    P4: 0.15 },
   'dawn':       { P1: 0.35, P2: 0.40, P3: 0,    P4: 0.25 },
@@ -111,36 +88,108 @@ var AIR_MENU = {
   'evening':    { P1: 0.50, P2: 0.20, P3: 0,    P4: 0.30 }
 };
 var AIR_REST = { 'deep-night': [45, 120], 'dawn': [20, 60], 'day': [15, 45], 'dusk': [20, 60], 'evening': [30, 90] };
+// r6.1: episode ON/OFF ranges + offEff season stretch UNCHANGED from old §3.4.
 var PAD_ON   = { 'deep-night': [30, 60], 'dawn': [45, 80], 'day': [60, 90], 'dusk': [45, 80], 'evening': [40, 70] };
 var PAD_OFF  = { 'deep-night': [90, 240], 'dawn': [40, 120], 'day': [20, 60], 'dusk': [40, 120], 'evening': [60, 180] };
-// §3.4 sonorities as semis (first-listed = the plain form; day draws 70/30):
-var PAD_SON = {
-  'deep-night': [[-15, -8]],
-  'evening':    [[-15, -8]],
-  'dawn':       [[-15, -8, -3]],
-  'dusk':       [[-15, -8, -3]],
-  'day':        [[-15, -8, -3], [-3, 4]]
-};
-// §3.3 P2 direction per register (menu arrows): rising at dawn/day, falling
-// at dusk/evening/deep night.
+// §3.3 P2 direction: rising dawn/day, falling dusk/evening/deep-night.
 var P2_RISES = { 'deep-night': false, 'dawn': true, 'day': true, 'dusk': false, 'evening': false };
-// §3.3 P5 the Signature — the Gate logotune phrase verbatim in contour+clock:
+// §3.3 P5 the Signature — the Gate logotune, verbatim contour+clock:
 var SIG_ONS  = [0, 0.42, 0.84, 1.26, 1.76, 2.18];
 var SIG_DECS = [0.95, 0.98, 1.02, 1.08, 0.90, 1.55];
 var SIG_VELS = [0.34, 0.36, 0.38, 0.42, 0.37, 0.49];
+function celLen(dec){ return dec * 1.15 + 0.12; }
 
-function celLen(dec){ return dec * 1.15 + 0.12; }  // the ported celesta buffer law
+var K_V = { padNight: 0.08928, padDay: 0.041, padDawnDusk: 0.06504, padWinterDeep: 0.04491, loneVoice: 0.2032 };
+var BREATH_DEPTH = { 'deep-night': 0.45, 'evening': 0.42, 'dawn': 0.42, 'dusk': 0.42, 'day': 0.38 };
+var STEP4 = [-2, -1, 1, 2];  // r6.3 loneVoice step map
 
-// ---- §3.8 the day's figure — pinned cumulative mapping
-function figureOf(dateInt){
-  var u = mulberry32(hash2(0xDA11EA5E, dateInt))();
-  return u < 0.30 ? 'P1' : u < 0.60 ? 'P2' : u < 0.80 ? 'P3' : 'P4';
+// r6.1 THE SLOT LAW — cumulative weights per (register,wMaj); row0 = top slot
+function slotTable(reg, wm){
+  if (reg === 'deep-night') return wm < 0.15
+    ? [['padWinterDeep', 0.45], ['padNight', 0.75], ['loneVoice', 1.0]]
+    : [['padNight', 0.60], ['padWinterDeep', 0.85], ['loneVoice', 1.0]];
+  if (reg === 'evening') return [['padNight', 0.55], ['padWinterDeep', 0.75], ['loneVoice', 1.0]];
+  if (reg === 'dawn' || reg === 'dusk') return [['padDawnDusk', 0.70], ['padNight', 1.0]];
+  return [['padDay', 0.70], ['padDawnDusk', 1.0]];  // day
+}
+function slotPick(reg, wm, u){
+  var t = slotTable(reg, wm);
+  for (var i = 0; i < t.length; i++) if (u < t[i][1]) return t[i][0];
+  return t[t.length - 1][0];
+}
+function slotTop(reg, wm){ return slotTable(reg, wm)[0][0]; }
+
+// r6.3 recipe draws (items 8+) in draw order; the caller prepends the
+// third-layer phase as phases[0].
+function drawRecipe(voice, r){
+  var det = [], ph = [], seeds = [], i, ti, v;
+  if (voice === 'padNight'){
+    for (i = 0; i < 5; i++) det.push(1 + (r() - 0.5) * 0.0012);
+    for (i = 0; i < 5; i++) ph.push(r() * TWO_PI);
+  } else if (voice === 'padDay'){
+    for (ti = 0; ti < 3; ti++) for (v = 0; v < 3; v++){ det.push(1 + (v - 1) * 0.0028 + (r() - 0.5) * 0.0008); ph.push(r() * TWO_PI); }
+    seeds.push(Math.floor(r() * U32));
+  } else if (voice === 'padDawnDusk'){
+    for (ti = 0; ti < 2; ti++){ ph.push(r() * TWO_PI, r() * TWO_PI, r() * TWO_PI); seeds.push(Math.floor(r() * U32)); }
+  } else {  // padWinterDeep
+    ph.push(r() * TWO_PI, r() * TWO_PI); seeds.push(Math.floor(r() * U32));
+  }
+  return { detunes: det, phases: ph, seeds: seeds };
 }
 
-// ---- one phrase, realized per its §3.3 row (shared by hour + announcement).
-// r supplies the row's own intra-phrase draws only (degrees bucket).
-// Returns the phrase's end time (last onset + audible length).
-function airPhrase(out, type, reg, maj, t0, r, ksg, alt, bpm, wm, padSon){
+// r6.1 episode-signal law — 8-s WINDOWS of one continuous signal (last
+// truncated at epEnd); realize/breath/third are event-carried.
+function emitPadWindows(out, voice, epStart, epLen, breathF, breathU0, depth, third, realize, gain){
+  var epEnd = epStart + epLen, ti = 0;
+  for (var wf = epStart; wf < epEnd - 1e-6; wf += 8){
+    out.push({ t: wf, voice: voice, layer: 'pad', gain: gain, pan: 0,
+      params: { epStart: epStart, epEnd: epEnd, tileIndex: ti, winFrom: wf, winDur: Math.min(8, epEnd - wf),
+        breathF: breathF, breathU0: breathU0, depth: depth, third: third, realize: realize } });
+    ti++;
+  }
+}
+
+// r6.4 THE LONEVOICE WALK — committed-pool ladder [max(anchor-12,A2),anchor+16];
+// ladder-index steps, reflect on clamp; one event per swell.
+function poolClasses(maj){
+  var offs = maj ? [0, 2, 4, 7, 9] : [0, 3, 5, 7, 10], set = {}, i;
+  for (i = 0; i < offs.length; i++) set[((9 + offs[i]) % 12 + 12) % 12] = 1;  // base A class = 9
+  return set;
+}
+function buildLadder(anchorS, maj){
+  var lo = Math.max(anchorS - 12, -15), hi = anchorS + 16, cls = poolClasses(maj), lad = [], s;
+  for (s = lo; s <= hi; s++) if (cls[((s % 12) + 12) % 12]) lad.push(s);
+  return lad;
+}
+function emitLoneVoice(out, reg, wm, modeU, count, steps, durs, gaps, epStart, epEnd){
+  var anchorS = reg === 'evening' ? -3 : -8;      // A3 / E3
+  var maj = modeU < wm;                            // §3.1 mode commit
+  var lad = buildLadder(anchorS, maj), li = lad.indexOf(anchorS), notes = [lad[li]], k, step, ni;
+  for (k = 1; k < count; k++){
+    step = STEP4[Math.floor(steps[k] * 4)];
+    ni = li + step;
+    if (ni < 0 || ni > lad.length - 1 || ni === li){ step = -step; ni = li + step; }
+    li = ni; notes.push(lad[li]);
+  }
+  var onset = epStart, plan = [];                  // lay out swells; stop at first non-fit
+  for (k = 0; k < count; k++){
+    if (onset + durs[k] > epEnd) break;
+    plan.push({ onset: onset, note: notes[k], dur: durs[k] });
+    onset = onset + durs[k] + gaps[k];
+  }
+  for (k = 0; k < plan.length; k++){
+    var prevConn = k > 0 && gaps[k - 1] <= 1.5, nextConn = k < plan.length - 1 && gaps[k] <= 1.5;
+    out.push({ t: plan[k].onset, voice: 'loneVoice', layer: 'pad', gain: K_V.loneVoice, pan: 0,
+      params: { note: plan[k].note, swellDur: plan[k].dur,
+        prevNote: prevConn ? plan[k - 1].note : null, gapS: prevConn ? gaps[k - 1] : null,
+        nextGapS: nextConn ? gaps[k] : null } });
+  }
+}
+
+// one phrase per its §3.3 row (hour + announcement). r = the row's intra-
+// phrase draws; breath = {seed,k} = the Breath's realize stream 0xD000+k.
+// Returns the phrase end time.
+function airPhrase(out, type, reg, maj, t0, r, ksg, alt, bpm, wm, breath){
   var night = reg === 'deep-night' || reg === 'evening';
   var i, offs, vel;
   if (type === 'P1'){ // the Murmur — pattern 50/50, base 50/50, vel per note
@@ -175,8 +224,10 @@ function airPhrase(out, type, reg, maj, t0, r, ksg, alt, bpm, wm, padSon){
     for (i = 0; i < 4; i++) out.push({ t: t0 + i * step, voice: 'ksPluck', params: { freq: noteHz('A3', offs[i]), dur: 0.9, brightness: 0.55, vel: vel }, gain: ksg, pan: 0, layer: 'notes' });
     return t0 + 3 * step + 0.9;
   }
-  if (type === 'P4'){ // the Breath — 3 pad tiles ≈ 13 s, gain 0.10 (§3.3 row)
-    for (i = 0; i < 3; i++) out.push({ t: t0 + 4 * i, voice: 'padChord', params: { freqs: padSon.map(function(s){ return semiToFreq(s); }), dur: 4.0, attack: 1.4, release: 1.4, gain: 0.10 }, gain: 1, pan: 0, layer: 'pad' });
+  if (type === 'P4'){ // the Breath (r6.1) — ONE 13.4-s swell of the register's TOP slot voice
+    var tv = slotTop(reg, wm);
+    var rz = drawRecipe(tv, mulberry32(hash2(breath.seed, 0xD000 + breath.k)));  // dedicated stream, NO third
+    emitPadWindows(out, tv, t0, 13.4, 1 / 13.4, 0, 1.0, 'none', rz, K_V[tv]);
     return t0 + 8 + 5.4;
   }
   // P5 the Signature — the seasonal third (never the phrase mode), base A4
@@ -185,29 +236,42 @@ function airPhrase(out, type, reg, maj, t0, r, ksg, alt, bpm, wm, padSon){
   return t0 + SIG_ONS[5] + celLen(SIG_DECS[5]);
 }
 
-// stable sort by onset, then dense seq from seqBase (DESIGN §6.3)
-function airFinish(list, seqBase){
+// r6.3 LAYERED seq: note/toll from 0; pad windows 10000; wind 20000; swells
+// 30000 (swell & window both layer 'pad'; swell has `note`, window `epStart`).
+function seqAssign(list){
   list.sort(function(a, b){ return a.t - b.t; });
-  for (var i = 0; i < list.length; i++) list[i].seq = seqBase + i;
+  var n = 0, p = 0, w = 0, s = 0, i, e;
+  for (i = 0; i < list.length; i++){
+    e = list[i];
+    if (e.layer === 'wind') e.seq = 20000 + w++;
+    else if (e.layer === 'pad' && e.params.note !== undefined) e.seq = 30000 + s++;
+    else if (e.layer === 'pad') e.seq = 10000 + p++;
+    else e.seq = n++;
+  }
+  return list;
+}
+// announcements dense from 0x4000 (§3.8-1)
+function armSeq(list){
+  list.sort(function(a, b){ return a.t - b.t; });
+  for (var i = 0; i < list.length; i++) list[i].seq = 0x4000 + i;
   return list;
 }
 
-// ---- DESIGN §6.3 — the composer entry: ONE civil hour
-// opts.figureOff is the §8.1-15 test hook ONLY: figure lean ×1.0 + opener
-// disabled (the §3.6 anniversary Signature opener is NOT affected).
+// DESIGN §6.3 — the composer entry: ONE civil hour. opts.figureOff is the
+// §8.1-15 test hook ONLY (figure lean ×1.0 + opener off; §3.6 opener unaffected).
 function composeHour(moment, opts){
   validateMoment(moment);
-  var hourSeed = moment.seed;                    // §4 — never re-hashed here
+  var hourSeed = moment.seed;                    // §4 — never re-hashed
   var curve = moment.altCurve;
   var p = moment.seasonPhase;
   var wm = wMaj(p), dens = seasonDens(p), bpm = pulseBPM(p);
   var figOff = !!(opts && opts.figureOff);
   var fig = figureOf(moment.dateInt);
-  var deep = Math.abs(wm - 0.5) > 0.35;
+  var deepSummer = (wm - 0.5) > 0.35;            // r6.1 bright-half third gate
   var ev = [];
   var i;
 
-  // §3.5 the tolls (layer 'toll' owns the seam; register at the hour's top)
+  // §3.5 the tolls (layer 'toll'; register at hour top)
   var regTop = airRegAt(curve, 0);
   var tollSemi = regTop === 'day' ? 21 : (regTop === 'dawn' || regTop === 'dusk') ? 9 : -3;
   ev.push({ t: 0.5, voice: 'celesta', params: { freq: semiToFreq(tollSemi), dec: 2.0, vel: 0.30 }, gain: 1, pan: 0, layer: 'toll' });
@@ -219,31 +283,46 @@ function composeHour(moment, opts){
     for (i = 0; i < 4; i++) ev.push({ t: tc + i * 0.42, voice: 'celesta', params: { freq: noteHz('A4', co[i]), dec: 1.5 + 0.7 * i / 3, vel: 0.50 }, gain: 1, pan: 0, layer: 'toll' });
   }
 
-  // §3.4 the pad layer — an independent track in the same pass (episodes
-  // alternate ON/OFF from t=0; composed first so P4 can read the current
-  // sonority)
-  var padEps = [];
+  // r6.2 the WIND FLOOR — 30-s windows @0..3570 (buffer 30.25 s = a 0.25-s power
+  // seam; last truncated to end <= 3599.5). Preset/tier/register held from hour
+  // top. gain=k_tier is a T2.5 TIER_DERIVE; the composer carries `tier`.
+  var hwsInt = Math.floor(mulberry32(hash2(hourSeed, 0xC000))() * U32);
+  var wpreset = wm < 0.30 ? 'winterThin' : (regTop === 'day' || regTop === 'dawn' || regTop === 'dusk') ? 'plain' : 'distantAir';
+  var wtier = regTop === 'day' ? 'day' : (regTop === 'dawn' || regTop === 'dusk') ? 'dawn-dusk' : regTop === 'evening' ? 'evening' : 'deep-night';
+  for (var wo = 0; wo < 3600; wo += 30) ev.push({ t: wo, voice: 'windBed', layer: 'wind', gain: null, pan: 0,
+    params: { preset: wpreset, tier: wtier, hourWindSeedInt: hwsInt, winFrom: wo, winDur: Math.min(30.25, 3599.5 - wo) } });
+
+  // r6.1 the PAD LAYER — episodes alternate ON/OFF from t=0; one continuous
+  // signal (8-s windows, or one event per loneVoice swell).
   var pt = 0, pj = 0;
   while (pt <= 3591){
     var pr = mulberry32(hash2(hourSeed, 0xA000 + pj));
     var preg = airRegAt(curve, pt);
     var onR = PAD_ON[preg], offR = PAD_OFF[preg];
-    var onDur = onR[0] + (onR[1] - onR[0]) * pr();
-    var offBase = offR[0] + (offR[1] - offR[0]) * pr();
-    var son = preg === 'day' ? (pr() < 0.7 ? PAD_SON.day[0] : PAD_SON.day[1]) : PAD_SON[preg][0];
-    if (deep && pr() < 0.5) son = son.concat(wm > 0.5 ? 1 : 0); // C#4 / C4
-    var pg = 0.08 + 0.04 * pr();
-    padEps.push({ t0: pt, son: son });
-    for (i = 0; i * 4 < onDur; i++){
-      var tt = pt + i * 4;
-      if (tt > 3591) break;
-      ev.push({ t: tt, voice: 'padChord', params: { freqs: son.map(function(s){ return semiToFreq(s); }), dur: 4.0, attack: 1.4, release: 1.4, gain: pg }, gain: 1, pan: 0, layer: 'pad' });
+    var onDur = onR[0] + (onR[1] - onR[0]) * pr();       // 1
+    var offBase = offR[0] + (offR[1] - offR[0]) * pr();  // 2
+    var voice = slotPick(preg, wm, pr());                // 3
+    var thirdElig = pr();                                // 4 (always consumed)
+    var thirdPh = pr() * TWO_PI;                         // 5 (always consumed)
+    var breathF = 1 / (10 + 4 * pr()), breathU0 = pr();  // 6, 7 breath
+    var epStart = pt, epEnd = Math.min(3599.5, pt + onDur), epLen = epEnd - epStart;
+    var live = epLen >= 12;  // clamp < 12 s -> SKIP; draws still consumed
+    var third = (deepSummer && voice === 'padNight' && thirdElig < 0.5) ? 'C#5' : 'none';
+    if (voice === 'loneVoice'){
+      var modeU = pr(), count = 3 + Math.floor(pr() * 5);  // 8, 9
+      var steps = [], durs = [], gaps = [], si;
+      for (si = 0; si < count; si++){ steps.push(pr()); durs.push(4 + 3 * pr()); gaps.push(1 + 2 * pr()); }
+      if (live) emitLoneVoice(ev, preg, wm, modeU, count, steps, durs, gaps, epStart, epEnd);
+    } else {
+      var rz = drawRecipe(voice, pr);                     // 8+
+      if (live){ rz.phases.unshift(thirdPh);              // phases[0] = third-layer phase
+        emitPadWindows(ev, voice, epStart, epLen, breathF, breathU0, BREATH_DEPTH[preg], third, rz, K_V[voice]); }
     }
     pt = pt + onDur + Math.min(300, offBase / dens);
     pj++;
   }
 
-  // §3.3 the phrase-and-rest engine — cursor 0 → 3600, melodic onsets [2,3540]
+  // §3.3 the phrase-and-rest engine — onsets [2,3540]
   var mt = 0, mk = 0;
   var sigPending = moment.annTier >= 1;  // §3.6 forced Signature opener
   var figPending = !figOff;              // §3.8-2 forced figure opener (one attempt)
@@ -278,19 +357,14 @@ function composeHour(moment, opts){
     var restEff = Math.min(240, (rr[0] + (rr[1] - rr[0]) * mr()) / dens);
     var tOn = mt + restEff;
     if (tOn > 3540) break;
-    var padSon = null;
-    if (type === 'P4'){ // “the current pad sonority” — the episode in effect
-      padSon = padEps[0].son;
-      for (i = 0; i < padEps.length; i++){ if (padEps[i].t0 <= tOn) padSon = padEps[i].son; else break; }
-    }
-    mt = airPhrase(ev, type, reg, maj, tOn, mr, ksg, alt, bpm, wm, padSon);
+    mt = airPhrase(ev, type, reg, maj, tOn, mr, ksg, alt, bpm, wm, { seed: hourSeed, k: mk });
     mk++;
   }
 
-  return { events: airFinish(ev, 0) };
+  return { events: seqAssign(ev) };
 }
 
-// ---- §3.8-1 the ARM ANNOUNCEMENT — the day named at the visitor's click ----
+// §3.8-1 the ARM ANNOUNCEMENT — the day named at the click
 function armResponse(moment){
   validateMoment(moment);
   var curve = moment.altCurve, p = moment.seasonPhase;
@@ -302,19 +376,22 @@ function armResponse(moment){
   var night = reg === 'deep-night' || reg === 'evening';
   var ksg = 1;
   if ((type === 'P1' && night) || type === 'P3') ksg = 0.35 + 0.20 * r();
-  var padSon = PAD_SON[reg][0];          // first-listed, no deep-season third
   var ev = [];
-  airPhrase(ev, type, reg, maj, 0, r, ksg, alt, bpm, wm, padSon);
-  return airFinish(ev, 0x4000);          // seq disjoint from any hour score
+  // the Breath-day announcement realizes from hash2(hourSeed, 0xD7FF) (k=0x7FF)
+  airPhrase(ev, type, reg, maj, 0, r, ksg, alt, bpm, wm, { seed: moment.seed, k: 0x7FF });
+  return armSeq(ev);                     // dense from 0x4000, disjoint from any hour
 }
 
-// ---- §3.2 register at the hour's top — the fixtures' assert surface
+function figureOf(dateInt){
+  var u = mulberry32(hash2(0xDA11EA5E, dateInt))();
+  return u < 0.30 ? 'P1' : u < 0.60 ? 'P2' : u < 0.80 ? 'P3' : 'P4';
+}
+
 function registerOf(moment){
   validateMoment(moment);
   return airRegAt(moment.altCurve, 0);
 }
 
-// ---- §9 visitor-facing prose (estate voice — VERBATIM)
 var REG_LINES = {
   'deep-night': "Deep night. The estate is mostly listening; a low string, now and then, to prove the dark is inhabited.",
   'dawn': "First light. The Staircase climbs with the sun.",
@@ -345,7 +422,7 @@ function describe(moment){
   };
 }
 
-// ---- §8.1a the browser backend's own proof (VERBATIM moment; §10 locks) ----
+// §8.1a the browser backend proof (VERBATIM moment; §10 locks)
 var SELFTEST_MOMENT = { seed: 305419896, dateInt: 20260621, hour: 14, seasonPhase: 0.25,
   altCurve: [60.9, 58.9, 56.6, 54.0, 51.2], solarNoonMin: null, annTier: 0, annLabel: null };
 function airLegalSemis(){
@@ -365,17 +442,18 @@ function scoreSelfTest(){
   var n = 0, pass = true;
   function ok(c){ n++; if (!c) pass = false; }
   try {
-    // 1 — pitch-law anchors, binding-independent (literal Hz)
+    // 1 pitch-law anchors (literal Hz)
     ok(Math.abs(semiToFreq(9) - 440) <= 1e-6);
     ok(Math.abs(semiToFreq(-15) - 110) <= 1e-6);
-    // 2 — determinism
+    // 2 determinism
     var a = composeHour(SELFTEST_MOMENT), b2 = composeHour(SELFTEST_MOMENT);
     ok(JSON.stringify(a) === JSON.stringify(b2));
-    // 3 — every event frequency is semiToFreq of a §3.1a-legal semi
+    // 3 every note/toll freq is a §3.1a-legal semi (pad/wind: no freq -> skip)
     var legal = airLegalSemis(), good = true;
     for (var i = 0; i < a.events.length; i++){
       var pms = a.events[i].params;
-      var fs = pms.freqs ? pms.freqs : [pms.freq];
+      var fs = pms.freqs ? pms.freqs : (pms.freq !== undefined ? [pms.freq] : null);
+      if (fs === null) continue;
       for (var j = 0; j < fs.length; j++){
         var hit = false;
         for (var q = 0; q < legal.length; q++) if (semiToFreq(legal[q]) === fs[j]){ hit = true; break; }
@@ -383,14 +461,14 @@ function scoreSelfTest(){
       }
     }
     ok(good);
-    // 4 — the toll: t = 0.5, layer 'toll', A5 (day register at this moment)
+    // 4 the toll: t=0.5, layer 'toll', A5 (day register here)
     var toll = false;
     for (var ti = 0; ti < a.events.length; ti++){
       var e = a.events[ti];
       if (e.t === 0.5 && e.layer === 'toll' && e.params.freq === semiToFreq(21)) toll = true;
     }
     ok(toll);
-    // 5 — describe lock (independent literals — the §9 day + high-summer strings)
+    // 5 describe lock (the §9 day + high-summer strings)
     var d = describe(SELFTEST_MOMENT);
     ok(d.registerLine === "Full day. The air is open — the loom and the glass take turns, and the rests are short.");
     ok(d.seasonLine === "High summer in the air: nearly every phrase takes the bright third. The Gate's own key.");
