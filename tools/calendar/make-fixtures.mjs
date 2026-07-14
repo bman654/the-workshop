@@ -1,6 +1,7 @@
 // ============================================================================
 //  MAKE-FIXTURES — the canonical moment manifests (WS4 The Living Calendar).
-//  Binding: SCORE.md §8.2 fixture table (F-DNW … F-STRESS). Every manifest is
+//  Binding: SCORE.md §8.2 fixture table (F-DNW … F-WEV; NINE fixtures — F-WEV
+//  2026-07-07 · 20 is the distantAir/warm-evening fixture, r6). Every manifest is
 //  GENERATED from the real cores — `Calendar.momentManifest(y,m,d,hour,Hours)`
 //  — never hand-typed (DESIGN.md §6.1: dates re-derived); each asserts its
 //  intended musical register via `Score.registerOf` (the §3.2 evaluation at
@@ -35,6 +36,7 @@ const TABLE = [
   { id: 'F-EVE',    y: 2026, m: 11, d:  1, hour: 18, reg: 'evening' },
   { id: 'F-ANN',    y: 2027, m:  6, d:  7, hour: 10, reg: 'day',        annTier: 1 },
   { id: 'F-STRESS', y: 2027, m:  6, d:  7, hour: 12, reg: 'day',        annTier: 1, solarNoonMin: 1 },
+  { id: 'F-WEV',    y: 2026, m:  7, d:  7, hour: 20, reg: 'evening',    phase: 0.29 }, // the distantAir fixture — r6 (hour 20: alt −6.67° falling ⇒ evening)
 ];
 
 function fail(msg) { console.error('make-fixtures: FAIL — ' + msg); process.exit(1); }
@@ -72,4 +74,4 @@ for (const row of TABLE) {
     ' solarNoonMin=' + a.manifest.solarNoonMin +
     ' -> ' + path.relative(process.cwd(), file) + ' (' + ja.length + ' B)');
 }
-console.log('make-fixtures: 8 fixtures written, registers asserted, OK');
+console.log('make-fixtures: ' + TABLE.length + ' fixtures written, registers asserted, OK');
