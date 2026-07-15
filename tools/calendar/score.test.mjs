@@ -126,7 +126,7 @@ const P2_RISES = { 'deep-night': false, 'dawn': true, 'day': true, 'dusk': false
 const SIG_ONS = [0, 0.42, 0.84, 1.26, 1.76, 2.18];
 const SIG_DECS = [0.95, 0.98, 1.02, 1.08, 0.90, 1.55];
 const SIG_VELS = [0.34, 0.36, 0.38, 0.42, 0.37, 0.49];
-const K_V = { padNight: 0.08928, padDay: 0.041, padDawnDusk: 0.06504, padWinterDeep: 0.04491, loneVoice: 0.2032 };
+const K_V = { padNight: 0.08928, padDay: 0.041, padDawnDusk: 0.06504, padWinterDeep: 0.2670, loneVoice: 0.2032 };
 const BREATH_DEPTH = { 'deep-night': 0.45, 'evening': 0.42, 'dawn': 0.42, 'dusk': 0.42, 'day': 0.38 };
 const STEP4 = [-2, -1, 1, 2];
 function wMaj(p) { return 0.5 + 0.45 * Math.cos(2 * Math.PI * (p - 0.25)); }
@@ -192,8 +192,8 @@ function drawRecipe(voice, r) {
     seeds.push(Math.floor(r() * U32));
   } else if (voice === 'padDawnDusk') {
     for (ti = 0; ti < 2; ti++) { ph.push(r() * TWO_PI, r() * TWO_PI, r() * TWO_PI); seeds.push(Math.floor(r() * U32)); }
-  } else { // padWinterDeep
-    ph.push(r() * TWO_PI, r() * TWO_PI); seeds.push(Math.floor(r() * U32));
+  } else { // padWinterDeep r10: 3 saws/tone
+    for (ti = 0; ti < 3; ti++) for (v = 0; v < 3; v++) { det.push(1 + (v - 1) * 0.0052 + (r() - 0.5) * 0.0008); ph.push(r() * TWO_PI); }
   }
   return { detunes: det, phases: ph, seeds: seeds };
 }
