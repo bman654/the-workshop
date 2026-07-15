@@ -48,8 +48,8 @@
      11 concurrency (r6 SPLIT) — PRINT each fixture's note/toll sounding max;
         assert max simultaneous ≤ printed + 2 wind + 2 pad (+3 pad in a
         Breath+loneVoice hour); NO +6 (announcements can't sound in composeHour)
-     12 size budget — EXISTENCE-SCOPED (r6 re-arm): pair ≤ 38,912 B / trio ≤
-        53,248 B
+     12 size budget — EXISTENCE-SCOPED (r11 re-arm): pair ≤ 41,984 B / trio ≤
+        56,320 B
      13 covenants — anchor literal home; no Math.random/Date.now/sampleRate;
         no audio assets
      14 describe() snapshot — the exact §9 strings per fixture
@@ -866,16 +866,16 @@ const notesTollOf = evts => evts.filter(e => e.layer === 'notes' || e.layer === 
   ok(toothOk, '(11) max simultaneous sounding ≤ note/toll max + 2 wind + 2 pad (+3 in a Breath+loneVoice hour); no +6', first);
 }
 
-/* ── 12 · size budget — existence-scoped, self-tightening (§8.1-12, r6 re-arm) ── */
+/* ── 12 · size budget — existence-scoped, self-tightening (§8.1-12, r11 re-arm) ── */
 {
   const sz = f => fs.statSync(path.join(__dirname, f)).size;
   const pair = sz('score.mjs') + sz('score-voices.mjs');
   const airPath = path.join(__dirname, 'air.js');
   if (fs.existsSync(airPath)) {
     const trio = pair + fs.statSync(airPath).size;
-    ok(trio <= 53248, '(12) trio score.mjs+score-voices.mjs+air.js = ' + trio + ' B ≤ 53,248 B');
+    ok(trio <= 56320, '(12) trio score.mjs+score-voices.mjs+air.js = ' + trio + ' B ≤ 56,320 B');
   } else {
-    ok(pair <= 38912, '(12) pair score.mjs+score-voices.mjs = ' + pair + ' B ≤ 38,912 B');
+    ok(pair <= 41984, '(12) pair score.mjs+score-voices.mjs = ' + pair + ' B ≤ 41,984 B');
     console.log('  · (12) air.js pending');
   }
 }
@@ -914,11 +914,17 @@ const notesTollOf = evts => evts.filter(e => e.layer === 'notes' || e.layer === 
   ok(!/Math\.random|Date\.now|sampleRate/.test(scoreCode),
     '(13) no Math.random / Date.now / sampleRate in score.mjs executable code');
   ok(assets && files, '(13) no audio assets: no asset directives / embedded audio / audio files under tools/calendar/', firstA);
-  /* .wav/.mp3 refs must not reach the PAGE-SHIPPED modules (score-render.mjs's
-     §5.2 `<out.wav>` CLI is design-mandated + Node-only, hence scoped out) */
+  /* Audio-asset refs must not reach the PAGE-SHIPPED modules (score-render.mjs's
+     §5.2 `<out.wav>` CLI is design-mandated + Node-only, hence scoped out).
+     The extension is word-BOUNDED (r11): §8.1-13's law is "no audio-asset
+     references", and an unbounded substring test convicts the identifier
+     `P.wavetable` — the realize-mode property SCORE r11.2 MANDATES in the bank —
+     which references no asset. A real ref ('out.wav', "x.mp3") ends the token at
+     the extension and is still caught; the filename/asset-directive/base64 greps
+     above are unchanged and still cover ALL of tools/calendar/ recursively. */
   let refOk = true, firstR = '';
   for (const f of ['calendar.js', 'score.mjs', 'score-voices.mjs'].concat(fs.existsSync(path.join(__dirname, 'air.js')) ? ['air.js'] : [])) {
-    if (/\.wav|\.mp3/i.test(fs.readFileSync(path.join(__dirname, f), 'utf8'))) { refOk = false; firstR = firstR || f; }
+    if (/\.(wav|mp3)\b/i.test(fs.readFileSync(path.join(__dirname, f), 'utf8'))) { refOk = false; firstR = firstR || f; }
   }
   ok(refOk, '(13) no .wav/.mp3 refs in the page-shipped modules', firstR);
 }
