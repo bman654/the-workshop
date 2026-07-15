@@ -32,7 +32,13 @@
 //        > 20 AND depthPct ≥ 0.25; gatedWindows ≥ 6/10; P0 self-calibration
 //        (sharpness ≥ 60 AND depth ≥ 2 %) + the 16-seed spread per voice; and
 //        (b) the tile-law byte gate (the four chord pads + the loneVoice
-//        diagnostic rendered windowed-8-s vs continuous → SHA-256 identical).
+//        diagnostic rendered windowed-8-s vs continuous → SHA-256 identical),
+//        EXTENDED at r11.3 with the STREAM CONTRACT's tooth: every pad + wind
+//        voice in DIRECT mode, chunked-vs-atomic SHA-256 identical at a PINNED
+//        adversarial partition (uneven chunks incl. 1-sample chunks, a chunk
+//        crossing the wind's 1-s pre-roll boundary, a chunk crossing an 8-s
+//        window seam). A mismatch is an implementation defect, never a design
+//        question.
 //        Procedure PORTED from research/r6-calibration-reference.mjs (the file
 //        IS the law); prose in SCORE r6 defers to it on procedure.
 //
@@ -56,7 +62,10 @@ import {
 } from '../audio-lens/src/analyzers.js';
 import { KEY, composeHour } from './score.mjs';
 import { MASTER, WIND_TIER, windBandRms, renderMix } from './score-render.mjs';
-import { padNight, padDay, padDawnDusk, padWinterDeep, loneVoiceSwell } from './score-voices.mjs';
+import {
+  padNight, padDay, padDawnDusk, padWinterDeep, loneVoiceSwell, windBed,
+  padNightStream, padDayStream, padDawnDuskStream, padWinterDeepStream, windBedStream,
+} from './score-voices.mjs';
 
 const require = createRequire(import.meta.url);
 const Hours = require('../hours/hours.js'); // read-only consume (DESIGN §1.8)
@@ -108,6 +117,27 @@ const DIAG = {
   },
 };
 const PAD_FN = { padNight, padDay, padDawnDusk, padWinterDeep };
+const PAD_STREAM = { padNight: padNightStream, padDay: padDayStream, padDawnDusk: padDawnDuskStream, padWinterDeep: padWinterDeepStream };
+
+// r11.3 — THE STREAM CONTRACT'S TOOTH (declared here, like DIAG above, so
+// runG10() sees it before its call). The r11.1 law: for ANY partition of
+// [0, D) the concatenated `fill`s equal the atomic render of D, sample-for-
+// sample (the atomic entries are thin wrappers over the stream — one realize
+// path). The PINNED adversarial partition cuts at these sample indices
+// (SR 44100, so 44100 = 1 s and 352800 = an 8-s window seam):
+//   [0, 1)   the wind's pre-roll boundary — the pre-roll [winFrom−1, winFrom)
+//            is consumed into a discarded scratch AT CONSTRUCTION, so index 0
+//            is the stream's own head: the maximally adversarial form of a
+//            chunk over that boundary is this 1-sample chunk, which catches
+//            any re-seed / state restart on the first fill;
+//   [44099, 44101)   a 2-sample chunk CROSSING the 1-s mark;
+//   [352799, 352801) a 2-sample chunk CROSSING the 8-s window seam;
+//   plus further 1-sample chunks and grossly uneven spans (97 · 43,999 · … ).
+const G10B_CUTS = [1, 2, 3, 100, 44099, 44101, 44102, 200000, 352799, 352801, 400000, 500000];
+// the pinned wind seat: a lawful window (winFrom a multiple of 30, the r6.2
+// 30.25-s buffer), one per preset — DIRECT mode throughout (padDay's wavetable
+// realize is a LIVE mode; r11.3 scopes this tooth to direct evaluation).
+const G10B_WIND = { hourWindSeedInt: 12345, winFrom: 300, winDur: 30.25 };
 const DIAG_RECIPE = { padNight: 'padNight', padDay: 'padDay', padDawnDusk: 'padDawnDusk', padWinterDeep: 'padWinterDeep', padNightThird: 'padNight' };
 
 // §3.3 P5 the Signature — onsets verbatim (the logotune's clock)
@@ -468,6 +498,20 @@ function windowedPad(name, P, seconds, winS) {
   }
   return concatF32(parts);
 }
+function partition(total) {
+  const out = []; let p = 0;
+  for (const c of G10B_CUTS) if (c > p && c < total) { out.push(c - p); p = c; }
+  if (p < total) out.push(total - p);
+  return out;
+}
+function chunkedStream(stream, total) {
+  const out = new Float32Array(total), parts = partition(total);
+  let p = 0;
+  for (const n of parts) { const b = new Float32Array(n); stream.fill(b, n); out.set(b, p); p += n; }
+  if (p !== total) throw new Error('partition sums to ' + p + ', not ' + total);
+  return out;
+}
+
 // loneVoice diagnostic events (the pinned plan: 5 swells dur 6, gaps [2,2,1.2,2];
 // swells 3→4 connect at gap 1.2 — the bridge/handoff law across a window seam)
 function loneEvents() {
@@ -528,4 +572,24 @@ function runG10() {
     const win = concatF32(parts);
     ok(win.length === cont.length && bufSha(cont) === bufSha(win), 'G10(b) loneVoice windowed 8-s ≡ continuous (SHA-256)');
   }
+
+  // (b) r11.3 — the stream contract's tooth: chunked ≡ atomic at the PINNED
+  // adversarial partition, every pad + wind voice, DIRECT mode.
+  for (const name of ['padNight', 'padDay', 'padDawnDusk', 'padWinterDeep']) {
+    const P = { ...diagPadParams(name, mulberry32(0xD1A6 + DIAG.voices[name].idx)), seconds: 60 };
+    const cont = PAD_FN[DIAG_RECIPE[name]](SR, P);
+    const chunks = partition(cont.length);
+    const chk = chunkedStream(PAD_STREAM[DIAG_RECIPE[name]](SR, P), cont.length);
+    ok(chk.length === cont.length && bufSha(cont) === bufSha(chk),
+      'G10(b) ' + name + ' chunked ≡ atomic at the pinned partition (' + chunks.length + ' chunks, SHA-256)');
+  }
+  for (const preset of ['plain', 'winterThin', 'distantAir']) {
+    const P = { preset, ...G10B_WIND };
+    const cont = windBed(SR, P);
+    const chunks = partition(cont.length);
+    const chk = chunkedStream(windBedStream(SR, P), cont.length);
+    ok(chk.length === cont.length && bufSha(cont) === bufSha(chk),
+      'G10(b) windBed ' + preset + ' chunked ≡ atomic at the pinned partition (' + chunks.length + ' chunks, SHA-256)');
+  }
+  console.log('  · G10(b) r11.3 partition: cuts ' + G10B_CUTS.join('/') + ' — 1-sample chunks incl. [0,1) at the wind pre-roll boundary; [44099,44101) crosses 1 s; [352799,352801) crosses the 8-s seam');
 }
