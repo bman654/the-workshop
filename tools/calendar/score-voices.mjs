@@ -195,11 +195,19 @@ function sawTable(comp, knee){
     for (let j = 0; j <= WT_N; j++) t[j] += amp * Math.sin(php + 2 * Math.PI * harm * j / WT_N); }
   return t;
 }
+// r12.5: fmod-free, yet STILL strictly index-computed (no running phase
+// accumulator — G10(b) bans that; every sample stays a pure function of its
+// absolute index, so chunked == atomic BY CONSTRUCTION). BIT-IDENTICAL to the
+// fmod form it replaces: WT_N is a power of two, so `step = dp * WT_N` and
+// `pos = step * (i0 + i)` are exactly WT_N * (dp * (i0 + i)) — same rounding —
+// and `floor(pos) & (WT_N - 1)` is floor(pos) mod WT_N (ToInt32 reduces mod 2^32,
+// which WT_N divides), i.e. the same table index and the same fraction the fmod
+// form computed. Costs one float modulo per sample per component less.
 function wtBank(out, n, i0, sr, comps, tabs){
-  for (let c = 0; c < comps.length; c++){ const dp = comps[c][0] / sr, tg = comps[c][2], t = tabs[c];
-    for (let i = 0; i < n; i++){          // dp > 0, i0 + i >= 0 => x % 1 is already in [0,1)
-      const x = (dp * (i0 + i)) % 1 * WT_N, j = Math.floor(x), fr = x - j;
-      out[i] += tg * (t[j] + (t[j + 1] - t[j]) * fr); } }
+  for (let c = 0; c < comps.length; c++){ const step = comps[c][0] / sr * WT_N, tg = comps[c][2], t = tabs[c];
+    for (let i = 0; i < n; i++){
+      const pos = step * (i0 + i), fl = Math.floor(pos), j = fl & (WT_N - 1);
+      out[i] += tg * (t[j] + (t[j + 1] - t[j]) * (pos - fl)); } }
 }
 
 // pad voices — whole-episode tone x breath; realize params drawn in r6.3 order.
