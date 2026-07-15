@@ -99,7 +99,7 @@ var SIG_DECS = [0.95, 0.98, 1.02, 1.08, 0.90, 1.55];
 var SIG_VELS = [0.34, 0.36, 0.38, 0.42, 0.37, 0.49];
 function celLen(dec){ return dec * 1.15 + 0.12; }
 
-var K_V = { padNight: 0.08928, padDay: 0.041, padDawnDusk: 0.06504, padWinterDeep: 0.04491, loneVoice: 0.2032 };
+var K_V = { padNight: 0.08928, padDay: 0.041, padDawnDusk: 0.06504, padWinterDeep: 0.2670, loneVoice: 0.2032 };
 var BREATH_DEPTH = { 'deep-night': 0.45, 'evening': 0.42, 'dawn': 0.42, 'dusk': 0.42, 'day': 0.38 };
 var STEP4 = [-2, -1, 1, 2];  // r6.3 loneVoice step map
 
@@ -119,8 +119,7 @@ function slotPick(reg, wm, u){
 }
 function slotTop(reg, wm){ return slotTable(reg, wm)[0][0]; }
 
-// r6.3 recipe draws (items 8+) in draw order; the caller prepends the
-// third-layer phase as phases[0].
+// r6.3 recipe draws (8+) in draw order; caller prepends third as phases[0].
 function drawRecipe(voice, r){
   var det = [], ph = [], seeds = [], i, ti, v;
   if (voice === 'padNight'){
@@ -131,14 +130,14 @@ function drawRecipe(voice, r){
     seeds.push(Math.floor(r() * U32));
   } else if (voice === 'padDawnDusk'){
     for (ti = 0; ti < 2; ti++){ ph.push(r() * TWO_PI, r() * TWO_PI, r() * TWO_PI); seeds.push(Math.floor(r() * U32)); }
-  } else {  // padWinterDeep
-    ph.push(r() * TWO_PI, r() * TWO_PI); seeds.push(Math.floor(r() * U32));
+  } else {  // padWinterDeep r10: 3 saws/tone
+    for (ti = 0; ti < 3; ti++) for (v = 0; v < 3; v++){ det.push(1 + (v - 1) * 0.0052 + (r() - 0.5) * 0.0008); ph.push(r() * TWO_PI); }
   }
   return { detunes: det, phases: ph, seeds: seeds };
 }
 
-// r6.1 episode-signal law — 8-s WINDOWS of one continuous signal (last
-// truncated at epEnd); realize/breath/third are event-carried.
+// r6.1 episode-signal law: 8-s WINDOWS of one continuous signal (last
+// truncated at epEnd); realize/breath/third event-carried.
 function emitPadWindows(out, voice, epStart, epLen, breathF, breathU0, depth, third, realize, gain){
   var epEnd = epStart + epLen, ti = 0;
   for (var wf = epStart; wf < epEnd - 1e-6; wf += 8){
