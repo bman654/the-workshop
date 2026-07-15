@@ -7,8 +7,10 @@
 //  P5 loneVoice / W1-3 windBed); seeds §4-r6, levels r6.2, walkers r6.3 knot-
 //  lattices. PURE: no clock/random/storage/DOM (free id semiToFreq imported above
 //  the sentinels). Voice (sr,params) -> Float32Array mono; pad = whole-episode tone
-//  x breath, episode ramps + k_V ride on top at realize. Monochord: pages inline a
-//  byte-twin of the sentinel slice (classic-script inside; export below END).
+//  x breath, episode ramps + k_V ride on top at realize. Every pad+wind voice also
+//  has an r11.1 STREAM form the live conductor drives incrementally (see the
+//  contract below). Monochord: pages inline a byte-twin of the sentinel slice
+//  (classic-script inside; export below END).
 // ============================================================================
 
 import { semiToFreq } from '../../sound-garden/pitch-core.mjs';
@@ -152,82 +154,121 @@ function knot(S, lo, hi, P){
   };
 }
 
+// r11.1 THE STREAM CONTRACT — every pad+wind voice has a cursor form beside its atomic
+// entry: `<voice>Stream(sr,P) -> {fill(out,n)}`. Construction seeds/pre-rolls/sets up
+// walkers EXACTLY as the atomic form; fill writes the NEXT n samples of the SAME signal,
+// carrying all generator/filter state + the absolute index. LAW: for ANY partition of
+// [0,D) the concatenated fills EQUAL the atomic render of D sample-for-sample — BY
+// CONSTRUCTION: the atomic entries are THIN WRAPPERS over the stream. ONE realize path;
+// air.js drives these, carrying no recipe DSP. `out` must be a Float32Array (its per-add
+// rounding IS the signal); pads zero [0,n). CONSTRUCT-then-ADVANCE — built at the
+// window/episode HEAD (where the salt is defined), never seeking a mid-window offset.
+
+// the breath ride (all pads) at absolute sample index i0+i
+function breathe(out, n, i0, sr, P){
+  for (let i = 0; i < n; i++) out[i] *= breathEnv((i0 + i) / sr, { f: P.breathF, depth: P.depth, u0: P.breathU0 });
+}
+// detuned-saw ensemble: comps = [freq, phase, toneGain] in r6.3 draw order, knee =
+// the tilt corner. Component-major then harmonic-major — the order IS the signal
+// (each += rounds through the Float32Array).
+function sawComps(tones, detunes, phases){
+  const c = [];
+  for (let ti = 0, d = 0; ti < tones.length; ti++) for (let v = 0; v < 3; v++, d++)
+    c.push([tones[ti][0] * detunes[d], phases[d], tones[ti][1]]);
+  return c;
+}
+function sawBank(out, n, i0, sr, comps, knee){
+  for (let c = 0; c < comps.length; c++){ const f = comps[c][0], ph = comps[c][1], tg = comps[c][2], N = Math.min(40, Math.floor(5000 / f));
+    for (let harm = 1; harm <= N; harm++){ const fp = f * harm, amp = (1 / harm) * (1 / (1 + Math.pow(fp / knee, 2))) * 0.22;
+      if (amp < 0.002) continue; const w = 2 * Math.PI * fp / sr, php = ph * harm % (2 * Math.PI);
+      for (let i = 0; i < n; i++) out[i] += tg * amp * Math.sin(php + w * (i0 + i)); } }
+}
+// r11.2 WAVETABLE realize MODE (padDay `wavetable:true` — the LIVE path only):
+// one band-limited single cycle PER COMPONENT, 4096 samples, linear interp. An
+// AUDIBLE-equivalence claim, NOT a bitwise one; §5.4 row (b3) freezes the parity
+// at T3.1. Offline/Node keeps the direct sum.
+const WT_N = 4096;
+function sawTable(comp, knee){
+  const f = comp[0], ph = comp[1], t = new Float32Array(WT_N + 1), N = Math.min(40, Math.floor(5000 / f));
+  for (let harm = 1; harm <= N; harm++){ const fp = f * harm, amp = (1 / harm) * (1 / (1 + Math.pow(fp / knee, 2))) * 0.22;
+    if (amp < 0.002) continue; const php = ph * harm % (2 * Math.PI);
+    for (let j = 0; j <= WT_N; j++) t[j] += amp * Math.sin(php + 2 * Math.PI * harm * j / WT_N); }
+  return t;
+}
+function wtBank(out, n, i0, sr, comps, tabs){
+  for (let c = 0; c < comps.length; c++){ const dp = comps[c][0] / sr, tg = comps[c][2], t = tabs[c];
+    for (let i = 0; i < n; i++){          // dp > 0, i0 + i >= 0 => x % 1 is already in [0,1)
+      const x = (dp * (i0 + i)) % 1 * WT_N, j = Math.floor(x), fr = x - j;
+      out[i] += tg * (t[j] + (t[j + 1] - t[j]) * fr); } }
+}
+
 // pad voices — whole-episode tone x breath; realize params drawn in r6.3 order.
-function padNight(sr, P){          // P1 {A2,E4}
-  const { seconds, detunes, phases } = P;
-  const n = Math.round(sr * seconds), out = new Float32Array(n);
+function padNightStream(sr, P){ // P1 {A2,E4}
+  const { detunes, phases } = P;
   const layers = [[110.0, 1, 0.55], [110.0, 2, 0.16], [110.0, 4, 0.05], [329.63, 1, 0.34], [329.63, 2, 0.08]];
-  for (let k = 0; k < 5; k++){
-    const f0 = layers[k][0], ratio = layers[k][1], g = layers[k][2];
-    const w = 2 * Math.PI * f0 * ratio * detunes[k] / sr, ph = phases[k];
-    for (let i = 0; i < n; i++) out[i] += g * Math.sin(ph + w * i);
-  }
-  if (P.third === 'C#5'){                          // deep-summer bright third (r7)
-    const w = 2 * Math.PI * 554.37 / sr, ph = P.thirdPhase || 0;
-    for (let i = 0; i < n; i++) out[i] += 0.08 * Math.sin(ph + w * i);
-  }
-  for (let i = 0; i < n; i++) out[i] *= breathEnv(i / sr, { f: P.breathF, depth: P.depth, u0: P.breathU0 });
-  return out;
+  let i0 = 0;
+  return { fill(out, n){
+    out.fill(0, 0, n);
+    for (let k = 0; k < 5; k++){ const f0 = layers[k][0], ratio = layers[k][1], g = layers[k][2];
+      const w = 2 * Math.PI * f0 * ratio * detunes[k] / sr, ph = phases[k];
+      for (let i = 0; i < n; i++) out[i] += g * Math.sin(ph + w * (i0 + i)); }
+    if (P.third === 'C#5'){                        // deep-summer bright third (r7)
+      const w = 2 * Math.PI * 554.37 / sr, ph = P.thirdPhase || 0;
+      for (let i = 0; i < n; i++) out[i] += 0.08 * Math.sin(ph + w * (i0 + i)); }
+    breathe(out, n, i0, sr, P); i0 += n;
+  } };
 }
-function padDay(sr, P){            // P2 saws {A2,A3,E4}->LP
-  const { seconds, detunes, phases, seeds } = P;
+function padDayStream(sr, P){ // P2 saws {A2,A3,E4}->LP
+  const comps = sawComps([[110.0, 1], [220.0, 1], [329.63, 1]], P.detunes, P.phases);
+  const tabs = P.wavetable ? comps.map((c) => sawTable(c, 750)) : null;
+  const wander = knot(P.seeds[0], 550, 1000, 3.5);
+  let y = 0, i0 = 0;
+  return { fill(out, n){
+    out.fill(0, 0, n);
+    if (tabs) wtBank(out, n, i0, sr, comps, tabs); else sawBank(out, n, i0, sr, comps, 750);
+    for (let i = 0; i < n; i++){ const k = 1 - Math.exp(-2 * Math.PI * wander((i0 + i) / sr) / sr);
+      y += k * (out[i] - y); out[i] = y * 2.2; }
+    breathe(out, n, i0, sr, P); i0 += n;
+  } };
+}
+function padDawnDuskStream(sr, P){ // P3 {A3,E4}+air
+  const { phases, seeds } = P, tones = [220.0, 329.63], st = [];
+  for (let ti = 0; ti < 2; ti++) st.push([pinkGen(mulberry32(seeds[ti])), svf()]);
+  let i0 = 0;
+  return { fill(out, n){
+    out.fill(0, 0, n);
+    for (let ti = 0; ti < 2; ti++){ const f0 = tones[ti], pink = st[ti][0], bp = st[ti][1];
+      const ph1 = phases[ti * 3], ph2 = phases[ti * 3 + 1], ph3 = phases[ti * 3 + 2];
+      const w1 = 2 * Math.PI * f0 / sr, w2 = 2 * w1, w3 = 3 * w1;
+      for (let i = 0; i < n; i++){ const a = i0 + i;
+        const tone = 0.42 * Math.sin(ph1 + w1 * a) + 0.10 * Math.sin(ph2 + w2 * a) + 0.035 * Math.sin(ph3 + w3 * a);
+        const air = bp(pink() * 3.0, f0, 14).band * 0.5;
+        out[i] += tone + air; } }
+    breathe(out, n, i0, sr, P); i0 += n;
+  } };
+}
+function padWinterDeepStream(sr, P){ // P6 r10: 3 detuned saws/tone {A3,E4,A4}->LP300, no noise
+  const comps = sawComps([[220.0, 1.0], [329.63, 0.6], [440.0, 0.5]], P.detunes, P.phases);
+  const k300 = 1 - Math.exp(-2 * Math.PI * 300 / sr);
+  let y = 0, i0 = 0;
+  return { fill(out, n){
+    out.fill(0, 0, n);
+    sawBank(out, n, i0, sr, comps, 150);
+    for (let i = 0; i < n; i++){ y += k300 * (out[i] - y); out[i] = y * 2.2; }
+    breathe(out, n, i0, sr, P); i0 += n;
+  } };
+}
+
+// the atomic entries — THIN WRAPPERS; signatures/output UNCHANGED (r11.4-locked).
+function atomic(stream, sr, seconds){
   const n = Math.round(sr * seconds), out = new Float32Array(n);
-  const tones = [110.0, 220.0, 329.63];
-  let d = 0;
-  for (let ti = 0; ti < 3; ti++){
-    const f0 = tones[ti];
-    for (let v = 0; v < 3; v++){
-      const f = f0 * detunes[d], ph = phases[d]; d++;
-      const N = Math.min(40, Math.floor(5000 / f));
-      for (let harm = 1; harm <= N; harm++){
-        const fp = f * harm;
-        const amp = (1 / harm) * (1 / (1 + Math.pow(fp / 750, 2))) * 0.22;
-        if (amp < 0.002) continue;
-        const w = 2 * Math.PI * fp / sr, php = ph * harm % (2 * Math.PI);
-        for (let i = 0; i < n; i++) out[i] += amp * Math.sin(php + w * i);
-      }
-    }
-  }
-  const wander = knot(seeds[0], 550, 1000, 3.5);
-  let y = 0;
-  for (let i = 0; i < n; i++){
-    const k = 1 - Math.exp(-2 * Math.PI * wander(i / sr) / sr);
-    y += k * (out[i] - y); out[i] = y * 2.2;
-  }
-  for (let i = 0; i < n; i++) out[i] *= breathEnv(i / sr, { f: P.breathF, depth: P.depth, u0: P.breathU0 });
+  stream.fill(out, n);
   return out;
 }
-function padDawnDusk(sr, P){       // P3 {A3,E4}+air
-  const { seconds, phases, seeds } = P;
-  const n = Math.round(sr * seconds), out = new Float32Array(n);
-  const tones = [220.0, 329.63];
-  for (let ti = 0; ti < 2; ti++){
-    const f0 = tones[ti];
-    const ph1 = phases[ti * 3], ph2 = phases[ti * 3 + 1], ph3 = phases[ti * 3 + 2];
-    const w1 = 2 * Math.PI * f0 / sr, w2 = 2 * w1, w3 = 3 * w1;
-    const pink = pinkGen(mulberry32(seeds[ti])), bp = svf();
-    for (let i = 0; i < n; i++){
-      const tone = 0.42 * Math.sin(ph1 + w1 * i) + 0.10 * Math.sin(ph2 + w2 * i) + 0.035 * Math.sin(ph3 + w3 * i);
-      const air = bp(pink() * 3.0, f0, 14).band * 0.5;
-      out[i] += tone + air;
-    }
-  }
-  for (let i = 0; i < n; i++) out[i] *= breathEnv(i / sr, { f: P.breathF, depth: P.depth, u0: P.breathU0 });
-  return out;
-}
-function padWinterDeep(sr, P){     // P6 r10: 3 detuned saws/tone {A3,E4,A4}->LP300, no noise
-  const { seconds, detunes, phases } = P, n = Math.round(sr * seconds), out = new Float32Array(n);
-  const tones = [[220.0, 1.0], [329.63, 0.6], [440.0, 0.5]];
-  for (let ti = 0, d = 0; ti < 3; ti++){ const f0 = tones[ti][0], tg = tones[ti][1];
-    for (let v = 0; v < 3; v++, d++){ const f = f0 * detunes[d], ph = phases[d], N = Math.min(40, Math.floor(5000 / f));
-      for (let harm = 1; harm <= N; harm++){ const fp = f * harm, amp = (1 / harm) * (1 / (1 + Math.pow(fp / 150, 2))) * 0.22;
-        if (amp < 0.002) continue; const w = 2 * Math.PI * fp / sr, php = ph * harm % (2 * Math.PI);
-        for (let i = 0; i < n; i++) out[i] += tg * amp * Math.sin(php + w * i); } } }
-  const k300 = 1 - Math.exp(-2 * Math.PI * 300 / sr); let y = 0;
-  for (let i = 0; i < n; i++){ y += k300 * (out[i] - y); out[i] = y * 2.2; }
-  for (let i = 0; i < n; i++) out[i] *= breathEnv(i / sr, { f: P.breathF, depth: P.depth, u0: P.breathU0 });
-  return out;
-}
+function padNight(sr, P){ return atomic(padNightStream(sr, P), sr, P.seconds); }
+function padDay(sr, P){ return atomic(padDayStream(sr, P), sr, P.seconds); }
+function padDawnDusk(sr, P){ return atomic(padDawnDuskStream(sr, P), sr, P.seconds); }
+function padWinterDeep(sr, P){ return atomic(padWinterDeepStream(sr, P), sr, P.seconds); }
 
 // loneVoice — one gliding near-sine per SWELL (P5 + the r6.4 walk law), realized
 // from the event fields (prevNote/gapS = this swell owns the bridge in, portamento
@@ -271,42 +312,40 @@ function loneVoiceSwell(sr, P){
 // windBed — one 30.25-s window of the seekable wind floor (r6.2/r6.3). Salts: noise
 // = hash2(seedInt,1000+windowIndex), lattices = hash2(seedInt,compIndex). 1-s pre-
 // roll [winFrom-1,winFrom) primes steady state before sample 0; ramps/seams outside.
-function windBed(sr, P){
-  const { preset, hourWindSeedInt, winFrom, winDur } = P;
-  const n = Math.round(sr * winDur), out = new Float32Array(n);
-  const pre = Math.round(sr);
+function windBedStream(sr, P){
+  const { preset, hourWindSeedInt, winFrom } = P;
   const rnd = mulberry32(hash2(hourWindSeedInt, 1000 + Math.round(winFrom / 30)));
+  let run;                    // the preset's sample loop, out[i] = the sample at absolute i0+i
   if (preset === 'plain'){
     const cut = knot(hash2(hourWindSeedInt, 0), 380, 900, 4.0);
     const gust = knot(hash2(hourWindSeedInt, 1), 0.55, 1.35, 6.5);
     const pink = pinkGen(rnd); let y = 0;
-    for (let i = -pre; i < n; i++){
-      const ht = winFrom + i / sr, k = 1 - Math.exp(-2 * Math.PI * cut(ht) / sr);
-      y += k * (pink() - y);
-      if (i >= 0) out[i] = y * gust(ht);
-    }
+    run = (out, n, i0) => { for (let i = 0; i < n; i++){
+      const ht = winFrom + (i0 + i) / sr, k = 1 - Math.exp(-2 * Math.PI * cut(ht) / sr);
+      y += k * (pink() - y); out[i] = y * gust(ht); } };
   } else if (preset === 'winterThin'){
     const center = knot(hash2(hourWindSeedInt, 0), 900, 1900, 3.0);
     const gust = knot(hash2(hourWindSeedInt, 1), 0.45, 1.5, 4.5);
     const wc = knot(hash2(hourWindSeedInt, 2), 1300, 2100, 2.2);
     const pink = pinkGen(rnd), bed = svf(), whistle = svf();
-    for (let i = -pre; i < n; i++){
-      const ht = winFrom + i / sr, p = pink();
+    run = (out, n, i0) => { for (let i = 0; i < n; i++){
+      const ht = winFrom + (i0 + i) / sr, p = pink();
       const b = bed(p, center(ht), 1.6).band, wh = whistle(p, wc(ht), 22).band;
-      if (i >= 0) out[i] = (b * 1.0 + wh * 0.22) * gust(ht);
-    }
+      out[i] = (b * 1.0 + wh * 0.22) * gust(ht); } };
   } else {
     const cut = knot(hash2(hourWindSeedInt, 0), 200, 320, 5.0);
     const gust = knot(hash2(hourWindSeedInt, 1), 0.8, 1.15, 8.0);
     const brown = brownGen(rnd); let y = 0;
-    for (let i = -pre; i < n; i++){
-      const ht = winFrom + i / sr, k = 1 - Math.exp(-2 * Math.PI * cut(ht) / sr);
-      y += k * (brown() - y);
-      if (i >= 0) out[i] = y * gust(ht) * 3.0;
-    }
+    run = (out, n, i0) => { for (let i = 0; i < n; i++){
+      const ht = winFrom + (i0 + i) / sr, k = 1 - Math.exp(-2 * Math.PI * cut(ht) / sr);
+      y += k * (brown() - y); out[i] = y * gust(ht) * 3.0; } };
   }
-  return out;
+  const pre = Math.round(sr);   // the 1-s pre-roll: primes steady state into a discarded
+  run(new Float32Array(pre), pre, -pre);   // scratch (the store never feeds back into state)
+  let i0 = 0;
+  return { fill(out, n){ run(out, n, i0); i0 += n; } };
 }
+function windBed(sr, P){ return atomic(windBedStream(sr, P), sr, P.winDur); }
 
 // one-pole lowpass coefficient for a given cutoff
 function onePoleK(sr, fc){ return 1 - Math.exp(-2*Math.PI*fc/sr); }
@@ -333,5 +372,6 @@ function mixIn(L, R, buf, offset, gain, pan){
 export {
   ksPluck, celesta, breathEnv, pinkGen, brownGen, svf, knot,
   padNight, padDay, padDawnDusk, padWinterDeep, loneVoiceSwell, windBed,
+  padNightStream, padDayStream, padDawnDuskStream, padWinterDeepStream, windBedStream,
   onePoleK, panGains, mixIn,
 };
