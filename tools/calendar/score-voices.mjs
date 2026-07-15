@@ -1,16 +1,14 @@
 // ============================================================================
 //  CALENDAR SCORE VOICES — the AIR's voice bank (WS4 The Living Calendar).
-//  Note voices (ksPluck/celesta/onePoleK/panGains/mixIn) VERBATIM from the trailer
-//  palette (05-trailer/design/music-prototype), diegetic voices excluded (§5.1).
-//  Pad+wind per SCORE r6: the retired chord pad is DELETED (SP-EAR round 1 rejected
-//  its low-fifth buzz + throbbing seams); RECIPE constants VERBATIM from research/
-//  r6-audition-reference.mjs (P1->padNight P2->padDay P3->padDawnDusk P6->padWinter
-//  Deep P5->loneVoice W1/W2/W3->windBed), seeds from §4-r6 (r6.3), levels from r6.2;
-//  walkers are r6.3 knot-lattices. Voice: (sr, params) -> Float32Array (mono). PURE
-//  (no clock/random/storage/DOM; free id `semiToFreq`, imported above sentinels).
-//  Pad renders are whole-episode tone x breath (§5.4/r6.2); episode ramps + k_V
-//  ride on top at realize time. Monochord: pages inline a byte-twin of the sentinel
-//  slice (classic-script inside; export below END).
+//  Note voices ksPluck/celesta/onePoleK/panGains/mixIn VERBATIM from the trailer
+//  palette (05-trailer/design/music-prototype); diegetic voices excluded (§5.1).
+//  Pads+wind per SCORE r6 (chord pad DELETED — SP-EAR rejected its low-fifth buzz).
+//  RECIPE constants VERBATIM from research/r6-audition-reference.mjs (P1-3,6 pads /
+//  P5 loneVoice / W1-3 windBed); seeds §4-r6, levels r6.2, walkers r6.3 knot-
+//  lattices. PURE: no clock/random/storage/DOM (free id semiToFreq imported above
+//  the sentinels). Voice (sr,params) -> Float32Array mono; pad = whole-episode tone
+//  x breath, episode ramps + k_V ride on top at realize. Monochord: pages inline a
+//  byte-twin of the sentinel slice (classic-script inside; export below END).
 // ============================================================================
 
 import { semiToFreq } from '../../sound-garden/pitch-core.mjs';
@@ -154,7 +152,7 @@ function knot(S, lo, hi, P){
   };
 }
 
-// pad voices — whole-episode tone x breath; realize {detunes,phases,seeds} in r6.3 order.
+// pad voices — whole-episode tone x breath; realize params drawn in r6.3 order.
 function padNight(sr, P){          // P1 {A2,E4}
   const { seconds, detunes, phases } = P;
   const n = Math.round(sr * seconds), out = new Float32Array(n);
@@ -217,27 +215,24 @@ function padDawnDusk(sr, P){       // P3 {A3,E4}+air
   for (let i = 0; i < n; i++) out[i] *= breathEnv(i / sr, { f: P.breathF, depth: P.depth, u0: P.breathU0 });
   return out;
 }
-function padWinterDeep(sr, P){     // P6 low A octave
-  const { seconds, phases, seeds } = P;
-  const n = Math.round(sr * seconds), out = new Float32Array(n);
-  const tones = [[110.0, 0.5], [220.0, 0.18]];
-  for (let k = 0; k < 2; k++){
-    const f0 = tones[k][0], g = tones[k][1];
-    const w = 2 * Math.PI * f0 / sr, ph = phases[k];
-    for (let i = 0; i < n; i++) out[i] += g * Math.sin(ph + w * i);
-  }
-  const brown = brownGen(mulberry32(seeds[0]));
-  const k180 = 1 - Math.exp(-2 * Math.PI * 180 / sr); let y = 0;
-  for (let i = 0; i < n; i++){ y += k180 * (brown() * 3.0 - y); out[i] += y * 0.8; }
+function padWinterDeep(sr, P){     // P6 r10: 3 detuned saws/tone {A3,E4,A4}->LP300, no noise
+  const { seconds, detunes, phases } = P, n = Math.round(sr * seconds), out = new Float32Array(n);
+  const tones = [[220.0, 1.0], [329.63, 0.6], [440.0, 0.5]];
+  for (let ti = 0, d = 0; ti < 3; ti++){ const f0 = tones[ti][0], tg = tones[ti][1];
+    for (let v = 0; v < 3; v++, d++){ const f = f0 * detunes[d], ph = phases[d], N = Math.min(40, Math.floor(5000 / f));
+      for (let harm = 1; harm <= N; harm++){ const fp = f * harm, amp = (1 / harm) * (1 / (1 + Math.pow(fp / 150, 2))) * 0.22;
+        if (amp < 0.002) continue; const w = 2 * Math.PI * fp / sr, php = ph * harm % (2 * Math.PI);
+        for (let i = 0; i < n; i++) out[i] += tg * amp * Math.sin(php + w * i); } } }
+  const k300 = 1 - Math.exp(-2 * Math.PI * 300 / sr); let y = 0;
+  for (let i = 0; i < n; i++){ y += k300 * (out[i] - y); out[i] = y * 2.2; }
   for (let i = 0; i < n; i++) out[i] *= breathEnv(i / sr, { f: P.breathF, depth: P.depth, u0: P.breathU0 });
   return out;
 }
 
 // loneVoice — one gliding near-sine per SWELL (P5 + the r6.4 walk law), realized
-// from the event fields. preceding gap <=1.5 s -> prevNote/gapS: this swell owns
-// the bridge (buffer from onset-gapS at prevNote, portamento 0.9 s, 0.15 floor).
-// following gap <=1.5 s -> nextGapS: release floors 0.15, +30 ms handoff. else
-// scoop from -1.5 st over 0.5 s. length = lead + swellDur + tail.
+// from the event fields (prevNote/gapS = this swell owns the bridge in, portamento
+// 0.9 s / 0.15 floor; nextGapS = release floors 0.15 + 30 ms handoff out; else scoop
+// from -1.5 st over 0.5 s). length = lead + swellDur + tail. See SCORE r6.4.
 function loneVoiceSwell(sr, P){
   const { note, prevNote, gapS, nextGapS, swellDur } = P;
   const baseAmp = P.baseAmp != null ? P.baseAmp : 0.5;
@@ -273,10 +268,9 @@ function loneVoiceSwell(sr, P){
   return out;
 }
 
-// windBed — one 30.25-s window of the seekable wind floor (r6.2). r6.3 salts:
-// noise = hash2(seedInt, 1000+windowIndex); lattices = hash2(seedInt, compIndex).
-// 1-s discarded pre-roll [winFrom-1, winFrom) reaches steady state before sample
-// 0. Head/tail ramps + 0.25-s seams are the render's envelope (raw signal here).
+// windBed — one 30.25-s window of the seekable wind floor (r6.2/r6.3). Salts: noise
+// = hash2(seedInt,1000+windowIndex), lattices = hash2(seedInt,compIndex). 1-s pre-
+// roll [winFrom-1,winFrom) primes steady state before sample 0; ramps/seams outside.
 function windBed(sr, P){
   const { preset, hourWindSeedInt, winFrom, winDur } = P;
   const n = Math.round(sr * winDur), out = new Float32Array(n);
