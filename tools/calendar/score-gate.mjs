@@ -37,10 +37,12 @@
 //        voice in DIRECT mode, chunked-vs-atomic SHA-256 identical at a PINNED
 //        adversarial partition (uneven chunks incl. 1-sample chunks, a chunk
 //        crossing the wind's 1-s pre-roll boundary, a chunk crossing an 8-s
-//        window seam) — and EXTENDED again at r12.5 to padDay's WAVETABLE mode
-//        (the mode air.js actually chunks live), bit-identity required WITHIN
-//        the mode at the SAME pinned partition. A mismatch is an implementation
-//        defect, never a design question.
+//        window seam) — and EXTENDED again at r12.5/r13.5 to EVERY WAVETABLE
+//        mode air.js chunks live (padDay's saws, padWinterDeep's saws, and
+//        padDawnDusk's tone half — r13.3's generalized law; padNight has no
+//        grant), bit-identity required WITHIN each mode at the SAME pinned
+//        partition. A mismatch is an implementation defect, never a design
+//        question.
 //        Procedure PORTED from research/r6-calibration-reference.mjs (the file
 //        IS the law); prose in SCORE r6 defers to it on procedure.
 //
@@ -138,7 +140,10 @@ const PAD_STREAM = { padNight: padNightStream, padDay: padDayStream, padDawnDusk
 const G10B_CUTS = [1, 2, 3, 100, 44099, 44101, 44102, 200000, 352799, 352801, 400000, 500000];
 // the pinned wind seat: a lawful window (winFrom a multiple of 30, the r6.2
 // 30.25-s buffer), one per preset. The wind has no wavetable mode, so the wind
-// seat is DIRECT-only; padDay carries BOTH modes and is gated in each (r12.5).
+// seat is DIRECT-only; the three GRANTED pads (padDay · padWinterDeep ·
+// padDawnDusk's tone half — r13.3) carry BOTH modes and are gated in each
+// (r12.5 seated padDay, r13.5 extended it to the other two); padNight has no
+// grant and is DIRECT-only.
 const G10B_WIND = { hourWindSeedInt: 12345, winFrom: 300, winDur: 30.25 };
 const DIAG_RECIPE = { padNight: 'padNight', padDay: 'padDay', padDawnDusk: 'padDawnDusk', padWinterDeep: 'padWinterDeep', padNightThird: 'padNight' };
 
@@ -593,17 +598,25 @@ function runG10() {
     ok(chk.length === cont.length && bufSha(cont) === bufSha(chk),
       'G10(b) windBed ' + preset + ' chunked ≡ atomic at the pinned partition (' + chunks.length + ' chunks, SHA-256)');
   }
-  // (b) r12.5 — the SAME tooth INSIDE padDay's WAVETABLE mode: the wavetable is
-  // what air.js chunks live, so chunked ≡ atomic must hold there too. The claim
-  // is bit-identity WITHIN the mode (wavetable-vs-DIRECT parity is an AUDIBLE
-  // claim — §5.4 row (b3), frozen at T3.1 — and is NOT asserted here).
-  {
-    const P = { ...diagPadParams('padDay', mulberry32(0xD1A6 + DIAG.voices.padDay.idx)), seconds: 60, wavetable: true };
-    const cont = padDay(SR, P);
+  // (b) r12.5, EXTENDED r13.5 — the SAME tooth INSIDE every WAVETABLE mode that
+  // air.js chunks live. The wavetable is what the live path actually fills, so
+  // chunked ≡ atomic must hold there too. r13.3 generalized the law from "padDay's
+  // saws" to "constant-frequency periodic component stacks are tabled", so the
+  // tooth now covers all three granted modes: padDay's saws (knee 750), the NEW
+  // padWinterDeep saws (knee 150), and the NEW padDawnDusk TONE half — whose AIR
+  // half stays DIRECT inside the same stream, so this seat also gates the mixed
+  // tabled/direct fill (the stateful pink/svf pair must carry across chunk seams
+  // exactly as it does across the atomic fill). padNight has NO grant (r13.3) and
+  // is gated in DIRECT mode above. The claim is bit-identity WITHIN each mode;
+  // wavetable-vs-DIRECT parity is the AUDIBLE claim — §5.4 rows (b3)/(b4)/(b5),
+  // derived-and-frozen at T3.1 — and is NOT asserted here.
+  for (const name of ['padDay', 'padWinterDeep', 'padDawnDusk']) {
+    const P = { ...diagPadParams(name, mulberry32(0xD1A6 + DIAG.voices[name].idx)), seconds: 60, wavetable: true };
+    const cont = PAD_FN[DIAG_RECIPE[name]](SR, P);
     const chunks = partition(cont.length);
-    const chk = chunkedStream(padDayStream(SR, P), cont.length);
+    const chk = chunkedStream(PAD_STREAM[DIAG_RECIPE[name]](SR, P), cont.length);
     ok(chk.length === cont.length && bufSha(cont) === bufSha(chk),
-      'G10(b) padDay WAVETABLE mode chunked ≡ atomic at the pinned partition (' + chunks.length + ' chunks, SHA-256)');
+      'G10(b) ' + name + ' WAVETABLE mode chunked ≡ atomic at the pinned partition (' + chunks.length + ' chunks, SHA-256)');
   }
   console.log('  · G10(b) r11.3 partition: cuts ' + G10B_CUTS.join('/') + ' — 1-sample chunks incl. [0,1) at the wind pre-roll boundary; [44099,44101) crosses 1 s; [352799,352801) crosses the 8-s seam');
 }
