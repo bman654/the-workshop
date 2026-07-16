@@ -9737,23 +9737,24 @@ function S(a,b,x){ if(b===a) return x<a?0:1; var t=Math.max(0,Math.min(1,(x-a)/(
 function lerp(a,b,t){ return a+(b-a)*t; }
 function mix(c1,c2,t){ return [Math.round(lerp(c1[0],c2[0],t)),Math.round(lerp(c1[1],c2[1],t)),Math.round(lerp(c1[2],c2[2],t))]; }
 function hx(h){ return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]; }
-// phase k/8 → [washRgb,washA,foliageRgb,foliageA]
+// phase k/8 → [washRgb,washA,crownRgb,crownA] (r17: foliage = the drawn CROWN FILL
+// colour+α; wash summer anchors shifted OFF-brass + lower α — the §8.4-(l) contrast fix).
 var DRESS=[
-  [hx('#dfe9d9'),.28,hx('#8fae6a'),.42],
-  [hx('#dcecd4'),.32,hx('#7fae62'),.46],
-  [hx('#f0e8c9'),.30,hx('#6f9e5e'),.46],
-  [hx('#eee2c2'),.32,hx('#7a9c58'),.44],
-  [hx('#ecd9be'),.30,hx('#b28448'),.46],
-  [hx('#e2c9ae'),.34,hx('#b26e42'),.42],
-  [hx('#c8d2e4'),.34,hx('#8d7a58'),.20],
-  [hx('#c2cde2'),.38,hx('#86765a'),.16]];
+  [hx('#dfe9d9'),.28,hx('#8fae6a'),.18],
+  [hx('#dcecd4'),.32,hx('#84a05a'),.22],
+  [hx('#e7e6d6'),.24,hx('#84a05a'),.26],
+  [hx('#e6e4d4'),.26,hx('#84a05a'),.26],
+  [hx('#ecd9be'),.30,hx('#a8783e'),.30],
+  [hx('#e2c9ae'),.34,hx('#c47a42'),.34],
+  [hx('#c8d2e4'),.34,hx('#6f6038'),.06],
+  [hx('#c2cde2'),.38,hx('#6f6038'),.04]];
 function bell(p,c,w){ var d=Math.abs(p-c); d=Math.min(d,1-d); return d>=w?0:0.5*(1+Math.cos(Math.PI*d/w)); }
 function dressing(phase){
   var p=((phase%1)+1)%1,k=Math.min(7,Math.floor(p*8)),t=S(k/8,(k+1)/8,p);
   var A=DRESS[k],B=DRESS[(k+1)%8];
   return {wash:{rgb:mix(A[0],B[0],t),a:lerp(A[1],B[1],t)},
     foliage:{rgb:mix(A[2],B[2],t),a:lerp(A[3],B[3],t)},
-    snow:bell(p,0.86,0.13),bloom:bell(p,0.07,0.07)};
+    snow:bell(p,0.86,0.13),bloom:bell(p,0.07,0.07),turn:bell(p,0.60,0.11)};
 }
 
 // history — the authored anniversary table (decorate, never gate); dates
@@ -9864,9 +9865,10 @@ function selfTest(){
   ok('s3 phase',z);
   z=[0.02,0.10,0.30,0.45,0.60,0.70,0.86,0.95].every(function(p){
     var d=dressing(p);
-    return d.wash.a>=0.26&&d.wash.a<=0.40&&d.foliage.a>=0.14&&d.foliage.a<=0.50
-      &&d.snow>=0&&d.snow<=1&&d.bloom>=0&&d.bloom<=1
-      &&(p>0.73||d.snow===0)&&(p<0.14||p>0.99||d.bloom===0); });
+    return d.wash.a>=0.22&&d.wash.a<=0.40&&d.foliage.a>=0&&d.foliage.a<=0.40
+      &&d.snow>=0&&d.snow<=1&&d.bloom>=0&&d.bloom<=1&&d.turn>=0&&d.turn<=1
+      &&(p>0.73||d.snow===0)&&(p<0.14||p>0.99||d.bloom===0)
+      &&((p>0.49&&p<0.71)||d.turn===0); });
   ok('s4 dressing',z);
   z=C.REGISTERS.length===6&&[-18,-6,-0.8,6,35].every(function(t,j){
     return hourRegister(t-0.05)===C.REGISTERS[j]&&hourRegister(t+0.05)===C.REGISTERS[j+1]; });
@@ -17208,8 +17210,8 @@ placeLabels();
    unarmed page. ════════════════════════════════════════════════════════════════════ */
 (function theCalendar(){
   try{
-    // ═══ THE SEASONAL DRESSING (§2) — four small moves keyed to the injected date:
-    //     channel A the ground wash · B the foliage tint · C the waypoint speckle. It
+    // ═══ THE SEASONAL DRESSING (§2, r17) — small moves keyed to the injected date:
+    //     channel A the ground wash · B the drawn avenue trees · C the seasonal motif. It
     //     renders ONCE and holds forever (§2.6 — zero timers/listeners, no motion), and
     //     runs FIRST so the plate is dressed even when the air button is absent and under
     //     reduced-motion / the canon pin (a still season, never a skipped one). It confers
@@ -17239,20 +17241,26 @@ placeLabels();
     var hb = document.getElementById("hours-back");
     if (hb) viewport.insertBefore(dress, hb); else viewport.appendChild(dress);
 
-    // ── Channel B — foliage. The .avenue-tree dot idiom gains custom-property indirection
-    //    (today's literals as fallback); theCalendar() sets the two props on #viewport
-    //    (scoped — the root palette is never forked). Layer absent/failed ⇒ the computed
-    //    style is byte-identical to today (fallback = the current literal values).
-    var fc = D.foliage.rgb;
-    viewport.style.setProperty("--cal-foliage", "rgb("+fc[0]+","+fc[1]+","+fc[2]+")");
-    viewport.style.setProperty("--cal-foliage-a", D.foliage.a.toFixed(3));
+    // ── Channel B — the drawn avenue trees (r17, replaces the dot-recolour). The
+    //    .avenue-tree DOTS are SUPPRESSED (--cal-foliage-a:0 on #viewport; fallback .4 with
+    //    the layer absent/failed ⇒ the dots render exactly as today — the provable
+    //    no-regression, now "dots ↔ trees"), and at every avenue-tree position a line-art
+    //    tree GLYPH is drawn in the subdued SCOPED palette (--tree/--snow + the seasonal
+    //    accents; the ~12 root tokens are never forked). Four legible states from the REUSED
+    //    dressing curve + bells: bare --tree structure (always) · crown fill = D.foliage ·
+    //    winter snow-crown · spring blossom · autumn falling leaves — static, zero-motion.
+    viewport.style.setProperty("--tree", "#6f6038");     /* darker brass — every outline */
+    viewport.style.setProperty("--snow", "#c2ccd8");     /* dull grey-white — winter fill */
+    viewport.style.setProperty("--spring", "#cf8aa2");   /* muted blossom */
+    viewport.style.setProperty("--summer", "#84a05a");   /* muted foliage green */
+    viewport.style.setProperty("--autumn", "#c47a42");   /* lifted rust */
+    viewport.style.setProperty("--cal-foliage-a", "0");  /* suppress the basemap dots; trees take over */
 
-    // ── Channel C — waypoint speckle (snow-caps + bloom motes). Deterministic, sparse,
-    //    ONLY at avenue-tree positions (guaranteed open planted ground), and NEVER near a
-    //    rendered label — the label-clearance exclusion rule. Labels reach their solved
-    //    slots only inside placeLabels() (this IIFE seats after it), and text.getBBox() is
-    //    LOCAL geometry, so every box is mapped local → world through its own CTM composed
-    //    against #viewport's (§2.2-C — exact for ANY ancestor transform).
+    // ── Shared label-clearance machinery (worldBox — reused by channel B crowns + the
+    //    channel C motif). Labels reach their solved slots only inside placeLabels() (this
+    //    IIFE seats after it), and text.getBBox() is LOCAL geometry, so every box is mapped
+    //    local → world through its own CTM composed against #viewport's (§2.2-C — exact for
+    //    ANY ancestor transform).
     var invVP = viewport.getScreenCTM().inverse();
     function worldBox(elm){                        // axis-aligned #viewport-space envelope
       var bb = elm.getBBox();                      // local geometry
@@ -17279,22 +17287,120 @@ placeLabels();
       return true;
     }
 
+    // ── the draw helpers (channel B glyph craft + channel C motif craft). Every element
+    //    is drawn ONLY in the subdued --tree/--snow/seasonal tokens — never primary brass
+    //    (§8.4-(k)) — and emits ZERO <text> (§8.4-(a)). Path craft converged in the SP-SEE
+    //    prototypes (proto-03).
+    var TREE="#6f6038", SNOW="#c2ccd8", SPRING="#cf8aa2", AUTUMN="#c47a42", SUMMER="#84a05a";
+    function fx(v){ return (+v).toFixed(2); }
+    function P(cx,cy,dx,dy){ return fx(cx+dx)+" "+fx(cy+dy); }
+    function crownPath(cx,cy){
+      return "M"+P(cx,cy,0,-45)+" C"+P(cx,cy,9,-45)+" "+P(cx,cy,16,-38)+" "+P(cx,cy,16,-30)+
+             " C"+P(cx,cy,16,-22)+" "+P(cx,cy,9,-15)+" "+P(cx,cy,0,-15)+
+             " C"+P(cx,cy,-9,-15)+" "+P(cx,cy,-16,-22)+" "+P(cx,cy,-16,-30)+
+             " C"+P(cx,cy,-16,-38)+" "+P(cx,cy,-9,-45)+" "+P(cx,cy,0,-45)+" Z";
+    }
+    function drawTreeStructure(g,cx,cy){                 /* thin engraved trunk + forked branches */
+      g.appendChild(el("path",{ "class":"cal-tree-st", fill:"none", stroke:TREE, "stroke-width":"1.4",
+        "stroke-linecap":"round", "stroke-linejoin":"round", opacity:"0.82",
+        d:"M"+P(cx,cy,0,0)+" L"+P(cx,cy,0,-30)+" M"+P(cx,cy,0,-12)+" L"+P(cx,cy,-7,-22)+
+          " M"+P(cx,cy,0,-12)+" L"+P(cx,cy,7,-22)+" M"+P(cx,cy,0,-22)+" L"+P(cx,cy,-5,-32)+
+          " M"+P(cx,cy,0,-22)+" L"+P(cx,cy,5,-32) }));
+    }
+    function drawCrownFill(g,cx,cy,rgb,a){               /* seasonal colour+α crown blob */
+      g.appendChild(el("path",{ "class":"cal-crown", d:crownPath(cx,cy),
+        fill:"rgb("+rgb[0]+","+rgb[1]+","+rgb[2]+")", opacity:a.toFixed(3),
+        stroke:TREE, "stroke-width":"0.8", "stroke-opacity":"0.5" }));
+    }
+    function drawSnowCrown(g,cx,cy,a){                   /* uneven-bezier --snow cap over the crown */
+      g.appendChild(el("path",{ "class":"cal-snow", fill:SNOW, opacity:(0.75*a).toFixed(3),
+        d:"M"+P(cx,cy,-15,-33)+" Q"+P(cx,cy,-9,-45)+" "+P(cx,cy,-3,-38)+
+          " Q"+P(cx,cy,3,-47)+" "+P(cx,cy,9,-39)+" Q"+P(cx,cy,14,-44)+" "+P(cx,cy,15,-33)+
+          " Q"+P(cx,cy,7,-29)+" "+P(cx,cy,0,-32)+" Q"+P(cx,cy,-8,-29)+" "+P(cx,cy,-15,-33)+" Z" }));
+    }
+    function drawBlossom(g,cx,cy,a,rv){                  /* --spring marks on the crown */
+      var pos=[[-8,-38],[6,-40],[-2,-30],[10,-28],[-11,-27]];
+      for (var q=0;q<pos.length;q++)
+        g.appendChild(el("circle",{ "class":"cal-bloom",
+          cx:fx(cx+pos[q][0]+(rv[q]*2-1)*2), cy:fx(cy+pos[q][1]+(rv[(q+1)%8]*2-1)*2),
+          r:"2.1", fill:SPRING, opacity:(0.85*a).toFixed(3) }));
+    }
+    function drawFallingLeaves(g,cx,cy,a,rv){            /* a few --autumn leaves below the crown */
+      var pos=[[-13,-6],[11,-10],[3,-2]];
+      for (var q=0;q<pos.length;q++){
+        var lx=cx+pos[q][0]+(rv[q]*2-1)*3, ly=cy+pos[q][1]+(rv[(q+2)%8]*2-1)*3;
+        g.appendChild(el("path",{ "class":"cal-leaf", fill:AUTUMN, opacity:(0.9*a).toFixed(3),
+          d:"M"+P(lx,ly,0,0)+" q3 -2 5 1 q-3 2 -5 -1 Z" }));
+      }
+    }
+    function drawMotif(g,season){                        /* ONE engraved cartouche, centred at local 0,0 */
+      var k;
+      if (season==="winter"){
+        for (k=0;k<6;k++) g.appendChild(el("path",{ transform:"rotate("+(k*60)+")",
+          fill:"none", stroke:SNOW, "stroke-width":"1.1", "stroke-linecap":"round", opacity:"0.85",
+          d:"M0 0 L0 -24 M0 -14 l-5 -5 M0 -14 l5 -5 M0 -20 l-4 -4 M0 -20 l4 -4" }));
+        g.appendChild(el("circle",{ cx:"0", cy:"0", r:"2", fill:TREE, opacity:"0.7" }));
+      } else if (season==="spring"){
+        for (k=0;k<5;k++) g.appendChild(el("path",{ transform:"rotate("+(k*72)+")",
+          fill:SPRING, opacity:"0.5", stroke:TREE, "stroke-width":"1", "stroke-linejoin":"round",
+          d:"M0 -4 C-6 -10 -6 -20 0 -22 C6 -20 6 -10 0 -4 Z" }));
+        g.appendChild(el("circle",{ cx:"0", cy:"0", r:"2.6", fill:TREE, opacity:"0.8" }));
+      } else if (season==="autumn"){
+        g.appendChild(el("path",{ fill:AUTUMN, opacity:"0.5", stroke:TREE, "stroke-width":"1", "stroke-linejoin":"round",
+          d:"M0 -25 L5 -16 L3.5 -13.5 L8 -8 L15 -10 L24 -3 L16 1 L9.5 4 L17 10 L19 15 L7 17.5 L0 21 "+
+            "L-7 17.5 L-19 15 L-17 10 L-9.5 4 L-16 1 L-24 -3 L-15 -10 L-8 -8 L-3.5 -13.5 L-5 -16 Z" }));
+        g.appendChild(el("path",{ stroke:TREE, "stroke-width":"0.8", fill:"none", opacity:"0.8", d:"M0 27 L0 21" }));
+        g.appendChild(el("path",{ stroke:TREE, "stroke-width":"0.55", fill:"none", opacity:"0.55",
+          d:"M0 19 L0 -22 M0 16 L20 -3 M0 16 L-20 -3 M0 18 L16 13 M0 18 L-16 13" }));
+      } else {                                           /* summer leaf sprig */
+        g.appendChild(el("path",{ stroke:TREE, "stroke-width":"1", fill:"none", opacity:"0.85", d:"M0 24 L0 -20" }));
+        g.appendChild(el("path",{ fill:SUMMER, opacity:"0.55", stroke:SUMMER, "stroke-width":"0.6",
+          d:"M0 -14 q-9 -2 -12 -9 q9 -1 12 6 Z M0 -14 q9 -2 12 -9 q-9 -1 -12 6 Z "+
+            "M0 -4 q-9 -2 -12 -9 q9 -1 12 6 Z M0 -4 q9 -2 12 -9 q-9 -1 -12 6 Z "+
+            "M0 6 q-8 -2 -11 -8 q8 -1 11 5 Z M0 6 q8 -2 11 -8 q-8 -1 -11 5 Z" }));
+      }
+    }
+
+    // ── channel B — draw a tree at every avenue-tree position. FIXED 8-draw rnd() budget
+    //    per tree BEFORE any branch, so neither label proximity nor season presence ever
+    //    re-phases the stream (the per-slot-hash stability lesson). A crown whose envelope
+    //    intersects a label draws BARE STRUCTURE only (thin trunk/branches are always safe).
     var trees = viewport.querySelectorAll("circle.avenue-tree");
     var rnd = Calendar.mulberry32(Calendar.dateSeed(cy_, cm_, cd_));
+    var gTrees = el("g", { id:"cal-trees" }); dress.appendChild(gTrees);
+    var CR = 18;
     for (var i=0; i<trees.length; i++){
-      var cx=+trees[i].getAttribute("cx"), cy=+trees[i].getAttribute("cy"),
-          r=+trees[i].getAttribute("r");
-      // the tree's WHOLE speckle envelope (crown cap + the highest possible bloom mote):
-      var ok = clearOfLabels(cx - (r*0.8 + 6), cy - r - 6 - 1.4, cx + (r*0.8 + 6), cy + r);
-      if (ok && D.snow > 0)                 // snow-cap: a white crescent-dot seated on the crown
-        dress.appendChild(el("circle", { "class":"cal-snow", cx:cx, cy:(cy - r*0.45),
-          r:(r*0.8).toFixed(2), fill:"#dde6f2", opacity:(0.55*D.snow).toFixed(3) }));
-      var b = rnd();                        // bloom: at most one warm mote per tree, seeded —
-      if (ok && D.bloom > 0 && b < D.bloom*0.9)   // ONE rnd() per tree regardless of any branch
-        dress.appendChild(el("circle", { "class":"cal-bloom",
-          cx:(cx + (rnd()*2-1)*6).toFixed(1), cy:(cy - r - 2 - rnd()*4).toFixed(1),
-          r:1.4, fill:"#e8c4d0", opacity:(0.4 + 0.3*rnd()).toFixed(3) }));
+      var cx=+trees[i].getAttribute("cx"), cy=+trees[i].getAttribute("cy");
+      var rv=[]; for (var rq=0; rq<8; rq++) rv.push(rnd());          // fixed per-tree budget
+      drawTreeStructure(gTrees, cx, cy);
+      var crownOk = clearOfLabels(cx-CR, cy-48, cx+CR, cy-2);
+      if (crownOk){
+        drawCrownFill(gTrees, cx, cy, D.foliage.rgb, D.foliage.a);
+        if (D.snow  > 0) drawSnowCrown(gTrees, cx, cy, D.snow);
+        if (D.bloom > 0) drawBlossom(gTrees, cx, cy, D.bloom, rv);
+        if (D.turn  > 0) drawFallingLeaves(gTrees, cx, cy, D.turn, rv);
+      }
     }
+
+    // ── channel C — ONE seasonal cartouche motif at a fixed CLEAR plate margin. Season by
+    //    nearest bell-centre (wrapped); cross-fade opacity dips toward each boundary. The
+    //    anchor is the first candidate corner provably clear of every label (deterministic —
+    //    the plate + labels are byte-stable per build). Zero <text>.
+    (function motif(){
+      var CEN={spring:0.07, summer:0.30, autumn:0.60, winter:0.86};
+      function wd(a,b){ var d=Math.abs(a-b); return Math.min(d,1-d); }
+      var pp=((phase%1)+1)%1, season="summer", best=9, s;
+      for (s in CEN){ var d=wd(pp, CEN[s]); if (d<best){ best=d; season=s; } }
+      var mo = 0.35 + 0.5*(best>=0.125 ? 0 : 0.5*(1+Math.cos(Math.PI*best/0.125)));
+      var cand=[[300,340],[300,2760],[2800,340],[2800,2760],[1550,240]], A=null, c;
+      for (c=0;c<cand.length;c++)
+        if (clearOfLabels(cand[c][0]-80, cand[c][1]-90, cand[c][0]+80, cand[c][1]+80)){ A=cand[c]; break; }
+      if (!A) return;
+      var gM = el("g", { id:"cal-motif", opacity:mo.toFixed(3),
+        transform:"translate("+A[0]+","+A[1]+") scale(1.9)" });
+      drawMotif(gM, season);
+      dress.appendChild(gM);
+    })();
 
     // ═══ THE AIR'S ARM AFFORDANCE (§5) — chrome, not dressing. ═══
     var box = document.getElementById("cal-airbox"),

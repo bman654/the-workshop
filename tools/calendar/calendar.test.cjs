@@ -189,15 +189,17 @@ const WING_FIXTURE = [
     let capsOk = true, winOk = true;
     for (let i = 0; i < 4096; i++) {
       const p = i / 4096, D = C.dressing(p);
-      if (!(D.wash.a >= 0.26 && D.wash.a <= 0.40 && D.foliage.a >= 0.14 && D.foliage.a <= 0.50
-        && D.snow >= 0 && D.snow <= 1 && D.bloom >= 0 && D.bloom <= 1)) capsOk = false;
+      if (!(D.wash.a >= 0.22 && D.wash.a <= 0.40 && D.foliage.a >= 0 && D.foliage.a <= 0.40
+        && D.snow >= 0 && D.snow <= 1 && D.bloom >= 0 && D.bloom <= 1 && D.turn >= 0 && D.turn <= 1)) capsOk = false;
       if ((p <= 0.73 || p >= 0.99) && D.snow !== 0) winOk = false;
       if ((p >= 0.14 && p <= 0.99) && D.bloom !== 0) winOk = false;
+      if ((p <= 0.49 || p >= 0.71) && D.turn !== 0) winOk = false;
     }
-    ok(capsOk, '(f) caps: wash α ∈ [.26,.40] · foliage α ∈ [.14,.50] · snow/bloom ∈ [0,1] (4096-pt phase sweep)');
-    ok(winOk, '(f) snow ≡ 0 on [0,.73]∪[.99,1] · bloom ≡ 0 on [.14,.99] (conservative bell envelopes)');
+    ok(capsOk, '(f) caps: wash α ∈ [.22,.40] · crown α ∈ [0,.40] · snow/bloom/turn ∈ [0,1] (4096-pt phase sweep)');
+    ok(winOk, '(f) snow ≡ 0 on [0,.73]∪[.99,1] · bloom ≡ 0 on [.14,.99] · turn ≡ 0 on [0,.49]∪[.71,1] (conservative bell envelopes)');
     ok(C.dressing(C.seasonPhase(C.jdOfLocalNoon(2027, 1, 30))).snow > 0.9, '(f) snow > 0.9 at 2027-01-30 (bell center)');
     ok(C.dressing(C.seasonPhase(C.jdOfLocalNoon(2027, 4, 15))).bloom > 0.9, '(f) bloom > 0.9 at 2027-04-15 (bell center)');
+    ok(C.dressing(C.seasonPhase(C.jdOfLocalNoon(2026, 11, 5))).turn > 0.9, '(f) turn > 0.9 at 2026-11-05 (bell center)');
     function sweep() {
       const out = [], t0 = Date.UTC(2026, 0, 1);
       for (let k = 0; k < 730; k++) {

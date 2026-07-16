@@ -116,23 +116,24 @@ function S(a,b,x){ if(b===a) return x<a?0:1; var t=Math.max(0,Math.min(1,(x-a)/(
 function lerp(a,b,t){ return a+(b-a)*t; }
 function mix(c1,c2,t){ return [Math.round(lerp(c1[0],c2[0],t)),Math.round(lerp(c1[1],c2[1],t)),Math.round(lerp(c1[2],c2[2],t))]; }
 function hx(h){ return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]; }
-// phase k/8 → [washRgb,washA,foliageRgb,foliageA]
+// phase k/8 → [washRgb,washA,crownRgb,crownA] (r17: foliage = the drawn CROWN FILL
+// colour+α; wash summer anchors shifted OFF-brass + lower α — the §8.4-(l) contrast fix).
 var DRESS=[
-  [hx('#dfe9d9'),.28,hx('#8fae6a'),.42],
-  [hx('#dcecd4'),.32,hx('#7fae62'),.46],
-  [hx('#f0e8c9'),.30,hx('#6f9e5e'),.46],
-  [hx('#eee2c2'),.32,hx('#7a9c58'),.44],
-  [hx('#ecd9be'),.30,hx('#b28448'),.46],
-  [hx('#e2c9ae'),.34,hx('#b26e42'),.42],
-  [hx('#c8d2e4'),.34,hx('#8d7a58'),.20],
-  [hx('#c2cde2'),.38,hx('#86765a'),.16]];
+  [hx('#dfe9d9'),.28,hx('#8fae6a'),.18],
+  [hx('#dcecd4'),.32,hx('#84a05a'),.22],
+  [hx('#e7e6d6'),.24,hx('#84a05a'),.26],
+  [hx('#e6e4d4'),.26,hx('#84a05a'),.26],
+  [hx('#ecd9be'),.30,hx('#a8783e'),.30],
+  [hx('#e2c9ae'),.34,hx('#c47a42'),.34],
+  [hx('#c8d2e4'),.34,hx('#6f6038'),.06],
+  [hx('#c2cde2'),.38,hx('#6f6038'),.04]];
 function bell(p,c,w){ var d=Math.abs(p-c); d=Math.min(d,1-d); return d>=w?0:0.5*(1+Math.cos(Math.PI*d/w)); }
 function dressing(phase){
   var p=((phase%1)+1)%1,k=Math.min(7,Math.floor(p*8)),t=S(k/8,(k+1)/8,p);
   var A=DRESS[k],B=DRESS[(k+1)%8];
   return {wash:{rgb:mix(A[0],B[0],t),a:lerp(A[1],B[1],t)},
     foliage:{rgb:mix(A[2],B[2],t),a:lerp(A[3],B[3],t)},
-    snow:bell(p,0.86,0.13),bloom:bell(p,0.07,0.07)};
+    snow:bell(p,0.86,0.13),bloom:bell(p,0.07,0.07),turn:bell(p,0.60,0.11)};
 }
 
 // history — the authored anniversary table (decorate, never gate); dates
@@ -243,9 +244,10 @@ function selfTest(){
   ok('s3 phase',z);
   z=[0.02,0.10,0.30,0.45,0.60,0.70,0.86,0.95].every(function(p){
     var d=dressing(p);
-    return d.wash.a>=0.26&&d.wash.a<=0.40&&d.foliage.a>=0.14&&d.foliage.a<=0.50
-      &&d.snow>=0&&d.snow<=1&&d.bloom>=0&&d.bloom<=1
-      &&(p>0.73||d.snow===0)&&(p<0.14||p>0.99||d.bloom===0); });
+    return d.wash.a>=0.22&&d.wash.a<=0.40&&d.foliage.a>=0&&d.foliage.a<=0.40
+      &&d.snow>=0&&d.snow<=1&&d.bloom>=0&&d.bloom<=1&&d.turn>=0&&d.turn<=1
+      &&(p>0.73||d.snow===0)&&(p<0.14||p>0.99||d.bloom===0)
+      &&((p>0.49&&p<0.71)||d.turn===0); });
   ok('s4 dressing',z);
   z=C.REGISTERS.length===6&&[-18,-6,-0.8,6,35].every(function(t,j){
     return hourRegister(t-0.05)===C.REGISTERS[j]&&hourRegister(t+0.05)===C.REGISTERS[j+1]; });
