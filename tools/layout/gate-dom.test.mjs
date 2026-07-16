@@ -217,22 +217,34 @@ function synthClick(sel) {
 // and settle the crossfade.
 function goHome() { realClick('#pz-home'); ab('wait', '900'); }
 
-// ── WS4 SEASONAL-DRESSING readers (§2, §8.4 a–j) ──────────────────────────────
-// The dressing signature at the CURRENT page: the wash rect fill/opacity, the two
-// foliage custom properties resolved on #viewport, the speckle counts, and the
-// structural facts (§8.4 a/d/g). One read, everything the letter checks need.
+// ── WS4 SEASONAL-DRESSING readers (§2, §8.4 a–e,h–l — r17 drawn trees + cartouche) ──
+// The dressing signature at the CURRENT page: the wash rect fill/opacity, the drawn-tree
+// glyph counts (bare .cal-tree-st structure · .cal-crown seasonal fill · .cal-snow winter
+// cap · .cal-bloom spring marks · .cal-leaf autumn leaves), the first crown's resolved
+// fill (the season is LIVE in the drawn layer), the seasonal cartouche #cal-motif presence
+// + an innerHTML fingerprint (season-varying across the bell dates), and the recede check
+// (§8.4-k: no #cal-dressing element resolves fill/stroke to the primary brass). One read.
 function dressingRead() {
   return abEval(`(function(){
+    function h2rgb(h){ return 'rgb('+parseInt(h.slice(1,3),16)+', '+parseInt(h.slice(3,5),16)+', '+parseInt(h.slice(5,7),16)+')'; }
+    var BRASS=[h2rgb('#c9a24a'), h2rgb('#f0d489')];
     var d=document.getElementById('cal-dressing');
     var w=document.getElementById('cal-wash');
-    var vp=document.getElementById('viewport');
+    var m=document.getElementById('cal-motif');
     var hb=document.getElementById('hours-back');
-    var cs=vp?getComputedStyle(vp):null;
     var order=null;                          // is #cal-dressing before #hours-back in document order?
     if(d&&hb&&d.parentNode===hb.parentNode){
       var kids=Array.prototype.slice.call(d.parentNode.childNodes);
       order = kids.indexOf(d) < kids.indexOf(hb);
     }
+    // (k) structural: no #cal-dressing element resolves fill/stroke to the primary brass.
+    var brassHit=0;
+    if(d){ var all=d.querySelectorAll('*');
+      for(var i=0;i<all.length;i++){ var g=getComputedStyle(all[i]);
+        if(BRASS.indexOf(g.fill)>=0 || BRASS.indexOf(g.stroke)>=0) brassHit++; } }
+    // a djb2 fingerprint of the motif's innerHTML (season-varying across the bell dates).
+    var ms=m?m.innerHTML:'', mh=5381; for(var j=0;j<ms.length;j++){ mh=(((mh*33)>>>0)^ms.charCodeAt(j))>>>0; }
+    var cr=d?d.querySelector('.cal-crown'):null;   // the season-live crown fill (D.foliage)
     return JSON.stringify({
       present:!!d,
       pe: d?getComputedStyle(d).pointerEvents:null,
@@ -240,12 +252,53 @@ function dressingRead() {
       beforeHoursBack: order,
       washFill: w?w.getAttribute('fill'):null,
       washOpacity: w?w.getAttribute('opacity'):null,
-      foliage: cs?cs.getPropertyValue('--cal-foliage').trim():null,
-      foliageA: cs?cs.getPropertyValue('--cal-foliage-a').trim():null,
-      snow: document.querySelectorAll('.cal-snow').length,
-      bloom: document.querySelectorAll('.cal-bloom').length,
-      trees: document.querySelectorAll('circle.avenue-tree').length });
+      trees: document.querySelectorAll('circle.avenue-tree').length,
+      struct: d?d.querySelectorAll('.cal-tree-st').length:0,
+      crown: d?d.querySelectorAll('.cal-crown').length:0,
+      snow: d?d.querySelectorAll('.cal-snow').length:0,
+      bloom: d?d.querySelectorAll('.cal-bloom').length:0,
+      leaf: d?d.querySelectorAll('.cal-leaf').length:0,
+      crownFill: cr?getComputedStyle(cr).fill:null,
+      motif:!!m, motifHash:mh, motifLen:ms.length,
+      brassHit:brassHit });
   })()`);
+}
+// the primary on-screen estate labels as SCREEN-pixel rects (getBoundingClientRect at
+// deviceScaleFactor 1 ⇒ PNG px), for the §8.4-(l) label-contrast sample: the estate-tier
+// district NAME glyphs (the `.zone-label` texts — THE MANOR HOUSE / THE FAIRGROUND / THE
+// NUMBER GARDEN / … — the "primary label glyphs" §8.4-l names). Deterministic per build.
+// (At the estate fit-view these are ~50–80px wide × ~5px tall, so no tall-box filter.)
+function labelRects() {
+  return abEval(`(function(){
+    var vp=document.getElementById('viewport'), ts=vp.querySelectorAll('text.zone-label'), out=[];
+    for(var i=0;i<ts.length;i++){ var t=ts[i], cs=getComputedStyle(t);
+      if(cs.display==='none' || cs.visibility==='hidden' || +cs.opacity<=0) continue;
+      var r=t.getBoundingClientRect();
+      if(r.width>=30 && r.height>=3 && r.width<600)
+        out.push({ x:r.left, y:r.top, w:r.width, h:r.height, area:r.width*r.height,
+          txt:(t.textContent||'').trim().slice(0,24) });
+    }
+    out.sort(function(a,b){ return b.area-a.area; });
+    return JSON.stringify(out.slice(0,8));
+  })()`);
+}
+// mask / restore the WHOLE dressing layer — including channel A's #cal-wash — for the
+// §8.4-(l) "undressed" reference: the wash is precisely what erodes label contrast, so the
+// undressed plate must remove it.
+function maskDressing(on) {
+  return abEval(`(function(){ var d=document.getElementById('cal-dressing');
+    if(d) d.style.display=${on ? "'none'" : "''"}; return JSON.stringify({ok:!!d}); })()`);
+}
+// mask / restore ONLY the DECORATION subgroups (#cal-trees + #cal-motif), NEVER the whole
+// #cal-dressing — for the §8.4-(k) pixel guard (r18). Masking the whole layer would remove the
+// SP-SEE-approved full-plate #cal-wash (whose job is to tint every pixel) and drop brightest-
+// quartile luminance ~72% because of the WASH, not the decoration; hiding only the decoration
+// isolates whether the trees/motif compete for the bright ink (measured ~0.6% ⇒ they recede).
+function maskDeco(on) {
+  return abEval(`(function(){ var found=0;
+    ['cal-trees','cal-motif'].forEach(function(id){ var e=document.getElementById(id);
+      if(e){ e.style.display=${on ? "'none'" : "''"}; found++; } });
+    return JSON.stringify({ok:found}); })()`);
 }
 // a cheap byte-fidelity fingerprint of #cal-dressing.innerHTML (djb2) for the
 // double-load determinism check (§8.4-e) — same len + same hash ⇒ byte-identical.
@@ -259,8 +312,10 @@ function dressingHTMLHash() {
 // §8.4-(i): the gate INDEPENDENTLY re-implements §2.2-C's worldBox CTM composition
 // (never reads the build's own values), FIRST proves the basis really is world space
 // (some labelgroup text box centre > 200 units from the origin — the r3-F1 failure
-// signature is every box clustered at the local origin), then asserts no speckle
-// circle's envelope (cx±r, cy±r) comes within 2px of any text world box.
+// signature is every box clustered at the local origin), then asserts no DECORATION
+// element (.cal-crown fill · .cal-snow cap · .cal-bloom mark · .cal-leaf · every #cal-motif
+// sub-glyph) comes within 2px of any text world box. Bare .cal-tree-st trunk/branch
+// structure is EXEMPT (thin line-art at planted ground — the read the basemap always carried).
 function clearanceRead() {
   return abEval(`(function(){
     var vp=document.getElementById('viewport');
@@ -280,17 +335,18 @@ function clearanceRead() {
         var ccx=b.x+b.w/2, ccy=b.y+b.h/2, dd=Math.sqrt(ccx*ccx+ccy*ccy);
         if(dd>maxCenterDist) maxCenterDist=dd; }catch(e){}
     }
-    function tooClose(cx,cy,r){
+    // a decoration world box is a violation if it comes within 2px of ANY text box.
+    function tooClose(D){
       for(var k=0;k<boxes.length;k++){ var L=boxes[k];
-        if(cx+r+2>L.x && cx-r-2<L.x+L.w && cy+r+2>L.y && cy-r-2<L.y+L.h) return true; }
+        if(D.x-2 < L.x+L.w && D.x+D.w+2 > L.x && D.y-2 < L.y+L.h && D.y+D.h+2 > L.y) return true; }
       return false;
     }
-    var circles=vp.querySelectorAll('.cal-snow,.cal-bloom'), violations=0;
-    for(var i=0;i<circles.length;i++){
-      var cx=+circles[i].getAttribute('cx'), cy=+circles[i].getAttribute('cy'), r=+circles[i].getAttribute('r');
-      if(tooClose(cx,cy,r)) violations++;
+    var deco=vp.querySelectorAll('#cal-dressing .cal-crown, #cal-dressing .cal-snow, #cal-dressing .cal-bloom, #cal-dressing .cal-leaf, #cal-motif *');
+    var violations=0, nDeco=0;
+    for(var i=0;i<deco.length;i++){
+      try{ var wb=worldBox(deco[i]); nDeco++; if(tooClose(wb)) violations++; }catch(e){}
     }
-    return JSON.stringify({ nTexts:boxes.length, nCircles:circles.length,
+    return JSON.stringify({ nTexts:boxes.length, nDeco:nDeco,
       maxCenterDist:maxCenterDist, violations:violations });
   })()`);
 }
@@ -344,6 +400,38 @@ function brightestQuartileWarmth(png) {
   var sr = 0, sg = 0, sb = 0, cnt = 0;
   for (i = 0; i < n; i++) { o = i * ch; if (data[o] + data[o + 1] + data[o + 2] >= thr) { sr += data[o]; sg += data[o + 1]; sb += data[o + 2]; cnt++; } }
   return { r: sr / cnt, g: sg / cnt, b: sb / cnt, rmb: (sr - sb) / cnt };
+}
+// sRGB relative luminance (WCAG) of an 8-bit RGB triple, 0..1 (§8.4-k/l).
+function relLum(r, g, b) {
+  function lin(c) { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+// §8.4-(k): mean relative luminance of the brightest quartile of a PNG (the light ink).
+function brightestQuartileLum(png) {
+  var n = png.width * png.height, ch = png.channels, data = png.data, hist = new Uint32Array(766), i, o;
+  for (i = 0; i < n; i++) { o = i * ch; hist[data[o] + data[o + 1] + data[o + 2]]++; }
+  var target = Math.floor(n * 0.75), acc = 0, thr = 765;
+  for (var v = 0; v < 766; v++) { acc += hist[v]; if (acc >= target) { thr = v; break; } }
+  var sl = 0, cnt = 0;
+  for (i = 0; i < n; i++) { o = i * ch; if (data[o] + data[o + 1] + data[o + 2] >= thr) { sl += relLum(data[o], data[o + 1], data[o + 2]); cnt++; } }
+  return cnt ? sl / cnt : 0;
+}
+// §8.4-(l): the label-to-background contrast in a SCREEN-pixel region. The label ink is the
+// brightest quartile of the region, the local background the darkest half (paper+wash); the
+// WCAG contrast ratio (L_light+0.05)/(L_dark+0.05). Returns null for a too-small region.
+function regionContrast(png, x, y, w, h) {
+  var X0 = Math.max(0, Math.floor(x)), Y0 = Math.max(0, Math.floor(y));
+  var X1 = Math.min(png.width, Math.ceil(x + w)), Y1 = Math.min(png.height, Math.ceil(y + h));
+  var ch = png.channels, data = png.data, sums = [], px, py, o;
+  for (py = Y0; py < Y1; py++) for (px = X0; px < X1; px++) { o = (py * png.width + px) * ch; sums.push({ s: data[o] + data[o + 1] + data[o + 2], o: o }); }
+  if (sums.length < 8) return null;
+  sums.sort(function (a, b) { return a.s - b.s; });
+  var qN = Math.max(1, Math.floor(sums.length * 0.25)), hN = Math.max(1, Math.floor(sums.length * 0.5));
+  var Ll = 0, cl = 0, Ld = 0, cd = 0, k, e;
+  for (k = sums.length - qN; k < sums.length; k++) { e = sums[k].o; Ll += relLum(data[e], data[e + 1], data[e + 2]); cl++; }  // brightest quartile = ink
+  for (k = 0; k < hN; k++) { e = sums[k].o; Ld += relLum(data[e], data[e + 1], data[e + 2]); cd++; }                          // darkest half = local bg
+  var Lli = Ll / cl, Ldi = Ld / cd;
+  return (Math.max(Lli, Ldi) + 0.05) / (Math.min(Lli, Ldi) + 0.05);
 }
 
 async function main() {
@@ -794,12 +882,15 @@ async function main() {
       glintSeen === false, '[polled ' + polls + '× across ~' + (polls * 0.5) + 's, glint seen=' + glintSeen + ']');
 
     // ════════════════════════════════════════════════════════════════════════════
-    //  THE SEASONAL DRESSING (WS4 §2, DESIGN §8.4 items a–e, h–j + g's WASH clause).
-    //  The dressing renders ONCE at load and holds (§2.6 — no timers/listeners): these
-    //  assertions prove it is a LIVE season (not a static attribute), that it stays clear
-    //  of the solved labels IN WORLD SPACE (the legibility model-proxy gate is blind to
-    //  this), and that the season really turns in RENDERED pixels. Runs on its own ?cal=
-    //  URLs, so it lives here with the other page-reopening checks.
+    //  THE SEASONAL DRESSING (WS4 §2, DESIGN §8.4 items a–e, g-wash, h–l — r17 DRAWN TREES
+    //  + CARTOUCHE MOTIF). The dressing renders ONCE at load and holds (§2.6 — no
+    //  timers/listeners): these assertions prove the season is LIVE in the DRAWN layer
+    //  (crowns / snow-crown / blossom / falling leaves / a season-varying #cal-motif — not
+    //  a bare attribute), that every drawn decoration stays clear of the solved labels IN
+    //  WORLD SPACE (the legibility model-proxy gate is blind to this), that the season
+    //  really turns in RENDERED pixels, that the decoration RECEDES behind the brass
+    //  (§8.4-k), and that the summer wash does not erode label contrast (§8.4-l). Runs on
+    //  its own ?cal= URLs, so it lives here with the other page-reopening checks.
     // ════════════════════════════════════════════════════════════════════════════
 
     // (a) — the dressing group is structurally whole and inert: it exists, computes
@@ -825,16 +916,18 @@ async function main() {
     check('(c) — the gate open-arch void STILL catches a real click with the dressing mounted (pointer-events:none layer steals no hit; D4b proved the descend path)',
       gHitWin.found && gHitWin.inWant, '[hit ' + gHitWin.tag + ']');
 
-    // (d) — the season is really LIVE: winter vs summer differ in the wash (fill or opacity)
-    //       AND in --cal-foliage on #viewport; (a) holds at BOTH dates.
+    // (d) — (r17) the season is really LIVE in the DRAWN layer: winter vs summer differ in
+    //       the wash (fill or opacity) AND in the drawn crown-fill colour AND in the active
+    //       #cal-motif sub-glyph — not merely an attribute; (a) holds at BOTH dates.
     ab('open', URL + '?cal=2026-06-21'); ab('wait', '--load', 'networkidle'); ab('wait', '2000');
     const dSum = dressingRead();
-    check('(d) — ?cal=2026-12-21 vs 2026-06-21: the season is LIVE — #cal-wash fill/opacity differs AND --cal-foliage differs; (a) holds at both',
+    check('(d) — ?cal=2026-12-21 vs 2026-06-21: the season is LIVE in the DRAWN layer — #cal-wash differs AND the .cal-crown fill differs AND the #cal-motif sub-glyph differs; (a) holds at both',
       dSum.present === true && dSum.pe === 'none' && dSum.texts === 0 && dSum.beforeHoursBack === true &&
       (dWin.washFill !== dSum.washFill || dWin.washOpacity !== dSum.washOpacity) &&
-      dWin.foliage !== dSum.foliage,
-      '[winter wash=' + dWin.washFill + '/' + dWin.washOpacity + ' foliage=' + dWin.foliage +
-      ' · summer wash=' + dSum.washFill + '/' + dSum.washOpacity + ' foliage=' + dSum.foliage + ']');
+      dWin.crownFill !== dSum.crownFill && dWin.motif === true && dSum.motif === true &&
+      dWin.motifHash !== dSum.motifHash,
+      '[winter wash=' + dWin.washFill + '/' + dWin.washOpacity + ' crown=' + dWin.crownFill + ' motif#' + dWin.motifHash +
+      ' · summer wash=' + dSum.washFill + '/' + dSum.washOpacity + ' crown=' + dSum.crownFill + ' motif#' + dSum.motifHash + ']');
 
     // (e) — determinism: two loads at the SAME ?cal= give byte-identical #cal-dressing
     //       innerHTML (the only randomness is the date-seeded mulberry32 — §2.5).
@@ -854,44 +947,97 @@ async function main() {
       dCanon.washFill === dSum.washFill && dCanon.washOpacity === dSum.washOpacity,
       '[canon wash=' + dCanon.washFill + '/' + dCanon.washOpacity + ' · 2026-06-21 wash=' + dSum.washFill + '/' + dSum.washOpacity + ']');
 
-    // (h)+(i) at the SNOW bell centre — the speckle really renders (count floor) and it holds
-    //       label clearance in WORLD space (basis proof + 2px margin).
-    ab('open', URL + '?cal=2027-01-30'); ab('wait', '--load', 'networkidle'); ab('wait', '2000');
-    const snowR = dressingRead();
-    const clrSnow = clearanceRead();
-    check('(h-snow) — at ?cal=2027-01-30 (snow bell centre) .cal-snow count ≥ 0.6× the circle.avenue-tree count (the channel is alive, not vestigial)',
-      snowR.trees > 0 && snowR.snow >= 0.6 * snowR.trees,
-      '[snow=' + snowR.snow + ', trees=' + snowR.trees + ', floor=' + (0.6 * snowR.trees).toFixed(1) + ']');
-    check('(i-snow) — WORLD-space clearance holds at the snow date: the CTM basis is world (a text box centre > 200 units from origin) AND no .cal-snow/.cal-bloom envelope comes within 2px of any text world box',
-      clrSnow.maxCenterDist > 200 && clrSnow.nTexts > 0 && clrSnow.violations === 0,
-      '[maxCenterDist=' + clrSnow.maxCenterDist.toFixed(1) + ', texts=' + clrSnow.nTexts + ', circles=' + clrSnow.nCircles + ', violations=' + clrSnow.violations + ']');
+    // (h) — (r17) THE DRAWN TREES + MOTIF REALLY RENDER. The bare structure floor holds at
+    //       every date (each planting draws ≥ its .cal-tree-st), the season features fire at
+    //       their bell centres (snow-crown / blossom / falling-leaf), and #cal-motif varies
+    //       across the four bell-center seasons. Read the four bell dates here; (i) rides
+    //       along at each.
+    ab('open', URL + '?cal=2027-01-30'); ab('wait', '--load', 'networkidle'); ab('wait', '2000');   // snow bell (winter)
+    const snowR = dressingRead(); const clrSnow = clearanceRead();
+    ab('open', URL + '?cal=2027-04-15'); ab('wait', '--load', 'networkidle'); ab('wait', '2000');   // bloom bell (spring)
+    const bloomR = dressingRead(); const clrBloom = clearanceRead();
+    ab('open', URL + '?cal=2026-11-05'); ab('wait', '--load', 'networkidle'); ab('wait', '2000');   // turn bell (autumn)
+    const turnR = dressingRead(); const clrTurn = clearanceRead();
 
-    // (h)+(i) at the BLOOM bell centre.
-    ab('open', URL + '?cal=2027-04-15'); ab('wait', '--load', 'networkidle'); ab('wait', '2000');
-    const bloomR = dressingRead();
-    const clrBloom = clearanceRead();
-    check('(h-bloom) — at ?cal=2027-04-15 (bloom bell centre) .cal-bloom count ≥ 0.5× the circle.avenue-tree count',
-      bloomR.trees > 0 && bloomR.bloom >= 0.5 * bloomR.trees,
-      '[bloom=' + bloomR.bloom + ', trees=' + bloomR.trees + ', floor=' + (0.5 * bloomR.trees).toFixed(1) + ']');
-    check('(i-bloom) — WORLD-space clearance holds at the bloom date (world basis + 2px clearance from every text world box)',
-      clrBloom.maxCenterDist > 200 && clrBloom.nTexts > 0 && clrBloom.violations === 0,
-      '[maxCenterDist=' + clrBloom.maxCenterDist.toFixed(1) + ', texts=' + clrBloom.nTexts + ', circles=' + clrBloom.nCircles + ', violations=' + clrBloom.violations + ']');
+    // (h-structure) — the tree-glyph count ≥ 0.85 × circle.avenue-tree at EVERY date (each
+    // planting draws at least its bare --tree structure; label exclusion bares some crowns).
+    const structFloorOK = d => d.trees > 0 && d.struct >= 0.85 * d.trees;
+    check('(h-structure) — the drawn tree-glyph count (.cal-tree-st) ≥ 0.85 × circle.avenue-tree at all four bell dates (each planting draws at least bare --tree structure)',
+      structFloorOK(dWin) && structFloorOK(dSum) && structFloorOK(snowR) && structFloorOK(bloomR) && structFloorOK(turnR),
+      '[winter ' + dWin.struct + '/' + dWin.trees + ' · summer ' + dSum.struct + '/' + dSum.trees + ' · snow ' + snowR.struct + '/' + snowR.trees +
+      ' · bloom ' + bloomR.struct + '/' + bloomR.trees + ' · turn ' + turnR.struct + '/' + turnR.trees + ' (floor 0.85×)]');
 
-    // (j) — the season is RENDERED, not merely attributed: capture the settled fit view at
-    //       BOTH solstices (same viewport; deviceScaleFactor cancels in the DELTA), decode
-    //       both PNGs, take the brightest-quartile mean ink colour, and assert the warmth
-    //       really turns: (R̄−B̄)_summer − (R̄−B̄)_winter ≥ 3. A floor failure is a DESIGN
-    //       escalation (SP-FLAG: raise wash/foliage contrast), never a worker tune.
+    // (h-features) — each season's drawn feature fires at its bell centre.
+    check('(h-snow) — at ?cal=2027-01-30 (snow bell) the winter SNOW-CROWN is present: .cal-snow ≥ 0.5 × the crown-drawn (.cal-crown) tree count',
+      snowR.crown > 0 && snowR.snow >= 0.5 * snowR.crown,
+      '[snow=' + snowR.snow + ', crowns=' + snowR.crown + ', floor=' + (0.5 * snowR.crown).toFixed(1) + ']');
+    check('(h-bloom) — at ?cal=2027-04-15 (bloom bell) SPRING BLOSSOM marks are present (.cal-bloom > 0)',
+      bloomR.bloom > 0, '[bloom=' + bloomR.bloom + ', crowns=' + bloomR.crown + ']');
+    check('(h-leaf) — at ?cal=2026-11-05 (turn bell) AUTUMN FALLING-LEAF marks are present (.cal-leaf > 0)',
+      turnR.leaf > 0, '[leaf=' + turnR.leaf + ', crowns=' + turnR.crown + ']');
+
+    // (h-motif) — #cal-motif exists at every date and its active-season sub-glyph differs
+    // across the four bell-center seasons (snowflake / blossom / sprig / maple). Four
+    // distinct innerHTML fingerprints: summer (2026-06-21) · winter (snow) · spring (bloom) ·
+    // autumn (turn).
+    const mh = [dSum.motifHash, snowR.motifHash, bloomR.motifHash, turnR.motifHash];
+    const mAll = dSum.motif && snowR.motif && bloomR.motif && turnR.motif;
+    const mDistinct = new Set(mh).size === 4;
+    check('(h-motif) — #cal-motif exists at every bell date and its sub-glyph VARIES across the four seasons (four distinct innerHTML fingerprints: summer/winter/spring/autumn)',
+      mAll && mDistinct,
+      '[present S/W/Sp/A=' + [dSum.motif, snowR.motif, bloomR.motif, turnR.motif].join('/') + ', hashes=' + JSON.stringify(mh) + ', distinct=' + new Set(mh).size + '/4]');
+
+    // (i) — (r17) crown / snow-crown / blossom / falling-leaf / motif clearance held in
+    //       WORLD space at ALL four bell dates. The gate re-implements §2.2-C's worldBox CTM
+    //       math, FIRST proves the basis is world (a text box centre > 200 units from origin
+    //       — the r3-F1 failure signature is every box clustered at the origin), then asserts
+    //       no drawn decoration comes within 2px of any text world box. Bare --tree structure
+    //       is EXEMPT.
+    const clrOK = c => c.maxCenterDist > 200 && c.nTexts > 0 && c.nDeco > 0 && c.violations === 0;
+    check('(i) — WORLD-space clearance holds at all four bell dates: the CTM basis is world (a text box centre > 200 units from origin) AND no crown/snow/blossom/leaf/motif element comes within 2px of any text world box (bare structure exempt)',
+      clrOK(clrSnow) && clrOK(clrBloom) && clrOK(clrTurn),
+      '[snow maxCD=' + clrSnow.maxCenterDist.toFixed(0) + ' deco=' + clrSnow.nDeco + ' viol=' + clrSnow.violations +
+      ' · bloom maxCD=' + clrBloom.maxCenterDist.toFixed(0) + ' deco=' + clrBloom.nDeco + ' viol=' + clrBloom.violations +
+      ' · turn maxCD=' + clrTurn.maxCenterDist.toFixed(0) + ' deco=' + clrTurn.nDeco + ' viol=' + clrTurn.violations + ']');
+
+    // (k-structural) — (r17) the decoration RECEDES: no #cal-dressing element resolves its
+    //       fill or stroke to the primary brass (#c9a24a / #f0d489). Structural, at any live
+    //       date (read at all four bell dates + the two solstices). A breach is SP-FLAG.
+    const noBrass = [dWin, dSum, snowR, bloomR, turnR].every(d => d.brassHit === 0);
+    check('(k-structural) — the decoration RECEDES by construction: ZERO #cal-dressing elements paint in the primary brass #c9a24a/#f0d489 (a breach is a DESIGN escalation, never a worker tune)',
+      noBrass,
+      '[brassHit winter=' + dWin.brassHit + ' summer=' + dSum.brassHit + ' snow=' + snowR.brassHit + ' bloom=' + bloomR.brassHit + ' turn=' + turnR.brassHit + ']');
+
+    // ── the RENDERED-PIXEL captures (§8.4 j/k/l). Fixed viewport, deviceScaleFactor 1 so a
+    //    getBoundingClientRect CSS px equals a PNG px. Summer: capture dressed, read the
+    //    primary label rects, then TWO undressed references — (a) DECORATION-only masked
+    //    (#cal-trees + #cal-motif hidden) for the §8.4-(k) recede guard, and (b) the WHOLE
+    //    #cal-dressing masked (wash included) for the §8.4-(l) label-contrast reference (the
+    //    wash is precisely what erodes label contrast). Winter: the dressed solstice for (j).
     ab('set', 'viewport', '1280', '800');
     const sumPng = path.join(tmpdir(), 'gate-dom-cal-summer.png');
+    const sumDecoMaskPng = path.join(tmpdir(), 'gate-dom-cal-summer-deco-masked.png');
+    const sumMaskPng = path.join(tmpdir(), 'gate-dom-cal-summer-undressed.png');
     const winPng = path.join(tmpdir(), 'gate-dom-cal-winter.png');
     ab('open', URL + '?cal=2026-06-21'); ab('wait', '--load', 'networkidle'); ab('wait', '2500');
     ab('screenshot', sumPng);
+    const labels = labelRects();                 // the primary label rects, on the dressed summer plate
+    maskDeco(true); ab('wait', '400');
+    ab('screenshot', sumDecoMaskPng);            // (k) reference: ONLY #cal-trees + #cal-motif hidden
+    maskDeco(false);
+    maskDressing(true); ab('wait', '400');
+    ab('screenshot', sumMaskPng);                // (l) reference: the WHOLE dressing hidden (wash gone)
+    maskDressing(false);
     ab('open', URL + '?cal=2026-12-21'); ab('wait', '--load', 'networkidle'); ab('wait', '2500');
     ab('screenshot', winPng);
+
+    // (j) — the season is RENDERED, not merely attributed: brightest-quartile mean ink
+    //       colour turns warmer in summer than winter by ≥ 3 (8-bit R̄−B̄). SP-FLAG on breach.
     let jOK = false, jDetail = '';
+    let sumDec = null, sumMaskDec = null, sumDecoMaskDec = null;
     try {
-      const ws = brightestQuartileWarmth(decodePNG(sumPng));
+      sumDec = decodePNG(sumPng); sumMaskDec = decodePNG(sumMaskPng); sumDecoMaskDec = decodePNG(sumDecoMaskPng);
+      const ws = brightestQuartileWarmth(sumDec);
       const ww = brightestQuartileWarmth(decodePNG(winPng));
       const turn = ws.rmb - ww.rmb;
       jOK = turn >= 3;
@@ -899,6 +1045,47 @@ async function main() {
     } catch (e) { jDetail = '[decode error: ' + e.message + ']'; }
     check('(j) — the RENDERED season turns: brightest-quartile ink (R̄−B̄)_summer − (R̄−B̄)_winter ≥ 3 (a floor failure is SP-FLAG, never a worker tune)',
       jOK, jDetail);
+
+    // (k-pixel) — (r18) the bright plate ink is NOT owned by the DECORATION: masking ONLY
+    //       #cal-trees + #cal-motif (NEVER the whole #cal-dressing — that would remove the
+    //       SP-SEE-approved full-plate #cal-wash and drop luminance ~72% because of the WASH,
+    //       not the decoration) drops the brightest-quartile mean luminance by ≤ 8% (measured
+    //       ~0.6%; the road/structures/labels own the bright ink). A breach is a DESIGN escalation.
+    let kOK = false, kDetail = '';
+    try {
+      const lD = brightestQuartileLum(sumDec), lM = brightestQuartileLum(sumDecoMaskDec);
+      const drop = (lD - lM) / lD;               // >0 ⇒ the decoration was in the bright quartile
+      kOK = drop <= 0.08;
+      kDetail = '[dressed L=' + lD.toFixed(4) + ', deco-masked L=' + lM.toFixed(4) + ', drop=' + (drop * 100).toFixed(1) + '% (ceiling 8%)]';
+    } catch (e) { kDetail = '[decode error: ' + e.message + ']'; }
+    check('(k-pixel) — masking ONLY #cal-trees + #cal-motif drops the brightest-quartile mean luminance by ≤ 8% (the estate ink, not the decoration, owns the bright — the decoration recedes)',
+      kOK, kDetail);
+
+    // (l) — (r18b, GATED) SUMMER LABELS STAY LEGIBLE: for each primary .zone-label rect, the
+    //       label-to-background contrast on the DRESSED summer plate vs the UNDRESSED reference
+    //       (whole #cal-dressing hidden — the wash is the eroder); the MIN-across-labels of the
+    //       dressed/undressed ratio must be ≥ 0.878 (the r18b floor: the summer wash sits at the
+    //       §8.1-f α .12 perceptibility floor, the measured MIN 0.898 − a 0.02 margin; 0.90 is
+    //       physically unreachable by 0.002). A breach BELOW 0.878 is a DESIGN escalation (shift
+    //       §2.3's summer wash), never a worker tune.
+    let lOK = false, lDetail = '';
+    try {
+      let minRatio = Infinity, m = 0, worst = '';
+      for (const r of labels) {
+        const rd = regionContrast(sumDec, r.x, r.y, r.w, r.h);
+        const ru = regionContrast(sumMaskDec, r.x, r.y, r.w, r.h);
+        if (rd != null && ru != null && ru > 0) {
+          const ratio = rd / ru; m++;
+          if (ratio < minRatio) { minRatio = ratio; worst = r.txt; }
+        }
+      }
+      const FLOOR = 0.878;                        // r18b: min-across-labels dressed/undressed ratio floor
+      lOK = m >= 3 && minRatio >= FLOOR;
+      lDetail = '[' + m + ' labels · MIN ratio=' + (isFinite(minRatio) ? minRatio.toFixed(3) : 'n/a') +
+        ' (worst "' + worst + '") (floor 0.878)]';
+    } catch (e) { lDetail = '[decode error: ' + e.message + ']'; }
+    check('(l) — SUMMER LABELS STAY LEGIBLE: the MIN across all primary .zone-labels of the dressed/undressed label-contrast ratio ≥ 0.878 (the summer wash at its α .12 floor does not erode label contrast below the reachable max; a breach is a DESIGN escalation)',
+      lOK, lDetail);
 
   } finally {
     // 4. TEARDOWN — close exactly OUR session + kill exactly OUR server child (never a broad pkill;
