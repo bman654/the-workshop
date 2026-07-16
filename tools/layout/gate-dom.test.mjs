@@ -572,6 +572,96 @@ async function main() {
       red.still === true && red.roundels >= 2 && typeof red.k === 'number' && red.k > 1 && red.walking === false && red.restored === true,
       '[still=' + red.still + ', roundels=' + red.roundels + ', k=' + red.k + ', walking=' + red.walking + ']');
 
+    // ════════════════════════════════════════════════════════════════════════════
+    //  G — THE AIR'S ARM AFFORDANCE (WS4 §5.1/§5.2, DESIGN §8.4 item g). The gate rides
+    //  the code it guards: it lands with the affordance so the on-ramp is never
+    //  structurally unguarded between waves. Everything here is the STATIC two-line
+    //  affordance + its conductor wiring; the dressing's own assertions arrive with the
+    //  dressing. Runs LAST because it re-opens the page on its own URLs.
+    // ════════════════════════════════════════════════════════════════════════════
+
+    // Ga — a PLAIN load: the affordance is structurally whole and at REST. The ♫ glyph's
+    // resting colour is the BRASS TOKEN while the label text stays MUTED (§5.1 move 1's
+    // split — read against the resolved custom properties, never a hard-coded hex), the
+    // box is never hidden, and the button is ENABLED (the static `disabled` ships on
+    // purpose and air.js's attach() lifts it — "enabled IFF the conductor is wired").
+    // The settle MUST outlast the glint: on a plain load move 2 fires at 2.5 s and runs
+    // 1.2 s, so a shorter wait samples the ANIMATION's brass→brass-bright ramp and reads a
+    // colour that is neither token. "Resting" is the steady state the keyframes return to.
+    ab('open', URL); ab('wait', '--load', 'networkidle'); ab('wait', '5000');
+    const g0 = abEval(`(function(){
+      var cs=getComputedStyle(document.documentElement);
+      function tok(n){ var d=document.createElement('span'); d.style.color=cs.getPropertyValue(n).trim();
+        document.body.appendChild(d); var v=getComputedStyle(d).color; d.remove(); return v; }
+      var box=document.getElementById('cal-airbox'), btn=document.getElementById('cal-air'),
+          g=btn&&btn.querySelector('.g'), sub=document.querySelector('.cal-air-sub');
+      return JSON.stringify({
+        box:!!box, btn:!!btn, glyph:g?g.textContent:null,
+        kids: btn?Array.prototype.map.call(btn.childNodes,function(n){ return n.nodeType===1?n.nodeName.toLowerCase()+'.'+n.className:'#text'; }):null,
+        glyphColor:g?getComputedStyle(g).color:null, brass:tok('--brass'),
+        labelColor:btn?getComputedStyle(btn).color:null, muted:tok('--muted'),
+        boxOpacity:box?getComputedStyle(box).opacity:null,
+        pressed:btn?btn.getAttribute('aria-pressed'):null, disabled:btn?btn.disabled:null,
+        subText:sub?(sub.textContent||'').replace(/\\s+/g,' ').trim():null,
+        subLink:!!document.querySelector('.cal-air-sub a[href="hours/almanac.html"]'),
+        inDock:!!(box&&box.parentElement&&box.parentElement.id==='brassdock'),
+        aria:btn?btn.getAttribute('aria-label'):null });
+    })()`);
+    check('Ga — the arm affordance rests whole (#cal-air in #brassdock, children EXACTLY [span.g, text], the ♫ glyph brass while the label stays muted, #cal-airbox opacity 1, aria-pressed=false, enabled by the conductor)',
+      g0.box === true && g0.btn === true && g0.glyph === '♫' &&
+      JSON.stringify(g0.kids) === JSON.stringify(['span.g', '#text']) &&
+      g0.glyphColor === g0.brass && g0.labelColor === g0.muted &&
+      g0.boxOpacity === '1' && g0.pressed === 'false' && g0.disabled === false &&
+      g0.inDock === true && typeof g0.aria === 'string' && g0.aria.length > 0,
+      '[glyph=' + g0.glyph + ', kids=' + JSON.stringify(g0.kids) + ', glyphColor=' + g0.glyphColor +
+      ' (brass=' + g0.brass + '), label=' + g0.labelColor + ' (muted=' + g0.muted + '), opacity=' + g0.boxOpacity + ', disabled=' + g0.disabled + ']');
+
+    // Gb — the touch-surviving teaser (soul r1-M3): the sub-line really says what the
+    // button does AND carries the every-day Almanac link — the on-ramp must not depend on
+    // a hover tooltip, which touch never sees.
+    check('Gb — .cal-air-sub carries the teaser prose + the every-day a[href="hours/almanac.html"] Almanac link (the on-ramp survives touch)',
+      g0.subLink === true && /a quiet hum, keyed to the hour and the season/.test(g0.subText || '') &&
+      /the Almanac tells more/.test(g0.subText || ''),
+      '[link=' + g0.subLink + ', sub="' + (g0.subText || '') + '"]');
+
+    // Gc — a REAL input click ARMS: aria-pressed toggles, the glyph turns ♪, and the click
+    // NEVER navigates or descends (the affordance is fixed HTML outside the SVG, so it can
+    // steal no map hit-test). The box stays fully visible — opacity 1 at ALL times.
+    const hrefBefore = abEval(`JSON.stringify({ href: location.href })`).href;
+    realClick('#cal-air');
+    ab('wait', '900');
+    const g1 = abEval(`(function(){
+      var btn=document.getElementById('cal-air'), box=document.getElementById('cal-airbox'),
+          g=btn&&btn.querySelector('.g'), vp=document.getElementById('viewport');
+      return JSON.stringify({
+        pressed:btn?btn.getAttribute('aria-pressed'):null, glyph:g?g.textContent:null,
+        glyphAlive:!!(g&&g.parentElement===btn),
+        kids: btn?Array.prototype.map.call(btn.childNodes,function(n){ return n.nodeType===1?n.nodeName.toLowerCase()+'.'+n.className:'#text'; }):null,
+        boxOpacity:box?getComputedStyle(box).opacity:null,
+        href:location.href, lod:vp?(/lod-estate/.test(vp.getAttribute('class')||'')?'estate':'other'):null });
+    })()`);
+    check('Gc — a REAL click on #cal-air toggles aria-pressed false→true and re-labels to ♪ WITHOUT destroying the glyph span (the identity law: character data only), never navigates, never descends, and #cal-airbox stays opacity 1',
+      g1.pressed === 'true' && g1.glyph === '♪' && g1.glyphAlive === true &&
+      JSON.stringify(g1.kids) === JSON.stringify(['span.g', '#text']) &&
+      g1.boxOpacity === '1' && g1.href === hrefBefore && g1.lod === 'estate',
+      '[pressed=' + g1.pressed + ', glyph=' + g1.glyph + ', kids=' + JSON.stringify(g1.kids) +
+      ', opacity=' + g1.boxOpacity + ', lod=' + g1.lod + ', navigated=' + (g1.href !== hrefBefore) + ']');
+
+    // Gd — THE CANON SEES PURE REST: under ?hours=allon no glint arm is installed at all,
+    // so the `glint` class never appears — polled ACROSS the whole settle wait (the primary
+    // arm is a 2.5 s beat, its deferral at most ~3.1 s), never sampled once at the end.
+    // Every canon screenshot is therefore bit-stable against an animation that never runs.
+    ab('open', URL + '?hours=allon'); ab('wait', '--load', 'networkidle');
+    let glintSeen = false, polls = 0;
+    for (let i = 0; i < 9; i++) {
+      ab('wait', '500'); polls++;
+      const q = abEval(`(function(){ var b=document.getElementById('cal-airbox');
+        return JSON.stringify({ glint: !!(b && b.classList.contains('glint')), box: !!b }); })()`);
+      if (q.glint) { glintSeen = true; break; }
+    }
+    check('Gd — with ?hours=allon the `glint` class NEVER appears through the settle wait (no arm is installed under the canon pin — canon screenshots see pure rest)',
+      glintSeen === false, '[polled ' + polls + '× across ~' + (polls * 0.5) + 's, glint seen=' + glintSeen + ']');
+
   } finally {
     // 4. TEARDOWN — close exactly OUR session + kill exactly OUR server child (never a broad pkill;
     //    this laptop also runs the maker's own servers — CLEANUP GUARDRAIL).
