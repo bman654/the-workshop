@@ -97,7 +97,7 @@ function plan(evs,a){ var o=[],i;
     start:startOf(evs[i]),job:null,src:null,sched:false,done:false,fade:false});
   return o; }
 function compose(m){ bk={y:m.y,mo:m.m,d:m.d,hour:m.hour};
-  man=Calendar.momentManifest(m.y,m.m,m.d,m.hour);
+  man=Calendar.momentManifest(m.y,m.m,m.d,m.hour,Hours);   // Hours = the on-page core (r15.5)
   live=plan(composeHour(man).events,false); eps={}; q=[]; }
 function secOf(m){ return m.min*60+m.sec; }
 
@@ -259,7 +259,7 @@ function cross(t){
 }
 function precompose(){
   try{ dnext=Calendar.nextHour(bk.y,bk.mo,bk.d,bk.hour);
-    var m=Calendar.momentManifest(dnext.y,dnext.m,dnext.d,dnext.hour);
+    var m=Calendar.momentManifest(dnext.y,dnext.m,dnext.d,dnext.hour,Hours);
     derived={man:m,evs:composeHour(m).events};
   }catch(e){ derived=null; dnext=null; }
 }
