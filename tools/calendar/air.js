@@ -67,7 +67,7 @@ A.SEAM=SEAM; A.BUDGET=BUDGET; A.SUB=SUB; A.AHEAD=AHEAD; A.HORIZON=HORIZON;
 var ctx=null,mst=null,bus=null,timer=null,armed=false,gest=false,heldNow=false,
     subbed=false,recov=false,epoch=0,bk=null,man=null,live=[],eps=null,q=null,
     srcs=null,derived=null,dnext=null,pumpStarts=0,ann=null,annBase=0,annSlip=null,
-    btn=null,L=null,onState=null,onVis=null;
+    btn=null,L=null,gEl=null,tEl=null,onState=null,onVis=null;
 function now(){ return ctx?ctx.currentTime:0; }
 function perf(){ try{ return performance.now(); }catch(e){ return Date.now(); } }
 function vis(){ try{ return document.visibilityState==='visible'; }catch(e){ return true; } }
@@ -381,13 +381,16 @@ function applyAir(m){
   label();
 }
 // DESIGN §5.2's five label rows live in the PAGE (r12.2): T3.3 hands `attach` a
-// table keyed off/on/mute/wait/held, each row [text, title] VERBATIM — the
-// conductor routes state->row (§6), the front door owns the prose.
+// table keyed off/on/mute/wait/held, each row [glyph, text, title] VERBATIM (the
+// glyph is state-dependent — r14.3). IDENTITY LAW (r14.4): `.g` takes CHARACTER
+// DATA, never structure — move 1 rests it brass, move 2's glint animates it.
 function label(){
   if(!btn||!L) return;
   var r=!armed?L.off:heldNow?L.held:!gest?L.wait:mut()?L.mute:L.on;
-  btn.textContent=r[0]; btn.title=r[1];
-  btn.setAttribute('aria-label',r[1]); btn.setAttribute('aria-pressed',armed?'true':'false');
+  if(gEl) gEl.textContent=r[0];
+  if(tEl) tEl.data=' '+r[1];
+  btn.title=r[2];
+  btn.setAttribute('aria-label',r[2]); btn.setAttribute('aria-pressed',armed?'true':'false');
 }
 
 /* --- the held state + route-change recovery (§6-C / r2-m8) --- */
@@ -423,6 +426,10 @@ A.attach=function(el,labels){
   try{
     if(typeof composeHour==='undefined'||!WS) return;   // theHours()'s guard idiom
     btn=el; L=labels||null;
+    // DESIGN:1141's children are EXACTLY [span.g, text node] — that markup IS the
+    // contract (§8.4-g); cache once, write data only (r14.4).
+    gEl=btn.querySelector('.g'); tEl=btn.lastChild;
+    btn.disabled=false;   // enabled IFF the conductor is wired (r14.5)
     var s=null; try{ s=localStorage.getItem('ws:pref:air'); }catch(e){}
     armed=s==='1'; gest=false;   // returning: awaiting gesture
     // the resume gesture is a click on the button ITSELF — NO window-level
