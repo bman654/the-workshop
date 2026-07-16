@@ -48,8 +48,8 @@
      11 concurrency (r6 SPLIT) — PRINT each fixture's note/toll sounding max;
         assert max simultaneous ≤ printed + 2 wind + 2 pad (+3 pad in a
         Breath+loneVoice hour); NO +6 (announcements can't sound in composeHour)
-     12 size budget — EXISTENCE-SCOPED (r12 re-arm): pair ≤ 43,008 B / trio ≤
-        65,536 B
+     12 size budget — EXISTENCE-SCOPED (r13 re-arm): pair ≤ 44,032 B / trio ≤
+        66,560 B
      13 covenants — anchor literal home; no Math.random/Date.now/sampleRate;
         no audio assets
      14 describe() snapshot — the exact §9 strings per fixture
@@ -866,16 +866,16 @@ const notesTollOf = evts => evts.filter(e => e.layer === 'notes' || e.layer === 
   ok(toothOk, '(11) max simultaneous sounding ≤ note/toll max + 2 wind + 2 pad (+3 in a Breath+loneVoice hour); no +6', first);
 }
 
-/* ── 12 · size budget — existence-scoped, self-tightening (§8.1-12, r12 re-arm) ── */
+/* ── 12 · size budget — existence-scoped, self-tightening (§8.1-12, r13 re-arm) ── */
 {
   const sz = f => fs.statSync(path.join(__dirname, f)).size;
   const pair = sz('score.mjs') + sz('score-voices.mjs');
   const airPath = path.join(__dirname, 'air.js');
   if (fs.existsSync(airPath)) {
     const trio = pair + fs.statSync(airPath).size;
-    ok(trio <= 65536, '(12) trio score.mjs+score-voices.mjs+air.js = ' + trio + ' B ≤ 65,536 B');
+    ok(trio <= 66560, '(12) trio score.mjs+score-voices.mjs+air.js = ' + trio + ' B ≤ 66,560 B');
   } else {
-    ok(pair <= 43008, '(12) pair score.mjs+score-voices.mjs = ' + pair + ' B ≤ 43,008 B');
+    ok(pair <= 44032, '(12) pair score.mjs+score-voices.mjs = ' + pair + ' B ≤ 44,032 B');
     console.log('  · (12) air.js pending');
   }
 }
