@@ -46,6 +46,16 @@
          three subscribed handlers — onMuteChange, visibilitychange, statechange
          — contains a call to applyAir.
 
+     THE CROSSING (driven, not grepped — (a)–(g) never run the conductor)
+     (h) THE PRECOMPUTE-LIVE TOOTH — a fresh air.js is armed against a stub page
+         and the WebAudio clock advanced across an hour boundary: arm() must
+         complete (compose injects Hours — the LOUD half), precompose() must
+         build a NON-NULL `derived` at > 3540 s (momentManifest accepts the
+         injected Hours — the SILENT half), and at the boundary cross() must take
+         its FAST path (the pre-composed bucket, no synchronous compose). A
+         self-arming twin run (nextHour sabotaged) proves the boundary otherwise
+         falls to the slow compose path (r15.5).
+
    Prints "air policy twin: N/N PASS"; exits non-zero on any failure.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
@@ -417,6 +427,147 @@ const rows = TABLE.map(function (r) {
     ok(reg.test(CODE),
       '(g) the ' + h[1] + ' listener registers ' + h[0] + ' itself — the asserted body IS the subscribed handler');
   });
+}
+
+/* ── (h) THE PRECOMPUTE-LIVE TOOTH — the silent half, driven (r15.5) ─────────
+   Checks (a)–(g) are STATIC — none exercises compose()/precompose()/cross(),
+   which is exactly why the arity bug survived them. This tooth ARMS a fresh
+   air.js against a stub page (a fake AudioContext + the on-page cores Calendar /
+   Hours / composeHour), advances the WebAudio clock across an hour boundary, and
+   asserts the crossing itself:
+     LOUD half  — arm() completes: compose() injects the on-page Hours core
+                  (air.js:100). A 4-arg momentManifest call throws TypeError here.
+     SILENT half— after precompose() at > 3540 s the pre-composed `derived` is
+                  NON-NULL (momentManifest accepted the injected Hours at
+                  air.js:262, so composeHour ran), and at the boundary cross()
+                  takes its FAST path — the pre-composed bucket, NO synchronous
+                  compose(). A patch of only the loud site leaves `derived` null
+                  forever and cross() falls to a synchronous whole-hour recompose;
+                  this tooth catches that.
+   The stub momentManifest reads H.ESTATE.latDeg exactly as the real core does
+   (calendar.js:208), so a reverted arity fix at either site trips the tooth.
+   Self-arming: a twin run with Calendar.nextHour sabotaged forces `derived` null
+   and proves the boundary then DOES take the slow (compose) path — so the
+   fast-path assertion is a real discriminator, not a vacuous pass. */
+{
+  const AIR_PATH = require.resolve('./air.js');
+  function freshAir() { delete require.cache[AIR_PATH]; return require(AIR_PATH); }
+
+  function makeWorld() {
+    const G = globalThis;
+    const names = ['AudioContext', 'webkitAudioContext', '__wsAudioCtx', 'Calendar',
+      'Hours', 'composeHour', 'airMoment', 'armResponse', 'figureOf', 'WS',
+      'document', 'localStorage', '__AIR__', 'setInterval', 'clearInterval', 'setTimeout'];
+    const saved = {};
+    names.forEach(function (n) { saved[n] = Object.getOwnPropertyDescriptor(G, n); });
+
+    const s = { time: 0, composeHours: 0, captured: null, moment: null, sabotageNext: false };
+
+    function gainNode() {
+      const g = { value: 1, setValueAtTime: function () {}, linearRampToValueAtTime: function () {},
+        cancelScheduledValues: function () {}, setValueCurveAtTime: function () {} };
+      return { gain: g, connect: function () {}, disconnect: function () {} };
+    }
+    function makeCtx() {
+      return {
+        sampleRate: 48000, state: 'running', destination: {},
+        get currentTime() { return s.time; },
+        createGain: gainNode,
+        createBuffer: function (ch, n) { return { getChannelData: function () { return new Float32Array(n); } }; },
+        createBufferSource: function () { return { connect: function () {}, disconnect: function () {}, start: function () {}, stop: function () {} }; },
+        addEventListener: function () {}, removeEventListener: function () {},
+        resume: function () { return { catch: function () {} }; }
+      };
+    }
+
+    G.AudioContext = function () { return makeCtx(); };   // arm does `new AC()`
+    G.webkitAudioContext = undefined;
+    G.__wsAudioCtx = undefined;
+    G.__AIR__ = undefined;
+    G.Calendar = {
+      momentManifest: function (y, m, d, hour, H) {
+        const lat = H.ESTATE.latDeg;   // binds the arity fix: throws if H is missing
+        return { y: y, m: m, d: d, hour: hour, seed: 1, annTier: 0, dateInt: 1, lat: lat };
+      },
+      nextHour: function (y, mo, d, hour) {
+        if (s.sabotageNext) throw new Error('nextHour sabotaged (self-arming control)');
+        return { y: y, m: mo, d: d, hour: hour + 1 };
+      },
+      hash2: function (a, b) { return (a ^ b) >>> 0; },
+      mulberry32: function () { return function () { return 0; }; }
+    };
+    G.Hours = { ESTATE: { latDeg: 51.5 } };
+    G.composeHour = function () { s.composeHours++; return { events: [] }; };
+    G.airMoment = function () { return s.moment; };
+    G.armResponse = function () { return []; };
+    G.figureOf = function () { return 'P4'; };
+    G.WS = { muted: function () { return false; }, onMuteChange: function () {} };
+    G.document = { visibilityState: 'visible', addEventListener: function () {}, removeEventListener: function () {} };
+    G.localStorage = { getItem: function () { return null; }, setItem: function () {} };
+    G.setInterval = function (fn) { s.captured = fn; return 1; };
+    G.clearInterval = function () {};
+    G.setTimeout = function () { return 0; };
+
+    return {
+      s: s,
+      restore: function () {
+        names.forEach(function (n) {
+          if (saved[n]) Object.defineProperty(G, n, saved[n]); else { try { delete G[n]; } catch (e) {} }
+        });
+      }
+    };
+  }
+
+  /* arm a fresh conductor, then drive two ticks: one at > 3540 s (precompose),
+     one at >= 3600 s with the moment advanced to the next hour (the crossing). */
+  function drive(sabotage) {
+    const w = makeWorld(), s = w.s;
+    let armErr = null, afterArm = 0, afterPre = 0, afterCross = 0, bucket = null, tick = null;
+    try {
+      const air = freshAir();
+      s.time = 0;
+      s.moment = { y: 2026, m: 3, d: 21, hour: 10, min: 0, sec: 0, hourPinned: false, dateInt: 1 };
+      try { air.arm(); } catch (e) { armErr = e; }
+      afterArm = s.composeHours;
+      tick = s.captured;
+      s.sabotageNext = sabotage;
+      s.time = 3541;                       // > 3540 s, < 3600 s: precompose only
+      if (tick) tick();
+      afterPre = s.composeHours;
+      s.time = 3601;                       // >= 3600 s: the crossing
+      s.moment = { y: 2026, m: 3, d: 21, hour: 11, min: 0, sec: 0, hourPinned: false, dateInt: 1 };
+      if (tick) tick();
+      afterCross = s.composeHours;
+      bucket = air.state().bucket;
+    } finally { w.restore(); }
+    return { armErr: armErr, afterArm: afterArm, afterPre: afterPre, afterCross: afterCross,
+      bucket: bucket, tick: !!tick };
+  }
+
+  const good = drive(false);
+  const bad = drive(true);
+
+  ok(!good.armErr, '(h) LOUD half: arm() completes — compose() injects the on-page Hours core (air.js:100); a 4-arg momentManifest would throw TypeError here',
+    good.armErr ? String((good.armErr && good.armErr.message) || good.armErr) : '');
+  ok(good.tick, '(h) the pump installed a tick (setInterval captured) — the crossing is drivable');
+  ok(good.afterArm === 1, '(h) arm() composed the current hour exactly once', 'composeHour calls after arm: ' + good.afterArm);
+  ok(good.afterPre === good.afterArm + 1,
+    '(h) SILENT half: precompose() built `derived` at > 3540 s — momentManifest accepted the injected Hours (air.js:262) and composeHour ran',
+    'composeHour after precompose: ' + good.afterPre + ' (want ' + (good.afterArm + 1) + ')');
+  ok(good.afterCross === good.afterPre,
+    '(h) SILENT half: at the boundary cross() took its FAST path — the pre-composed bucket, NO synchronous compose()',
+    'synchronous composeHour at the boundary: ' + (good.afterCross - good.afterPre) + ' (want 0)');
+  ok(good.bucket && good.bucket.hour === 11,
+    '(h) the crossing advanced the live bucket to the next hour via `derived` — proving derived was NON-NULL and consumed',
+    'bucket: ' + JSON.stringify(good.bucket));
+
+  ok(!bad.armErr, '(h) self-arm control: arm() still completes — the sabotage touches only precompose’s nextHour');
+  ok(bad.afterPre === bad.afterArm,
+    '(h) self-arm control: with nextHour sabotaged, precompose() failed to build derived (no composeHour)',
+    'composeHour after precompose: ' + bad.afterPre + ' (want ' + bad.afterArm + ')');
+  ok(bad.afterCross === bad.afterPre + 1,
+    '(h) self-arm control: derived null ⇒ cross() DID fall to the slow synchronous compose() at the boundary — so the fast-path assertion above is a real discriminator, not a vacuous pass',
+    'synchronous composeHour at the boundary: ' + (bad.afterCross - bad.afterPre) + ' (want 1)');
 }
 
 /* ── report ── */
