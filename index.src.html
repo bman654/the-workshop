@@ -8106,32 +8106,91 @@ placeLabels();
       var x0=Math.min.apply(0,xs), y0=Math.min.apply(0,ys);
       return { x:x0, y:y0, w:Math.max.apply(0,xs)-x0, h:Math.max.apply(0,ys)-y0 };
     }
-    // Every SVG <text> in #viewport (hidden loupe labels included — opacity:0 measures
-    // fine, and they reveal at these very positions), world box padded 4px.
+    // r19 (SP-SEE fix 1) — VISIBLE labels ONLY. The hidden loupe/room labels (opacity:0,
+    // revealed only when the surveyor leans in) are invisible ink; counting them was baring
+    // ~40% of the growing-season trees near a name that never shows. isHiddenLabel is a DOM
+    // predicate (computed display:none / visibility:hidden / opacity 0 on the element or any
+    // ancestor), so it lives here in PAGE scope — never the pure calendar.js core (invariant:
+    // no DOM in a core; the design's `Calendar.` prefix is a naming shorthand, the substance
+    // is executed verbatim). The always-on district/zone captions (.zone-label opacity .7,
+    // .struct-mono/.struct-tally) read visible and are KEPT, so a crown never washes over a
+    // shown name.
+    function isHiddenLabel(t){
+      try{
+        for (var n=t; n && n.nodeType===1; n=n.parentNode){
+          var cs = window.getComputedStyle(n);
+          if (!cs) continue;
+          if (cs.display === "none" || cs.visibility === "hidden") return true;
+          if (parseFloat(cs.opacity) === 0) return true;
+        }
+      }catch(e){}
+      return false;
+    }
     var labelBoxes = [];
     var texts = viewport.querySelectorAll("text");
     for (var j=0; j<texts.length; j++){
+      if (isHiddenLabel(texts[j])) continue;         // r19: skip invisible ink
       try{ var wb = worldBox(texts[j]);
         labelBoxes.push({ x:wb.x-4, y:wb.y-4, w:wb.w+8, h:wb.h+8 }); }catch(e){}
     }
-    function clearOfLabels(x0, y0, x1, y1){          // speckle envelope vs every label box
+    function clearOfLabels(x0, y0, x1, y1){          // envelope vs every VISIBLE label box
       for (var kk=0; kk<labelBoxes.length; kk++){ var L = labelBoxes[kk];
         if (x0 < L.x+L.w && x1 > L.x && y0 < L.y+L.h && y1 > L.y) return false; }
       return true;
     }
+
+    // r19 (SP-SEE fix 3) — the fixed CHROME the cartouche motif must ALSO clear, so it can
+    // never hide behind the chip. Screen-fixed HTML boxes mapped to WORLD space through the
+    // same inverse #viewport CTM the labels use: the top-left door self-test chip (#doortest),
+    // the bottom-right pan/zoom controls (.pzctl), and the bottom-left air affordance
+    // (#cal-airbox). getBoundingClientRect is CSS-px in the same client frame getScreenCTM
+    // reports, so invVP maps its corners to world exactly (deterministic per build+machine).
+    var CHROME_BOXES = [];
+    function addChromeBox(e){
+      try{
+        var r = e && e.getBoundingClientRect(); if (!r || (!r.width && !r.height)) return;
+        var pts = [[r.left,r.top],[r.right,r.top],[r.left,r.bottom],[r.right,r.bottom]];
+        var xs=[], ys=[], q, px, py;
+        for (q=0; q<4; q++){ px=pts[q][0]; py=pts[q][1];
+          xs.push(invVP.a*px + invVP.c*py + invVP.e);
+          ys.push(invVP.b*px + invVP.d*py + invVP.f); }
+        var x0=Math.min.apply(0,xs), y0=Math.min.apply(0,ys);
+        CHROME_BOXES.push({ x:x0, y:y0, w:Math.max.apply(0,xs)-x0, h:Math.max.apply(0,ys)-y0 });
+      }catch(e2){}
+    }
+    addChromeBox(document.getElementById("doortest"));
+    addChromeBox(document.getElementById("cal-airbox"));
+    addChromeBox(document.querySelector(".pzctl"));
+    function clearOfChrome(x0, y0, x1, y1){
+      for (var kc=0; kc<CHROME_BOXES.length; kc++){ var C = CHROME_BOXES[kc];
+        if (x0 < C.x+C.w && x1 > C.x && y0 < C.y+C.h && y1 > C.y) return false; }
+      return true;
+    }
+    function clearMargin(x0, y0, x1, y1){ return clearOfLabels(x0,y0,x1,y1) && clearOfChrome(x0,y0,x1,y1); }
 
     // ── the draw helpers (channel B glyph craft + channel C motif craft). Every element
     //    is drawn ONLY in the subdued --tree/--snow/seasonal tokens — never primary brass
     //    (§8.4-(k)) — and emits ZERO <text> (§8.4-(a)). Path craft converged in the SP-SEE
     //    prototypes (proto-03).
     var TREE="#6f6038", SNOW="#c2ccd8", SPRING="#cf8aa2", AUTUMN="#c47a42", SUMMER="#84a05a";
+    var CR=18, CRMIN=8, CYC=30;      // full crown half-extent · min fitted radius · crown centre above cy
     function fx(v){ return (+v).toFixed(2); }
     function P(cx,cy,dx,dy){ return fx(cx+dx)+" "+fx(cy+dy); }
-    function crownPath(cx,cy){
-      return "M"+P(cx,cy,0,-45)+" C"+P(cx,cy,9,-45)+" "+P(cx,cy,16,-38)+" "+P(cx,cy,16,-30)+
-             " C"+P(cx,cy,16,-22)+" "+P(cx,cy,9,-15)+" "+P(cx,cy,0,-15)+
-             " C"+P(cx,cy,-9,-15)+" "+P(cx,cy,-16,-22)+" "+P(cx,cy,-16,-30)+
-             " C"+P(cx,cy,-16,-38)+" "+P(cx,cy,-9,-45)+" "+P(cx,cy,0,-45)+" Z";
+    // r19 (SP-SEE fix 2) — the crown blob at a FITTED radius r (centre at cy-CYC; rx≈0.9r,
+    // ry≈0.85r matches the full CR=18 blob's 16×15 half-extents). A reduced crown still
+    // carries the season near a label rather than baring the tree.
+    function crownEnv(cx,cy,r){ var rx=r*0.9, ry=r*0.85, yc=cy-CYC;
+      return [cx-rx, yc-ry, cx+rx, yc+ry]; }
+    function crownFit(cx,cy){                          // largest r in [CRMIN,CR] clearing visible labels, else 0
+      for (var r=CR; r>=CRMIN; r-=2){ var e=crownEnv(cx,cy,r);
+        if (clearOfLabels(e[0],e[1],e[2],e[3])) return r; }
+      return 0;
+    }
+    function crownPath(cx,cy,r){ var rx=r*0.9, ry=r*0.85, yc=cy-CYC;
+      return "M"+P(cx,yc,0,-ry)+" C"+P(cx,yc,rx*0.56,-ry)+" "+P(cx,yc,rx,-ry*0.53)+" "+P(cx,yc,rx,0)+
+             " C"+P(cx,yc,rx,ry*0.53)+" "+P(cx,yc,rx*0.56,ry)+" "+P(cx,yc,0,ry)+
+             " C"+P(cx,yc,-rx*0.56,ry)+" "+P(cx,yc,-rx,ry*0.53)+" "+P(cx,yc,-rx,0)+
+             " C"+P(cx,yc,-rx,-ry*0.53)+" "+P(cx,yc,-rx*0.56,-ry)+" "+P(cx,yc,0,-ry)+" Z";
     }
     function drawTreeStructure(g,cx,cy){                 /* thin engraved trunk + forked branches */
       g.appendChild(el("path",{ "class":"cal-tree-st", fill:"none", stroke:TREE, "stroke-width":"1.4",
@@ -8140,25 +8199,26 @@ placeLabels();
           " M"+P(cx,cy,0,-12)+" L"+P(cx,cy,7,-22)+" M"+P(cx,cy,0,-22)+" L"+P(cx,cy,-5,-32)+
           " M"+P(cx,cy,0,-22)+" L"+P(cx,cy,5,-32) }));
     }
-    function drawCrownFill(g,cx,cy,rgb,a){               /* seasonal colour+α crown blob */
-      g.appendChild(el("path",{ "class":"cal-crown", d:crownPath(cx,cy),
+    function drawCrownFill(g,cx,cy,r,rgb,a){            /* seasonal colour+α crown blob at the FITTED radius */
+      g.appendChild(el("path",{ "class":"cal-crown", d:crownPath(cx,cy,r),
         fill:"rgb("+rgb[0]+","+rgb[1]+","+rgb[2]+")", opacity:a.toFixed(3),
         stroke:TREE, "stroke-width":"0.8", "stroke-opacity":"0.5" }));
     }
-    function drawSnowCrown(g,cx,cy,a){                   /* uneven-bezier --snow cap over the crown */
-      g.appendChild(el("path",{ "class":"cal-snow", fill:SNOW, opacity:(0.75*a).toFixed(3),
-        d:"M"+P(cx,cy,-15,-33)+" Q"+P(cx,cy,-9,-45)+" "+P(cx,cy,-3,-38)+
-          " Q"+P(cx,cy,3,-47)+" "+P(cx,cy,9,-39)+" Q"+P(cx,cy,14,-44)+" "+P(cx,cy,15,-33)+
-          " Q"+P(cx,cy,7,-29)+" "+P(cx,cy,0,-32)+" Q"+P(cx,cy,-8,-29)+" "+P(cx,cy,-15,-33)+" Z" }));
+    function drawSnowCap(g,cx,cy,r){                     /* r19: FULL-opacity --snow cap, UN-gated by the crown */
+      var s=r/CR, yc=cy-CYC;
+      g.appendChild(el("path",{ "class":"cal-snow", fill:SNOW, opacity:"0.95",
+        d:"M"+P(cx,yc,-15*s,-3*s)+" Q"+P(cx,yc,-9*s,-15*s)+" "+P(cx,yc,-3*s,-8*s)+
+          " Q"+P(cx,yc,3*s,-17*s)+" "+P(cx,yc,9*s,-9*s)+" Q"+P(cx,yc,14*s,-14*s)+" "+P(cx,yc,15*s,-3*s)+
+          " Q"+P(cx,yc,7*s,1*s)+" "+P(cx,yc,0,-2*s)+" Q"+P(cx,yc,-8*s,1*s)+" "+P(cx,yc,-15*s,-3*s)+" Z" }));
     }
-    function drawBlossom(g,cx,cy,a,rv){                  /* --spring marks on the crown */
-      var pos=[[-8,-38],[6,-40],[-2,-30],[10,-28],[-11,-27]];
+    function drawBlossom(g,cx,cy,r,a,rv){               /* --spring marks on the crown (scaled to the fitted radius) */
+      var s=r/CR, yc=cy-CYC, pos=[[-8,-8],[6,-10],[-2,0],[10,2],[-11,3]];
       for (var q=0;q<pos.length;q++)
         g.appendChild(el("circle",{ "class":"cal-bloom",
-          cx:fx(cx+pos[q][0]+(rv[q]*2-1)*2), cy:fx(cy+pos[q][1]+(rv[(q+1)%8]*2-1)*2),
-          r:"2.1", fill:SPRING, opacity:(0.85*a).toFixed(3) }));
+          cx:fx(cx+(pos[q][0]+(rv[q]*2-1)*2)*s), cy:fx(yc+(pos[q][1]+(rv[(q+1)%8]*2-1)*2)*s),
+          r:fx(2.1*s), fill:SPRING, opacity:(0.85*a).toFixed(3) }));
     }
-    function drawFallingLeaves(g,cx,cy,a,rv){            /* a few --autumn leaves below the crown */
+    function drawFallingLeaves(g,cx,cy,r,a,rv){          /* a few --autumn leaves below the crown */
       var pos=[[-13,-6],[11,-10],[3,-2]];
       for (var q=0;q<pos.length;q++){
         var lx=cx+pos[q][0]+(rv[q]*2-1)*3, ly=cy+pos[q][1]+(rv[(q+2)%8]*2-1)*3;
@@ -8196,44 +8256,53 @@ placeLabels();
 
     // ── channel B — draw a tree at every avenue-tree position. FIXED 8-draw rnd() budget
     //    per tree BEFORE any branch, so neither label proximity nor season presence ever
-    //    re-phases the stream (the per-slot-hash stability lesson). A crown whose envelope
-    //    intersects a label draws BARE STRUCTURE only (thin trunk/branches are always safe).
+    //    re-phases the stream (the per-slot-hash stability lesson). r19 fixes: a crown near a
+    //    VISIBLE label is REDUCED (crownFit), not bared — a fully bare crown is a WINTER read
+    //    only (isWinterBare); the snow cap is a SPARSE seeded subset at FULL opacity, UN-gated
+    //    by the crown, so winter & near-label trees still cap and the winter read is clear.
     var trees = viewport.querySelectorAll("circle.avenue-tree");
     var rnd = Calendar.mulberry32(Calendar.dateSeed(cy_, cm_, cd_));
     var gTrees = el("g", { id:"cal-trees" }); dress.appendChild(gTrees);
-    var CR = 18;
+    var isWinterBare = (D.foliage.a < 0.08);           // leaf-off winter only, never a clearance artifact
     for (var i=0; i<trees.length; i++){
       var cx=+trees[i].getAttribute("cx"), cy=+trees[i].getAttribute("cy");
-      var rv=[]; for (var rq=0; rq<8; rq++) rv.push(rnd());          // fixed per-tree budget
-      drawTreeStructure(gTrees, cx, cy);
-      var crownOk = clearOfLabels(cx-CR, cy-48, cx+CR, cy-2);
-      if (crownOk){
-        drawCrownFill(gTrees, cx, cy, D.foliage.rgb, D.foliage.a);
-        if (D.snow  > 0) drawSnowCrown(gTrees, cx, cy, D.snow);
-        if (D.bloom > 0) drawBlossom(gTrees, cx, cy, D.bloom, rv);
-        if (D.turn  > 0) drawFallingLeaves(gTrees, cx, cy, D.turn, rv);
+      var rv=[]; for (var rq=0; rq<8; rq++) rv.push(rnd());          // fixed per-tree budget (branch-independent)
+      var snowThis = (D.snow > 0) && (rv[0] < D.snow);              // sparse SEEDED full-opacity snow subset (fraction ≈ D.snow)
+      var cr = crownFit(cx, cy);                                    // ≤ CR, ≥ CRMIN, or 0 iff even CRMIN collides
+      drawTreeStructure(gTrees, cx, cy);                            // bare --tree structure — ALWAYS
+      if (!isWinterBare && cr > 0){
+        drawCrownFill(gTrees, cx, cy, cr, D.foliage.rgb, D.foliage.a);
+        if (D.bloom > 0) drawBlossom(gTrees, cx, cy, cr, D.bloom, rv);
+        if (D.turn  > 0) drawFallingLeaves(gTrees, cx, cy, cr, D.turn, rv);
       }
+      if (snowThis) drawSnowCap(gTrees, cx, cy, (cr > 0 ? cr : CR));  // UN-gated by the crown
     }
 
     // ── channel C — ONE seasonal cartouche motif at a fixed CLEAR plate margin. Season by
-    //    nearest bell-centre (wrapped); cross-fade opacity dips toward each boundary. The
-    //    anchor is the first candidate corner provably clear of every label (deterministic —
-    //    the plate + labels are byte-stable per build). Zero <text>.
-    (function motif(){
+    //    nearest bell-centre (wrapped); cross-fade opacity dips toward each boundary. r19: the
+    //    anchor must clear BOTH the visible labels AND the fixed chrome (clearMargin /
+    //    CHROME_BOXES) so the cartouche never hides behind the self-test chip / controls /
+    //    affordance. Deterministic — plate, labels, and chrome are byte-stable per build. The
+    //    #cal-motif subgroup stays maskable on its own (§8.4-(k)). Zero <text>.
+    function drawSeasonMotif(g, D, clearFn, chromeBoxes){
       var CEN={spring:0.07, summer:0.30, autumn:0.60, winter:0.86};
       function wd(a,b){ var d=Math.abs(a-b); return Math.min(d,1-d); }
       var pp=((phase%1)+1)%1, season="summer", best=9, s;
       for (s in CEN){ var d=wd(pp, CEN[s]); if (d<best){ best=d; season=s; } }
       var mo = 0.35 + 0.5*(best>=0.125 ? 0 : 0.5*(1+Math.cos(Math.PI*best/0.125)));
-      var cand=[[300,340],[300,2760],[2800,340],[2800,2760],[1550,240]], A=null, c;
+      // corners AWAY from the three chrome anchors first (top-right, top-centre, mid-edges),
+      // then the chrome corners as fallbacks — clearFn (labels + chrome) picks the first clear.
+      var cand=[[2820,300],[1550,230],[2870,1550],[280,1550],[1550,2870],[300,340],[2800,2760],[300,2760]],
+          A=null, c;
       for (c=0;c<cand.length;c++)
-        if (clearOfLabels(cand[c][0]-80, cand[c][1]-90, cand[c][0]+80, cand[c][1]+80)){ A=cand[c]; break; }
+        if (clearFn(cand[c][0]-80, cand[c][1]-90, cand[c][0]+80, cand[c][1]+80)){ A=cand[c]; break; }
       if (!A) return;
-      var gM = el("g", { id:"cal-motif", opacity:mo.toFixed(3),
-        transform:"translate("+A[0]+","+A[1]+") scale(1.9)" });
-      drawMotif(gM, season);
-      dress.appendChild(gM);
-    })();
+      var gInner = el("g", { opacity:mo.toFixed(3), transform:"translate("+A[0]+","+A[1]+") scale(1.9)" });
+      drawMotif(gInner, season);
+      g.appendChild(gInner);
+    }
+    var gMotif = el("g", { id:"cal-motif" }); dress.appendChild(gMotif);
+    drawSeasonMotif(gMotif, D, clearMargin, CHROME_BOXES);
 
     // ═══ THE AIR'S ARM AFFORDANCE (§5) — chrome, not dressing. ═══
     var box = document.getElementById("cal-airbox"),
