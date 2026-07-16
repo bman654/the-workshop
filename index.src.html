@@ -115,7 +115,7 @@
     filter:drop-shadow(0 0 3px rgba(201,162,74,.3)); }
   .survey-path.drive-edge{ stroke:var(--line-warm); stroke-width:1; opacity:.34;
     stroke-dasharray:none; stroke-linecap:round; }
-  .avenue-tree{ fill:var(--line-warm); opacity:.4; }
+  .avenue-tree{ fill:var(--cal-foliage, var(--line-warm)); opacity:var(--cal-foliage-a, .4); }
 
   /* footprints — a POI is an <a>; .fp* are its plan linework, given warm relief */
   .poi{ cursor:pointer; outline:none; }
@@ -859,6 +859,11 @@
      transparent by day so the plan stays legible — its opacity is driven inline by
      (1 − dayFactor). It multiplies, so it only ever deepens the dark ground. */
   #hours-wash{ pointer-events:none; mix-blend-mode:multiply; }
+  /* ── THE LIVING CALENDAR season dressing (§2.2): cosmetics under the Hours wash.
+     #cal-dressing seats BELOW #hours-back so night still darkens the season; #cal-wash
+     multiplies its near-white season tint over the plate (never darkening). No motion. */
+  #cal-dressing{ pointer-events:none; }
+  #cal-wash{ mix-blend-mode:multiply; }
   /* at night, brighten the existing Survey stars for contrast (no competing star set) */
   .sky.hours-night .sky-star{ opacity:1; filter:drop-shadow(0 0 5px rgba(234,240,250,.7)); }
   .sky.hours-night .sky-star.mag1{ filter:drop-shadow(0 0 7px rgba(240,212,137,.7)); }
@@ -6631,7 +6636,10 @@ function airMoment(){                        // the AIR's edge: pinned → stabl
     var DIAL_R = 30;                          // the live brass dial radius on the plate
     // the fixed estate place + the day to show. A canonical day (summer; the swing is
     // widest) keeps the demo's range legible; the visitor scrubs the civil minute.
-    var LAT = Hours.ESTATE.latDeg, DOY = 172;  // summer solstice — the longest day
+    var CANON_DOY = 172;    // the screenshot-canon day (summer solstice; 1-based ordinal —
+                            // the convention this pin has always used, see Calendar.doyOf)
+    var LAT = Hours.ESTATE.latDeg,
+        DOY = CANON_DOY;    // provisional — resolved for real AFTER pinFrame, just below
     var STYLE_LEN = 1;                          // dial-units; we scale the shadow to DIAL_R
 
     /* ── CANONICAL / SCREENSHOT determinism ──────────────────────────────────
@@ -6654,6 +6662,16 @@ function airMoment(){                        // the AIR's edge: pinned → stabl
       if(/hours=allon/.test(q) || /hours-allon/.test(h)) pinFrame = true;
       if(WS && WS.store){ var s2 = WS.store(); if(s2 && s2.has && s2.has("ws:seen:undercroft-rune")) runeReward = true; }
     }catch(e){}
+
+    // resolve the real day now that pinFrame is known (nothing between the DOY line and
+    // here reads DOY — verified). Consumes THE shared calendar edge (top-level, defined
+    // above theHours() — §1.8): the same memoized read the dressing uses, so tint and
+    // dressing can never straddle local midnight against each other. Under pinFrame DOY
+    // stays CANON_DOY, so ?hours=allon captures are season-stable.
+    if (!pinFrame){
+      try{ var mD = localMoment(); DOY = Calendar.doyOf(mD.y, mD.m, mD.d); }
+      catch(e){ /* keep CANON_DOY — the legible summer fallback */ }
+    }
 
     /* ── BUILD THE LAYER STACK (into #viewport, after the sky pass) ─────────── */
     var skyG = viewport.querySelector("g.sky");   // the existing Survey stars (we only toggle a class)
@@ -8025,6 +8043,95 @@ placeLabels();
    unarmed page. ════════════════════════════════════════════════════════════════════ */
 (function theCalendar(){
   try{
+    // ═══ THE SEASONAL DRESSING (§2) — four small moves keyed to the injected date:
+    //     channel A the ground wash · B the foliage tint · C the waypoint speckle. It
+    //     renders ONCE and holds forever (§2.6 — zero timers/listeners, no motion), and
+    //     runs FIRST so the plate is dressed even when the air button is absent and under
+    //     reduced-motion / the canon pin (a still season, never a skipped one). It confers
+    //     no access, adds no PLACES row, mutates no geometry, contains zero <text>. ═══
+    //
+    // §2.5 — theCalendar() cannot see theHours()'s `pinFrame` var, so it re-derives the
+    // flag from the SAME query test; under ?hours=allon the dressing forces the canon date
+    // {2026,6,21} so screenshots are season-stable forever.
+    var pinFrame = false;
+    try{ pinFrame = /hours=allon/.test(String(location.search||"")) ||
+                    /hours-allon/.test(String(location.hash||"")); }catch(e){}
+    var today = pinFrame ? { y:2026, m:6, d:21, pinned:true } : localToday();
+    var cy_ = today.y, cm_ = today.m, cd_ = today.d;
+    var phase = Calendar.seasonPhase(Calendar.jdOfLocalNoon(cy_, cm_, cd_));
+    var D = Calendar.dressing(phase);
+
+    // ── Channel A — the season ground wash. One full-plate rect in a new group, inserted
+    //    BELOW #hours-back so night still darkens the season (SVG paints in document order;
+    //    the Hours wash multiplies over everything beneath it). The anchors are near-white
+    //    tints, so multiply gives a gentle cast, never a darkening that fights night.
+    var dress = el("g", { id:"cal-dressing", "pointer-events":"none" });
+    var WW = LAYOUT.world.W, WH = LAYOUT.world.H;   // LAYOUT.world dims — the hours-wash pattern
+    var wc = D.wash.rgb;
+    var sWash = el("rect", { id:"cal-wash", x:0, y:0, width:WW, height:WH,
+      fill:"rgb("+wc[0]+","+wc[1]+","+wc[2]+")", opacity:D.wash.a.toFixed(3) });
+    dress.appendChild(sWash);
+    var hb = document.getElementById("hours-back");
+    if (hb) viewport.insertBefore(dress, hb); else viewport.appendChild(dress);
+
+    // ── Channel B — foliage. The .avenue-tree dot idiom gains custom-property indirection
+    //    (today's literals as fallback); theCalendar() sets the two props on #viewport
+    //    (scoped — the root palette is never forked). Layer absent/failed ⇒ the computed
+    //    style is byte-identical to today (fallback = the current literal values).
+    var fc = D.foliage.rgb;
+    viewport.style.setProperty("--cal-foliage", "rgb("+fc[0]+","+fc[1]+","+fc[2]+")");
+    viewport.style.setProperty("--cal-foliage-a", D.foliage.a.toFixed(3));
+
+    // ── Channel C — waypoint speckle (snow-caps + bloom motes). Deterministic, sparse,
+    //    ONLY at avenue-tree positions (guaranteed open planted ground), and NEVER near a
+    //    rendered label — the label-clearance exclusion rule. Labels reach their solved
+    //    slots only inside placeLabels() (this IIFE seats after it), and text.getBBox() is
+    //    LOCAL geometry, so every box is mapped local → world through its own CTM composed
+    //    against #viewport's (§2.2-C — exact for ANY ancestor transform).
+    var invVP = viewport.getScreenCTM().inverse();
+    function worldBox(elm){                        // axis-aligned #viewport-space envelope
+      var bb = elm.getBBox();                      // local geometry
+      var M = invVP.multiply(elm.getScreenCTM());  // local → viewport space (pan/zoom cancels)
+      var xs = [], ys = [], px, py, q;
+      var cs = [[bb.x,bb.y],[bb.x+bb.width,bb.y],[bb.x,bb.y+bb.height],
+                [bb.x+bb.width,bb.y+bb.height]];
+      for (q=0; q<4; q++){ px=cs[q][0]; py=cs[q][1];
+        xs.push(M.a*px + M.c*py + M.e); ys.push(M.b*px + M.d*py + M.f); }
+      var x0=Math.min.apply(0,xs), y0=Math.min.apply(0,ys);
+      return { x:x0, y:y0, w:Math.max.apply(0,xs)-x0, h:Math.max.apply(0,ys)-y0 };
+    }
+    // Every SVG <text> in #viewport (hidden loupe labels included — opacity:0 measures
+    // fine, and they reveal at these very positions), world box padded 4px.
+    var labelBoxes = [];
+    var texts = viewport.querySelectorAll("text");
+    for (var j=0; j<texts.length; j++){
+      try{ var wb = worldBox(texts[j]);
+        labelBoxes.push({ x:wb.x-4, y:wb.y-4, w:wb.w+8, h:wb.h+8 }); }catch(e){}
+    }
+    function clearOfLabels(x0, y0, x1, y1){          // speckle envelope vs every label box
+      for (var kk=0; kk<labelBoxes.length; kk++){ var L = labelBoxes[kk];
+        if (x0 < L.x+L.w && x1 > L.x && y0 < L.y+L.h && y1 > L.y) return false; }
+      return true;
+    }
+
+    var trees = viewport.querySelectorAll("circle.avenue-tree");
+    var rnd = Calendar.mulberry32(Calendar.dateSeed(cy_, cm_, cd_));
+    for (var i=0; i<trees.length; i++){
+      var cx=+trees[i].getAttribute("cx"), cy=+trees[i].getAttribute("cy"),
+          r=+trees[i].getAttribute("r");
+      // the tree's WHOLE speckle envelope (crown cap + the highest possible bloom mote):
+      var ok = clearOfLabels(cx - (r*0.8 + 6), cy - r - 6 - 1.4, cx + (r*0.8 + 6), cy + r);
+      if (ok && D.snow > 0)                 // snow-cap: a white crescent-dot seated on the crown
+        dress.appendChild(el("circle", { "class":"cal-snow", cx:cx, cy:(cy - r*0.45),
+          r:(r*0.8).toFixed(2), fill:"#dde6f2", opacity:(0.55*D.snow).toFixed(3) }));
+      var b = rnd();                        // bloom: at most one warm mote per tree, seeded —
+      if (ok && D.bloom > 0 && b < D.bloom*0.9)   // ONE rnd() per tree regardless of any branch
+        dress.appendChild(el("circle", { "class":"cal-bloom",
+          cx:(cx + (rnd()*2-1)*6).toFixed(1), cy:(cy - r - 2 - rnd()*4).toFixed(1),
+          r:1.4, fill:"#e8c4d0", opacity:(0.4 + 0.3*rnd()).toFixed(3) }));
+    }
+
+    // ═══ THE AIR'S ARM AFFORDANCE (§5) — chrome, not dressing. ═══
     var box = document.getElementById("cal-airbox"),
         btn = document.getElementById("cal-air");
     if(!box || !btn || typeof Air === "undefined") return;
