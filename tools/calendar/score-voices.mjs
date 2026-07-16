@@ -183,17 +183,26 @@ function sawBank(out, n, i0, sr, comps, knee){
       if (amp < 0.002) continue; const w = 2 * Math.PI * fp / sr, php = ph * harm % (2 * Math.PI);
       for (let i = 0; i < n; i++) out[i] += tg * amp * Math.sin(php + w * (i0 + i)); } }
 }
-// r11.2 WAVETABLE realize MODE (padDay `wavetable:true` — the LIVE path only):
-// one band-limited single cycle PER COMPONENT, 4096 samples, linear interp. An
-// AUDIBLE-equivalence claim, NOT a bitwise one; §5.4 row (b3) freezes the parity
-// at T3.1. Offline/Node keeps the direct sum.
+// WAVETABLE realize MODE (`wavetable:true` — the LIVE path only): one band-limited
+// single cycle PER COMPONENT, 4096 samples, linear interp. AUDIBLE-equivalence, NOT
+// bitwise; §5.4 rows (b3)/(b4)/(b5) freeze the parity at T3.1. Offline keeps direct.
+// r13.3: the law is "constant-frequency periodic component stacks are tabled", not
+// "padDay is special" — padDay/padWinterDeep saws (knee 750/150) + padDawnDusk's TONE
+// half are tabled; its AIR half stays direct (stateful noise is not tableable) and
+// padNight stays direct (38.43 vs 38.65 buys no wall). `partTable` takes explicit
+// [harm, amp, phase] triples; `sawTable` derives the saw law's and calls it — no fork.
 const WT_N = 4096;
-function sawTable(comp, knee){
-  const f = comp[0], ph = comp[1], t = new Float32Array(WT_N + 1), N = Math.min(40, Math.floor(5000 / f));
-  for (let harm = 1; harm <= N; harm++){ const fp = f * harm, amp = (1 / harm) * (1 / (1 + Math.pow(fp / knee, 2))) * 0.22;
-    if (amp < 0.002) continue; const php = ph * harm % (2 * Math.PI);
+function partTable(parts){
+  const t = new Float32Array(WT_N + 1);
+  for (let p = 0; p < parts.length; p++){ const harm = parts[p][0], amp = parts[p][1], php = parts[p][2];
     for (let j = 0; j <= WT_N; j++) t[j] += amp * Math.sin(php + 2 * Math.PI * harm * j / WT_N); }
   return t;
+}
+function sawTable(comp, knee){
+  const f = comp[0], ph = comp[1], N = Math.min(40, Math.floor(5000 / f)), parts = [];
+  for (let harm = 1; harm <= N; harm++){ const fp = f * harm, amp = (1 / harm) * (1 / (1 + Math.pow(fp / knee, 2))) * 0.22;
+    if (amp >= 0.002) parts.push([harm, amp, ph * harm % (2 * Math.PI)]); }
+  return partTable(parts);
 }
 // r12.5: fmod-free, yet STILL strictly index-computed (no running phase
 // accumulator — G10(b) bans that; every sample stays a pure function of its
@@ -239,13 +248,18 @@ function padDayStream(sr, P){ // P2 saws {A2,A3,E4}->LP
     breathe(out, n, i0, sr, P); i0 += n;
   } };
 }
-function padDawnDuskStream(sr, P){ // P3 {A3,E4}+air
+function padDawnDuskStream(sr, P){ // P3 {A3,E4}+air — r13.3: TONE half tabled live, AIR half always direct
   const { phases, seeds } = P, tones = [220.0, 329.63], st = [];
   for (let ti = 0; ti < 2; ti++) st.push([pinkGen(mulberry32(seeds[ti])), svf()]);
+  const comps = [[tones[0], 0, 1], [tones[1], 0, 1]];   // wtBank reads [freq, ., toneGain]; phase is baked into the table
+  const tabs = P.wavetable ? [0, 1].map((ti) => partTable(
+    [[1, 0.42, phases[ti * 3]], [2, 0.10, phases[ti * 3 + 1]], [3, 0.035, phases[ti * 3 + 2]]])) : null;
   let i0 = 0;
   return { fill(out, n){
     out.fill(0, 0, n);
+    if (tabs) wtBank(out, n, i0, sr, comps, tabs);
     for (let ti = 0; ti < 2; ti++){ const f0 = tones[ti], pink = st[ti][0], bp = st[ti][1];
+      if (tabs){ for (let i = 0; i < n; i++) out[i] += bp(pink() * 3.0, f0, 14).band * 0.5; continue; }
       const ph1 = phases[ti * 3], ph2 = phases[ti * 3 + 1], ph3 = phases[ti * 3 + 2];
       const w1 = 2 * Math.PI * f0 / sr, w2 = 2 * w1, w3 = 3 * w1;
       for (let i = 0; i < n; i++){ const a = i0 + i;
@@ -257,11 +271,12 @@ function padDawnDuskStream(sr, P){ // P3 {A3,E4}+air
 }
 function padWinterDeepStream(sr, P){ // P6 r10: 3 detuned saws/tone {A3,E4,A4}->LP300, no noise
   const comps = sawComps([[220.0, 1.0], [329.63, 0.6], [440.0, 0.5]], P.detunes, P.phases);
+  const tabs = P.wavetable ? comps.map((c) => sawTable(c, 150)) : null;   // r13.3
   const k300 = 1 - Math.exp(-2 * Math.PI * 300 / sr);
   let y = 0, i0 = 0;
   return { fill(out, n){
     out.fill(0, 0, n);
-    sawBank(out, n, i0, sr, comps, 150);
+    if (tabs) wtBank(out, n, i0, sr, comps, tabs); else sawBank(out, n, i0, sr, comps, 150);
     for (let i = 0; i < n; i++){ y += k300 * (out[i] - y); out[i] = y * 2.2; }
     breathe(out, n, i0, sr, P); i0 += n;
   } };
