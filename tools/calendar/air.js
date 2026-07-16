@@ -107,8 +107,9 @@ function epOf(e){   // ONE stream per pad episode
   if(!eps[k]){ var sr=ctx.sampleRate,secs=p.epEnd-p.epStart,
       mk={padNight:padNightStream,padDay:padDayStream,
           padDawnDusk:padDawnDuskStream,padWinterDeep:padWinterDeepStream}[e.ev.voice];
-    // r11.2 — LIVE takes padDay's WAVETABLE mode; same bank, same recipe.
-    eps[k]={st:mk(sr,padParams(e.ev.voice,p,secs,e.ev.voice==='padDay')),
+    // r13.3 — LIVE takes the WAVETABLE mode PER VOICE: padDay + padWinterDeep saws
+    // and padDawnDusk's tone half; padNight stays DIRECT (a table buys it no wall).
+    eps[k]={st:mk(sr,padParams(e.ev.voice,p,secs,e.ev.voice!=='padNight')),
       cur:0,n:Math.round(sr*secs),fade:false,scr:null}; }
   return eps[k];
 }
