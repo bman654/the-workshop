@@ -245,6 +245,18 @@ function dressingRead() {
     // a djb2 fingerprint of the motif's innerHTML (season-varying across the bell dates).
     var ms=m?m.innerHTML:'', mh=5381; for(var j=0;j<ms.length;j++){ mh=(((mh*33)>>>0)^ms.charCodeAt(j))>>>0; }
     var cr=d?d.querySelector('.cal-crown'):null;   // the season-live crown fill (D.foliage)
+    // (h) r19 fix-3: the cartouche motif must NOT hide behind fixed chrome. Test the motif inner
+    // <g>'s SCREEN-space bbox centre against the three chrome element rects (#doortest self-test
+    // chip · #cal-airbox affordance · .pzctl controls) in the same client frame — same math the
+    // build's CHROME_BOXES avoidance uses, read back independently. null ⇒ clear of all chrome.
+    var motifChrome=null;
+    if(m){ var mg=m.querySelector('g');
+      if(mg){ var mb=mg.getBoundingClientRect(), mcx=mb.left+mb.width/2, mcy=mb.top+mb.height/2;
+        [['#doortest',document.getElementById('doortest')],
+         ['#cal-airbox',document.getElementById('cal-airbox')],
+         ['.pzctl',document.querySelector('.pzctl')]].forEach(function(cp){
+          var e=cp[1]; if(!e) return; var r=e.getBoundingClientRect();
+          if(mcx>=r.left&&mcx<=r.right&&mcy>=r.top&&mcy<=r.bottom) motifChrome=cp[0]; }); } }
     return JSON.stringify({
       present:!!d,
       pe: d?getComputedStyle(d).pointerEvents:null,
@@ -259,7 +271,7 @@ function dressingRead() {
       bloom: d?d.querySelectorAll('.cal-bloom').length:0,
       leaf: d?d.querySelectorAll('.cal-leaf').length:0,
       crownFill: cr?getComputedStyle(cr).fill:null,
-      motif:!!m, motifHash:mh, motifLen:ms.length,
+      motif:!!m, motifHash:mh, motifLen:ms.length, motifChrome:motifChrome,
       brassHit:brassHit });
   })()`);
 }
@@ -329,8 +341,22 @@ function clearanceRead() {
       var x0=Math.min.apply(0,xs),y0=Math.min.apply(0,ys);
       return { x:x0,y:y0,w:Math.max.apply(0,xs)-x0,h:Math.max.apply(0,ys)-y0 };
     }
+    // r19: the draw clears VISIBLE labels ONLY (isHiddenLabel skip — the hidden loupe/room
+    // captions are invisible ink a crown may pass under), so the clearance basis is the VISIBLE
+    // text set, re-implemented here to match §2.2's predicate (computed display:none /
+    // visibility:hidden / opacity 0 on the element or any ancestor). Checking against hidden
+    // boxes would flag the intentional near-hidden-label decoration (T4.1 named (i) as an interim
+    // red for exactly this: "old gate clears ALL texts, r19 clears VISIBLE only").
+    function isHiddenLabel(t){
+      try{ for(var n=t; n && n.nodeType===1; n=n.parentNode){
+        var cs=window.getComputedStyle(n); if(!cs) continue;
+        if(cs.display==='none' || cs.visibility==='hidden') return true;
+        if(parseFloat(cs.opacity)===0) return true; } }catch(e){}
+      return false;
+    }
     var texts=vp.querySelectorAll('text'), boxes=[], maxCenterDist=0;
     for(var j=0;j<texts.length;j++){
+      if(isHiddenLabel(texts[j])) continue;                // r19: VISIBLE ink only
       try{ var b=worldBox(texts[j]); boxes.push(b);
         var ccx=b.x+b.w/2, ccy=b.y+b.h/2, dd=Math.sqrt(ccx*ccx+ccy*ccy);
         if(dd>maxCenterDist) maxCenterDist=dd; }catch(e){}
@@ -952,7 +978,7 @@ async function main() {
     //       their bell centres (snow-crown / blossom / falling-leaf), and #cal-motif varies
     //       across the four bell-center seasons. Read the four bell dates here; (i) rides
     //       along at each.
-    ab('open', URL + '?cal=2027-01-30'); ab('wait', '--load', 'networkidle'); ab('wait', '2000');   // snow bell (winter)
+    ab('open', URL + '?cal=2027-01-08'); ab('wait', '--load', 'networkidle'); ab('wait', '2000');   // snow bell centre (phase ≈ 0.80, r19)
     const snowR = dressingRead(); const clrSnow = clearanceRead();
     ab('open', URL + '?cal=2027-04-15'); ab('wait', '--load', 'networkidle'); ab('wait', '2000');   // bloom bell (spring)
     const bloomR = dressingRead(); const clrBloom = clearanceRead();
@@ -968,9 +994,36 @@ async function main() {
       ' · bloom ' + bloomR.struct + '/' + bloomR.trees + ' · turn ' + turnR.struct + '/' + turnR.trees + ' (floor 0.85×)]');
 
     // (h-features) — each season's drawn feature fires at its bell centre.
-    check('(h-snow) — at ?cal=2027-01-30 (snow bell) the winter SNOW-CROWN is present: .cal-snow ≥ 0.5 × the crown-drawn (.cal-crown) tree count',
-      snowR.crown > 0 && snowR.snow >= 0.5 * snowR.crown,
-      '[snow=' + snowR.snow + ', crowns=' + snowR.crown + ', floor=' + (0.5 * snowR.crown).toFixed(1) + ']');
+    // (h-snow) r19 — the snow caps are a SPARSE SEEDED SUBSET drawn at FULL --snow opacity,
+    //   UN-gated by the crown (winter crowns are bare, so the old crown-relative floor no longer
+    //   applies), with .cal-snow count TRACKING the bell (≈ D.snow × tree count). Assert at BOTH
+    //   the bell CENTRE (?cal=2027-01-08, phase ≈ 0.80, D.snow ≈ 1 ⇒ near-all trees cap) AND the
+    //   WINTER SOLSTICE (dWin @ ?cal=2026-12-21, phase ≈ 0.75, bell(0.75,0.80,0.16) ≈ 0.78 ⇒ most
+    //   trees cap) — caps must READ at the solstice, not only at the peak (the r19 SP-SEE fix).
+    check('(h-snow) r19 — full-opacity snow caps track the widened bell: .cal-snow ≥ 0.85 × tree count at the bell centre (2027-01-08) AND ≥ 0.5 × tree count at the winter solstice (2026-12-21); caps are a seeded subset un-gated by the crown',
+      snowR.trees > 0 && snowR.snow >= 0.85 * snowR.trees && dWin.trees > 0 && dWin.snow >= 0.5 * dWin.trees,
+      '[bell centre snow=' + snowR.snow + '/' + snowR.trees + ' (floor ' + (0.85 * snowR.trees).toFixed(1) + ') · solstice snow=' + dWin.snow + '/' + dWin.trees + ' (floor ' + (0.5 * dWin.trees).toFixed(1) + ')]');
+
+    // (h-crown) r19.1 — GROWING-SEASON CROWNS ARE NOT BARE FROM CLEARANCE. A crown near a VISIBLE
+    //   label is REDUCED (crownFit, CRMIN 8), never bared; a fully bare crown is a WINTER read
+    //   only (isWinterBare, foliage α < .08). At ?cal=2026-06-21 the crown-fill count must be
+    //   ≥ 0.85 × tree count (dSum read above) — r19.1 lowers the floor 0.9 → 0.85 (matches the
+    //   (h-structure) 0.85 sibling): 8 avenue-trees are physically boxed by visible labels so even
+    //   CRMIN 8 collides and they bare unavoidably (~12% baring). A breach is a DESIGN escalation
+    //   (the fit envelope cannot be shrunk below the drawn crown without breaking the (i) clearance
+    //   gate), NEVER a worker tune.
+    check('(h-crown) r19.1 — growing-season crown-fill (.cal-crown) count ≥ 0.85 × tree count at ?cal=2026-06-21 (near-label crowns REDUCED not bared; the 8 label-boxed trees bare unavoidably; bare crowns are a winter read only)',
+      dSum.crown >= 0.85 * dSum.trees,
+      '[summer crown-fill=' + dSum.crown + '/' + dSum.trees + ' = ' + (dSum.crown / dSum.trees).toFixed(4) + ' (floor 0.85 ⇒ ' + Math.ceil(0.85 * dSum.trees) + ')]');
+
+    // (h-motif-chrome) r19 — the cartouche motif clears the FIXED CHROME. Its bbox centre must
+    //   not fall inside any of the three screen-fixed chrome boxes (#doortest self-test chip /
+    //   #cal-airbox affordance / .pzctl controls) at any of the four bell dates (SP-SEE fix 3:
+    //   the motif no longer hides behind the chip).
+    const motifClearsChrome = [dWin, dSum, snowR, bloomR, turnR].every(d => d.motif && d.motifChrome === null);
+    check('(h-motif-chrome) r19 — #cal-motif clears the fixed chrome at every bell date: its bbox centre is inside NO chrome box (#doortest / #cal-airbox / .pzctl)',
+      motifClearsChrome,
+      '[in-chrome winter=' + dWin.motifChrome + ' summer=' + dSum.motifChrome + ' snow=' + snowR.motifChrome + ' bloom=' + bloomR.motifChrome + ' turn=' + turnR.motifChrome + ']');
     check('(h-bloom) — at ?cal=2027-04-15 (bloom bell) SPRING BLOSSOM marks are present (.cal-bloom > 0)',
       bloomR.bloom > 0, '[bloom=' + bloomR.bloom + ', crowns=' + bloomR.crown + ']');
     check('(h-leaf) — at ?cal=2026-11-05 (turn bell) AUTUMN FALLING-LEAF marks are present (.cal-leaf > 0)',
@@ -1061,30 +1114,50 @@ async function main() {
     check('(k-pixel) — masking ONLY #cal-trees + #cal-motif drops the brightest-quartile mean luminance by ≤ 8% (the estate ink, not the decoration, owns the bright — the decoration recedes)',
       kOK, kDetail);
 
-    // (l) — (r18b, GATED) SUMMER LABELS STAY LEGIBLE: for each primary .zone-label rect, the
-    //       label-to-background contrast on the DRESSED summer plate vs the UNDRESSED reference
-    //       (whole #cal-dressing hidden — the wash is the eroder); the MIN-across-labels of the
-    //       dressed/undressed ratio must be ≥ 0.878 (the r18b floor: the summer wash sits at the
-    //       §8.1-f α .12 perceptibility floor, the measured MIN 0.898 − a 0.02 margin; 0.90 is
-    //       physically unreachable by 0.002). A breach BELOW 0.878 is a DESIGN escalation (shift
-    //       §2.3's summer wash), never a worker tune.
+    // (l) — (r19, GATED) LABELS STAY LEGIBLE IN EVERY SEASON. The wash is now constant-low-
+    //       luminance and hue-rotated, so NO season lightens the paper the most — the summer-only
+    //       worst case is retired. Re-derive across ALL FOUR seasons: at each of ?cal=2026-03-20
+    //       (spring) / 2026-06-21 (summer) / 2026-09-22 (autumn) / 2026-12-21 (winter), for each
+    //       primary .zone-label rect compute the label-to-background contrast (method A) on the
+    //       DRESSED plate and the UNDRESSED reference (whole #cal-dressing hidden — the wash is
+    //       the eroder); the MIN across ALL 8 labels × ALL 4 seasons of the dressed/undressed
+    //       ratio must be ≥ 0.878 (the r18b sanctioned floor; with the common low-L wash the
+    //       measured MIN is expected to rise back toward 0.90 — the run REPORTS the measured MIN
+    //       so a re-derived floor can be SET, but never lowered below 0.878). A breach BELOW 0.878
+    //       is a DESIGN escalation (shift §2.3's wash chroma), never a worker tune. The estate
+    //       layout is season-independent, so `labels` (read once on the dressed summer plate) is
+    //       the shared rect set for all four seasons.
     let lOK = false, lDetail = '';
     try {
-      let minRatio = Infinity, m = 0, worst = '';
-      for (const r of labels) {
-        const rd = regionContrast(sumDec, r.x, r.y, r.w, r.h);
-        const ru = regionContrast(sumMaskDec, r.x, r.y, r.w, r.h);
-        if (rd != null && ru != null && ru > 0) {
-          const ratio = rd / ru; m++;
-          if (ratio < minRatio) { minRatio = ratio; worst = r.txt; }
+      const lSeasons = [['spring', '2026-03-20'], ['summer', '2026-06-21'], ['autumn', '2026-09-22'], ['winter', '2026-12-21']];
+      let minRatio = Infinity, m = 0, worst = '', perSeason = [];
+      for (const [sName, sDate] of lSeasons) {
+        const dPng = path.join(tmpdir(), 'gate-dom-l-' + sName + '.png');
+        const uPng = path.join(tmpdir(), 'gate-dom-l-' + sName + '-undressed.png');
+        ab('open', URL + '?cal=' + sDate); ab('wait', '--load', 'networkidle'); ab('wait', '2500');
+        ab('screenshot', dPng);
+        maskDressing(true); ab('wait', '400');
+        ab('screenshot', uPng);
+        maskDressing(false);
+        const dDec = decodePNG(dPng), uDec = decodePNG(uPng);
+        let sMin = Infinity;
+        for (const r of labels) {
+          const rd = regionContrast(dDec, r.x, r.y, r.w, r.h);
+          const ru = regionContrast(uDec, r.x, r.y, r.w, r.h);
+          if (rd != null && ru != null && ru > 0) {
+            const ratio = rd / ru; m++;
+            if (ratio < sMin) sMin = ratio;
+            if (ratio < minRatio) { minRatio = ratio; worst = sName + ':' + r.txt; }
+          }
         }
+        perSeason.push(sName + ' ' + (isFinite(sMin) ? sMin.toFixed(3) : 'n/a'));
       }
-      const FLOOR = 0.878;                        // r18b: min-across-labels dressed/undressed ratio floor
-      lOK = m >= 3 && minRatio >= FLOOR;
-      lDetail = '[' + m + ' labels · MIN ratio=' + (isFinite(minRatio) ? minRatio.toFixed(3) : 'n/a') +
-        ' (worst "' + worst + '") (floor 0.878)]';
+      const FLOOR = 0.878;                        // r18b sanctioned floor; r19 re-derives across 4 seasons (may RISE, never below)
+      lOK = m >= 12 && minRatio >= FLOOR;
+      lDetail = '[' + m + ' label×season samples · MIN ratio=' + (isFinite(minRatio) ? minRatio.toFixed(3) : 'n/a') +
+        ' (worst "' + worst + '") · per-season MIN {' + perSeason.join(', ') + '} (floor 0.878)]';
     } catch (e) { lDetail = '[decode error: ' + e.message + ']'; }
-    check('(l) — SUMMER LABELS STAY LEGIBLE: the MIN across all primary .zone-labels of the dressed/undressed label-contrast ratio ≥ 0.878 (the summer wash at its α .12 floor does not erode label contrast below the reachable max; a breach is a DESIGN escalation)',
+    check('(l) r19 — LABELS STAY LEGIBLE IN EVERY SEASON: the MIN across all primary .zone-labels × all four seasons of the dressed/undressed label-contrast ratio ≥ 0.878 (constant-low-L hue-rotated wash; a breach BELOW 0.878 is a DESIGN escalation)',
       lOK, lDetail);
 
   } finally {
