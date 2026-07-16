@@ -78,10 +78,12 @@
 'use strict';
 
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import net from 'node:net';
+import zlib from 'node:zlib';
+import { tmpdir } from 'node:os';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..', '..');
@@ -214,6 +216,135 @@ function synthClick(sel) {
 // return to the fit-view estate home from anywhere via the ⌂ button (a real HTML button click),
 // and settle the crossfade.
 function goHome() { realClick('#pz-home'); ab('wait', '900'); }
+
+// ── WS4 SEASONAL-DRESSING readers (§2, §8.4 a–j) ──────────────────────────────
+// The dressing signature at the CURRENT page: the wash rect fill/opacity, the two
+// foliage custom properties resolved on #viewport, the speckle counts, and the
+// structural facts (§8.4 a/d/g). One read, everything the letter checks need.
+function dressingRead() {
+  return abEval(`(function(){
+    var d=document.getElementById('cal-dressing');
+    var w=document.getElementById('cal-wash');
+    var vp=document.getElementById('viewport');
+    var hb=document.getElementById('hours-back');
+    var cs=vp?getComputedStyle(vp):null;
+    var order=null;                          // is #cal-dressing before #hours-back in document order?
+    if(d&&hb&&d.parentNode===hb.parentNode){
+      var kids=Array.prototype.slice.call(d.parentNode.childNodes);
+      order = kids.indexOf(d) < kids.indexOf(hb);
+    }
+    return JSON.stringify({
+      present:!!d,
+      pe: d?getComputedStyle(d).pointerEvents:null,
+      texts: d?d.querySelectorAll('text').length:-1,
+      beforeHoursBack: order,
+      washFill: w?w.getAttribute('fill'):null,
+      washOpacity: w?w.getAttribute('opacity'):null,
+      foliage: cs?cs.getPropertyValue('--cal-foliage').trim():null,
+      foliageA: cs?cs.getPropertyValue('--cal-foliage-a').trim():null,
+      snow: document.querySelectorAll('.cal-snow').length,
+      bloom: document.querySelectorAll('.cal-bloom').length,
+      trees: document.querySelectorAll('circle.avenue-tree').length });
+  })()`);
+}
+// a cheap byte-fidelity fingerprint of #cal-dressing.innerHTML (djb2) for the
+// double-load determinism check (§8.4-e) — same len + same hash ⇒ byte-identical.
+function dressingHTMLHash() {
+  return abEval(`(function(){
+    var d=document.getElementById('cal-dressing'); var s=d?d.innerHTML:'';
+    var h=5381; for(var i=0;i<s.length;i++){ h=(((h*33)>>>0)^s.charCodeAt(i))>>>0; }
+    return JSON.stringify({ hash:h, len:s.length });
+  })()`);
+}
+// §8.4-(i): the gate INDEPENDENTLY re-implements §2.2-C's worldBox CTM composition
+// (never reads the build's own values), FIRST proves the basis really is world space
+// (some labelgroup text box centre > 200 units from the origin — the r3-F1 failure
+// signature is every box clustered at the local origin), then asserts no speckle
+// circle's envelope (cx±r, cy±r) comes within 2px of any text world box.
+function clearanceRead() {
+  return abEval(`(function(){
+    var vp=document.getElementById('viewport');
+    var invVP=vp.getScreenCTM().inverse();
+    function worldBox(elm){
+      var bb=elm.getBBox();
+      var M=invVP.multiply(elm.getScreenCTM());
+      var xs=[],ys=[],px,py,q;
+      var cs=[[bb.x,bb.y],[bb.x+bb.width,bb.y],[bb.x,bb.y+bb.height],[bb.x+bb.width,bb.y+bb.height]];
+      for(q=0;q<4;q++){ px=cs[q][0]; py=cs[q][1]; xs.push(M.a*px+M.c*py+M.e); ys.push(M.b*px+M.d*py+M.f); }
+      var x0=Math.min.apply(0,xs),y0=Math.min.apply(0,ys);
+      return { x:x0,y:y0,w:Math.max.apply(0,xs)-x0,h:Math.max.apply(0,ys)-y0 };
+    }
+    var texts=vp.querySelectorAll('text'), boxes=[], maxCenterDist=0;
+    for(var j=0;j<texts.length;j++){
+      try{ var b=worldBox(texts[j]); boxes.push(b);
+        var ccx=b.x+b.w/2, ccy=b.y+b.h/2, dd=Math.sqrt(ccx*ccx+ccy*ccy);
+        if(dd>maxCenterDist) maxCenterDist=dd; }catch(e){}
+    }
+    function tooClose(cx,cy,r){
+      for(var k=0;k<boxes.length;k++){ var L=boxes[k];
+        if(cx+r+2>L.x && cx-r-2<L.x+L.w && cy+r+2>L.y && cy-r-2<L.y+L.h) return true; }
+      return false;
+    }
+    var circles=vp.querySelectorAll('.cal-snow,.cal-bloom'), violations=0;
+    for(var i=0;i<circles.length;i++){
+      var cx=+circles[i].getAttribute('cx'), cy=+circles[i].getAttribute('cy'), r=+circles[i].getAttribute('r');
+      if(tooClose(cx,cy,r)) violations++;
+    }
+    return JSON.stringify({ nTexts:boxes.length, nCircles:circles.length,
+      maxCenterDist:maxCenterDist, violations:violations });
+  })()`);
+}
+
+// ── §8.4-(j): a minimal zero-dependency PNG decoder (the repo's png.js is a WRITER
+//    only). 8-bit, colourType 2 (RGB) or 6 (RGBA); concatenated IDAT → inflate → per-row
+//    unfilter for the 5 standard filter types. Then the brightest-quartile mean ink. ──
+function paeth(a, b, c) {
+  var p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+  return (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
+}
+function decodePNG(file) {
+  var buf = readFileSync(file);
+  var off = 8, width = 0, height = 0, bitDepth = 0, colorType = 0, idat = [];
+  while (off + 8 <= buf.length) {
+    var len = buf.readUInt32BE(off);
+    var type = buf.toString('ascii', off + 4, off + 8);
+    var data = buf.subarray(off + 8, off + 8 + len);
+    if (type === 'IHDR') { width = data.readUInt32BE(0); height = data.readUInt32BE(4); bitDepth = data[8]; colorType = data[9]; }
+    else if (type === 'IDAT') { idat.push(data); }
+    else if (type === 'IEND') { break; }
+    off += 12 + len;
+  }
+  var channels = colorType === 6 ? 4 : (colorType === 2 ? 3 : 0);
+  if (bitDepth !== 8 || channels === 0) throw new Error('unsupported PNG bitDepth=' + bitDepth + ' colorType=' + colorType);
+  var raw = zlib.inflateSync(Buffer.concat(idat));
+  var stride = width * channels, out = Buffer.alloc(height * stride), pos = 0;
+  for (var y = 0; y < height; y++) {
+    var ft = raw[pos++];
+    for (var x = 0; x < stride; x++) {
+      var rb = raw[pos++];
+      var a = x >= channels ? out[y * stride + x - channels] : 0;         // left
+      var b = y > 0 ? out[(y - 1) * stride + x] : 0;                      // up
+      var c = (x >= channels && y > 0) ? out[(y - 1) * stride + x - channels] : 0; // up-left
+      var val;
+      if (ft === 0) val = rb; else if (ft === 1) val = rb + a; else if (ft === 2) val = rb + b;
+      else if (ft === 3) val = rb + ((a + b) >> 1); else if (ft === 4) val = rb + paeth(a, b, c);
+      else throw new Error('bad PNG filter ' + ft);
+      out[y * stride + x] = val & 0xFF;
+    }
+  }
+  return { width: width, height: height, channels: channels, data: out };
+}
+// mean RGB over the brightest quartile of pixels (ranked by R+G+B — the light INK, not
+// the near-black paper), via a 0..765 histogram threshold (no million-element sort).
+function brightestQuartileWarmth(png) {
+  var n = png.width * png.height, ch = png.channels, data = png.data, hist = new Uint32Array(766), i, o;
+  for (i = 0; i < n; i++) { o = i * ch; hist[data[o] + data[o + 1] + data[o + 2]]++; }
+  var target = Math.floor(n * 0.75), acc = 0, thr = 765;
+  for (var v = 0; v < 766; v++) { acc += hist[v]; if (acc >= target) { thr = v; break; } }
+  var sr = 0, sg = 0, sb = 0, cnt = 0;
+  for (i = 0; i < n; i++) { o = i * ch; if (data[o] + data[o + 1] + data[o + 2] >= thr) { sr += data[o]; sg += data[o + 1]; sb += data[o + 2]; cnt++; } }
+  return { r: sr / cnt, g: sg / cnt, b: sb / cnt, rmb: (sr - sb) / cnt };
+}
 
 async function main() {
   console.log('gate-dom.test — THE ESTATE PLATEWALK (§4.6/§5.1): the LIVE RENDERED DOM, headless browser, REAL input\n');
@@ -661,6 +792,113 @@ async function main() {
     }
     check('Gd — with ?hours=allon the `glint` class NEVER appears through the settle wait (no arm is installed under the canon pin — canon screenshots see pure rest)',
       glintSeen === false, '[polled ' + polls + '× across ~' + (polls * 0.5) + 's, glint seen=' + glintSeen + ']');
+
+    // ════════════════════════════════════════════════════════════════════════════
+    //  THE SEASONAL DRESSING (WS4 §2, DESIGN §8.4 items a–e, h–j + g's WASH clause).
+    //  The dressing renders ONCE at load and holds (§2.6 — no timers/listeners): these
+    //  assertions prove it is a LIVE season (not a static attribute), that it stays clear
+    //  of the solved labels IN WORLD SPACE (the legibility model-proxy gate is blind to
+    //  this), and that the season really turns in RENDERED pixels. Runs on its own ?cal=
+    //  URLs, so it lives here with the other page-reopening checks.
+    // ════════════════════════════════════════════════════════════════════════════
+
+    // (a) — the dressing group is structurally whole and inert: it exists, computes
+    //       pointer-events:none, holds ZERO <text>, and sits BEFORE #hours-back so the
+    //       night wash still darkens the season.
+    ab('open', URL + '?cal=2026-12-21'); ab('wait', '--load', 'networkidle'); ab('wait', '2000');
+    const dWin = dressingRead();
+    check('(a) — #cal-dressing exists · computed pointer-events:none · zero <text> · before #hours-back in document order',
+      dWin.present === true && dWin.pe === 'none' && dWin.texts === 0 && dWin.beforeHoursBack === true,
+      '[present=' + dWin.present + ', pe=' + dWin.pe + ', texts=' + dWin.texts + ', beforeHoursBack=' + dWin.beforeHoursBack + ']');
+
+    // (b) — with the WINTER layer mounted the estate tier still rests exactly as claimed
+    //       (gate-dom :340-349's values): structures shown, room/wing folded to 0.
+    const restWin = state();
+    check('(b) — LOD at rest is UNCHANGED with the season layer mounted (lod-estate · structOp>0.9 · room/wing 0)',
+      restWin.lod === 'estate' && restWin.structOp > 0.9 && restWin.roomOp === 0 && restWin.wingOp === 0,
+      '[lod=' + restWin.lod + ', structOp=' + restWin.structOp + ', roomOp=' + restWin.roomOp + ', wingOp=' + restWin.wingOp + ']');
+
+    // (c) — the gate open-arch void STILL catches a real click with the dressing mounted:
+    //       the pointer-events:none layer intercepts nothing (the D4b real descend above
+    //       already drove the load-bearing path — this re-asserts it under a live season).
+    const gHitWin = hitTest(GATE, 0.5, 0.30, '.gate-face');
+    check('(c) — the gate open-arch void STILL catches a real click with the dressing mounted (pointer-events:none layer steals no hit; D4b proved the descend path)',
+      gHitWin.found && gHitWin.inWant, '[hit ' + gHitWin.tag + ']');
+
+    // (d) — the season is really LIVE: winter vs summer differ in the wash (fill or opacity)
+    //       AND in --cal-foliage on #viewport; (a) holds at BOTH dates.
+    ab('open', URL + '?cal=2026-06-21'); ab('wait', '--load', 'networkidle'); ab('wait', '2000');
+    const dSum = dressingRead();
+    check('(d) — ?cal=2026-12-21 vs 2026-06-21: the season is LIVE — #cal-wash fill/opacity differs AND --cal-foliage differs; (a) holds at both',
+      dSum.present === true && dSum.pe === 'none' && dSum.texts === 0 && dSum.beforeHoursBack === true &&
+      (dWin.washFill !== dSum.washFill || dWin.washOpacity !== dSum.washOpacity) &&
+      dWin.foliage !== dSum.foliage,
+      '[winter wash=' + dWin.washFill + '/' + dWin.washOpacity + ' foliage=' + dWin.foliage +
+      ' · summer wash=' + dSum.washFill + '/' + dSum.washOpacity + ' foliage=' + dSum.foliage + ']');
+
+    // (e) — determinism: two loads at the SAME ?cal= give byte-identical #cal-dressing
+    //       innerHTML (the only randomness is the date-seeded mulberry32 — §2.5).
+    const h1 = dressingHTMLHash();
+    ab('open', URL + '?cal=2026-06-21'); ab('wait', '--load', 'networkidle'); ab('wait', '2000');
+    const h2 = dressingHTMLHash();
+    check('(e) — two loads at ?cal=2026-06-21 give byte-identical #cal-dressing.innerHTML (deterministic dressing)',
+      h1.len === h2.len && h1.hash === h2.hash && h1.len > 0,
+      '[len ' + h1.len + '/' + h2.len + ', hash ' + h1.hash + '/' + h2.hash + ']');
+
+    // (g-wash) — the CANON pin's screenshot stability (§8.4-g's wash clause, adopted here
+    //       where #cal-wash exists): under ?hours=allon the dressing forces the canon date
+    //       {2026,6,21}, so #cal-wash must equal the ?cal=2026-06-21 value.
+    ab('open', URL + '?hours=allon'); ab('wait', '--load', 'networkidle'); ab('wait', '2000');
+    const dCanon = dressingRead();
+    check('(g-wash) — under ?hours=allon #cal-wash equals the pinned-canon {2026,6,21} value (screenshot stability)',
+      dCanon.washFill === dSum.washFill && dCanon.washOpacity === dSum.washOpacity,
+      '[canon wash=' + dCanon.washFill + '/' + dCanon.washOpacity + ' · 2026-06-21 wash=' + dSum.washFill + '/' + dSum.washOpacity + ']');
+
+    // (h)+(i) at the SNOW bell centre — the speckle really renders (count floor) and it holds
+    //       label clearance in WORLD space (basis proof + 2px margin).
+    ab('open', URL + '?cal=2027-01-30'); ab('wait', '--load', 'networkidle'); ab('wait', '2000');
+    const snowR = dressingRead();
+    const clrSnow = clearanceRead();
+    check('(h-snow) — at ?cal=2027-01-30 (snow bell centre) .cal-snow count ≥ 0.6× the circle.avenue-tree count (the channel is alive, not vestigial)',
+      snowR.trees > 0 && snowR.snow >= 0.6 * snowR.trees,
+      '[snow=' + snowR.snow + ', trees=' + snowR.trees + ', floor=' + (0.6 * snowR.trees).toFixed(1) + ']');
+    check('(i-snow) — WORLD-space clearance holds at the snow date: the CTM basis is world (a text box centre > 200 units from origin) AND no .cal-snow/.cal-bloom envelope comes within 2px of any text world box',
+      clrSnow.maxCenterDist > 200 && clrSnow.nTexts > 0 && clrSnow.violations === 0,
+      '[maxCenterDist=' + clrSnow.maxCenterDist.toFixed(1) + ', texts=' + clrSnow.nTexts + ', circles=' + clrSnow.nCircles + ', violations=' + clrSnow.violations + ']');
+
+    // (h)+(i) at the BLOOM bell centre.
+    ab('open', URL + '?cal=2027-04-15'); ab('wait', '--load', 'networkidle'); ab('wait', '2000');
+    const bloomR = dressingRead();
+    const clrBloom = clearanceRead();
+    check('(h-bloom) — at ?cal=2027-04-15 (bloom bell centre) .cal-bloom count ≥ 0.5× the circle.avenue-tree count',
+      bloomR.trees > 0 && bloomR.bloom >= 0.5 * bloomR.trees,
+      '[bloom=' + bloomR.bloom + ', trees=' + bloomR.trees + ', floor=' + (0.5 * bloomR.trees).toFixed(1) + ']');
+    check('(i-bloom) — WORLD-space clearance holds at the bloom date (world basis + 2px clearance from every text world box)',
+      clrBloom.maxCenterDist > 200 && clrBloom.nTexts > 0 && clrBloom.violations === 0,
+      '[maxCenterDist=' + clrBloom.maxCenterDist.toFixed(1) + ', texts=' + clrBloom.nTexts + ', circles=' + clrBloom.nCircles + ', violations=' + clrBloom.violations + ']');
+
+    // (j) — the season is RENDERED, not merely attributed: capture the settled fit view at
+    //       BOTH solstices (same viewport; deviceScaleFactor cancels in the DELTA), decode
+    //       both PNGs, take the brightest-quartile mean ink colour, and assert the warmth
+    //       really turns: (R̄−B̄)_summer − (R̄−B̄)_winter ≥ 3. A floor failure is a DESIGN
+    //       escalation (SP-FLAG: raise wash/foliage contrast), never a worker tune.
+    ab('set', 'viewport', '1280', '800');
+    const sumPng = path.join(tmpdir(), 'gate-dom-cal-summer.png');
+    const winPng = path.join(tmpdir(), 'gate-dom-cal-winter.png');
+    ab('open', URL + '?cal=2026-06-21'); ab('wait', '--load', 'networkidle'); ab('wait', '2500');
+    ab('screenshot', sumPng);
+    ab('open', URL + '?cal=2026-12-21'); ab('wait', '--load', 'networkidle'); ab('wait', '2500');
+    ab('screenshot', winPng);
+    let jOK = false, jDetail = '';
+    try {
+      const ws = brightestQuartileWarmth(decodePNG(sumPng));
+      const ww = brightestQuartileWarmth(decodePNG(winPng));
+      const turn = ws.rmb - ww.rmb;
+      jOK = turn >= 3;
+      jDetail = '[summer R−B=' + ws.rmb.toFixed(2) + ', winter R−B=' + ww.rmb.toFixed(2) + ', turn=' + turn.toFixed(2) + ' (floor 3)]';
+    } catch (e) { jDetail = '[decode error: ' + e.message + ']'; }
+    check('(j) — the RENDERED season turns: brightest-quartile ink (R̄−B̄)_summer − (R̄−B̄)_winter ≥ 3 (a floor failure is SP-FLAG, never a worker tune)',
+      jOK, jDetail);
 
   } finally {
     // 4. TEARDOWN — close exactly OUR session + kill exactly OUR server child (never a broad pkill;
