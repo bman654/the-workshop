@@ -275,6 +275,24 @@ function dressingRead() {
       brassHit:brassHit });
   })()`);
 }
+// §3.4 the front-door mark reader: is #cal-day present, and if so is it a lone <a>, is it
+// #brassdock's FIRST child, where does it link, and what is its composed text? On a plain
+// (non-mark) day the element must not exist at all (B6 decorate-never-gate).
+function calDayRead() {
+  return abEval(`(function(){
+    var dock=document.getElementById('brassdock');
+    var m=document.getElementById('cal-day');
+    if(!m) return JSON.stringify({present:false, dockKids: dock?dock.children.length:-1});
+    return JSON.stringify({
+      present:true,
+      tag: m.tagName.toLowerCase(),
+      first: !!(dock && dock.firstElementChild===m),
+      href: m.getAttribute('href'),
+      text: m.textContent,
+      count: document.querySelectorAll('#cal-day').length,
+      color: getComputedStyle(m).color });
+  })()`);
+}
 // the primary on-screen estate labels as SCREEN-pixel rects (getBoundingClientRect at
 // deviceScaleFactor 1 ⇒ PNG px), for the §8.4-(l) label-contrast sample: the estate-tier
 // district NAME glyphs (the `.zone-label` texts — THE MANOR HOUSE / THE FAIRGROUND / THE
@@ -963,6 +981,25 @@ async function main() {
     check('(e) — two loads at ?cal=2026-06-21 give byte-identical #cal-dressing.innerHTML (deterministic dressing)',
       h1.len === h2.len && h1.hash === h2.hash && h1.len > 0,
       '[len ' + h1.len + '/' + h2.len + ', hash ' + h1.hash + '/' + h2.hash + ']');
+
+    // (f) — (§3.4) THE FRONT-DOOR MARK exists ONLY on a mark day. At ?cal=2027-06-07 (the
+    //       first Founding anniversary — marksFor stacks founding + one wing) a lone
+    //       <a id=cal-day> is #brassdock's FIRST child, links hours/almanac.html, and its text
+    //       is marksFor[0] rendered verbatim (glyph + fully-composed line) with the composition
+    //       tail " · the Almanac holds one more". At the plain ?cal=2026-08-01 the element does
+    //       NOT exist at all (B6 §3.6 decorate-never-gate: nothing appears/disappears but the
+    //       mark itself). A single line, ever (querySelectorAll('#cal-day') === 1 on the mark day).
+    ab('open', URL + '?cal=2027-06-07'); ab('wait', '--load', 'networkidle'); ab('wait', '2000');
+    const markDay = calDayRead();
+    ab('open', URL + '?cal=2026-08-01'); ab('wait', '--load', 'networkidle'); ab('wait', '2000');
+    const plainDay = calDayRead();
+    const FOUNDING_MARK = '✦ the Founding — the estate broke ground this day, a year ago · the Almanac holds one more';
+    check('(f) — #cal-day exists ONLY on a mark day: at ?cal=2027-06-07 a lone <a id=cal-day> is the FIRST child of #brassdock, links hours/almanac.html, text = marksFor[0] verbatim + " the Almanac holds one more"; ABSENT at the plain ?cal=2026-08-01',
+      markDay.present === true && markDay.tag === 'a' && markDay.first === true &&
+      markDay.href === 'hours/almanac.html' && markDay.count === 1 &&
+      markDay.text === FOUNDING_MARK && plainDay.present === false,
+      '[mark-day present=' + markDay.present + ' tag=' + markDay.tag + ' first=' + markDay.first + ' count=' + markDay.count +
+      ' href=' + markDay.href + ' text="' + markDay.text + '" · plain-day present=' + plainDay.present + ' dockKids=' + plainDay.dockKids + ']');
 
     // (g-wash) — the CANON pin's screenshot stability (§8.4-g's wash clause, adopted here
     //       where #cal-wash exists): under ?hours=allon the dressing forces the canon date
