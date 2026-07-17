@@ -110,6 +110,9 @@
       'tree.foliage':      '#4f7b3a',
       'tree.trunk':        '#5a4630',
       'snow.drift':        '#eef3fa',
+      'spring.blush':      '#e8a8c4',
+      'spring.gold':       '#ecc94e',
+      'spring.berry':      '#c23b30',
       'stone':             '#9aa0a8',
       'mist':              '#dfe8f2',
       'rep.swatch1':       '#9aa0a8',
@@ -135,6 +138,9 @@
       'tree.foliage':      '#586537',
       'tree.trunk':        '#4f3c2c',
       'snow.drift':        '#e9d9cb',
+      'spring.blush':      '#d99aa8',
+      'spring.gold':       '#dfae5e',
+      'spring.berry':      '#ad4438',
       'stone':             '#9a8e8a',
       'mist':              '#e7c6b0',
       'rep.swatch1':       '#9a8e8a',
@@ -160,6 +166,9 @@
       'tree.foliage':      '#2c3a40',
       'tree.trunk':        '#2a2620',
       'snow.drift':        '#b6c2d4',
+      'spring.blush':      '#8f93b0',
+      'spring.gold':       '#96906e',
+      'spring.berry':      '#713a40',
       'stone':             '#6a7079',
       'mist':              '#7c8aa0',
       'rep.swatch1':       '#6a7079',
@@ -301,15 +310,22 @@
                                                           // scotopic honesty; also keeps the
                                                           // authored night palette's cool
                                                           // register in charge at night
+  var SNOW_COVER_K = {                        // r24 — the BOLD winter (§9.4): how far each
+    'grass':1.0, 'hill':0.78,                 // role whitens toward the band's OWN
+    'manor.roof':0.92, 'observatory.dome':0.88 // snow.drift row at full ground cover.
+  };                                          // hill < grass ⇒ the grade bands read as
+                                              // GRAY drift-shadow, never flat white.
   CM.applySeasonColors = function (out, band, B, gs) {
     if (!out || !gs) return out;
     var pal = PALETTES[String(band||'night').toUpperCase()] || PALETTES.NIGHT;
     var bk = SEASON_BAND_K[band] || 1.0;
+    var snowT = (gs.snowCover > 0) ? hexTrip(pal['snow.drift']) : null;  // band-honest white
     // (1) the FOLIAGE TURN (E2): trees, bushes, tufts — all read tree.foliage
     if (gs.foliage && gs.foliage.mix > 0)
       out['--tree.foliage'] = dim(mixHex(pal['tree.foliage'], gs.foliage.rgb,
                                          gs.foliage.mix * bk), B);
-    // (2) the GROUND turn + the COOL CAST, per SEASON_CAST_K
+    // (2) the GROUND turn + the COOL CAST + (r24) the SNOW COVER, per role, ONE chain
+    //     (mix in hex space FIRST, dim(B) LAST — the applyRepColors law holds):
     for (var role in SEASON_CAST_K) {
       if (!Object.prototype.hasOwnProperty.call(pal, role)) continue;
       var c = pal[role];
@@ -317,8 +333,16 @@
         c = mixHex(c, gs.straw, gs.grassMix * bk);               // straw before the cast
       var k = gs.cool * SEASON_CAST_K[role] * bk;
       if (k > 0) c = mixHex(c, gs.cast, k);
+      if (snowT && SNOW_COVER_K[role])                           // r24: snow lies OVER the
+        c = mixHex(c, snowT, gs.snowCover * SNOW_COVER_K[role]); // field — LAST, and with
+                                                                 // NO bk (snow is white at
+                                                                 // night too; the band lives
+                                                                 // in the snow.drift row)
       if (c !== pal[role]) out['--' + role] = dim(c, B);
     }
+    // (3) r24 — the SPRING marks' roles (spring.blush/.gold/.berry, §9.4-spring) are
+    //     plain PALETTE rows: resolve() dims them like any role, the stage never
+    //     touches them (a bloom's color is authored per band, not derived).
     return out;
   };
   // mixHex(hex, rgbTarget, k): integer-rounded RGB lerp. CONTRACT: arg 1 is a '#rrggbb'
@@ -334,6 +358,9 @@
         b = Math.round(c.b + (t[2] - c.b) * k);
     return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
   }
+  // hexTrip(hex): '#rrggbb' → [r,g,b] via the file's OWN hexToRgb (:33) — derived once
+  // per applySeasonColors call, only when snowCover > 0 (midsummer allocates nothing).
+  function hexTrip(hex) { var c = hexToRgb(hex); return [c.r, c.g, c.b]; }
   // No k clamp is needed: both call sites keep k in [0,1] (max mix .85; cool*K*bk <= .16)
   // and both endpoints are already integers in [0,255], so r/g/b are too — the (1<<24)
   // bit-trick re-emit is exact for them.
