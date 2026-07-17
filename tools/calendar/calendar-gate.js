@@ -76,6 +76,16 @@
   // (0.64, 0.96) by construction - snow and bloom can never co-occur - and its
   // upper edge sits ~27 days clear of the midsummer pin (phase 0.25040).
   function springK(p){ return dz(bell(p, 0.09, 0.085)); }
+  // autumnK (r25 - the litter driver, 9.4-autumn): fallen leaves build with the
+  // turn (rise Sep 22 -> full ~ Oct 29), hold through peak russet (~ Nov 7), and are
+  // gone ~ Nov 29 - dz snaps the fall-leg tail at p ~ 0.683, where groundSnowCover
+  // is still <= ~.13, so litter never lies on white ground (asserted as the s9d
+  // implication: cover >= .2 => autumn === 0; cover first reaches .2 at p ~ 0.688).
+  // Max slope ~ .068/day (the .06-wide fall leg at the smoothstep's 1.5x mid-leg
+  // gain) - under s9b's .08/day cap. Exact 0 at midsummer (S(0.50,..) = 0 at 0.25040).
+  function autumnK(p){ p = wrap(p);
+    return dz( S(0.50, 0.60, p) * (1 - S(0.625, 0.685, p)) );
+  }
 
   Calendar.gate.season = function (phase) {
     var p = wrap(phase);
@@ -90,6 +100,7 @@
       snow:     sn,
       snowCover: Calendar.gate.groundSnowCover(sn),// r24 - the ground-whitening driver
       spring:   springK(p),                        // r24 - the flowering driver
+      autumn:   autumnK(p),                        // r25 - the fallen-litter driver
       cast:     trip(COOL_CAST),
       straw:    trip(GRASS_STRAW)
     };

@@ -402,18 +402,19 @@ const WING_FIXTURE = [
     const gsj = C.gate.season(pj);
     ok(gsj.foliage.mix === 0 && gsj.grassMix === 0 && gsj.cool === 0
       && gsj.bare === 0 && gsj.snow === 0
-      && gsj.snowCover === 0 && gsj.spring === 0,
+      && gsj.snowCover === 0 && gsj.spring === 0 && gsj.autumn === 0,
       '(m) midsummer identity: every Calendar.gate.season knob === 0 at phase ' + pj.toFixed(5)
-      + ' (dz dead-zone, exact; r24 snowCover + spring join the exact-zero sweep)');
+      + ' (dz dead-zone, exact; r24 snowCover + spring + r25 autumn join the exact-zero sweep)');
     // negative control: at the winter-solstice phase the cast is ~fully on
     const pw = C.seasonPhase(C.jdOfLocalNoon(2026, 12, 21));
     ok(C.gate.season(pw).cool > 0.999,
       '(m) negative control: cool > 0.999 at the winter-solstice phase (the stage can move)');
 
     // — s9b foliage-curve continuity over the full 366-day sweep + determinism
-    //   (r24 adds the two new curves: |ΔsnowCover| ≤ .08/day, |Δspring| ≤ .06/day)
+    //   (r24 adds the two new curves: |ΔsnowCover| ≤ .08/day, |Δspring| ≤ .06/day;
+    //    r25 adds |Δautumn| ≤ .08/day — the litter driver, max slope ≈ .068/day)
     let contOk = true, worstRgb = 0, worstMix = 0, badDay = -1;
-    let coverOk = true, springOk = true, worstCover = 0, worstSpring = 0;
+    let coverOk = true, springOk = true, autumnOk = true, worstCover = 0, worstSpring = 0, worstAutumn = 0;
     const t0 = Date.UTC(2026, 0, 1);
     let prev = null;
     for (let k = 0; k < 366; k++) {
@@ -435,15 +436,19 @@ const WING_FIXTURE = [
         const dsp = Math.abs(g.spring - prev.spring);
         if (dsp > worstSpring) worstSpring = dsp;
         if (dsp > 0.06) { springOk = false; if (badDay < 0) badDay = k; }
+        const dau = Math.abs(g.autumn - prev.autumn);
+        if (dau > worstAutumn) worstAutumn = dau;
+        if (dau > 0.08) { autumnOk = false; if (badDay < 0) badDay = k; }
       }
       prev = g;
     }
     ok(contOk, '(m) s9b continuity: |Δrgb| ≤ 5/channel/day (worst ' + worstRgb.toFixed(3)
       + ') · |Δmix| ≤ .025/day (worst ' + worstMix.toFixed(4) + ') over 366 consecutive noons',
       'first breach day ' + badDay);
-    ok(coverOk && springOk,
-      '(m) s9b r24 curves: |ΔsnowCover| ≤ .08/day (worst ' + worstCover.toFixed(4)
-      + ') · |Δspring| ≤ .06/day (worst ' + worstSpring.toFixed(4) + ') over 366 consecutive noons',
+    ok(coverOk && springOk && autumnOk,
+      '(m) s9b r24/r25 curves: |ΔsnowCover| ≤ .08/day (worst ' + worstCover.toFixed(4)
+      + ') · |Δspring| ≤ .06/day (worst ' + worstSpring.toFixed(4)
+      + ') · |Δautumn| ≤ .08/day (worst ' + worstAutumn.toFixed(4) + ') over 366 consecutive noons',
       'first breach day ' + badDay);
     let detOk = true;
     [0.02, 0.10, 0.30, 0.45, 0.60, 0.70, 0.86, 0.95].forEach(function (p) {
@@ -474,6 +479,21 @@ const WING_FIXTURE = [
     ok(implOk, '(m) s9d implication: groundSnowCover > 0 ⇒ precipKind ≠ rain over a 40-pt sweep',
       'first breach probe ' + badI);
     ok(C.gate.groundSnowCover(0) === 0, '(m) s9d: groundSnowCover(0) === 0 (dz exact)');
+    // r25 — the litter implication: fallen leaves are GONE before white ground.
+    //   autumn snaps to 0 at p ≈ 0.683; snowCover first reaches .2 at p ≈ 0.688, so
+    //   `cover ≥ .2 ⇒ autumn === 0` holds with margin across the whole wheel.
+    let litterOk = true, litterBadP = -1;
+    for (let i = 0; i < 1000; i++) {
+      const p = i / 1000;
+      const cover = C.gate.groundSnowCover(C.dressing(p).snow);
+      if (cover >= 0.2 && C.gate.season(p).autumn !== 0) { litterOk = false; if (litterBadP < 0) litterBadP = i; }
+    }
+    ok(litterOk, '(m) s9d litter: snowCover ≥ .2 ⇒ Calendar.gate.season.autumn === 0 (litter gone under white ground) over a 1000-pt sweep',
+      'first breach probe ' + litterBadP);
+    // r25 positive control: the turn cell (Oct 31) carries FULL litter on a bare-ground dusk
+    const aTurn = C.gate.season(C.seasonPhase(C.jdOfLocalNoon(2026, 10, 31)));
+    ok(aTurn.autumn > 0.9 && aTurn.snowCover === 0,
+      '(m) s9d autumn anchor: 2026-10-31 carries full litter (autumn ' + aTurn.autumn.toFixed(3) + ' > .9) on bare ground (snowCover 0)');
     function pk(y, m, d) { return C.gate.precipKind(C.seasonPhase(C.jdOfLocalNoon(y, m, d))); }
     ok(pk(2027, 1, 30) === 'snow', '(m) s9d anchor: 2027-01-30 → snow (got ' + pk(2027, 1, 30) + ')');
     ok(pk(2026, 12, 5) === 'sleet', '(m) s9d anchor: 2026-12-05 → sleet, the r22 cold-edge anchor (got ' + pk(2026, 12, 5) + ')');
