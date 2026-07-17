@@ -6178,6 +6178,12 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
   var DUCK_HOLD    = 0.70; // held under the crack + early roll
   var DUCK_RELEASE = 1.7;  // bed eases back up over the rolling tail
 
+  // r25.2 (THE DUCK SURVIVES THE STRIKE): the level the rain bus was actually
+  // STARTED at — the SINGLE AUTHORITY duckBed restores to (never the hardcoded
+  // RAIN_BUS), so a strike can't shove a ducked sleet floor back up. Reset to the
+  // safe shipped default on kill; also the initial value.
+  A._rainLvl = RAIN_BUS;
+
   // ambient layer handles (each = { node, src } returned by a Gate.sfx builder,
   // routed through its own sub-bus gain so we can cross-fade independently).
   var amb = {
@@ -6237,6 +6243,11 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
     var wl = (season && season.wildlife) || { crickets: true, birdK: 1 };
     return {
       rain:   storming && !snowing,      // rain loop — snow-hush gate (E4)
+      rainLvl: sleeting ? 0.15 : RAIN_BUS, // r25: the rain BUS LEVEL — DUCKED under
+                                         // sleet (0.15) so the ticks read; plain rain
+                                         // keeps the shipped RAIN_BUS (= 0.78) exactly
+                                         // — SYMBOLIC (r25.1/#14) so the plan can never
+                                         // drift from the code (§9.6, THE DUCK)
       sleet:  sleeting,                  // r24: the ice-tick bed RIDES ON the rain loop
       roll:   storming && !snowing,      // distant rolling thunder rides with it
       chimes: !storming,                 // chimes gate on the CLOUD, as shipped
@@ -6383,15 +6394,21 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
     var P = A.plan(bandNow(), weatherNow(), seasonNow());
 
     // RAIN — the storm loop, and NEVER under snowfall (the snow-hush gate, E4).
+    // Started at the plan's bus level (r25: P.rainLvl — 0.15 ducked under sleet,
+    // RAIN_BUS otherwise); record it so duckBed restores to THIS, not the constant
+    // (r25.2 — THE DUCK SURVIVES THE STRIKE).
     if (P.rain) {
-      startTexture('rain', 'rain', { intensity: rainIntensityFor(weatherNow()) }, RAIN_BUS);
+      A._rainLvl = P.rainLvl;
+      startTexture('rain', 'rain', { intensity: rainIntensityFor(weatherNow()) }, P.rainLvl);
     } else {
+      A._rainLvl = RAIN_BUS;
       killTexture('rain', 0.9);
     }
 
-    // SLEET — the ice-tick bed (r24) rides OVER the rain loop; storm-sleet only.
+    // SLEET — the ice-tick bed (r24) rides OVER the ducked rain loop; storm-sleet
+    // only. Bus 0.6 (r25 — was 0.5) so the ticks DOMINATE the barely-there wet floor.
     if (P.sleet) {
-      startTexture('sleet', 'sleet', {}, 0.5);
+      startTexture('sleet', 'sleet', {}, 0.6);
     } else {
       killTexture('sleet', 0.8);
     }
@@ -6472,7 +6489,12 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
     } catch (e) { try { g.gain.value = baseLevel; } catch (e2) {} }
   }
   function duckBed() {
-    duckOne('rain', RAIN_BUS, DUCK_RAIN_TO);
+    // r25.2: restore to the level the rain bus was STARTED at (A._rainLvl), never the
+    // hardcoded RAIN_BUS, and duck TO the min so a strike can NEVER LIFT an already-
+    // ducked floor (sleet: min(0.30, 0.15) = 0.15 — the bus holds FLAT through the
+    // flash; plain rain: 0.78/0.30, bit-identical to the shipped surface). The duck is
+    // down-only, by law (THE DUCK SURVIVES THE STRIKE, §9.6).
+    duckOne('rain', A._rainLvl, Math.min(DUCK_RAIN_TO, A._rainLvl));
     duckOne('wind', WIND_BUS, DUCK_WIND_TO);
   }
 
@@ -15279,7 +15301,7 @@ if (typeof globalThis !== 'undefined') {
     if (!C || !C.gate || !CM) { check('s9a: gate+colormap present', false, ''); }
     else {
       var pj = C.seasonPhase(C.jdOfLocalNoon(2026, 6, 21)), gj = C.gate.season(pj);
-      check('s9a: midsummer knobs all 0 (incl snowCover/spring)', gj.foliage.mix === 0 && gj.grassMix === 0 && gj.cool === 0 && gj.bare === 0 && gj.snow === 0 && gj.snowCover === 0 && gj.spring === 0, '');
+      check('s9a: midsummer knobs all 0 (incl snowCover/spring/autumn)', gj.foliage.mix === 0 && gj.grassMix === 0 && gj.cool === 0 && gj.bare === 0 && gj.snow === 0 && gj.snowCover === 0 && gj.spring === 0 && gj.autumn === 0, '');
       var idOk = true, bx;
       for (bx = 0; bx < 3; bx++) { var b = S_BANDS[bx]; if (JSON.stringify(CM.applySeasonColors(CM.resolve(b, 1), b, 1, gj)) !== JSON.stringify(CM.resolve(b, 1))) idOk = false; }
       check('s9a: applySeasonColors identity @midsummer (3 bands)', idOk, '');
@@ -15297,7 +15319,7 @@ if (typeof globalThis !== 'undefined') {
       var dOk = true;
       [.02, .10, .30, .45, .60, .70, .86, .95].forEach(function (p) { if (JSON.stringify(C.gate.season(p)) !== JSON.stringify(C.gate.season(p))) dOk = false; });
       check('s9b: season double-eval identical (8 phases)', dOk, '');
-      var cOk = true, wr = 0, wm = 0, wsc = 0, wsp = 0, pg = null, pd = 0, sx, t0 = Date.UTC(2026, 0, 1);
+      var cOk = true, wr = 0, wm = 0, wsc = 0, wsp = 0, wau = 0, pg = null, pd = 0, sx, t0 = Date.UTC(2026, 0, 1);
       for (sx = 0; sx <= 40; sx++) {
         var dy = Math.round(sx * 366 / 40), dt = new Date(t0 + dy * 864e5), g = C.gate.season(C.seasonPhase(C.jdOfLocalNoon(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate())));
         if (pg) {
@@ -15305,30 +15327,36 @@ if (typeof globalThis !== 'undefined') {
           var dm = Math.abs(g.foliage.mix - pg.foliage.mix) / gp; if (dm > wm) wm = dm; if (dm > .025) cOk = false;
           var dsc = Math.abs(g.snowCover - pg.snowCover) / gp; if (dsc > wsc) wsc = dsc; if (dsc > .08) cOk = false;
           var dsp = Math.abs(g.spring - pg.spring) / gp; if (dsp > wsp) wsp = dsp; if (dsp > .06) cOk = false;
+          var dau = Math.abs(g.autumn - pg.autumn) / gp; if (dau > wau) wau = dau; if (dau > .08) cOk = false;   // r25 — the fall-leg litter driver
         }
         pg = g; pd = dy;
       }
-      check('s9b: |drgb|<=5 |dmix|<=.025 |dsnowCover|<=.08 |dspring|<=.06 /day (40pt)', cOk, '[' + wr.toFixed(2) + '/' + wm.toFixed(4) + '/' + wsc.toFixed(4) + '/' + wsp.toFixed(4) + ']');
+      check('s9b: |drgb|<=5 |dmix|<=.025 |dsnowCover|<=.08 |dspring|<=.06 |dautumn|<=.08 /day (40pt)', cOk, '[' + wr.toFixed(2) + '/' + wm.toFixed(4) + '/' + wsc.toFixed(4) + '/' + wsp.toFixed(4) + '/' + wau.toFixed(4) + ']');
     }
 
-    /* s9c — dressing presence by phase (r24: snow, spring, marc-leaf; + palette whitening) */
+    /* s9c — dressing presence by phase (r25: snow, spring, marc-leaf, AND autumn litter; + palette whitening) */
     if (!SD || !SD.plan || !SD.count) { check('s9c: scenedressing present', false, ''); }
     else {
-      var dd = (Gate.season && Gate.season.dress) || { snow: 0, spring: 0, bare: 0 };
-      check('s9c: count()==plan(snow,spring,bare)', JSON.stringify(SD.count()) === JSON.stringify(SD.plan(+dd.snow || 0, +dd.spring || 0, +dd.bare || 0)),
-        '[s=' + (+dd.snow || 0).toFixed(2) + ' k=' + (+dd.spring || 0).toFixed(2) + ' b=' + (+dd.bare || 0).toFixed(2) + ']');
-      var p0 = SD.plan(0, 0, 0), pW = SD.plan(.95, 0, 1), pS = SD.plan(0, .9, 0);
+      var tnF = function (k) { return 44 + Math.round(72 * k); }, tnW = function (k) { return 4 + Math.round(4 * k); };   // §9.4 density formula — the test's OWN oracle (never a hard count, r25)
+      var dd = (Gate.season && Gate.season.dress) || { snow: 0, spring: 0, bare: 0, autumn: 0 };
+      check('s9c: count()==plan(snow,spring,bare,autumn)', JSON.stringify(SD.count()) === JSON.stringify(SD.plan(+dd.snow || 0, +dd.spring || 0, +dd.bare || 0, +dd.autumn || 0)),
+        '[s=' + (+dd.snow || 0).toFixed(2) + ' k=' + (+dd.spring || 0).toFixed(2) + ' b=' + (+dd.bare || 0).toFixed(2) + ' a=' + (+dd.autumn || 0).toFixed(2) + ']');
+      var p0 = SD.plan(0, 0, 0, 0), pW = SD.plan(.95, 0, 1, 0), pS = SD.plan(0, .9, 0, 0), pA = SD.plan(0, 0, 0, .9);
       var trees = 0, fol = (S && S._foliage) ? S._foliage : [], ti; for (ti = 0; ti < fol.length; ti++) if (fol[ti].kind === 'tree') trees++;
-      check('s9c: plan(0,0,0) all zero', s_tot(p0) === 0, '');
-      check('s9c: plan(.95,0,1) snow18 + marc10 = 28', s_snowmarc(pW) === 28 && pW.crown['marc-leaf'] === 10, '[' + s_snowmarc(pW) + '/' + pW.crown['marc-leaf'] + ']');
-      check('s9c: plan(0,.9,0) 48 flowers + 6 washes + 6xtree berries', pS.spring['spring-flower'] === 48 && pS.spring['spring-wash'] === 6 && pS.crown['spring-berry'] === 6 * trees, '[' + s_spring(pS) + ']');
-      var scP = [SD.plan(0, 0, 0), SD.plan(.5, 0, 1), SD.plan(.95, 0, 1)], spP = [SD.plan(0, 0, 0), SD.plan(0, .5, 0), SD.plan(0, .9, 0)], capOk = true, ci;
-      for (ci = 0; ci < 3; ci++) { if (s_snowmarc(scP[ci]) > 40) capOk = false; if (s_spring(spP[ci]) > 96) capOk = false; }
-      check('s9c: restraint snow+marc-leaf<=40, spring<=96', capOk, '');
+      check('s9c: plan(0,0,0,0) all zero', s_tot(p0) === 0, '');
+      check('s9c: plan(.95,0,1,0) snow18 + marc10 = 28', s_snowmarc(pW) === 28 && pW.crown['marc-leaf'] === 10, '[' + s_snowmarc(pW) + '/' + pW.crown['marc-leaf'] + ']');
+      check('s9c: plan(0,.9,0,0) nF(.9) flowers + nW(.9) washes + 6xtree berries (formula)', pS.spring['spring-flower'] === tnF(.9) && pS.spring['spring-wash'] === tnW(.9) && pS.crown['spring-berry'] === 6 * trees, '[' + s_spring(pS) + ']');
+      check('s9c: plan(0,0,0,.9) 4xtree autumn-leaf litter', pA.autumn['autumn-leaf'] === 4 * trees, '[' + s_autumn(pA) + ']');
+      var scP = [SD.plan(0, 0, 0, 0), SD.plan(.5, 0, 1, 0), SD.plan(.95, 0, 1, 0)], spP = [SD.plan(0, 0, 0, 0), SD.plan(0, .5, 0, 0), SD.plan(0, .95, 0, 0)], auP = [SD.plan(0, 0, 0, 0), SD.plan(0, 0, 0, .5), SD.plan(0, 0, 0, .95)], capOk = true, ci;
+      for (ci = 0; ci < 3; ci++) { if (s_snowmarc(scP[ci]) > 40) capOk = false; if (s_spring(spP[ci]) > 160) capOk = false; if (s_autumn(auP[ci]) > 24) capOk = false; }
+      check('s9c: restraint snow+marc-leaf<=40, spring<=160, autumn<=24', capOk, '');
       var sv = S && S.refs && S.refs.svg, rOk = true;
       if (sv) { var rg = sv.querySelector('#dress-snow-roofs'), rk = rg ? rg.childNodes : [], ri; for (ri = 0; ri < rk.length; ri++) { var e = s_ext(rk[ri]); if (e && (e.y > 592 || e.x < 1232)) rOk = false; } }
       check('s9c: drawn snow-roofs y<=592 / x>=1232', rOk, '');
-      check('s9c NEG: plan(0,0,0)!=plan(.95,0,1) && !=plan(0,.9,0)', JSON.stringify(p0) !== JSON.stringify(pW) && JSON.stringify(p0) !== JSON.stringify(pS), '');
+      var alOk = true, alN = 0;   // AUTUMN cell (cal=2026-10-31, a=1): every drawn leaf's x OUTSIDE [700,900] (the kept-drive bound)
+      if (sv) { var ag = sv.querySelector('#dress-autumn-ground'); if (ag) { var ak = ag.querySelectorAll('.autumn-leaf'), ax; for (ax = 0; ax < ak.length; ax++) { alN++; var alx = s_tx(ak[ax]); if (alx !== null && alx >= 700 && alx <= 900) alOk = false; } } }
+      check('s9c: drawn autumn-leaf x outside [700,900] (kept-drive bound)', alOk, '[n=' + alN + ']');
+      check('s9c NEG: plan(0,0,0,0)!=plan(.95,0,1,0) && !=plan(0,.9,0,0) && !=plan(0,0,0,.9)', JSON.stringify(p0) !== JSON.stringify(pW) && JSON.stringify(p0) !== JSON.stringify(pS) && JSON.stringify(p0) !== JSON.stringify(pA), '');
       if (CM && C && C.gate) {   // r24 palette WHITENING reference checks (deep-winter, day, B=1 — inline lerp, never mixHex)
         var gwc = C.gate.season(C.seasonPhase(C.jdOfLocalNoon(2027, 1, 30))), gjc = C.gate.season(C.seasonPhase(C.jdOfLocalNoon(2026, 6, 21)));
         var CK = [['grass', .12, 1.0, 1], ['hill', .12, .78, 1], ['manor.roof', .06, .92, 0], ['observatory.dome', .06, .88, 0]];
@@ -15354,10 +15382,11 @@ if (typeof globalThis !== 'undefined') {
     /* s9d — precip-phase thresholds couple to the snow curve (r24: ground-coupling implication) */
     if (!C || !C.gate || typeof C.dressing !== 'function') { check('s9d: precip present', false, ''); }
     else {
-      var kOk = true, gcOk = true, di;
-      for (di = 0; di < 40; di++) { var pp = di / 40, sd = C.dressing(pp).snow, kd = C.gate.precipKind(pp); if (kd !== (sd >= .5 ? 'snow' : sd >= .04 ? 'sleet' : 'rain')) kOk = false; if (C.gate.groundSnowCover(sd) > 0 && kd === 'rain') gcOk = false; }
+      var kOk = true, gcOk = true, liOk = true, di;
+      for (di = 0; di < 40; di++) { var pp = di / 40, sd = C.dressing(pp).snow, kd = C.gate.precipKind(pp); if (kd !== (sd >= .5 ? 'snow' : sd >= .04 ? 'sleet' : 'rain')) kOk = false; if (C.gate.groundSnowCover(sd) > 0 && kd === 'rain') gcOk = false; if (C.gate.groundSnowCover(sd) >= 0.2 && C.gate.season(pp).autumn !== 0) liOk = false; }   // r25 — leaves never on white ground
       check('s9d: precipKind couples to snow (40pt sweep)', kOk, '');
       check('s9d: groundSnowCover>0 => not rain (40pt sweep)', gcOk, '');
+      check('s9d: groundSnowCover>=.2 => autumn===0 (litter off white ground)', liOk, '');
       var pk = function (y, m, d) { return C.gate.precipKind(C.seasonPhase(C.jdOfLocalNoon(y, m, d))); };
       check('s9d anchors: 01-30 snow, 12-05 sleet, 06-21 rain', pk(2027, 1, 30) === 'snow' && pk(2026, 12, 5) === 'sleet' && pk(2026, 6, 21) === 'rain', '');
       check('s9d NEG: midsummer NOT snow + groundSnowCover(0)==0', pk(2026, 6, 21) !== 'snow' && C.gate.groundSnowCover(0) === 0, '');
@@ -15369,13 +15398,13 @@ if (typeof globalThis !== 'undefined') {
       var se = function (y, m, d) { var p = C.seasonPhase(C.jdOfLocalNoon(y, m, d)); return { kind: C.gate.precipKind(p), wildlife: C.gate.wildlife(p) }; };
       var wi = se(2027, 1, 30), su = se(2026, 6, 21), sl = se(2026, 12, 5), h = A.plan('night', 'storm', wi), lv = A.plan('night', 'storm', su), sp = A.plan('night', 'storm', sl), wd = A.plan('day', 'clear', wi);
       check('s9e: (storm,snow) hush rain/roll/thunder/sleet off, creature null, wind .35', h.rain === false && h.roll === false && h.thunder === false && h.sleet === false && h.creature === null && h.wind === 0.35, '');
-      check('s9e: (storm,rain) rain+thunder on, sleet off, wind 1.0 (live control)', lv.rain === true && lv.thunder === true && lv.sleet === false && lv.wind === 1, '');
-      check('s9e: (storm,sleet) rain+sleet+roll+thunder all on', sp.rain === true && sp.sleet === true && sp.roll === true && sp.thunder === true, '');
+      check('s9e: (storm,rain) rain+thunder on, sleet off, wind 1.0, rainLvl .78 (live control)', lv.rain === true && lv.thunder === true && lv.sleet === false && lv.wind === 1 && lv.rainLvl === 0.78, '[rainLvl=' + lv.rainLvl + ']');
+      check('s9e: (storm,sleet) rain+sleet+roll+thunder on, rainLvl DUCKED .15', sp.rain === true && sp.sleet === true && sp.roll === true && sp.thunder === true && sp.rainLvl === 0.15, '[rainLvl=' + sp.rainLvl + ']');
       check('s9e: (cloudy/clear,sleet) sleet off (a storm voice)', A.plan('night', 'cloudy', sl).sleet === false && A.plan('day', 'clear', sl).sleet === false, '');
       check('s9e: dusk winter->null, dusk summer->crickets, night->owl', A.plan('dusk', 'clear', wi).creature === null && A.plan('dusk', 'clear', su).creature === 'crickets' && A.plan('night', 'clear', su).creature === 'owl', '');
       check('s9e: (day, deep winter) birds, birdMin 24 / birdMax 62', wd.creature === 'birds' && wd.birdMin === 24 && wd.birdMax === 62, '[' + wd.birdMin + '/' + wd.birdMax + ']');
       var nc = A.plan('day', 'clear', null), ns = A.plan('day', 'storm', null);
-      check('s9e NEG: season=null -> shipped (clear birds 10/26 wind .2 sleet off; storm rain wind 1 sleet off)', nc.creature === 'birds' && nc.birdMin === 10 && nc.birdMax === 26 && nc.wind === 0.2 && nc.sleet === false && ns.rain === true && ns.wind === 1 && ns.sleet === false, '');
+      check('s9e NEG: season=null -> shipped (clear birds 10/26 wind .2 sleet off rainLvl .78; storm rain wind 1 sleet off rainLvl .78)', nc.creature === 'birds' && nc.birdMin === 10 && nc.birdMax === 26 && nc.wind === 0.2 && nc.sleet === false && nc.rainLvl === 0.78 && ns.rain === true && ns.wind === 1 && ns.sleet === false && ns.rainLvl === 0.78, '');
     }
 
     /* s9f — the bare winter is WIRED (r24: the BINARY-CANOPY law + per-tree threshold) */
@@ -15439,6 +15468,8 @@ if (typeof globalThis !== 'undefined') {
   function s_grp(g) { var n = 0, b; for (b in g) n += g[b]; return n; }                          // one manifest group's sum
   function s_snowmarc(p) { return s_grp(p.gate) + s_grp(p.roofs) + s_grp(p.ground) + p.crown['marc-leaf']; }  // snow + held-leaf marks
   function s_spring(p) { return s_grp(p.spring) + p.crown['spring-berry']; }                       // flowers + washes + berries
+  function s_autumn(p) { return s_grp(p.autumn); }                                                 // fallen-leaf litter (r25)
+  function s_tx(o) { if (!o || !o.getAttribute) return null; var t = o.getAttribute('transform'); if (!t) return null; var m = /translate\(\s*(-?\d+(?:\.\d+)?)/.exec(t); return m ? +m[1] : null; }   // the translate x of an autumn-leaf (r25)
   function s_lerp(base, tgt, k) { return [Math.round(base[0] + (tgt[0] - base[0]) * k), Math.round(base[1] + (tgt[1] - base[1]) * k), Math.round(base[2] + (tgt[2] - base[2]) * k)]; }  // integer-rounded RGB lerp (the mixHex oracle, s9c)
   function s_ext(o) { if (!o || !o.getAttribute) return null; if ((o.tagName || '').toLowerCase() === 'ellipse') return { x: +o.getAttribute('cx') - +o.getAttribute('rx'), y: +o.getAttribute('cy') + +o.getAttribute('ry') }; var d = o.getAttribute('d'); if (!d) return null; var u = d.match(/-?\d+(\.\d+)?/g) || [], x = 1 / 0, y = -1 / 0, i; for (i = 0; i + 1 < u.length; i += 2) { if (+u[i] < x) x = +u[i]; if (+u[i + 1] > y) y = +u[i + 1]; } return { x: x, y: y }; }
 

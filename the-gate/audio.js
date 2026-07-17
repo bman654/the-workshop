@@ -81,6 +81,12 @@
   var DUCK_HOLD    = 0.70; // held under the crack + early roll
   var DUCK_RELEASE = 1.7;  // bed eases back up over the rolling tail
 
+  // r25.2 (THE DUCK SURVIVES THE STRIKE): the level the rain bus was actually
+  // STARTED at — the SINGLE AUTHORITY duckBed restores to (never the hardcoded
+  // RAIN_BUS), so a strike can't shove a ducked sleet floor back up. Reset to the
+  // safe shipped default on kill; also the initial value.
+  A._rainLvl = RAIN_BUS;
+
   // ambient layer handles (each = { node, src } returned by a Gate.sfx builder,
   // routed through its own sub-bus gain so we can cross-fade independently).
   var amb = {
@@ -140,6 +146,11 @@
     var wl = (season && season.wildlife) || { crickets: true, birdK: 1 };
     return {
       rain:   storming && !snowing,      // rain loop — snow-hush gate (E4)
+      rainLvl: sleeting ? 0.15 : RAIN_BUS, // r25: the rain BUS LEVEL — DUCKED under
+                                         // sleet (0.15) so the ticks read; plain rain
+                                         // keeps the shipped RAIN_BUS (= 0.78) exactly
+                                         // — SYMBOLIC (r25.1/#14) so the plan can never
+                                         // drift from the code (§9.6, THE DUCK)
       sleet:  sleeting,                  // r24: the ice-tick bed RIDES ON the rain loop
       roll:   storming && !snowing,      // distant rolling thunder rides with it
       chimes: !storming,                 // chimes gate on the CLOUD, as shipped
@@ -286,15 +297,21 @@
     var P = A.plan(bandNow(), weatherNow(), seasonNow());
 
     // RAIN — the storm loop, and NEVER under snowfall (the snow-hush gate, E4).
+    // Started at the plan's bus level (r25: P.rainLvl — 0.15 ducked under sleet,
+    // RAIN_BUS otherwise); record it so duckBed restores to THIS, not the constant
+    // (r25.2 — THE DUCK SURVIVES THE STRIKE).
     if (P.rain) {
-      startTexture('rain', 'rain', { intensity: rainIntensityFor(weatherNow()) }, RAIN_BUS);
+      A._rainLvl = P.rainLvl;
+      startTexture('rain', 'rain', { intensity: rainIntensityFor(weatherNow()) }, P.rainLvl);
     } else {
+      A._rainLvl = RAIN_BUS;
       killTexture('rain', 0.9);
     }
 
-    // SLEET — the ice-tick bed (r24) rides OVER the rain loop; storm-sleet only.
+    // SLEET — the ice-tick bed (r24) rides OVER the ducked rain loop; storm-sleet
+    // only. Bus 0.6 (r25 — was 0.5) so the ticks DOMINATE the barely-there wet floor.
     if (P.sleet) {
-      startTexture('sleet', 'sleet', {}, 0.5);
+      startTexture('sleet', 'sleet', {}, 0.6);
     } else {
       killTexture('sleet', 0.8);
     }
@@ -375,7 +392,12 @@
     } catch (e) { try { g.gain.value = baseLevel; } catch (e2) {} }
   }
   function duckBed() {
-    duckOne('rain', RAIN_BUS, DUCK_RAIN_TO);
+    // r25.2: restore to the level the rain bus was STARTED at (A._rainLvl), never the
+    // hardcoded RAIN_BUS, and duck TO the min so a strike can NEVER LIFT an already-
+    // ducked floor (sleet: min(0.30, 0.15) = 0.15 — the bus holds FLAT through the
+    // flash; plain rain: 0.78/0.30, bit-identical to the shipped surface). The duck is
+    // down-only, by law (THE DUCK SURVIVES THE STRIKE, §9.6).
+    duckOne('rain', A._rainLvl, Math.min(DUCK_RAIN_TO, A._rainLvl));
     duckOne('wind', WIND_BUS, DUCK_WIND_TO);
   }
 
