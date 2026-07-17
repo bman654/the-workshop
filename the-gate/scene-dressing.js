@@ -1,10 +1,14 @@
-/* scene-dressing.js — THE CALENDAR'S SEASONAL DRESSING (E2/E3a/spring, DESIGN §9.3/§9.4, r24):
+/* scene-dressing.js — THE CALENDAR'S SEASONAL DRESSING (E2/E3a/spring/autumn, DESIGN §9.3/§9.4, r25):
    one post-build pass — the bare winter (the BINARY canopy law + per-tree threshold + the
    optional marc-leaf held-leaf marks), the fallen snow (seat marks over the palette-whitened
-   ground/roofs), and the spring flowering. Pure; rest-state writes NOTHING (§9.1). r24:
-   canopy opacity is per-tree {0,1} ONLY (every fade retired); the seat table is v2 (a white
-   greenhouse ROOF-PLANE replaces the retired stall lenses; the ground rings + horizon band
-   are retired — the whole ground now whitens in the palette, §9.2/colormap); spring blooms. */
+   ground/roofs), the spring flowering, and the autumn fallen litter. Pure; rest-state writes
+   NOTHING (§9.1). r24: canopy opacity is per-tree {0,1} ONLY (every fade retired); the seat
+   table is v2 (a white greenhouse ROOF-PLANE replaces the retired stall lenses; the ground
+   rings + horizon band are retired — the whole ground now whitens in the palette,
+   §9.2/colormap); spring blooms. r25: the meadow DENSIFIES with spring depth k (THE ONE-FORMULA
+   LAW, shared verbatim by drawSpring + plan — more flowers, never bigger); a modest autumn
+   litter of fallen maple leaves at the trees' feet (drawAutumn, salt 0xFA11); plan goes
+   four-scalar plan(s,k,bare,a). */
 
 (function (root) {
   'use strict';
@@ -42,6 +46,14 @@
   }
   function foliage() { var S = Gate.scene; return (S && S._foliage) ? S._foliage : []; }
 
+  // §9.4-spring — THE ONE-FORMULA LAW (r25): the meadow densifies with spring depth k. Stated
+  // ONCE here, used verbatim by BOTH drawSpring and SD.plan so s9c predicts counts from the
+  // cell's own k (never a constant). Seed-free; SIZE is pinned elsewhere (more flowers, never bigger).
+  function nF(k)     { return 44 + Math.round(72 * k); }     // total flowers: 47 at k=.04 → 116 at k=1
+  function nGold(k)  { return Math.round(0.4 * nF(k)); }     // gold split (~40%)
+  function nBlush(k) { return nF(k) - nGold(k); }            // blush split (~60%)
+  function nW(k)     { return 4 + Math.round(4 * k); }        // meadow washes: 4 → 8
+
   // ── the manifest (the tooth, §9.8-s9c) — plan(s,k,bare) is pure/seed-free; count() reads DOM ──
   function skeleton() {
     return {
@@ -49,12 +61,14 @@
       roofs:  { 'snow-gh-roof': 0, 'snow-ridge': 0 },
       ground: { 'snow-lamp': 0, 'snow-lip-line': 0, 'snow-lip-patch': 0, 'snow-drive': 0 },
       spring: { 'spring-flower': 0, 'spring-wash': 0 },
+      autumn: { 'autumn-leaf': 0 },                   // §9.4-autumn r25 — own dress group
       crown:  { 'spring-berry': 0, 'marc-leaf': 0 }   // crown-hosted → whole-SVG class scan
     };
   }
-  // plan(s, k, bare) — snow + spring + bare scalars; counts FIXED per tier (§9.4). No seed.
-  SD.plan = function (s, k, bare) {
-    s = +s || 0; k = +k || 0; bare = +bare || 0;
+  // plan(s, k, bare, a) — snow + spring + bare + autumn scalars (r25: FOUR-scalar). Counts are
+  // pure/seed-free: snow + autumn fixed per tier, spring by THE ONE-FORMULA LAW (§9.4). No seed.
+  SD.plan = function (s, k, bare, a) {
+    s = +s || 0; k = +k || 0; bare = +bare || 0; a = +a || 0;
     var p = skeleton(), fol = foliage(), i, trees = 0, marcBare = 0;
     for (i = 0; i < fol.length; i++) {
       if (fol[i].kind === 'tree') { trees++; if (fol[i].marc && bare >= thI(i)) marcBare++; }
@@ -63,7 +77,8 @@
     if (s > 0.30) { p.roofs['snow-ridge'] = 1; p.ground['snow-lamp'] = 2; p.ground['snow-lip-line'] = 1; }
     if (s > 0.45) { p.gate['snow-crest'] = 1; p.ground['snow-lip-patch'] = 5; }
     if (s > 0.60) { p.ground['snow-drive'] = 3; }
-    if (k > 0.04) { p.spring['spring-flower'] = 48; p.spring['spring-wash'] = 6; p.crown['spring-berry'] = 6 * trees; }
+    if (k > 0.04) { p.spring['spring-flower'] = nF(k); p.spring['spring-wash'] = nW(k); p.crown['spring-berry'] = 6 * trees; }
+    if (a > 0.04) { p.autumn['autumn-leaf'] = 4 * trees; }   // §9.4-autumn — 4 leaves per open-grown tree
     p.crown['marc-leaf'] = SD.TUNE.marcLeafMarks ? 5 * marcBare : 0;
     return p;
   };
@@ -73,7 +88,8 @@
     var svg = Gate.scene && Gate.scene.refs && Gate.scene.refs.svg;
     if (!svg) return p;
     var idOf = { 'dress-snow-gate': 'gate', 'dress-snow-roofs': 'roofs',
-                 'dress-snow-ground': 'ground', 'dress-spring-ground': 'spring' };
+                 'dress-snow-ground': 'ground', 'dress-spring-ground': 'spring',
+                 'dress-autumn-ground': 'autumn' };
     for (var id in idOf) {
       var g = svg.querySelector('#' + id); if (!g) continue;
       var kids = g.childNodes, bucket = p[idOf[id]];
@@ -165,22 +181,50 @@
     var gG = el('g', { id: 'dress-spring-ground' });
     if (mid && mid.parentNode) mid.parentNode.insertBefore(gG, mid.nextSibling); else svg.appendChild(gG);
     function rails(y) { var t = (900 - y) / 422; return [706 + 62 * t, 894 - 62 * t]; }   // §drive taper
-    for (var q = 0; q < 48; q++) {                 // 28 blush + 20 gold
-      var fill = q < 28 ? BLUSH : GOLD;
+    // THE ONE-FORMULA LAW (r25) — count densifies with k; blush first, then gold (fixed order):
+    var nFl = nF(k), nBl = nBlush(k), nWa = nW(k);
+    for (var q = 0; q < nFl; q++) {                 // nBlush blush, then nGold gold
+      var fill = q < nBl ? BLUSH : GOLD;
       var fx0 = 30 + rng() * 1540;                 // x ∈ [30,1570]
       var fy = 486 + rng() * 320;                  // y ∈ [486,806] — meadow only, above the apron
       var depth = (fy - 470) / 430;                // nearer flowers larger (the mottle's perspective)
-      var rx = (1.5 + rng() * 1.3) * (0.7 + 0.55 * depth);
+      var rx = (1.5 + rng() * 1.3) * (0.7 + 0.55 * depth);   // r25: SIZE curve PINNED (more flowers, never bigger)
       var op = o((0.55 + 0.35 * rng()) * (0.35 + 0.65 * k));
       var r = rails(fy), L = r[0] - 8, R = r[1] + 8;   // the drive stays kept: reflect out (no loop)
       if (fx0 > L && fx0 < R) fx0 = (fx0 - L < R - fx0) ? (2 * L - fx0) : (2 * R - fx0);
       el('ellipse', { cx: f(fx0), cy: f(fy), rx: f(rx), ry: f(rx * 0.8), fill: fill,
         opacity: op, 'class': 'spring-flower' }, gG);
     }
-    for (var w = 0; w < 6; w++) {                  // soft drifts of bloom
+    for (var w = 0; w < nWa; w++) {                 // soft drifts of bloom
       el('ellipse', { cx: f(30 + rng() * 1540), cy: f(486 + rng() * 320),
         rx: f(18 + rng() * 24), ry: f(4 + rng() * 4), fill: BLUSH,
         opacity: o(0.14 * k), 'class': 'spring-wash' }, gG);
+    }
+  }
+
+  // §9.4-autumn (r25) — the fallen litter: a modest seeded scatter of fallen maple leaves at the
+  // open-grown trees' feet (4 per kind:'tree' registration → 20). One seeded stream (salt 0xFA11),
+  // fixed draw order (registration order); a ≤ .04 writes NOTHING (rest-state / midsummer). Fill is
+  // the foliage role (amber→russet across the turn — the one-light law, zero new palette rows).
+  function drawAutumn(S, a, date) {
+    if (!(a > 0.04)) return;
+    var svg = S.refs && S.refs.svg; if (!svg) return;
+    var el = S.el, rng = rngOf(date, 0xFA11), fol = foliage(), i;
+    var mid = svg.querySelector('#layer-midground');
+    var gA = el('g', { id: 'dress-autumn-ground' });   // after #layer-midground — leaves on the grass
+    if (mid && mid.parentNode) mid.parentNode.insertBefore(gA, mid.nextSibling); else svg.appendChild(gA);
+    for (i = 0; i < fol.length; i++) {
+      var fo = fol[i];
+      if (fo.kind !== 'tree' || fo.bx == null) continue;
+      for (var lf = 0; lf < 4; lf++) {                 // 4 leaves per open-grown tree
+        var lx = fo.bx + (rng() * 2 - 1) * fo.rx * 0.9;  // spread to the dripline
+        var ly = fo.by - 2 + rng() * 12;                 // a shallow ground band hugging the trunk
+        var sca = 0.15 + rng() * 0.10;                   // the marc marks' ~0.22 size class
+        var rot = rng() * 360;                           // seeded rotation
+        var op = o((0.6 + 0.35 * rng()) * (0.35 + 0.65 * a));
+        el('path', { d: MAPLE, fill: LEAF, opacity: op, 'class': 'autumn-leaf',
+          transform: 'translate(' + f(lx) + ' ' + f(ly) + ') rotate(' + f(rot) + ') scale(' + sca.toFixed(3) + ')' }, gA);
+      }
     }
   }
 
@@ -227,6 +271,7 @@
     applyBare(S, +d.bare || 0, date);              // the bare winter (canopy · armature · marc-leaf · sway)
     drawSnow(S, +d.snow || 0, +d.snowCover || 0, date);  // fallen-snow seat marks
     drawSpring(S, +d.spring || 0, date);           // the spring flowering
+    drawAutumn(S, +d.autumn || 0, date);           // the autumn fallen litter (§9.4-autumn r25)
   };
   if (typeof module !== 'undefined' && module.exports) { module.exports = Gate; }
 }(typeof globalThis !== 'undefined' ? globalThis : this));
