@@ -543,6 +543,7 @@
     // sky), darker hollows lower/forward. Deterministic so it never jitters.
     var mott = group('grass-mottle', parent);
     var mr = groundsRng(91);
+    S._groundOvals.length = 0;                        // §9.4-spring r26: the DARK ovals are the spring-cluster substrate (SINGLE SOURCE)
     for (var mi = 0; mi < 26; mi++) {
       var my = groundTop + 30 + mr() * 300;
       var depth = (my - groundTop) / 330;            // 0 at horizon → 1 forward
@@ -553,6 +554,9 @@
       el('ellipse', { cx: g1f(mx), cy: g1f(my), rx: g1f(mw), ry: g1f(mh),
         fill: light ? BRI : '#000',
         opacity: (light ? (0.05 + depth * 0.04) : (0.07 + depth * 0.07)).toFixed(3) }, mott);
+      // register the DARK (hollow) ovals as the spring-cluster substrate — the SINGLE SOURCE the
+      // r26 two-population meadow reads (drawSpring never re-derives this formula; §9.4-spring):
+      if (!light) S._groundOvals.push({ cx: g1f(mx), cy: g1f(my), rx: g1f(mw), ry: g1f(mh) });
     }
 
     // ════ THE DRIVE — a raked-gravel ribbon from the gate seam (front, wide) back to
@@ -821,6 +825,7 @@
   var WIND_DUR = { none: 4, light: 3.6, strong: 2.1 };   // base sway period, seconds
   S._foliage = [];                  // [{el,px,py,phase,per,heavy,kind,marc,mul}] swayable crowns
   S._groundSeats = [];              // [{x,y,r}] tree/bush foot rings for snow dressing (§9.4)
+  S._groundOvals = [];              // [{cx,cy,rx,ry}] the DARK grass-mottle ovals — spring-cluster substrate (§9.4-spring r26)
   S._windLevel = 'light';
   S._windAmp = WIND_AMP.light;      // current (eased) amplitude
   S._windAmpTarget = WIND_AMP.light;

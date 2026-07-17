@@ -8,7 +8,11 @@
    §9.2/colormap); spring blooms. r25: the meadow DENSIFIES with spring depth k (THE ONE-FORMULA
    LAW, shared verbatim by drawSpring + plan — more flowers, never bigger); a modest autumn
    litter of fallen maple leaves at the trees' feet (drawAutumn, salt 0xFA11); plan goes
-   four-scalar plan(s,k,bare,a). */
+   four-scalar plan(s,k,bare,a). r26: the meadow is TWO POPULATIONS — ~4× flowers (nF=44+416·k),
+   dense CLUSTERS filling the DARK grass-mottle ovals (S._groundOvals, the SINGLE SOURCE) + the
+   r25-class thin SPRINKLE everywhere else; the spring AND autumn dress groups go INTO
+   #layer-midground before the trees/bushes (the OCCLUSION LAW — flowers/leaves lie UNDER the
+   canopies). SIZE curve, counts (plan==count), and rest-state law all unchanged. */
 
 (function (root) {
   'use strict';
@@ -46,10 +50,22 @@
   }
   function foliage() { var S = Gate.scene; return (S && S._foliage) ? S._foliage : []; }
 
+  // §9.4 r26 — THE OCCLUSION LAW: a dress group goes INTO #layer-midground, BEFORE the
+  // trees/bushes group, so a canopy or building occludes any flower/leaf behind it (paint order
+  // grass < mottle < drive < FLOWERS/LITTER < trees/bushes < furniture < gate). Fixes the r25
+  // insert-after-#layer-midground sibling placement (the meadow/litter painted ON TOP of canopies).
+  function placeUnderCanopies(svg, node) {
+    var mid = svg.querySelector('#layer-midground');
+    var trees = svg.querySelector('#trees');
+    if (mid && trees && trees.parentNode === mid) mid.insertBefore(node, trees);
+    else if (mid) mid.appendChild(node);
+    else svg.appendChild(node);
+  }
+
   // §9.4-spring — THE ONE-FORMULA LAW (r25): the meadow densifies with spring depth k. Stated
   // ONCE here, used verbatim by BOTH drawSpring and SD.plan so s9c predicts counts from the
   // cell's own k (never a constant). Seed-free; SIZE is pinned elsewhere (more flowers, never bigger).
-  function nF(k)     { return 44 + Math.round(72 * k); }     // total flowers: 47 at k=.04 → 116 at k=1
+  function nF(k)     { return 44 + Math.round(416 * k); }    // r26: total flowers — 61 at k=.04 → 460 at k=1 (~4× r25)
   function nGold(k)  { return Math.round(0.4 * nF(k)); }     // gold split (~40%)
   function nBlush(k) { return nF(k) - nGold(k); }            // blush split (~60%)
   function nW(k)     { return 4 + Math.round(4 * k); }        // meadow washes: 4 → 8
@@ -156,9 +172,11 @@
     }
   }
 
-  // §9.4-spring — the flowering: crown berries (into each crown <g>, ride the sway), a vibrant
-  // meadow (48 flowers + 6 washes in dress-spring-ground). One seeded stream, fixed draw order;
-  // k ≤ .04 writes NOTHING (rest-state / midsummer).
+  // §9.4-spring (r26) — the flowering: crown berries (into each crown <g>, ride the sway), and a
+  // TWO-POPULATION meadow — dense CLUSTERS filling the DARK grass-mottle ovals + the r25-class thin
+  // SPRINKLE everywhere else (nF=44+416·k, ~4× r25). One seeded stream, fixed draw order
+  // (blush-clusters → blush-sprinkle → gold-clusters → gold-sprinkle → washes); k ≤ .04 writes
+  // NOTHING (rest-state / midsummer). The split is PLACEMENT-ONLY — counts stay plan==count.
   function drawSpring(S, k, date) {
     if (!(k > 0.04)) return;
     var svg = S.refs && S.refs.svg; if (!svg) return;
@@ -176,26 +194,52 @@
           opacity: o(0.55 + 0.45 * k), 'class': 'spring-berry' }, fo.el);
       }
     }
-    // ground FLOWERS + meadow washes — dress-spring-ground, immediately after #layer-midground:
-    var mid = svg.querySelector('#layer-midground');
+    // ground FLOWERS + meadow washes — dress-spring-ground, UNDER the canopies (§9.4 r26 occlusion):
     var gG = el('g', { id: 'dress-spring-ground' });
-    if (mid && mid.parentNode) mid.parentNode.insertBefore(gG, mid.nextSibling); else svg.appendChild(gG);
+    placeUnderCanopies(svg, gG);
     function rails(y) { var t = (900 - y) / 422; return [706 + 62 * t, 894 - 62 * t]; }   // §drive taper
-    // THE ONE-FORMULA LAW (r25) — count densifies with k; blush first, then gold (fixed order):
-    var nFl = nF(k), nBl = nBlush(k), nWa = nW(k);
-    for (var q = 0; q < nFl; q++) {                 // nBlush blush, then nGold gold
-      var fill = q < nBl ? BLUSH : GOLD;
-      var fx0 = 30 + rng() * 1540;                 // x ∈ [30,1570]
-      var fy = 486 + rng() * 320;                  // y ∈ [486,806] — meadow only, above the apron
-      var depth = (fy - 470) / 430;                // nearer flowers larger (the mottle's perspective)
-      var rx = (1.5 + rng() * 1.3) * (0.7 + 0.55 * depth);   // r25: SIZE curve PINNED (more flowers, never bigger)
+    // the DARK grass-mottle ovals are the cluster substrate (SINGLE SOURCE, §9.4-spring r26):
+    var ovals = (S._groundOvals && S._groundOvals.length) ? S._groundOvals : null;
+    var cdf = null, tot = 0, j;
+    if (ovals) { cdf = []; for (j = 0; j < ovals.length; j++) { tot += ovals[j].rx * ovals[j].ry; cdf.push(tot); } }
+    // ONE ellipse per flower — the SIZE curve is PINNED (r25, re-pinned r26: more flowers, never
+    // bigger); the drive stays kept (reflect out — CLUSTER and SPRINKLE alike, after meadow-bound):
+    function flower(fill, x, y) {
+      var r = rails(y), L = r[0] - 8, R = r[1] + 8;
+      if (x > L && x < R) x = (x - L < R - x) ? (2 * L - x) : (2 * R - x);
+      var depth = (y - 470) / 430;                  // nearer flowers larger (the mottle's perspective)
+      var rx = (1.5 + rng() * 1.3) * (0.7 + 0.55 * depth);
       var op = o((0.55 + 0.35 * rng()) * (0.35 + 0.65 * k));
-      var r = rails(fy), L = r[0] - 8, R = r[1] + 8;   // the drive stays kept: reflect out (no loop)
-      if (fx0 > L && fx0 < R) fx0 = (fx0 - L < R - fx0) ? (2 * L - fx0) : (2 * R - fx0);
-      el('ellipse', { cx: f(fx0), cy: f(fy), rx: f(rx), ry: f(rx * 0.8), fill: fill,
+      el('ellipse', { cx: f(x), cy: f(y), rx: f(rx), ry: f(rx * 0.8), fill: fill,
         opacity: op, 'class': 'spring-flower' }, gG);
     }
-    for (var w = 0; w < nWa; w++) {                 // soft drifts of bloom
+    // SPRINKLE — the r25 uniform scatter (unchanged in character): x ∈ [30,1570], y ∈ [486,806]:
+    function sprinkle(fill, n) {
+      for (var s = 0; s < n; s++) flower(fill, 30 + rng() * 1540, 486 + rng() * 320);
+    }
+    // CLUSTERS — dense fills of the DARK ovals: area-weighted oval pick (w=rx·ry, CDF) then the
+    // area-uniform disk map (θ, r=√u fills ACROSS the oval, ×0.9 inside the soft edge), meadow-bound
+    // count-preserving by reflection. No ovals ⇒ fall back to sprinkle placement (count held):
+    function cluster(fill, n) {
+      for (var c = 0; c < n; c++) {
+        var x, y;
+        if (ovals) {
+          var u = rng() * tot, oj = ovals[ovals.length - 1], jj;
+          for (jj = 0; jj < cdf.length; jj++) { if (u <= cdf[jj]) { oj = ovals[jj]; break; } }
+          var th = rng() * Math.PI * 2, rr = Math.sqrt(rng());
+          x = oj.cx + Math.cos(th) * rr * oj.rx * 0.9;
+          y = oj.cy + Math.sin(th) * rr * oj.ry * 0.9;
+          if (y > 806) y = 1612 - y; else if (y < 486) y = 972 - y;
+        } else { x = 30 + rng() * 1540; y = 486 + rng() * 320; }
+        flower(fill, x, y);
+      }
+    }
+    // fixed draw order: within each color nSpr=round(0.25·n) join the SPRINKLE, the rest CLUSTER:
+    var nBl = nBlush(k), nGo = nGold(k);
+    var blSpr = Math.round(0.25 * nBl), goSpr = Math.round(0.25 * nGo);
+    cluster(BLUSH, nBl - blSpr); sprinkle(BLUSH, blSpr);
+    cluster(GOLD,  nGo - goSpr); sprinkle(GOLD,  goSpr);
+    for (var w = 0, nWa = nW(k); w < nWa; w++) {    // soft drifts of bloom (the between-patch wash)
       el('ellipse', { cx: f(30 + rng() * 1540), cy: f(486 + rng() * 320),
         rx: f(18 + rng() * 24), ry: f(4 + rng() * 4), fill: BLUSH,
         opacity: o(0.14 * k), 'class': 'spring-wash' }, gG);
@@ -210,9 +254,8 @@
     if (!(a > 0.04)) return;
     var svg = S.refs && S.refs.svg; if (!svg) return;
     var el = S.el, rng = rngOf(date, 0xFA11), fol = foliage(), i;
-    var mid = svg.querySelector('#layer-midground');
-    var gA = el('g', { id: 'dress-autumn-ground' });   // after #layer-midground — leaves on the grass
-    if (mid && mid.parentNode) mid.parentNode.insertBefore(gA, mid.nextSibling); else svg.appendChild(gA);
+    var gA = el('g', { id: 'dress-autumn-ground' });   // r26: UNDER the canopies (§9.4 occlusion law)
+    placeUnderCanopies(svg, gA);
     for (i = 0; i < fol.length; i++) {
       var fo = fol[i];
       if (fo.kind !== 'tree' || fo.bx == null) continue;
