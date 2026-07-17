@@ -358,7 +358,7 @@
     /* s9c — dressing presence by phase (r25: snow, spring, marc-leaf, AND autumn litter; + palette whitening) */
     if (!SD || !SD.plan || !SD.count) { check('s9c: scenedressing present', false, ''); }
     else {
-      var tnF = function (k) { return 44 + Math.round(72 * k); }, tnW = function (k) { return 4 + Math.round(4 * k); };   // §9.4 density formula — the test's OWN oracle (never a hard count, r25)
+      var tnF = function (k) { return 44 + Math.round(416 * k); }, tnW = function (k) { return 4 + Math.round(4 * k); };   // §9.4-spring density formula — the test's OWN oracle (never a hard count; r26: 4× flowers, 44+416·k)
       var dd = (Gate.season && Gate.season.dress) || { snow: 0, spring: 0, bare: 0, autumn: 0 };
       check('s9c: count()==plan(snow,spring,bare,autumn)', JSON.stringify(SD.count()) === JSON.stringify(SD.plan(+dd.snow || 0, +dd.spring || 0, +dd.bare || 0, +dd.autumn || 0)),
         '[s=' + (+dd.snow || 0).toFixed(2) + ' k=' + (+dd.spring || 0).toFixed(2) + ' b=' + (+dd.bare || 0).toFixed(2) + ' a=' + (+dd.autumn || 0).toFixed(2) + ']');
@@ -369,14 +369,20 @@
       check('s9c: plan(0,.9,0,0) nF(.9) flowers + nW(.9) washes + 6xtree berries (formula)', pS.spring['spring-flower'] === tnF(.9) && pS.spring['spring-wash'] === tnW(.9) && pS.crown['spring-berry'] === 6 * trees, '[' + s_spring(pS) + ']');
       check('s9c: plan(0,0,0,.9) 4xtree autumn-leaf litter', pA.autumn['autumn-leaf'] === 4 * trees, '[' + s_autumn(pA) + ']');
       var scP = [SD.plan(0, 0, 0, 0), SD.plan(.5, 0, 1, 0), SD.plan(.95, 0, 1, 0)], spP = [SD.plan(0, 0, 0, 0), SD.plan(0, .5, 0, 0), SD.plan(0, .95, 0, 0)], auP = [SD.plan(0, 0, 0, 0), SD.plan(0, 0, 0, .5), SD.plan(0, 0, 0, .95)], capOk = true, ci;
-      for (ci = 0; ci < 3; ci++) { if (s_snowmarc(scP[ci]) > 40) capOk = false; if (s_spring(spP[ci]) > 160) capOk = false; if (s_autumn(auP[ci]) > 24) capOk = false; }
-      check('s9c: restraint snow+marc-leaf<=40, spring<=160, autumn<=24', capOk, '');
+      for (ci = 0; ci < 3; ci++) { if (s_snowmarc(scP[ci]) > 40) capOk = false; if (s_spring(spP[ci]) > 520) capOk = false; if (s_autumn(auP[ci]) > 24) capOk = false; }
+      check('s9c: restraint snow+marc-leaf<=40, spring<=520, autumn<=24', capOk, '');
       var sv = S && S.refs && S.refs.svg, rOk = true;
       if (sv) { var rg = sv.querySelector('#dress-snow-roofs'), rk = rg ? rg.childNodes : [], ri; for (ri = 0; ri < rk.length; ri++) { var e = s_ext(rk[ri]); if (e && (e.y > 592 || e.x < 1232)) rOk = false; } }
       check('s9c: drawn snow-roofs y<=592 / x>=1232', rOk, '');
       var alOk = true, alN = 0;   // AUTUMN cell (cal=2026-10-31, a=1): every drawn leaf's x OUTSIDE [700,900] (the kept-drive bound)
       if (sv) { var ag = sv.querySelector('#dress-autumn-ground'); if (ag) { var ak = ag.querySelectorAll('.autumn-leaf'), ax; for (ax = 0; ax < ak.length; ax++) { alN++; var alx = s_tx(ak[ax]); if (alx !== null && alx >= 700 && alx <= 900) alOk = false; } } }
       check('s9c: drawn autumn-leaf x outside [700,900] (kept-drive bound)', alOk, '[n=' + alN + ']');
+      var GO = (S && S._groundOvals) || null, goOk = !!(GO && GO.length), gk;   // r26: the DARK grass-mottle ovals — the cluster substrate; non-empty + inside the mottle formula's derived bounds
+      if (goOk) for (gk = 0; gk < GO.length; gk++) { var ov = GO[gk]; if (!(ov.cx >= 0 && ov.cx <= 1600 && ov.cy >= 500 && ov.cy <= 800 && ov.rx >= 70 && ov.rx <= 310 && ov.ry >= 14 && ov.ry <= 52)) goOk = false; }
+      check('s9c: _groundOvals non-empty + inside mottle bounds (cluster substrate)', goOk, '[n=' + (GO ? GO.length : 0) + ']');
+      var occOk = true, ogids = ['dress-spring-ground', 'dress-autumn-ground'], ogi;   // r26 OCCLUSION LAW: each dress-ground group, when present, is a child of #layer-midground preceding the trees/bushes group in document order
+      if (sv) { var midL = sv.querySelector('#layer-midground'), trG = sv.querySelector('#trees'); for (ogi = 0; ogi < ogids.length; ogi++) { var dg = sv.querySelector('#' + ogids[ogi]); if (dg) { if (dg.parentNode !== midL) occOk = false; else if (trG && (dg.compareDocumentPosition(trG) & 4) === 0) occOk = false; } } }
+      check('s9c: dress-ground groups under #layer-midground before #trees (occlusion order)', occOk, '');
       check('s9c NEG: plan(0,0,0,0)!=plan(.95,0,1,0) && !=plan(0,.9,0,0) && !=plan(0,0,0,.9)', JSON.stringify(p0) !== JSON.stringify(pW) && JSON.stringify(p0) !== JSON.stringify(pS) && JSON.stringify(p0) !== JSON.stringify(pA), '');
       if (CM && C && C.gate) {   // r24 palette WHITENING reference checks (deep-winter, day, B=1 — inline lerp, never mixHex)
         var gwc = C.gate.season(C.seasonPhase(C.jdOfLocalNoon(2027, 1, 30))), gjc = C.gate.season(C.seasonPhase(C.jdOfLocalNoon(2026, 6, 21)));
