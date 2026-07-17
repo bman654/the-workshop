@@ -1024,7 +1024,8 @@
     S._foliage.push({ el: crown, px: f1f(x), py: f1f(trunkTopY),
       phase: rnd() * Math.PI * 2, per: 0.82 + rnd() * 0.36,
       heavy: Math.max(0.7, Math.min(1.2, 1 / Math.sqrt(sc))),
-      kind: 'tree', marc: manicured, mul: 1 });
+      kind: 'tree', marc: manicured, mul: 1,
+      cx: f1f(x), cy: f1f(crownCY), rx: f1f(crownRX), ry: f1f(crownRY) });  // §9.4 r24: crown envelope (spring berries · marc-leaf marks)
     S._groundSeats.push({ x: f1f(x), y: f1f(baseY), r: f1f(18 * sc) });
   }
 
