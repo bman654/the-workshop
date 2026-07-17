@@ -322,7 +322,7 @@
     if (!C || !C.gate || !CM) { check('s9a: gate+colormap present', false, ''); }
     else {
       var pj = C.seasonPhase(C.jdOfLocalNoon(2026, 6, 21)), gj = C.gate.season(pj);
-      check('s9a: midsummer knobs all 0', gj.foliage.mix === 0 && gj.grassMix === 0 && gj.cool === 0 && gj.bare === 0 && gj.snow === 0, '');
+      check('s9a: midsummer knobs all 0 (incl snowCover/spring)', gj.foliage.mix === 0 && gj.grassMix === 0 && gj.cool === 0 && gj.bare === 0 && gj.snow === 0 && gj.snowCover === 0 && gj.spring === 0, '');
       var idOk = true, bx;
       for (bx = 0; bx < 3; bx++) { var b = S_BANDS[bx]; if (JSON.stringify(CM.applySeasonColors(CM.resolve(b, 1), b, 1, gj)) !== JSON.stringify(CM.resolve(b, 1))) idOk = false; }
       check('s9a: applySeasonColors identity @midsummer (3 bands)', idOk, '');
@@ -340,80 +340,125 @@
       var dOk = true;
       [.02, .10, .30, .45, .60, .70, .86, .95].forEach(function (p) { if (JSON.stringify(C.gate.season(p)) !== JSON.stringify(C.gate.season(p))) dOk = false; });
       check('s9b: season double-eval identical (8 phases)', dOk, '');
-      var cOk = true, wr = 0, wm = 0, pg = null, pd = 0, sx, t0 = Date.UTC(2026, 0, 1);
+      var cOk = true, wr = 0, wm = 0, wsc = 0, wsp = 0, pg = null, pd = 0, sx, t0 = Date.UTC(2026, 0, 1);
       for (sx = 0; sx <= 40; sx++) {
         var dy = Math.round(sx * 366 / 40), dt = new Date(t0 + dy * 864e5), g = C.gate.season(C.seasonPhase(C.jdOfLocalNoon(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate())));
-        if (pg) { var gp = (dy - pd) || 1, cc; for (cc = 0; cc < 3; cc++) { var dr = Math.abs(g.foliage.rgb[cc] - pg.foliage.rgb[cc]) / gp; if (dr > wr) wr = dr; if (dr > 5) cOk = false; } var dm = Math.abs(g.foliage.mix - pg.foliage.mix) / gp; if (dm > wm) wm = dm; if (dm > .025) cOk = false; }
+        if (pg) {
+          var gp = (dy - pd) || 1, cc; for (cc = 0; cc < 3; cc++) { var dr = Math.abs(g.foliage.rgb[cc] - pg.foliage.rgb[cc]) / gp; if (dr > wr) wr = dr; if (dr > 5) cOk = false; }
+          var dm = Math.abs(g.foliage.mix - pg.foliage.mix) / gp; if (dm > wm) wm = dm; if (dm > .025) cOk = false;
+          var dsc = Math.abs(g.snowCover - pg.snowCover) / gp; if (dsc > wsc) wsc = dsc; if (dsc > .08) cOk = false;
+          var dsp = Math.abs(g.spring - pg.spring) / gp; if (dsp > wsp) wsp = dsp; if (dsp > .06) cOk = false;
+        }
         pg = g; pd = dy;
       }
-      check('s9b: |drgb|<=5 |dmix|<=.025 per day-equiv (40pt)', cOk, '[' + wr.toFixed(2) + '/' + wm.toFixed(4) + ']');
+      check('s9b: |drgb|<=5 |dmix|<=.025 |dsnowCover|<=.08 |dspring|<=.06 /day (40pt)', cOk, '[' + wr.toFixed(2) + '/' + wm.toFixed(4) + '/' + wsc.toFixed(4) + '/' + wsp.toFixed(4) + ']');
     }
 
-    /* s9c — snow dressing: the drawn inventory matches the pure plan */
+    /* s9c — dressing presence by phase (r24: snow, spring, marc-leaf; + palette whitening) */
     if (!SD || !SD.plan || !SD.count) { check('s9c: scenedressing present', false, ''); }
     else {
-      var sn = (Gate.season && Gate.season.dress) ? +Gate.season.dress.snow : 0, p0 = SD.plan(0), p5 = SD.plan(.5), p9 = SD.plan(.95);
-      check('s9c: count()==plan(snow)', JSON.stringify(SD.count()) === JSON.stringify(SD.plan(sn)), '[snow=' + sn.toFixed(3) + ']');
-      check('s9c: plan(0)=0, plan(.95)=29, all<=40', s_tot(p0) === 0 && s_tot(p9) === 29 && s_tot(p5) <= 40, '[' + s_tot(p0) + '/' + s_tot(p5) + '/' + s_tot(p9) + ']');
+      var dd = (Gate.season && Gate.season.dress) || { snow: 0, spring: 0, bare: 0 };
+      check('s9c: count()==plan(snow,spring,bare)', JSON.stringify(SD.count()) === JSON.stringify(SD.plan(+dd.snow || 0, +dd.spring || 0, +dd.bare || 0)),
+        '[s=' + (+dd.snow || 0).toFixed(2) + ' k=' + (+dd.spring || 0).toFixed(2) + ' b=' + (+dd.bare || 0).toFixed(2) + ']');
+      var p0 = SD.plan(0, 0, 0), pW = SD.plan(.95, 0, 1), pS = SD.plan(0, .9, 0);
+      var trees = 0, fol = (S && S._foliage) ? S._foliage : [], ti; for (ti = 0; ti < fol.length; ti++) if (fol[ti].kind === 'tree') trees++;
+      check('s9c: plan(0,0,0) all zero', s_tot(p0) === 0, '');
+      check('s9c: plan(.95,0,1) snow18 + marc10 = 28', s_snowmarc(pW) === 28 && pW.crown['marc-leaf'] === 10, '[' + s_snowmarc(pW) + '/' + pW.crown['marc-leaf'] + ']');
+      check('s9c: plan(0,.9,0) 48 flowers + 6 washes + 6xtree berries', pS.spring['spring-flower'] === 48 && pS.spring['spring-wash'] === 6 && pS.crown['spring-berry'] === 6 * trees, '[' + s_spring(pS) + ']');
+      var scP = [SD.plan(0, 0, 0), SD.plan(.5, 0, 1), SD.plan(.95, 0, 1)], spP = [SD.plan(0, 0, 0), SD.plan(0, .5, 0), SD.plan(0, .9, 0)], capOk = true, ci;
+      for (ci = 0; ci < 3; ci++) { if (s_snowmarc(scP[ci]) > 40) capOk = false; if (s_spring(spP[ci]) > 96) capOk = false; }
+      check('s9c: restraint snow+marc-leaf<=40, spring<=96', capOk, '');
       var sv = S && S.refs && S.refs.svg, rOk = true;
       if (sv) { var rg = sv.querySelector('#dress-snow-roofs'), rk = rg ? rg.childNodes : [], ri; for (ri = 0; ri < rk.length; ri++) { var e = s_ext(rk[ri]); if (e && (e.y > 592 || e.x < 1232)) rOk = false; } }
       check('s9c: drawn snow-roofs y<=592 / x>=1232', rOk, '');
-      check('s9c NEG: plan(0)!=plan(.95)', JSON.stringify(p0) !== JSON.stringify(p9), '');
+      check('s9c NEG: plan(0,0,0)!=plan(.95,0,1) && !=plan(0,.9,0)', JSON.stringify(p0) !== JSON.stringify(pW) && JSON.stringify(p0) !== JSON.stringify(pS), '');
+      if (CM && C && C.gate) {   // r24 palette WHITENING reference checks (deep-winter, day, B=1 — inline lerp, never mixHex)
+        var gwc = C.gate.season(C.seasonPhase(C.jdOfLocalNoon(2027, 1, 30))), gjc = C.gate.season(C.seasonPhase(C.jdOfLocalNoon(2026, 6, 21)));
+        var CK = [['grass', .12, 1.0, 1], ['hill', .12, .78, 1], ['manor.roof', .06, .92, 0], ['observatory.dome', .06, .88, 0]];
+        var res0 = CM.resolve('day', 1), appW = CM.applySeasonColors(CM.resolve('day', 1), 'day', 1, gwc), appJ = CM.applySeasonColors(CM.resolve('day', 1), 'day', 1, gjc);
+        var drift = s_rgb(res0['--snow.drift']), pOk = true, mOkP = true, pi;
+        for (pi = 0; pi < CK.length; pi++) {
+          var role = CK[pi][0], ck = CK[pi][1], skk = CK[pi][2], strawFlag = CK[pi][3], base = s_rgb(res0['--' + role]);
+          if (!base || !drift) { pOk = false; continue; }
+          var c = base;
+          if (strawFlag && gwc.grassMix > 0) c = s_lerp(c, gwc.straw, gwc.grassMix);
+          var kk = gwc.cool * ck; if (kk > 0) c = s_lerp(c, gwc.cast, kk);
+          c = s_lerp(c, drift, gwc.snowCover * skk);
+          var emc = s_rgb(appW['--' + role]);
+          if (!emc || Math.abs(emc[0] - c[0]) > 1 || Math.abs(emc[1] - c[1]) > 1 || Math.abs(emc[2] - c[2]) > 1) pOk = false;
+          if (appJ['--' + role] !== res0['--' + role]) mOkP = false;   // midsummer: none of the four written
+        }
+        var grEm = s_rgb(appW['--grass']), grOk = !!(grEm && drift) && Math.abs(grEm[0] - drift[0]) <= 1 && Math.abs(grEm[1] - drift[1]) <= 1 && Math.abs(grEm[2] - drift[2]) <= 1;
+        check('s9c: winter grass==snow.drift@cover1 + 4 roles match inline chain', pOk && grOk, '');
+        check('s9c: midsummer writes none of grass/hill/roof/dome', mOkP, '');
+      }
     }
 
-    /* s9d — precip-phase thresholds couple to the snow curve */
+    /* s9d — precip-phase thresholds couple to the snow curve (r24: ground-coupling implication) */
     if (!C || !C.gate || typeof C.dressing !== 'function') { check('s9d: precip present', false, ''); }
     else {
-      var kOk = true, di;
-      for (di = 0; di < 40; di++) { var pp = di / 40, sd = C.dressing(pp).snow, kd = C.gate.precipKind(pp); if (kd !== (sd >= .5 ? 'snow' : sd >= .04 ? 'sleet' : 'rain')) kOk = false; }
+      var kOk = true, gcOk = true, di;
+      for (di = 0; di < 40; di++) { var pp = di / 40, sd = C.dressing(pp).snow, kd = C.gate.precipKind(pp); if (kd !== (sd >= .5 ? 'snow' : sd >= .04 ? 'sleet' : 'rain')) kOk = false; if (C.gate.groundSnowCover(sd) > 0 && kd === 'rain') gcOk = false; }
       check('s9d: precipKind couples to snow (40pt sweep)', kOk, '');
+      check('s9d: groundSnowCover>0 => not rain (40pt sweep)', gcOk, '');
       var pk = function (y, m, d) { return C.gate.precipKind(C.seasonPhase(C.jdOfLocalNoon(y, m, d))); };
       check('s9d anchors: 01-30 snow, 12-05 sleet, 06-21 rain', pk(2027, 1, 30) === 'snow' && pk(2026, 12, 5) === 'sleet' && pk(2026, 6, 21) === 'rain', '');
-      check('s9d NEG: midsummer NOT snow', pk(2026, 6, 21) !== 'snow', '');
+      check('s9d NEG: midsummer NOT snow + groundSnowCover(0)==0', pk(2026, 6, 21) !== 'snow' && C.gate.groundSnowCover(0) === 0, '');
     }
 
-    /* s9e — the audio gating truth-table (over the pure A.plan) */
+    /* s9e — the audio gating truth-table (over the pure A.plan; r24: the sleet rows) */
     if (!A || !A.plan || !C || !C.gate) { check('s9e: audio.plan+gate present', false, ''); }
     else {
       var se = function (y, m, d) { var p = C.seasonPhase(C.jdOfLocalNoon(y, m, d)); return { kind: C.gate.precipKind(p), wildlife: C.gate.wildlife(p) }; };
-      var wi = se(2027, 1, 30), su = se(2026, 6, 21), h = A.plan('night', 'storm', wi), lv = A.plan('night', 'storm', su), wd = A.plan('day', 'clear', wi);
-      check('s9e: (storm,snow) hush rain/roll/thunder off, creature null, wind .35', h.rain === false && h.roll === false && h.thunder === false && h.creature === null && h.wind === 0.35, '');
-      check('s9e: (storm,rain) rain+thunder on, wind 1.0 (live control)', lv.rain === true && lv.thunder === true && lv.wind === 1, '');
+      var wi = se(2027, 1, 30), su = se(2026, 6, 21), sl = se(2026, 12, 5), h = A.plan('night', 'storm', wi), lv = A.plan('night', 'storm', su), sp = A.plan('night', 'storm', sl), wd = A.plan('day', 'clear', wi);
+      check('s9e: (storm,snow) hush rain/roll/thunder/sleet off, creature null, wind .35', h.rain === false && h.roll === false && h.thunder === false && h.sleet === false && h.creature === null && h.wind === 0.35, '');
+      check('s9e: (storm,rain) rain+thunder on, sleet off, wind 1.0 (live control)', lv.rain === true && lv.thunder === true && lv.sleet === false && lv.wind === 1, '');
+      check('s9e: (storm,sleet) rain+sleet+roll+thunder all on', sp.rain === true && sp.sleet === true && sp.roll === true && sp.thunder === true, '');
+      check('s9e: (cloudy/clear,sleet) sleet off (a storm voice)', A.plan('night', 'cloudy', sl).sleet === false && A.plan('day', 'clear', sl).sleet === false, '');
       check('s9e: dusk winter->null, dusk summer->crickets, night->owl', A.plan('dusk', 'clear', wi).creature === null && A.plan('dusk', 'clear', su).creature === 'crickets' && A.plan('night', 'clear', su).creature === 'owl', '');
       check('s9e: (day, deep winter) birds, birdMin 24 / birdMax 62', wd.creature === 'birds' && wd.birdMin === 24 && wd.birdMax === 62, '[' + wd.birdMin + '/' + wd.birdMax + ']');
       var nc = A.plan('day', 'clear', null), ns = A.plan('day', 'storm', null);
-      check('s9e NEG: season=null -> shipped (clear birds 10/26 wind .2; storm rain wind 1)', nc.creature === 'birds' && nc.birdMin === 10 && nc.birdMax === 26 && nc.wind === 0.2 && ns.rain === true && ns.wind === 1, '');
+      check('s9e NEG: season=null -> shipped (clear birds 10/26 wind .2 sleet off; storm rain wind 1 sleet off)', nc.creature === 'birds' && nc.birdMin === 10 && nc.birdMax === 26 && nc.wind === 0.2 && nc.sleet === false && ns.rain === true && ns.wind === 1 && ns.sleet === false, '');
     }
 
-    /* s9f — the bare winter is WIRED, not just computed (kind/marc + DOM opacities) */
+    /* s9f — the bare winter is WIRED (r24: the BINARY-CANOPY law + per-tree threshold) */
     if (!S || !S._foliage || !SD || !SD.TUNE) { check('s9f: foliage+TUNE present', false, ''); }
     else {
       var fl = S._foliage, T = SD.TUNE, fkOk = true, mc = 0, tr = 0, fi;
       for (fi = 0; fi < fl.length; fi++) { var fk = fl[fi].kind; if (fk !== 'tree' && fk !== 'bush') fkOk = false; if (fk === 'tree') tr++; if (fl[fi].marc === true) mc++; }
       check('s9f: every entry kind in {tree,bush}, exactly 2 marc', fkOk && mc === 2, '[marc=' + mc + ']');
-      var ba = (Gate.season && Gate.season.dress) ? +Gate.season.dress.bare : 0;
+      var maxJit = 0; for (fi = 0; fi < S_JIT.length; fi++) if (S_JIT[fi] > maxJit) maxJit = S_JIT[fi];
+      check('s9f: threshold guarantee base+spread*maxJit<=0.85', T.bareThreshBase + T.bareThreshSpread * maxJit <= 0.85, '');
+      var ba = (Gate.season && Gate.season.dress) ? +Gate.season.dress.bare : 0, opOk = true, oi;
+      for (oi = 0; oi < fl.length; oi++) {   // THE OPACITY LAW — at THIS phase, every crown is ABSENT or exactly '0'
+        var fo = fl[oi], op = fo.el ? fo.el.getAttribute('opacity') : null, thI = T.bareThreshBase + T.bareThreshSpread * (oi < S_JIT.length ? S_JIT[oi] : 0);
+        if (op !== null && op !== '0') opOk = false;
+        if (fo.kind === 'bush') { if (op !== null) opOk = false; }
+        else { var want0 = ba >= thI; if (want0 && op !== '0') opOk = false; if (!want0 && op !== null) opOk = false; }
+      }
+      check('s9f: crown opacity {absent|0} per TH_i (binary law)', opOk, '[bare=' + ba.toFixed(3) + ']');
+      var ml = (S.refs && S.refs.svg) ? S.refs.svg.querySelectorAll('.marc-leaf').length : 0;
       if (ba > 0) {
-        var mOk = true, aOk = true, crOk = true, ac = 0, fj, aj;
+        var mOk = true, aOk = true, ac = 0, marcOff = 0, fj, aj;
         for (fj = 0; fj < fl.length; fj++) {
-          var fo = fl[fj], bt = ba * (1 - (fj < S_JIT.length ? S_JIT[fj] : 0));
-          if (Math.abs(fo.mul - (1 - 0.7 * bt)) > 1e-9) mOk = false;
-          var fd = fo.marc ? T.crownFadeMarc : (fo.kind === 'bush' ? T.crownFadeBush : T.crownFadeTree);
-          if (fo.el && fo.el.getAttribute('opacity') !== (1 - fd * bt).toFixed(3)) crOk = false;
-          if (fo.kind === 'tree' && fo.el && fo.el.parentNode) { var ar = fo.el.parentNode.querySelectorAll('.bare-armature'), ao = (T.armOpacity * bt).toFixed(3); ac += ar.length; for (aj = 0; aj < ar.length; aj++) if (ar[aj].getAttribute('opacity') !== ao) aOk = false; }
+          var f2 = fl[fj], jit = (fj < S_JIT.length ? S_JIT[fj] : 0), bt = ba * (1 - jit), off2 = f2.kind === 'tree' && ba >= (T.bareThreshBase + T.bareThreshSpread * jit);
+          if (Math.abs(f2.mul - (1 - 0.7 * bt)) > 1e-9) mOk = false;
+          if (f2.kind === 'tree' && f2.el && f2.el.parentNode) { var ar = f2.el.parentNode.querySelectorAll('.bare-armature'), ao = off2 ? String(T.armOpacity) : '0'; ac += ar.length; for (aj = 0; aj < ar.length; aj++) if (ar[aj].getAttribute('opacity') !== ao) aOk = false; }
+          if (f2.marc && off2) marcOff++;
         }
         check('s9f: mul==1-.7*bareT per entry (BARE_JIT oracle)', mOk, '');
-        check('s9f: crown opacity==1-FADE*bareT per entry', crOk, '');
-        check('s9f: armature opacity==armOpacity*bareT per tree', aOk, '');
+        check('s9f: armature opacity binary with tree (armOpacity|0)', aOk, '');
         check('s9f: .bare-armature count==6x trees', ac === 6 * tr, '[' + ac + '=6x' + tr + ']');
+        check('s9f: marc-leaf count==(marcLeafMarks?5x marc-off:0)', ml === (T.marcLeafMarks ? 5 * marcOff : 0), '[' + ml + ']');
       } else {
         var reOk = true, rj, rk2;
         for (rj = 0; rj < fl.length; rj++) {
-          var f2 = fl[rj];
-          if (f2.mul !== 1) { reOk = false; break; }
-          if (f2.el && f2.el.hasAttribute('opacity')) { reOk = false; break; }
-          if (f2.kind === 'tree' && f2.el && f2.el.parentNode) { var ra = f2.el.parentNode.querySelectorAll('.bare-armature'); for (rk2 = 0; rk2 < ra.length; rk2++) if (ra[rk2].getAttribute('opacity') !== '0') reOk = false; }
+          var f3 = fl[rj];
+          if (f3.mul !== undefined && f3.mul !== 1) { reOk = false; break; }
+          if (f3.el && f3.el.hasAttribute('opacity')) { reOk = false; break; }
+          if (f3.kind === 'tree' && f3.el && f3.el.parentNode) { var ra = f3.el.parentNode.querySelectorAll('.bare-armature'); for (rk2 = 0; rk2 < ra.length; rk2++) if (ra[rk2].getAttribute('opacity') !== '0') reOk = false; }
         }
-        check('s9f: REST mul 1, crown opacity absent, armatures 0 (identity pin)', reOk, '');
+        check('s9f: REST mul 1, crown opacity absent, armatures 0, 0 marc-leaf (identity)', reOk && ml === 0, '');
       }
     }
 
@@ -434,6 +479,10 @@
   var S_JIT = [0, .12, .05, .09, .14, .03, .07, .11];   // §9.3 authored BARE_JIT (test oracle)
   function s_rgb(s) { var m = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec('' + (s == null ? '' : s)); if (!m) return null; var t = [+m[1], +m[2], +m[3]], i; for (i = 0; i < 3; i++) if (!(t[i] >= 0 && t[i] <= 255)) return null; return t; }
   function s_tot(p) { var n = 0, a, b; for (a in p) for (b in p[a]) n += p[a][b]; return n; }
+  function s_grp(g) { var n = 0, b; for (b in g) n += g[b]; return n; }                          // one manifest group's sum
+  function s_snowmarc(p) { return s_grp(p.gate) + s_grp(p.roofs) + s_grp(p.ground) + p.crown['marc-leaf']; }  // snow + held-leaf marks
+  function s_spring(p) { return s_grp(p.spring) + p.crown['spring-berry']; }                       // flowers + washes + berries
+  function s_lerp(base, tgt, k) { return [Math.round(base[0] + (tgt[0] - base[0]) * k), Math.round(base[1] + (tgt[1] - base[1]) * k), Math.round(base[2] + (tgt[2] - base[2]) * k)]; }  // integer-rounded RGB lerp (the mixHex oracle, s9c)
   function s_ext(o) { if (!o || !o.getAttribute) return null; if ((o.tagName || '').toLowerCase() === 'ellipse') return { x: +o.getAttribute('cx') - +o.getAttribute('rx'), y: +o.getAttribute('cy') + +o.getAttribute('ry') }; var d = o.getAttribute('d'); if (!d) return null; var u = d.match(/-?\d+(\.\d+)?/g) || [], x = 1 / 0, y = -1 / 0, i; for (i = 0; i + 1 < u.length; i += 2) { if (+u[i] < x) x = +u[i]; if (+u[i + 1] > y) y = +u[i + 1]; } return { x: x, y: y }; }
 
   /* ════════════════════════════════════════════════════════════════════════════

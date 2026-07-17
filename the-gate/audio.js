@@ -136,9 +136,11 @@
   A.plan = function (band, w, season) {
     var storming = (w === 'storm');                        // the CLOUD
     var snowing  = storming && !!season && season.kind === 'snow';
+    var sleeting = storming && !!season && season.kind === 'sleet';   // r24
     var wl = (season && season.wildlife) || { crickets: true, birdK: 1 };
     return {
       rain:   storming && !snowing,      // rain loop — snow-hush gate (E4)
+      sleet:  sleeting,                  // r24: the ice-tick bed RIDES ON the rain loop
       roll:   storming && !snowing,      // distant rolling thunder rides with it
       chimes: !storming,                 // chimes gate on the CLOUD, as shipped
       wind:   snowing ? 0.35             // snowfall STILLS the air (E4/B7): below
@@ -288,6 +290,13 @@
       startTexture('rain', 'rain', { intensity: rainIntensityFor(weatherNow()) }, RAIN_BUS);
     } else {
       killTexture('rain', 0.9);
+    }
+
+    // SLEET — the ice-tick bed (r24) rides OVER the rain loop; storm-sleet only.
+    if (P.sleet) {
+      startTexture('sleet', 'sleet', {}, 0.5);
+    } else {
+      killTexture('sleet', 0.8);
     }
 
     // WIND — always present; snowfall stills it to a low breath (P.wind, E4).
