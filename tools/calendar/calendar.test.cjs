@@ -42,6 +42,15 @@
          hours.js's civilToAST SUBTRACTS eot, so its apparent noon drifts
          OPPOSITE an ephemeris; never "correct" these back), and
          M*(2026-02-12) ∈ [699,713] (706); both bands exclude 720.
+     (m) THE GATE'S SEASONS (calendar-gate.js — DESIGN §9) — the Node-runnable
+         subset of the §9.8 teeth: the midsummer all-zero identity (dz snaps
+         every knob at the pinned phase 0.25040); the s9b foliage-curve
+         continuity over the full 366-day sweep (|Δrgb| ≤ 5/channel/day,
+         |Δmix| ≤ .025/day — the round-2 MEASURED caps) + double-run
+         determinism; the s9d precip coupling law over a 40-point sweep +
+         the r22 date anchors (2027-01-30 snow · 2026-12-05 sleet · 2026-06-21
+         rain) + the midsummer negative control; the §9.6 wildlife window +
+         birdK anchors; PURITY GREP over calendar-gate.js.
 
    Prints "calendar twin: N/N PASS"; exits non-zero on any failure.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -50,6 +59,7 @@
 const fs = require('fs');
 const path = require('path');
 const C = require('./calendar.js');
+require('./calendar-gate.js'); // augments the SAME C instance with C.gate (§9)
 const Hours = require('../hours/hours.js');
 const Dial = require('../dial/dial.js');
 
@@ -382,6 +392,89 @@ const WING_FIXTURE = [
       '(l) annTier/annLabel: the founding day maps to tier 1 with the composed founding text');
     ok(mfW.annTier === 0 && mfW.annLabel === null,
       '(l) annTier/annLabel: a waypoint-only day maps to tier 0 / null (waypoints never tier)');
+  }
+
+  /* ── (m) THE GATE'S SEASONS — calendar-gate.js (DESIGN §9) ── */
+  {
+    // — the midsummer all-zero identity (s9a's pure half): dz snaps every knob
+    //   at the real pin phase 0.25040 (≠ 0.25), so === 0 is EXACT law, §9.2.
+    const pj = C.seasonPhase(C.jdOfLocalNoon(2026, 6, 21));
+    const gsj = C.gate.season(pj);
+    ok(gsj.foliage.mix === 0 && gsj.grassMix === 0 && gsj.cool === 0
+      && gsj.bare === 0 && gsj.snow === 0,
+      '(m) midsummer identity: every Calendar.gate.season knob === 0 at phase ' + pj.toFixed(5)
+      + ' (dz dead-zone, exact)');
+    // negative control: at the winter-solstice phase the cast is ~fully on
+    const pw = C.seasonPhase(C.jdOfLocalNoon(2026, 12, 21));
+    ok(C.gate.season(pw).cool > 0.999,
+      '(m) negative control: cool > 0.999 at the winter-solstice phase (the stage can move)');
+
+    // — s9b foliage-curve continuity over the full 366-day sweep + determinism
+    let contOk = true, worstRgb = 0, worstMix = 0, badDay = -1;
+    const t0 = Date.UTC(2026, 0, 1);
+    let prev = null;
+    for (let k = 0; k < 366; k++) {
+      const dt = new Date(t0 + k * 86400000);
+      const p = C.seasonPhase(C.jdOfLocalNoon(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate()));
+      const g = C.gate.season(p);
+      if (prev) {
+        for (let c = 0; c < 3; c++) {
+          const dr = Math.abs(g.foliage.rgb[c] - prev.foliage.rgb[c]);
+          if (dr > worstRgb) worstRgb = dr;
+          if (dr > 5) { contOk = false; if (badDay < 0) badDay = k; }
+        }
+        const dm = Math.abs(g.foliage.mix - prev.foliage.mix);
+        if (dm > worstMix) worstMix = dm;
+        if (dm > 0.025) { contOk = false; if (badDay < 0) badDay = k; }
+      }
+      prev = g;
+    }
+    ok(contOk, '(m) s9b continuity: |Δrgb| ≤ 5/channel/day (worst ' + worstRgb.toFixed(3)
+      + ') · |Δmix| ≤ .025/day (worst ' + worstMix.toFixed(4) + ') over 366 consecutive noons',
+      'first breach day ' + badDay);
+    let detOk = true;
+    [0.02, 0.10, 0.30, 0.45, 0.60, 0.70, 0.86, 0.95].forEach(function (p) {
+      if (JSON.stringify(C.gate.season(p)) !== JSON.stringify(C.gate.season(p))) detOk = false;
+    });
+    ok(detOk, '(m) s9b determinism: Calendar.gate.season double-eval JSON-identical at 8 probe phases');
+
+    // — s9d precip coupling law over a 40-point sweep + the r22 date anchors
+    let coupleOk = true, badP = -1;
+    for (let i = 0; i < 40; i++) {
+      const p = i / 40;
+      const s = C.dressing(p).snow, kind = C.gate.precipKind(p);
+      const want = s >= 0.5 ? 'snow' : s >= 0.04 ? 'sleet' : 'rain';
+      if (kind !== want) { coupleOk = false; if (badP < 0) badP = i; }
+    }
+    ok(coupleOk, '(m) s9d coupling: precipKind ≡ (snow ≥ .5 → snow / [.04,.5) → sleet / else rain) over a 40-pt sweep',
+      'first breach probe ' + badP);
+    function pk(y, m, d) { return C.gate.precipKind(C.seasonPhase(C.jdOfLocalNoon(y, m, d))); }
+    ok(pk(2027, 1, 30) === 'snow', '(m) s9d anchor: 2027-01-30 → snow (got ' + pk(2027, 1, 30) + ')');
+    ok(pk(2026, 12, 5) === 'sleet', '(m) s9d anchor: 2026-12-05 → sleet, the r22 cold-edge anchor (got ' + pk(2026, 12, 5) + ')');
+    ok(pk(2026, 6, 21) === 'rain', '(m) s9d anchor: 2026-06-21 → rain (got ' + pk(2026, 6, 21) + ')');
+    ok(pk(2026, 6, 21) !== 'snow', '(m) s9d negative control: midsummer is NOT snow');
+
+    // — §9.6 wildlife: the crickets window (0.21, 0.60) + birdK curve anchors
+    const wSummer = C.gate.wildlife(0.30), wWinter = C.gate.wildlife(0.86), wJan = C.gate.wildlife(0.95);
+    ok(wSummer.crickets === true && Math.abs(wSummer.birdK - 1) < 1e-9,
+      '(m) wildlife: high-summer (p=0.30) crickets on, birdK 1.0');
+    ok(wWinter.crickets === false && Math.abs(wWinter.birdK - 2.4) < 1e-9,
+      '(m) wildlife: deep-winter bell center (p=0.86) crickets off, birdK 2.4');
+    ok(C.gate.wildlife(0.21).crickets === false && C.gate.wildlife(0.60).crickets === false
+      && C.gate.wildlife(0.22).crickets === true && C.gate.wildlife(0.59).crickets === true,
+      '(m) wildlife: crickets window is the open interval (0.21, 0.60)');
+    ok(wJan.crickets === false && wJan.birdK > 1,
+      '(m) wildlife: deep-winter (p=0.95) crickets off, birdsong thinned (birdK > 1)');
+
+    // — PURITY GREP over calendar-gate.js (the house comment/string-strip pattern)
+    const gsrc = fs.readFileSync(path.join(__dirname, 'calendar-gate.js'), 'utf8');
+    const gcode = gsrc
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1')
+      .replace(/'(?:\\.|[^'\\])*'/g, "''")
+      .replace(/"(?:\\.|[^"\\])*"/g, '""');
+    ok(!/Date\.now|Math\.random|localStorage|document|window\./.test(gcode),
+      '(m) purity grep: calendar-gate.js has no Date.now / Math.random / localStorage / document / window. in executable code');
   }
 
   /* ── report ── */
