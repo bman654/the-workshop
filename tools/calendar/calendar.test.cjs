@@ -401,16 +401,19 @@ const WING_FIXTURE = [
     const pj = C.seasonPhase(C.jdOfLocalNoon(2026, 6, 21));
     const gsj = C.gate.season(pj);
     ok(gsj.foliage.mix === 0 && gsj.grassMix === 0 && gsj.cool === 0
-      && gsj.bare === 0 && gsj.snow === 0,
+      && gsj.bare === 0 && gsj.snow === 0
+      && gsj.snowCover === 0 && gsj.spring === 0,
       '(m) midsummer identity: every Calendar.gate.season knob === 0 at phase ' + pj.toFixed(5)
-      + ' (dz dead-zone, exact)');
+      + ' (dz dead-zone, exact; r24 snowCover + spring join the exact-zero sweep)');
     // negative control: at the winter-solstice phase the cast is ~fully on
     const pw = C.seasonPhase(C.jdOfLocalNoon(2026, 12, 21));
     ok(C.gate.season(pw).cool > 0.999,
       '(m) negative control: cool > 0.999 at the winter-solstice phase (the stage can move)');
 
     // — s9b foliage-curve continuity over the full 366-day sweep + determinism
+    //   (r24 adds the two new curves: |ΔsnowCover| ≤ .08/day, |Δspring| ≤ .06/day)
     let contOk = true, worstRgb = 0, worstMix = 0, badDay = -1;
+    let coverOk = true, springOk = true, worstCover = 0, worstSpring = 0;
     const t0 = Date.UTC(2026, 0, 1);
     let prev = null;
     for (let k = 0; k < 366; k++) {
@@ -426,11 +429,21 @@ const WING_FIXTURE = [
         const dm = Math.abs(g.foliage.mix - prev.foliage.mix);
         if (dm > worstMix) worstMix = dm;
         if (dm > 0.025) { contOk = false; if (badDay < 0) badDay = k; }
+        const dsc = Math.abs(g.snowCover - prev.snowCover);
+        if (dsc > worstCover) worstCover = dsc;
+        if (dsc > 0.08) { coverOk = false; if (badDay < 0) badDay = k; }
+        const dsp = Math.abs(g.spring - prev.spring);
+        if (dsp > worstSpring) worstSpring = dsp;
+        if (dsp > 0.06) { springOk = false; if (badDay < 0) badDay = k; }
       }
       prev = g;
     }
     ok(contOk, '(m) s9b continuity: |Δrgb| ≤ 5/channel/day (worst ' + worstRgb.toFixed(3)
       + ') · |Δmix| ≤ .025/day (worst ' + worstMix.toFixed(4) + ') over 366 consecutive noons',
+      'first breach day ' + badDay);
+    ok(coverOk && springOk,
+      '(m) s9b r24 curves: |ΔsnowCover| ≤ .08/day (worst ' + worstCover.toFixed(4)
+      + ') · |Δspring| ≤ .06/day (worst ' + worstSpring.toFixed(4) + ') over 366 consecutive noons',
       'first breach day ' + badDay);
     let detOk = true;
     [0.02, 0.10, 0.30, 0.45, 0.60, 0.70, 0.86, 0.95].forEach(function (p) {
@@ -448,6 +461,19 @@ const WING_FIXTURE = [
     }
     ok(coupleOk, '(m) s9d coupling: precipKind ≡ (snow ≥ .5 → snow / [.04,.5) → sleet / else rain) over a 40-pt sweep',
       'first breach probe ' + badP);
+    // r24 — ground-coupling implication: white ground never lies under plain rain
+    //   (one-directional; the dz snap keeps cover 0 on the thin sleet sliver, so the
+    //   converse is NOT asserted). Plus groundSnowCover(0) === 0.
+    let implOk = true, badI = -1;
+    for (let i = 0; i < 40; i++) {
+      const p = i / 40;
+      if (C.gate.groundSnowCover(C.dressing(p).snow) > 0 && C.gate.precipKind(p) === 'rain') {
+        implOk = false; if (badI < 0) badI = i;
+      }
+    }
+    ok(implOk, '(m) s9d implication: groundSnowCover > 0 ⇒ precipKind ≠ rain over a 40-pt sweep',
+      'first breach probe ' + badI);
+    ok(C.gate.groundSnowCover(0) === 0, '(m) s9d: groundSnowCover(0) === 0 (dz exact)');
     function pk(y, m, d) { return C.gate.precipKind(C.seasonPhase(C.jdOfLocalNoon(y, m, d))); }
     ok(pk(2027, 1, 30) === 'snow', '(m) s9d anchor: 2027-01-30 → snow (got ' + pk(2027, 1, 30) + ')');
     ok(pk(2026, 12, 5) === 'sleet', '(m) s9d anchor: 2026-12-05 → sleet, the r22 cold-edge anchor (got ' + pk(2026, 12, 5) + ')');
