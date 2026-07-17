@@ -819,7 +819,8 @@
      reduced-motion = no sway (the boot simply never ticks it → crowns stay upright). */
   var WIND_AMP = { none: 0, light: 1.5, strong: 3.4 };   // peak sway, degrees
   var WIND_DUR = { none: 4, light: 3.6, strong: 2.1 };   // base sway period, seconds
-  S._foliage = [];                  // [{el,px,py,phase,per,heavy}] — swayable crowns
+  S._foliage = [];                  // [{el,px,py,phase,per,heavy,kind,marc,mul}] swayable crowns
+  S._groundSeats = [];              // [{x,y,r}] tree/bush foot rings for snow dressing (§9.4)
   S._windLevel = 'light';
   S._windAmp = WIND_AMP.light;      // current (eased) amplitude
   S._windAmpTarget = WIND_AMP.light;
@@ -851,7 +852,7 @@
     for (var i = 0; i < fol.length; i++) {
       var f = fol[i];
       var omega = twoPi / (S._windDur * f.per);
-      var ang = (amp * 0.62 + amp * 0.5 * Math.sin(t * omega + f.phase)) * f.heavy;
+      var ang = (amp * 0.62 + amp * 0.5 * Math.sin(t * omega + f.phase)) * f.heavy * (f.mul == null ? 1 : f.mul);
       f.el.setAttribute('transform', 'rotate(' + (Math.round(ang * 1000) / 1000) + ' ' + f.px + ' ' + f.py + ')');
     }
   };
@@ -869,6 +870,7 @@
   function drawTrees(parent) {
     var g = group('trees', parent);
     S._foliage.length = 0;            // rebuild the swayable-crown list from scratch
+    S._groundSeats.length = 0;        // + the foot-ring seats (§9.4)
     // LEFT cluster — frames the observatory rise + flanks the cairn slot. Kept OUT
     // of the room-rep slot CORE (x152..308 below y492) so a tall rep isn't crowded:
     // the big tree sits at x96 (crown to ~x150), the others at x250/x348 keep their
@@ -942,6 +944,25 @@
     el('line', { x1: f1f(x - topW * 0.7), y1: f1f(trunkTopY + 4 * sc), x2: f1f(x - rootW * 0.7), y2: f1f(baseY - 6 * sc),
       stroke: BRI, 'stroke-width': '1', opacity: '0.14' }, g);
 
+    // bare-winter ARMATURE (E2, §9.3): 3 rising limbs, each forking once = SIX
+    // 'bare-armature' strokes, opacity 0 (scene-dressing reveals them in winter); into
+    // g so they stand while the crown sways; inert at rest. Left/high, center, right/mid:
+    var ARM = [   // [tipX,tipY, ctrlX,ctrlY, w·sc]
+      [x - crownRX * 0.50, crownCY - crownRY * 0.55, x - crownRX * 0.42, crownCY + crownRY * 0.02, 2.2],
+      [x + crownRX * 0.05, crownCY - crownRY * 0.78, x - crownRX * 0.10, crownCY - crownRY * 0.20, 1.8],
+      [x + crownRX * 0.55, crownCY - crownRY * 0.20, x + crownRX * 0.42, crownCY + crownRY * 0.06, 1.4]
+    ];
+    for (var ai = 0; ai < ARM.length; ai++) {
+      var Aa = ARM[ai], atx = Aa[0], aty = Aa[1];
+      el('path', { d: 'M ' + f1f(x) + ' ' + f1f(trunkTopY) + ' Q ' + f1f(Aa[2]) + ' ' + f1f(Aa[3]) + ' ' + f1f(atx) + ' ' + f1f(aty),
+        fill: 'none', stroke: TRK, 'stroke-width': f1f(Aa[4] * sc), 'stroke-linecap': 'round', 'class': 'bare-armature', opacity: '0' }, g);
+      var fx0 = x + (atx - x) * 0.7, fy0 = trunkTopY + (aty - trunkTopY) * 0.7;   // fork ~0.7 along, ~0.35 len, ~25°
+      var fdx = (atx - x) * 0.35, fdy = (aty - trunkTopY) * 0.35;
+      var frx = fdx * 0.906 - fdy * 0.423, fry = fdx * 0.423 + fdy * 0.906;
+      el('path', { d: 'M ' + f1f(fx0) + ' ' + f1f(fy0) + ' Q ' + f1f(fx0 + frx * 0.5) + ' ' + f1f(fy0 + fry * 0.5) + ' ' + f1f(fx0 + frx) + ' ' + f1f(fy0 + fry),
+        fill: 'none', stroke: TRK, 'stroke-width': f1f(1.0 * sc), 'stroke-linecap': 'round', 'class': 'bare-armature', opacity: '0' }, g);
+    }
+
     // ── FOLIAGE MASS — a single crown <g> (the natural sway pivot) built in layers:
     //    (1) a dark SHADOW belly offset down/forward,
     //    (2) the mid BODY mass in tree.foliage,
@@ -1002,7 +1023,9 @@
     // Bigger trees sway a touch less (heavy = 1/√sc); per-crown period + phase desync.
     S._foliage.push({ el: crown, px: f1f(x), py: f1f(trunkTopY),
       phase: rnd() * Math.PI * 2, per: 0.82 + rnd() * 0.36,
-      heavy: Math.max(0.7, Math.min(1.2, 1 / Math.sqrt(sc))) });
+      heavy: Math.max(0.7, Math.min(1.2, 1 / Math.sqrt(sc))),
+      kind: 'tree', marc: manicured, mul: 1 });
+    S._groundSeats.push({ x: f1f(x), y: f1f(baseY), r: f1f(18 * sc) });
   }
 
   function drawBush(parent, x, baseY, sc) {
@@ -1060,7 +1083,9 @@
     // register the bush crown for wind sway — pivots at the ground line; gentler than a
     // tree (low + springy, close to the ground), with a faster rustle period.
     S._foliage.push({ el: crown, px: f1f(x), py: f1f(baseY),
-      phase: rnd() * Math.PI * 2, per: 0.7 + rnd() * 0.3, heavy: 0.7 });
+      phase: rnd() * Math.PI * 2, per: 0.7 + rnd() * 0.3, heavy: 0.7,
+      kind: 'bush', mul: 1 });                       // marc:false implicit
+    S._groundSeats.push({ x: f1f(x), y: f1f(baseY), r: f1f(14 * sc) });
   }
 
   /* ── LAYER 6 — the room-rep (Cairn) + label, in front of the observatory rise ── */
