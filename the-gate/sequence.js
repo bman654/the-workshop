@@ -77,6 +77,21 @@
       moon: (q.moon != null && q.moon !== '' && !isNaN(+q.moon)) ? Math.max(0, Math.min(1, +q.moon)) : null,
       wx: (['clear', 'cloudy', 'storm'].indexOf(q.wx) >= 0) ? q.wx : null,
       seed: (q.seed != null && q.seed !== '' && !isNaN(+q.seed)) ? (+q.seed) : null,
+      // ?cal=YYYY-MM-DD[THH] — pin the calendar DATE (season phase -> dressing, foliage,
+      // precip kind, wildlife). The THH tail is the front door's air-hour pin; the gate
+      // ACCEPTS and IGNORES it (the gate's hour axis is ?t=) so one URL suffix works
+      // estate-wide. Invalid -> null (live clock). Parity: the front door's edge
+      // range-checks the date IDENTICALLY (malformed month/day -> live clock on EVERY
+      // surface; both then normalize a well-formed-but-unreal day like Feb 31 through the
+      // same Date.UTC), so "one URL suffix" means one BEHAVIOR — the sole designed axis
+      // difference is the THH tail (honored 0-23 on the front door, accepted-ignored here).
+      cal: (function () {
+        var m = /^(\d{4})-(\d{2})-(\d{2})(?:T\d{2})?$/.exec(q.cal || '');
+        if (!m) return null;
+        var y = +m[1], mo = +m[2], d = +m[3];
+        if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+        return { y: y, m: mo, d: d };
+      })(),
       // ?undercroft — TRI-STATE dev override (null = earned-only; 'closed' = force
       // the found-but-sealed doors-shut state; 'open' = force the open hatch). The
       // truthy aliases (1/true/open) map to 'open'; closed/2 map to 'closed';

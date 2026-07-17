@@ -724,6 +724,15 @@
   <script>
   <!-- forge:include ../tools/hours/hours.js -->
   </script>
+  <!-- the calendar cores (E1/E8): calendar.js publishes window.Calendar; calendar-gate.js
+       extends it with Calendar.gate.season / .precipKind / .wildlife. The front door does
+       NOT include calendar-gate.js — its budget is untouched; the gate is the showcase. -->
+  <script>
+  <!-- forge:include ../tools/calendar/calendar.js -->
+  </script>
+  <script>
+  <!-- forge:include ../tools/calendar/calendar-gate.js -->
+  </script>
 
   <!-- ════ gate modules (attach to window.Gate.*) ════ -->
   <script>
@@ -860,6 +869,32 @@
       url.reliquary = 'open';
     }
 
+    // ── THE GATE'S CALENDAR EDGE (E1/E6) — the season's one clock read, frozen ────────
+    var NOW = new Date();                 // ONE wall-clock read for every SEASON consumer;
+                                          // the moon-phase line below is EDITED to consume
+                                          // this same read (was: moonPhase(julianDate(new
+                                          // Date()))) so season and moon can never straddle
+                                          // midnight against each other. Gate.timeofday keeps
+                                          // its OWN clock read for band/doy (an independent,
+                                          // already-shipped axis this design does NOT route
+                                          // through the season edge.)
+    Gate.season = null;                   // null => every consumer degrades to the shipped
+                                          // scene (the Hours-envelope try/catch discipline) —
+                                          // rain stays rain, no cast, no dressing.
+    try {
+      if (typeof Calendar !== 'undefined' && Calendar.gate) {
+        var cd = url.cal || { y: NOW.getFullYear(), m: NOW.getMonth()+1, d: NOW.getDate() };
+        var sp = Calendar.seasonPhase(Calendar.jdOfLocalNoon(cd.y, cd.m, cd.d));   // §1.3
+        Gate.season = {
+          phase:    sp,
+          dress:    Calendar.gate.season(sp),     // foliage turn · cool cast · bare · snow
+          kind:     Calendar.gate.precipKind(sp), // 'rain' | 'sleet' | 'snow'  (E4)
+          wildlife: Calendar.gate.wildlife(sp),   // crickets gate · birdsong cadence (E5)
+          date: cd, pinned: !!url.cal
+        };
+      }
+    } catch (e) { Gate.season = null; }
+
     // ── init subsystems with any pins ────────────────────────────────────────
     Gate.timeofday.init({ pin: url.t });
     Gate.weather.init({ pin: url.wx, seed: url.seed });
@@ -871,7 +906,7 @@
     // lit side ('right' waxing / 'left' waning). The ?moon=<0..1> dev pin OVERRIDES
     // the computed fraction (and re-derives its lit side) so a preview can sweep
     // new→half→full at will; an explicit ?moon ALWAYS wins over the clock value.
-    var ph = moonPhase(julianDate(new Date()));
+    var ph = moonPhase(julianDate(NOW));   // shares THE GATE'S CALENDAR EDGE clock read
     var term = terminator(ph.illuminatedFraction, ph.waxing);
     var moonFrac = ph.illuminatedFraction, moonSide = term.litSide;
     if (url.moon != null) {                          // ?moon=<0..1> dev override
@@ -906,6 +941,8 @@
       var band = Gate.timeofday.band();
       var B = currentB();
       var out = CM.resolve(band, B);
+      if (Gate.season && Gate.season.dress)                                    // season BEFORE reps
+        CM.applySeasonColors(out, band, B, Gate.season.dress);
       if (repPick && repPick.repColors) CM.applyRepColors(out, band, B, repPick.repColors);
       return out;
     }

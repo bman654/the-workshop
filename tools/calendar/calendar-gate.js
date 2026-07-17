@@ -87,5 +87,5 @@
     };
   };
 
-  if (typeof module !== 'undefined' && module.exports) module.exports = Calendar;
+  if (typeof module !== 'undefined' && module.exports) { module.exports = Calendar; }
 }(this));

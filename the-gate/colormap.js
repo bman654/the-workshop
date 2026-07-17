@@ -109,6 +109,7 @@
       'hill':              '#5d7e44',
       'tree.foliage':      '#4f7b3a',
       'tree.trunk':        '#5a4630',
+      'snow.drift':        '#eef3fa',
       'stone':             '#9aa0a8',
       'mist':              '#dfe8f2',
       'rep.swatch1':       '#9aa0a8',
@@ -133,6 +134,7 @@
       'hill':              '#5a5a3c',
       'tree.foliage':      '#586537',
       'tree.trunk':        '#4f3c2c',
+      'snow.drift':        '#e9d9cb',
       'stone':             '#9a8e8a',
       'mist':              '#e7c6b0',
       'rep.swatch1':       '#9a8e8a',
@@ -157,6 +159,7 @@
       'hill':              '#2c3742',
       'tree.foliage':      '#2c3a40',
       'tree.trunk':        '#2a2620',
+      'snow.drift':        '#b6c2d4',
       'stone':             '#6a7079',
       'mist':              '#7c8aa0',
       'rep.swatch1':       '#6a7079',
@@ -278,6 +281,62 @@
     }
     return out;
   };
+
+  /* ── applySeasonColors: the season stage (E8, §9.2) — the exact sibling of
+     applyRepColors. gs = Calendar.gate.season(phase), passed in by the boot (colormap
+     stays Calendar-free — it receives numbers, like it receives repColors). Re-derives
+     each touched role from the BASE palette hex: mix in hex space FIRST, dim(B) SECOND. */
+  var SEASON_CAST_K = {                       // per-role strength of the winter cast (E8)
+    'sky.top':.16, 'sky.horizon':.16, 'mist':.16,               // the light itself
+    'manor.wall':.10, 'road':.10, 'stone':.10, 'greenhouse.glass':.10,
+    'grass':.12, 'hill':.12,                                    // ground (also turns, below)
+    'manor.roof':.06, 'manor.trim':.06, 'observatory.dome':.06, 'observatory.body':.06,
+    'greenhouse.frame':.06, 'gate.iron':.06, 'tree.trunk':.06,  // structure: a touch
+    'brass.stroke':.05, 'brass.bright':.05                      // the estate's metal: least
+    // absent = untouched: tree.foliage (owned by the turn), snow.drift, rep.swatch*
+    //          (a rep's colors are the rep's own statement), and every GLOW role —
+    //          emissives are palette-immune by the file's own contract.
+  };
+  var SEASON_BAND_K = { day:1.0, dusk:0.7, night:0.35 };  // moonlight drains color —
+                                                          // scotopic honesty; also keeps the
+                                                          // authored night palette's cool
+                                                          // register in charge at night
+  CM.applySeasonColors = function (out, band, B, gs) {
+    if (!out || !gs) return out;
+    var pal = PALETTES[String(band||'night').toUpperCase()] || PALETTES.NIGHT;
+    var bk = SEASON_BAND_K[band] || 1.0;
+    // (1) the FOLIAGE TURN (E2): trees, bushes, tufts — all read tree.foliage
+    if (gs.foliage && gs.foliage.mix > 0)
+      out['--tree.foliage'] = dim(mixHex(pal['tree.foliage'], gs.foliage.rgb,
+                                         gs.foliage.mix * bk), B);
+    // (2) the GROUND turn + the COOL CAST, per SEASON_CAST_K
+    for (var role in SEASON_CAST_K) {
+      if (!Object.prototype.hasOwnProperty.call(pal, role)) continue;
+      var c = pal[role];
+      if ((role === 'grass' || role === 'hill') && gs.grassMix > 0)
+        c = mixHex(c, gs.straw, gs.grassMix * bk);               // straw before the cast
+      var k = gs.cool * SEASON_CAST_K[role] * bk;
+      if (k > 0) c = mixHex(c, gs.cast, k);
+      if (c !== pal[role]) out['--' + role] = dim(c, B);
+    }
+    return out;
+  };
+  // mixHex(hex, rgbTarget, k): integer-rounded RGB lerp. CONTRACT: arg 1 is a '#rrggbb'
+  // STRING, arg 2 an [r,g,b] TRIPLE, and it RETURNS a '#rrggbb' STRING (its output is
+  // re-fed to mixHex and to dim(), and dim's hexToRgb parses '#rrggbb' ONLY). The
+  // ROUNDING is binding (Math.round per channel, so a sub-half-unit shift is a true
+  // no-op and the identity anchor is exact). hexToRgb is the file's OWN parser (:33) and
+  // returns an {r,g,b} OBJECT.
+  function mixHex(hex, t, k) {
+    var c = hexToRgb(hex);
+    var r = Math.round(c.r + (t[0] - c.r) * k),
+        g = Math.round(c.g + (t[1] - c.g) * k),
+        b = Math.round(c.b + (t[2] - c.b) * k);
+    return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+  }
+  // No k clamp is needed: both call sites keep k in [0,1] (max mix .85; cool*K*bk <= .16)
+  // and both endpoints are already integers in [0,255], so r/g/b are too — the (1<<24)
+  // bit-trick re-emit is exact for them.
 
   /* ── apply: write a var-map onto an element's inline style ──────────────────── */
   CM.apply = function (el, vars) {
