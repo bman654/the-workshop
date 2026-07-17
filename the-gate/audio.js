@@ -128,6 +128,31 @@
   // rain INTENSITY only exists in storm.
   function rainIntensityFor(w) { return w === 'storm' ? 0.9 : 0; }
 
+  // the SEASON, read live (null off the calendar, like weatherNow/bandNow).
+  function seasonNow() { try { return Gate.season || null; } catch (e) { return null; } }
+
+  /* A.plan(band, w, season): ONE pure gating policy the selftest table-checks
+     (§9.6). Numbers in, a truth-row out; every branch routes through it. */
+  A.plan = function (band, w, season) {
+    var storming = (w === 'storm');                        // the CLOUD
+    var snowing  = storming && !!season && season.kind === 'snow';
+    var wl = (season && season.wildlife) || { crickets: true, birdK: 1 };
+    return {
+      rain:   storming && !snowing,      // rain loop — snow-hush gate (E4)
+      roll:   storming && !snowing,      // distant rolling thunder rides with it
+      chimes: !storming,                 // chimes gate on the CLOUD, as shipped
+      wind:   snowing ? 0.35             // snowfall STILLS the air (E4/B7): below
+              : windStrengthFor(w),      // even cloudy .5 — quiet in FACT
+      creature: storming ? null          // creatures gate on the CLOUD
+              : band === 'day'  ? 'birds'
+              : band === 'dusk' ? (wl.crickets ? 'crickets' : null)   // winter dusk silent
+              : 'owl',                   // owls call year-round
+      birdMin: Math.round(10 * wl.birdK),  // birdsong THINS: interval widens
+      birdMax: Math.round(26 * wl.birdK),  //   (10–26 s → 24–62 s deep winter)
+      thunder: !snowing                  // ENFORCED upstream at the strike (§9.5)
+    };
+  };
+
   /* ── unlock(): first opening click. Create/resume the ctx, publish it, build
      the master gain, start the ambient bed. Idempotent. ──────────────────── */
   A.unlock = function () {
@@ -254,24 +279,22 @@
   /* ── ambient(): the live ambient mixer. Re-evaluated on weather change. ──── */
   A.ambient = function () {
     if (!ctx) return;     // nothing until unlock()
-    var w = weatherNow();
-    var raining = (w === 'storm');
+    // ONE plan per call (§9.6): every branch routes through it, so the
+    // season/weather gating is a single table-checkable policy.
+    var P = A.plan(bandNow(), weatherNow(), seasonNow());
 
-    // RAIN — only in storm, scaled by intensity. Cross-fade in/out. The rain is
-    // the brightest, highest-RMS bed (the dominant masker of the clap's crack
-    // band), so it sits a touch under its old level (0.85 → 0.78) to give the
-    // strike room; the sidechain duck in thunder() does the rest.
-    if (raining) {
-      startTexture('rain', 'rain', { intensity: rainIntensityFor(w) }, RAIN_BUS);
+    // RAIN — the storm loop, and NEVER under snowfall (the snow-hush gate, E4).
+    if (P.rain) {
+      startTexture('rain', 'rain', { intensity: rainIntensityFor(weatherNow()) }, RAIN_BUS);
     } else {
       killTexture('rain', 0.9);
     }
 
-    // WIND — always present, strength clear < cloudy < storm.
-    startTexture('wind', 'wind', { strength: windStrengthFor(w) }, WIND_BUS);
+    // WIND — always present; snowfall stills it to a low breath (P.wind, E4).
+    startTexture('wind', 'wind', { strength: P.wind }, WIND_BUS);
 
-    // WINDCHIMES — occasional, ONLY when NOT raining (clear / cloudy).
-    if (!raining) {
+    // WINDCHIMES — occasional, ONLY off the storm CLOUD.
+    if (P.chimes) {
       scheduleSparse('chimes', 14, 34, function () {
         if (weatherNow() === 'storm') return;             // re-check at fire time
         playOnce('windchimes', { dur: 6 }, 0.5);
@@ -280,9 +303,8 @@
       clearSparse('chimes');
     }
 
-    // DISTANT ROLLING THUNDER — occasional, ONLY in storm, at a distant/quiet
-    // level (distinct from the loud per-strike thunder() on the lightning edge).
-    if (raining) {
+    // DISTANT ROLLING THUNDER — with the rain family (P.roll); silent under snow.
+    if (P.roll) {
       scheduleSparse('roll', 18, 40, function () {
         if (weatherNow() !== 'storm') return;
         playOnce('thunderroll', { dur: 5, distance: 'distant' }, 0.5);
@@ -291,23 +313,14 @@
       clearSparse('roll');
     }
 
-    // CREATURE ROTATION — exactly ONE creature voice at a time, picked by the
-    // time-of-day BAND, and ONLY when it is NOT raining (clear OR cloudy; silent
-    // in storm). The band's onChange already re-calls ambient(), so a band change
-    // cross-fades the creatures (the old key's sparse timer is cleared, the new
-    // key's starts). Each fire re-checks weather+band so a change mid-interval is
-    // honoured.
-    //   day   → birdsong   (broadened from clear-only to any non-storm)
-    //   dusk  → crickets
-    //   night → owl
-    var band = bandNow();
-    var creature = !raining
-      ? (band === 'day' ? 'birds' : band === 'dusk' ? 'crickets' : 'owl')
-      : null;
+    // CREATURE ROTATION — one voice, picked by band + gated on the CLOUD/season
+    // (P.creature: 'birds'/'crickets'/'owl' or null — winter dusk silent). Each
+    // fire re-checks weather+band verbatim.
+    var creature = P.creature;
 
-    // birdsong (day): clear/cloudy, daytime.
+    // birdsong (day): the interval widens as winter thins the song (P.birdMin/Max).
     if (creature === 'birds') {
-      scheduleSparse('birds', 10, 26, function () {
+      scheduleSparse('birds', P.birdMin, P.birdMax, function () {
         if (weatherNow() === 'storm' || bandNow() !== 'day') return;
         playOnce('birdsong', { dur: 6 }, 0.6);
       });
@@ -422,6 +435,14 @@
      null before unlock(). Lets the e2e harness assert mute forces the master to
      0 and unmute restores it — without reaching into module internals. ─────── */
   A._masterGainValue = function () { return master ? master.gain.value : null; };
+
+  /* ── read-only QA probe: the current gain of ONE ambient sub-bus (or null if
+     never built / faded out). The master hook can't tell rain from wind, so the
+     snow-hush probe (§9.6) reads BUS truth: under snow rain null-or-≈0, wind > 0.
+     No new bus, no new ws: key. ─────────────────────────────────────────────── */
+  A._busGainValue = function (key) {
+    return (ambBus[key] && ambBus[key].gain) ? ambBus[key].gain.value : null;
+  };
 
   Gate.audio = A;
 

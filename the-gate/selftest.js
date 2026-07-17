@@ -315,6 +315,108 @@
       check('determinism: R.pick() stable within a load', false, '[Gate.rooms unavailable]');
     }
 
+    /* ── 5. THE SEASONS (§9.8 s9a–s9f) — render-blind, a negative control per family ── */
+    var C = root.Calendar, CM = Gate.colormap, A = Gate.audio, SD = Gate.scenedressing;
+
+    /* s9a — midsummer identity + turned-phase color validity */
+    if (!C || !C.gate || !CM) { check('s9a: gate+colormap present', false, ''); }
+    else {
+      var pj = C.seasonPhase(C.jdOfLocalNoon(2026, 6, 21)), gj = C.gate.season(pj);
+      check('s9a: midsummer knobs all 0', gj.foliage.mix === 0 && gj.grassMix === 0 && gj.cool === 0 && gj.bare === 0 && gj.snow === 0, '');
+      var idOk = true, bx;
+      for (bx = 0; bx < 3; bx++) { var b = S_BANDS[bx]; if (JSON.stringify(CM.applySeasonColors(CM.resolve(b, 1), b, 1, gj)) !== JSON.stringify(CM.resolve(b, 1))) idOk = false; }
+      check('s9a: applySeasonColors identity @midsummer (3 bands)', idOk, '');
+      var gsl = C.gate.season(C.seasonPhase(C.jdOfLocalNoon(2026, 12, 21))), mv = JSON.stringify(CM.applySeasonColors(CM.resolve('day', 1), 'day', 1, gsl)) !== JSON.stringify(CM.resolve('day', 1));
+      check('s9a NEG: solstice moves color + cool>.999', mv && gsl.cool > 0.999, '[cool=' + gsl.cool.toFixed(4) + ']');
+      var gw = C.gate.season(C.seasonPhase(C.jdOfLocalNoon(2027, 1, 30))), vOk = true, vx, vk;
+      for (vx = 0; vx < 3; vx++) { var vb = S_BANDS[vx], vm = CM.applySeasonColors(CM.resolve(vb, 1), vb, 1, gw); for (vk in vm) if (!s_rgb(vm[vk])) vOk = false; }
+      var bs = s_rgb(CM.resolve('day', 1)['--tree.foliage']), em = s_rgb(CM.applySeasonColors(CM.resolve('day', 1), 'day', 1, gw)['--tree.foliage']), wa = bs && [0, 1, 2].map(function (c) { return Math.round(bs[c] + (gw.foliage.rgb[c] - bs[c]) * gw.foliage.mix); });
+      check('s9a: winter colors valid rgb + day foliage==lerp (no mixHex)', vOk && !!em && !!wa && em[0] === wa[0] && em[1] === wa[1] && em[2] === wa[2], '');
+    }
+
+    /* s9b — foliage-curve determinism + continuity (40-day, day-equivalent sweep) */
+    if (!C || !C.gate) { check('s9b: gate present', false, ''); }
+    else {
+      var dOk = true;
+      [.02, .10, .30, .45, .60, .70, .86, .95].forEach(function (p) { if (JSON.stringify(C.gate.season(p)) !== JSON.stringify(C.gate.season(p))) dOk = false; });
+      check('s9b: season double-eval identical (8 phases)', dOk, '');
+      var cOk = true, wr = 0, wm = 0, pg = null, pd = 0, sx, t0 = Date.UTC(2026, 0, 1);
+      for (sx = 0; sx <= 40; sx++) {
+        var dy = Math.round(sx * 366 / 40), dt = new Date(t0 + dy * 864e5), g = C.gate.season(C.seasonPhase(C.jdOfLocalNoon(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate())));
+        if (pg) { var gp = (dy - pd) || 1, cc; for (cc = 0; cc < 3; cc++) { var dr = Math.abs(g.foliage.rgb[cc] - pg.foliage.rgb[cc]) / gp; if (dr > wr) wr = dr; if (dr > 5) cOk = false; } var dm = Math.abs(g.foliage.mix - pg.foliage.mix) / gp; if (dm > wm) wm = dm; if (dm > .025) cOk = false; }
+        pg = g; pd = dy;
+      }
+      check('s9b: |drgb|<=5 |dmix|<=.025 per day-equiv (40pt)', cOk, '[' + wr.toFixed(2) + '/' + wm.toFixed(4) + ']');
+    }
+
+    /* s9c — snow dressing: the drawn inventory matches the pure plan */
+    if (!SD || !SD.plan || !SD.count) { check('s9c: scenedressing present', false, ''); }
+    else {
+      var sn = (Gate.season && Gate.season.dress) ? +Gate.season.dress.snow : 0, p0 = SD.plan(0), p5 = SD.plan(.5), p9 = SD.plan(.95);
+      check('s9c: count()==plan(snow)', JSON.stringify(SD.count()) === JSON.stringify(SD.plan(sn)), '[snow=' + sn.toFixed(3) + ']');
+      check('s9c: plan(0)=0, plan(.95)=29, all<=40', s_tot(p0) === 0 && s_tot(p9) === 29 && s_tot(p5) <= 40, '[' + s_tot(p0) + '/' + s_tot(p5) + '/' + s_tot(p9) + ']');
+      var sv = S && S.refs && S.refs.svg, rOk = true;
+      if (sv) { var rg = sv.querySelector('#dress-snow-roofs'), rk = rg ? rg.childNodes : [], ri; for (ri = 0; ri < rk.length; ri++) { var e = s_ext(rk[ri]); if (e && (e.y > 592 || e.x < 1232)) rOk = false; } }
+      check('s9c: drawn snow-roofs y<=592 / x>=1232', rOk, '');
+      check('s9c NEG: plan(0)!=plan(.95)', JSON.stringify(p0) !== JSON.stringify(p9), '');
+    }
+
+    /* s9d — precip-phase thresholds couple to the snow curve */
+    if (!C || !C.gate || typeof C.dressing !== 'function') { check('s9d: precip present', false, ''); }
+    else {
+      var kOk = true, di;
+      for (di = 0; di < 40; di++) { var pp = di / 40, sd = C.dressing(pp).snow, kd = C.gate.precipKind(pp); if (kd !== (sd >= .5 ? 'snow' : sd >= .04 ? 'sleet' : 'rain')) kOk = false; }
+      check('s9d: precipKind couples to snow (40pt sweep)', kOk, '');
+      var pk = function (y, m, d) { return C.gate.precipKind(C.seasonPhase(C.jdOfLocalNoon(y, m, d))); };
+      check('s9d anchors: 01-30 snow, 12-05 sleet, 06-21 rain', pk(2027, 1, 30) === 'snow' && pk(2026, 12, 5) === 'sleet' && pk(2026, 6, 21) === 'rain', '');
+      check('s9d NEG: midsummer NOT snow', pk(2026, 6, 21) !== 'snow', '');
+    }
+
+    /* s9e — the audio gating truth-table (over the pure A.plan) */
+    if (!A || !A.plan || !C || !C.gate) { check('s9e: audio.plan+gate present', false, ''); }
+    else {
+      var se = function (y, m, d) { var p = C.seasonPhase(C.jdOfLocalNoon(y, m, d)); return { kind: C.gate.precipKind(p), wildlife: C.gate.wildlife(p) }; };
+      var wi = se(2027, 1, 30), su = se(2026, 6, 21), h = A.plan('night', 'storm', wi), lv = A.plan('night', 'storm', su), wd = A.plan('day', 'clear', wi);
+      check('s9e: (storm,snow) hush rain/roll/thunder off, creature null, wind .35', h.rain === false && h.roll === false && h.thunder === false && h.creature === null && h.wind === 0.35, '');
+      check('s9e: (storm,rain) rain+thunder on, wind 1.0 (live control)', lv.rain === true && lv.thunder === true && lv.wind === 1, '');
+      check('s9e: dusk winter->null, dusk summer->crickets, night->owl', A.plan('dusk', 'clear', wi).creature === null && A.plan('dusk', 'clear', su).creature === 'crickets' && A.plan('night', 'clear', su).creature === 'owl', '');
+      check('s9e: (day, deep winter) birds, birdMin 24 / birdMax 62', wd.creature === 'birds' && wd.birdMin === 24 && wd.birdMax === 62, '[' + wd.birdMin + '/' + wd.birdMax + ']');
+      var nc = A.plan('day', 'clear', null), ns = A.plan('day', 'storm', null);
+      check('s9e NEG: season=null -> shipped (clear birds 10/26 wind .2; storm rain wind 1)', nc.creature === 'birds' && nc.birdMin === 10 && nc.birdMax === 26 && nc.wind === 0.2 && ns.rain === true && ns.wind === 1, '');
+    }
+
+    /* s9f — the bare winter is WIRED, not just computed (kind/marc + DOM opacities) */
+    if (!S || !S._foliage || !SD || !SD.TUNE) { check('s9f: foliage+TUNE present', false, ''); }
+    else {
+      var fl = S._foliage, T = SD.TUNE, fkOk = true, mc = 0, tr = 0, fi;
+      for (fi = 0; fi < fl.length; fi++) { var fk = fl[fi].kind; if (fk !== 'tree' && fk !== 'bush') fkOk = false; if (fk === 'tree') tr++; if (fl[fi].marc === true) mc++; }
+      check('s9f: every entry kind in {tree,bush}, exactly 2 marc', fkOk && mc === 2, '[marc=' + mc + ']');
+      var ba = (Gate.season && Gate.season.dress) ? +Gate.season.dress.bare : 0;
+      if (ba > 0) {
+        var mOk = true, aOk = true, crOk = true, ac = 0, fj, aj;
+        for (fj = 0; fj < fl.length; fj++) {
+          var fo = fl[fj], bt = ba * (1 - (fj < S_JIT.length ? S_JIT[fj] : 0));
+          if (Math.abs(fo.mul - (1 - 0.7 * bt)) > 1e-9) mOk = false;
+          var fd = fo.marc ? T.crownFadeMarc : (fo.kind === 'bush' ? T.crownFadeBush : T.crownFadeTree);
+          if (fo.el && fo.el.getAttribute('opacity') !== (1 - fd * bt).toFixed(3)) crOk = false;
+          if (fo.kind === 'tree' && fo.el && fo.el.parentNode) { var ar = fo.el.parentNode.querySelectorAll('.bare-armature'), ao = (T.armOpacity * bt).toFixed(3); ac += ar.length; for (aj = 0; aj < ar.length; aj++) if (ar[aj].getAttribute('opacity') !== ao) aOk = false; }
+        }
+        check('s9f: mul==1-.7*bareT per entry (BARE_JIT oracle)', mOk, '');
+        check('s9f: crown opacity==1-FADE*bareT per entry', crOk, '');
+        check('s9f: armature opacity==armOpacity*bareT per tree', aOk, '');
+        check('s9f: .bare-armature count==6x trees', ac === 6 * tr, '[' + ac + '=6x' + tr + ']');
+      } else {
+        var reOk = true, rj, rk2;
+        for (rj = 0; rj < fl.length; rj++) {
+          var f2 = fl[rj];
+          if (f2.mul !== 1) { reOk = false; break; }
+          if (f2.el && f2.el.hasAttribute('opacity')) { reOk = false; break; }
+          if (f2.kind === 'tree' && f2.el && f2.el.parentNode) { var ra = f2.el.parentNode.querySelectorAll('.bare-armature'); for (rk2 = 0; rk2 < ra.length; rk2++) if (ra[rk2].getAttribute('opacity') !== '0') reOk = false; }
+        }
+        check('s9f: REST mul 1, crown opacity absent, armatures 0 (identity pin)', reOk, '');
+      }
+    }
+
     var passed = 0;
     for (var i = 0; i < results.length; i++) if (results[i].pass) passed++;
     return { pass: passed === results.length, total: results.length, passed: passed, results: results };
@@ -326,6 +428,13 @@
   }
   function fmt(n) { return typeof n === 'number' ? n.toFixed(6) : String(n); }
   function astName(a) { return a === null ? 'null' : (a && a.name ? '"' + a.name + '"' : String(a)); }
+
+  /* ── season selftest helpers (s9a–s9f, §9.8); terse for the itemized byte budget ── */
+  var S_BANDS = ['day', 'dusk', 'night'];
+  var S_JIT = [0, .12, .05, .09, .14, .03, .07, .11];   // §9.3 authored BARE_JIT (test oracle)
+  function s_rgb(s) { var m = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec('' + (s == null ? '' : s)); if (!m) return null; var t = [+m[1], +m[2], +m[3]], i; for (i = 0; i < 3; i++) if (!(t[i] >= 0 && t[i] <= 255)) return null; return t; }
+  function s_tot(p) { var n = 0, a, b; for (a in p) for (b in p[a]) n += p[a][b]; return n; }
+  function s_ext(o) { if (!o || !o.getAttribute) return null; if ((o.tagName || '').toLowerCase() === 'ellipse') return { x: +o.getAttribute('cx') - +o.getAttribute('rx'), y: +o.getAttribute('cy') + +o.getAttribute('ry') }; var d = o.getAttribute('d'); if (!d) return null; var u = d.match(/-?\d+(\.\d+)?/g) || [], x = 1 / 0, y = -1 / 0, i; for (i = 0; i + 1 < u.length; i += 2) { if (+u[i] < x) x = +u[i]; if (+u[i + 1] > y) y = +u[i + 1]; } return { x: x, y: y }; }
 
   /* ════════════════════════════════════════════════════════════════════════════
      DOM CHIP — the small brass pill. Subtle at rest (low opacity), brightens on
