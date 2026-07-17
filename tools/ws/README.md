@@ -7,6 +7,8 @@ decide what's unlocked. Full convention: [`/UNLOCK.md`](../../UNLOCK.md).
 This used to be copy-pasted into every page. It's now **one module, inlined via
 forge** — shipped `.html` files stay self-contained, but the source lives here.
 
+**The PREF namespace.** `ws:pref:air — the ambient score's arm choice ('1' armed). The PREF trio is now: muted (audibility, estate-wide), reduced-motion (stillness), air (the bed's existence). Independent axes; honor each separately. The air never autoplays: arming is remembered, sounding still requires a gesture per page-load.`
+
 ## Use it in a page (the pattern)
 
 1. Author the page as `index.src.html`. Inside a `<script>` block (early enough
