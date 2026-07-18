@@ -94,6 +94,10 @@ export const INTERNAL = [
   { hub: 'strange-garden', rule: 'pieces-dir', dir: 'strange-garden/pieces', kind: 'piece' },
   { hub: 'cavern',       rule: 'internal-links', file: 'cavern/index.html', firstClass: ['bench'], kind: 'bench' },
   { hub: 'the-barrel-house', rule: 'internal-links', file: 'the-barrel-house/index.html', firstClass: ['card'], kind: 'exhibit' },
+  // `flat` — explicit visitor leaf pages that live DIRECTLY in a hub dir (not a
+  // subdir, not in a js-manifest), so no scrape rule can find them. hours/almanac.html
+  // (the Almanac bench, WS4) is the first: a sibling leaf of the-hours.html.
+  { hub: 'hours', rule: 'flat', files: ['hours/almanac.html'], kind: 'bench' },
 ];
 
 /* ── STRAYS: the R3 re-homing table (DESIGN §7.1 R3) ──────────────────────────

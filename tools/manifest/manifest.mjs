@@ -178,6 +178,10 @@ function extractInternal(row) {
         out.push({ name: readName(row.hub + '/' + sub), href: row.hub + '/' + sub + '/index.html', kind: row.kind });
       }
     }
+  } else if (row.rule === 'flat') {
+    // flat leaf pages: explicit visitor pages that live directly in a hub dir (not a
+    // subdir, not a js-manifest entry). Named from the page's own <h1>/<title>.
+    for (const href of row.files) out.push({ name: readName(href), href, kind: row.kind });
   }
   // §6.2 hard error: every extracted href must exist on disk (an exact file for
   // js-manifest/pieces-dir; internal-links resolves to a subdir index).
