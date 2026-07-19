@@ -166,6 +166,42 @@ const PLANT_PAGE = '__negctl_pages__/nowhere/index.html';   // resolves to NO ro
   ok(failedLoud, 'CLI `--check --plant-page=…` exits non-zero (FAILS LOUD)');
   ok(named, 'CLI failure output names the planted page'); }
 
+/* ── (7) the §6.5 BOTH-OR-NEITHER + SAME-LOCKS laws ───────────────────────────── */
+{ // live repo: every LOCKS descriptor proven ≡ ws.js; every place-secret catalogued
+  // under its own reveal-lock; every catalogued page referenced by another page.
+  ok(live.lockDrift.length === 0, 'live repo: zero lock drift vs ws.js (' + live.lockDrift.join('; ') + ')');
+  ok(live.secretFaults.length === 0, 'live repo: secret-path audit clean (' + live.secretFaults.join('; ') + ')');
+  ok(live.unreachable.length === 0, 'live repo: every catalogued page reachable (' + live.unreachable.join(', ') + ')');
+  // the re-gated quickening: the catalog lock is the PATH lock, not the visit-proxy
+  let quick = null;
+  for (const d of live.manifest.districts) for (const r of d.rooms) {
+    for (const ex of r.exhibits) if (ex.href === 'sound-garden/quickening.html') quick = ex;
+  }
+  ok(!!quick && quick.lockId === 'quickening' && quick.hidden === true
+    && JSON.stringify(quick.lock) === JSON.stringify({ all: ['ws:seen:game-of-life', 'ws:seen:lattice'] }),
+    'quickening carries its true PATH lock (game-of-life && lattice), not a visit-proxy (got ' + JSON.stringify(quick && quick.lock) + ')');
+  // the 9 Undercroft place-secrets are enrolled, each hidden with a lock
+  const uc = [];
+  for (const d of live.manifest.districts) for (const r of d.rooms) {
+    for (const ex of r.exhibits) if (ex.href.startsWith('undercroft/')) uc.push(ex);
+  }
+  ok(uc.length === 9 && uc.every((e) => e.hidden === true && e.lock && e.lockId),
+    'the 9 Undercroft place-secrets are catalogued hidden+locked (got ' + uc.length + ')'); }
+
+/* ── (7-neg) the §6.5 failure modes are LOUD ──────────────────────────────────── */
+{ const base = { manifest: deepClone(live.manifest), unclaimed: [], doubleClaimed: [], unclaimedPages: [], denyUnused: [] };
+  const r1 = evaluate({ ...base, lockDrift: ['LOCKS["x"] ≠ ws.js'] }, committedJson, committedTallies);
+  ok(!r1.ok && r1.failures.some((f) => f.includes('LOCK DRIFT')), 'lock drift FAILS loud');
+  const r2 = evaluate({ ...base, secretFaults: ['place secret "y" is NOT catalogued'] }, committedJson, committedTallies);
+  ok(!r2.ok && r2.failures.some((f) => f.includes('SECRET-PATH AUDIT') && f.includes('"y"')), 'a secret-path fault FAILS naming the secret');
+  const r3 = evaluate({ ...base, unreachable: ['ghost/index.html'] }, committedJson, committedTallies);
+  ok(!r3.ok && r3.failures.some((f) => f.includes('UNREACHABLE') && f.includes('ghost/index.html')), 'an unreachable entry FAILS by name'); }
+{ // REAL wiring: a planted sub-bench is auto-enrolled but NO page references it —
+  // the reachability arm must flag exactly that newcomer.
+  const planted = build({ extraPages: ['conservatory/__negctl_bench__/index.html'] });
+  ok(planted.unreachable.includes('conservatory/__negctl_bench__/index.html'),
+    'the reachability arm flags an enrolled page nothing links (both-or-neither, catalog side)'); }
+
 /* ── (5) the depth-tally projection (§6.3 consumer 2) is checked too ──────────── */
 { // a stale tallies file (a district count nudged) is caught
   const staleTallies = JSON.parse(committedTallies);

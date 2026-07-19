@@ -118,18 +118,83 @@ export const INTERNAL = [
   { hub: 'museum', rule: 'flat', kind: 'exhibit', files: ['museum/ages.html'] },
   // the Strange Garden's field-notes journal (real visitor reading, own page).
   { hub: 'strange-garden', rule: 'flat', kind: 'exhibit', files: ['strange-garden/field-notes.html'] },
-  // the sealed room's diary — a hidden-until-found metagame page. It drops its own
-  // `ws:seen:the-mere` breadcrumb, so it enrolls GATED on that key (+hidden): the
-  // catalog carries it but indexes it only once the visitor has already found it
-  // (the §4.4 lock-parity discipline — present-but-hidden, never a spoiler).
+  // ── the SECRET places (both-or-neither / same-locks law, §6.5) ──────────────
+  // Every entry below is a walkable page a visitor reaches through a REVEAL-LOCKED
+  // link (the Undercroft's niches, ws.js WS.SECRETS). Each enrolls hidden with
+  // `lock: '<ws-secret-id>'` — a reference into the LOCKS table below, the SAME
+  // predicate that reveals the walkable link — so the catalog shows an entry
+  // exactly when the visitor could walk to it, never before, never later. The
+  // manifest gate PROVES each LOCKS descriptor equivalent to the live ws.js
+  // predicate, so a ws.js change that drifts a lock fails the build by name.
+  // the sealed room's diary — reached from the Reliquary annex + the Undercroft
+  // niche, both revealed on its own grand key.
   { hub: 'the-reliquary', rule: 'flat', kind: 'exhibit', files: ['the-reliquary/the-mere.html'],
-    gate: 'ws:seen:the-mere', hidden: true },
-  // the Living Lattice — an Undercroft-reached secret that lives in the Sound Garden. It
-  // DROPS its own `ws:seen:quickening` breadcrumb (quickening.src.html:1216), so — exactly
-  // as the-mere — it enrolls GATED+hidden: present in the volume, indexed only once found.
+    lock: 'the-mere' },
+  // the Living Lattice — the Undercroft's quickening niche links it once the
+  // visitor has met BOTH ingredients (game-of-life + lattice): the true PATH lock
+  // (the old ws:seen:quickening gate was a visit-proxy — you could walk to it
+  // before the catalog admitted it existed).
   { hub: 'sound-garden', rule: 'flat', kind: 'bench', files: ['sound-garden/quickening.html'],
-    gate: 'ws:seen:quickening', hidden: true },
+    lock: 'quickening' },
+  // the Undercroft's own earned rooms — each niche reveals its stair-level door on
+  // the predicate named here (the room card itself additionally sits behind the
+  // Undercroft's ROOM_LOCK, so nothing shows before the way down is even found).
+  { hub: 'undercroft', rule: 'flat', kind: 'exhibit', files: [
+    { href: 'undercroft/the-long-quiet.html',  lock: 'the-long-quiet' },
+    { href: 'undercroft/rosette.html',         lock: 'rosette' },
+    { href: 'undercroft/codex.html',           lock: 'codex' },
+    { href: 'undercroft/floating-ink.html',    lock: 'floating-ink' },
+    { href: 'undercroft/almanac.html',         lock: 'almanac' },
+    { href: 'undercroft/enigma.html',          lock: 'enigma' },
+    { href: 'undercroft/the-night-shift.html', lock: 'night-shift' },
+    { href: 'undercroft/light-mixer.html',     lock: 'light-mixer' },
+    { href: 'undercroft/keeper.html',          lock: 'm-keeper-of-tales' },
+  ] },
 ];
+
+/* ── LOCKS: reveal-lock descriptors, transcribed from tools/ws/ws.js WS.SECRETS ──
+   THE AUTHORITY IS ws.js — these are data transcriptions of its predicate
+   functions (functions cannot ride into a JSON slab), in the lockMet grammar
+   (card-catalog/core.mjs): a string leaf = key present; {key,min} = numeric ≥;
+   {distinctSeen:n} = n distinct ws:seen:* keys; {all:[…]}/{any:[…]} combinators.
+   The manifest gate PROVES each row equivalent to WS.unlocked(id, …) by driving
+   the real ws.js predicate over satisfied/broken synthetic stores — transcription
+   drift fails the build naming the id (the STRAYS seeds-and-checks pattern). */
+export const LOCKS = {
+  quickening:       { all: ['ws:seen:game-of-life', 'ws:seen:lattice'] },
+  'the-long-quiet': { all: ['ws:flag:patience'] },
+  rosette:          { all: ['ws:seen:game-of-life', 'ws:seen:lattice', 'ws:flag:patience',
+                            'ws:flag:eleven', { key: 'ws:best:swarm', min: 8 }] },
+  codex:            { all: ['ws:seen:verse', 'ws:seen:scriptorium'] },
+  'floating-ink':   { all: ['ws:seen:cartographer', 'ws:seen:scriptorium'] },
+  almanac:          { all: ['ws:seen:verse', 'ws:seen:orrery'] },
+  enigma:           { all: ['ws:seen:scriptorium', 'ws:seen:slipstick'] },
+  'night-shift':    { all: ['ws:flag:the-lamplighter-won', 'ws:flag:the-ferryman-won'] },
+  'light-mixer':    { all: ['ws:flag:earned-rainbow', 'ws:flag:earned-halo', 'ws:flag:earned-spyglass',
+                            'ws:flag:earned-camera', 'ws:flag:earned-spectroscope', 'ws:flag:earned-polariser',
+                            'ws:flag:earned-anamorphosis', 'ws:flag:earned-iridescence', 'ws:flag:earned-maze'] },
+  'm-keeper-of-tales': { all: ['ws:flag:the-lamplighter-won', 'ws:flag:the-ferryman-won',
+                               'ws:flag:the-clockmaker-won'] },
+  reliquary:        { all: ['ws:seen:reliquary-solved'] },
+  'the-mere':       { all: ['ws:seen:the-mere'] },
+};
+
+/* ── ROOM_LOCKS: reveal-locks for the LOCKED PLACES rooms (both-or-neither) ─────
+   Baked onto the locked slab cards by card-catalog/reclaim.mjs and evaluated by
+   core.mjs unlockedFor — the catalog shows a locked room exactly when the visitor
+   could WALK to it (weakest path across every way in):
+   • undercroft — the front-door stair becomes a LINK only once the rune is found
+     (ws:seen:undercroft-rune) or the cellar already visited. (The ≥4-distinct
+     broken-stair tile is a TEASER, not walkable — so it does not unlock.)
+   • reliquary — the front-door study tile is walkable at ≥8 distinct ws:seen
+     rooms (index.src.html revealReliquary); `-opening`/`-seen` keep it for
+     returning visitors; the Undercroft niche opens the same door on
+     ws:seen:reliquary-solved. Weakest of all four ways in. */
+export const ROOM_LOCKS = {
+  undercroft: { any: ['ws:seen:undercroft-rune', 'ws:seen:undercroft'] },
+  reliquary:  { any: [{ distinctSeen: 8 }, 'ws:seen:reliquary-opening',
+                      'ws:seen:reliquary', 'ws:seen:reliquary-solved'] },
+};
 
 /* ── STRAYS: the R3 re-homing table (DESIGN §7.1 R3) ──────────────────────────
    Post-epoch Workbench-only pieces given honest kin hubs. The generator computes
@@ -275,7 +340,6 @@ export const DENY = {
     'meta: ART FOUNDRY spec-preview pages (maker-side scaffolding for the room art)',
   'the-value-of-a-cut/art-specs/':
     'meta: ART FOUNDRY spec-preview pages (maker-side scaffolding for the room art)',
-  // ── secret: earned pages, spoiler-disciplined out of the visible index ──
-  'undercroft/':
-    'secret: the locked Undercroft’s interior pages — the room itself is catalogued (locked, gated at render); its inside stays unlisted',
+  // (the Undercroft's interior places are no longer denied: §6.5 both-or-neither
+  //  enrolls each as a hidden exhibit locked on its own niche predicate above.)
 };

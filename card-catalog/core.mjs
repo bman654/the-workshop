@@ -30,8 +30,44 @@
    spatial fields (district/tier/wing/order) for the indexes. */
 export const FIELDS = [
   'id', 'room', 'piece', 'glyph', 'accent', 'district', 'tier',
-  'wing', 'order', 'href', 'blurb', 'tag', 'locked', 'entry', 'entryDate', 'exhibits'
+  'wing', 'order', 'href', 'blurb', 'tag', 'locked', 'lock', 'entry', 'entryDate', 'exhibits'
 ];
+
+/* ── lockMet: the ONE reveal-lock evaluator (both-or-neither / same-locks law) ──
+   A LOCK DESCRIPTOR is data baked into the slab at build time (reclaim/manifest),
+   transcribed from the estate's canonical unlock table (tools/ws/ws.js WS.SECRETS
+   + the front door's reveal-fns) and PROVEN equivalent to it by the manifest gate.
+   Evaluating data here keeps this module pure and Node-twinnable — no browser WS
+   global is ever imported. Grammar (nestable):
+     'ws:…'                a leaf: the key is present in the store
+     { key, min }          a leaf: +store.get(key) >= min          (score locks)
+     { distinctSeen: n }   a leaf: ≥ n distinct 'ws:seen:*' keys   (wandering locks;
+                           needs store.all — absent ⇒ counts 0, stays locked)
+     { all: [...] }        every clause holds
+     { any: [...] }        at least one clause holds
+   Storage off / no store ⇒ locked (the spoiler-safe default). */
+export function lockMet(lock, store) {
+  if (!lock) return false;
+  if (!store || !store.ok) return false;
+  const evalClause = (c) => {
+    if (typeof c === 'string') return !!store.has(c);
+    if (!c || typeof c !== 'object') return false;
+    if (Array.isArray(c.all)) return c.all.every(evalClause);
+    if (Array.isArray(c.any)) return c.any.some(evalClause);
+    if (typeof c.distinctSeen === 'number') {
+      const all = store.all;
+      if (!all || typeof all !== 'object') return false;
+      let n = 0;
+      for (const k in all) { if (k.indexOf('ws:seen:') === 0) n++; }
+      return n >= c.distinctSeen;
+    }
+    if (typeof c.key === 'string' && typeof c.min === 'number') {
+      return (+(store.get && store.get(c.key)) || 0) >= c.min;
+    }
+    return false;                               // unknown clause shape ⇒ locked (safe)
+  };
+  return evalClause(lock);
+}
 
 /* ── THE LOCK PREDICATE — PURE (ids/wsHas in, not localStorage reads) ──────────
    The SAME predicate the front door's reveal-fns use to decide whether a gated way
@@ -45,6 +81,12 @@ export const FIELDS = [
 export function unlockedFor(record, store) {
   if (!record.locked) return true;
   if (!store || !store.ok) return false;
+  // the slab-baked reveal-lock descriptor (ROOM_LOCKS via reclaim) — the SAME lock
+  // the visitor's walkable path carries (both-or-neither / same-locks law): the
+  // Undercroft stair is a LINK only once its rune is found; the Reliquary tile is
+  // walkable at ≥8 distinct ws:seen (or once opened/entered/solved via the
+  // Undercroft niche). Legacy fallbacks below keep old fixtures behaving.
+  if (record.lock) return lockMet(record.lock, store);
   if (record.id === 'reliquary') return store.has('ws:seen:reliquary');
   return store.has('ws:seen:undercroft-rune') || store.has('ws:seen:undercroft');
 }
@@ -309,19 +351,23 @@ function wingLabel(wing, district) {
    pushed one level down to a room's own pieces: no piece the visitor has not yet met
    can leak into the register's search. */
 
-/* is this exhibit a spoiler-gated secret (a within-piece or an explicitly hidden one)? */
+/* is this exhibit a spoiler-gated secret (a within-piece, an explicitly hidden one,
+   or one carrying a reveal-lock descriptor)? */
 export function exhibitGated(ex) {
-  return !!ex && (ex.kind === 'within' || ex.hidden === true);
+  return !!ex && (ex.kind === 'within' || ex.hidden === true || ex.lock != null);
 }
 
 /* the exhibits of a record that are INDEXED given the live store: every non-gated
-   exhibit, plus a gated one only when its own `gate` key is earned. `store` may be
-   undefined ⇒ gated exhibits excluded (the spoiler-safe default a fresh visitor sees).
+   exhibit, plus a gated one only when its reveal condition is met — its `lock`
+   descriptor (the PATH lock, same-locks law) when it carries one, else its single
+   `gate` breadcrumb (the within discipline). `store` may be undefined ⇒ gated
+   exhibits excluded (the spoiler-safe default a fresh visitor sees).
    Pure: depends only on the record and the store snapshot. */
 export function indexedExhibits(record, store) {
   const list = Array.isArray(record && record.exhibits) ? record.exhibits : [];
   return list.filter((ex) => {
     if (!exhibitGated(ex)) return true;
+    if (ex.lock != null) return lockMet(ex.lock, store);
     if (!ex.gate) return false;                 // gated but keyless → never index
     return !!(store && store.ok && store.has(ex.gate));
   });
@@ -468,8 +514,9 @@ export function runSelfTest(records, store) {
   add('a guaranteed-absent query returns none', search(visible, ABSENT, store).length === 0,
     search(visible, ABSENT, store).length + '');
 
-  // (e2) EXHIBIT SPOILER PARITY — a gated (within/hidden) exhibit is indexed by the
-  // search ONLY when its own key is earned in THIS store; non-gated exhibits always.
+  // (e2) EXHIBIT SPOILER PARITY — a gated (within/hidden/locked) exhibit is indexed
+  // by the search ONLY when its reveal condition holds in THIS store (its `lock`
+  // descriptor if it carries one, else its single `gate` key); non-gated always.
   // This is the phantom-witness discipline one level down: no unmet piece leaks in.
   let exhibitParity = true, exhibitDetail = 'no gated exhibits', gatedSeen = 0;
   for (const r of visible) {
@@ -478,7 +525,9 @@ export function runSelfTest(records, store) {
     for (const ex of all) {
       const shouldIndex = !exhibitGated(ex)
         ? true
-        : !!(ex.gate && store && store.ok && store.has(ex.gate));
+        : ex.lock != null
+          ? lockMet(ex.lock, store)
+          : !!(ex.gate && store && store.ok && store.has(ex.gate));
       if (exhibitGated(ex)) gatedSeen++;
       if (idx.has(ex.href) !== shouldIndex) { exhibitParity = false; exhibitDetail = r.id + '/' + ex.name; break; }
     }

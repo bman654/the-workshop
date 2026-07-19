@@ -58,6 +58,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { ROOM_LOCKS } from '../tools/manifest/registry.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..');
@@ -375,6 +376,10 @@ export function loadExhibitsByRoom(manifestPath = MANIFEST_PATH) {
         const o = { name: ex.name, href: ex.href, kind: ex.kind };
         if (ex.gate != null) o.gate = ex.gate;         // the ws:seen key a secret is earned by
         if (ex.hidden === true) o.hidden = true;       // an explicitly hidden exhibit
+        if (ex.lock != null) o.lock = ex.lock;         // the §6.5 reveal-lock descriptor (same-locks
+                                                       // law): core.mjs lockMet gates the index on the
+                                                       // SAME predicate that reveals the walkable link.
+                                                       // (lockId is manifest-side audit metadata — dropped.)
         return o;
       });
       byRoom.set(room.id, list);
@@ -392,11 +397,27 @@ export function withExhibits(records, byRoom) {
 
 /* ── emit the slab + re-pin ─────────────────────────────────────────────────── */
 function main() {
-  const records = withExhibits(withEntryTimes(loadPlaces()), loadExhibitsByRoom());
+  let records = withExhibits(withEntryTimes(loadPlaces()), loadExhibitsByRoom());
+  // ── ROOM REVEAL-LOCKS (§6.5 same-locks law): bake each LOCKED room's walkable
+  // reveal-lock descriptor (registry ROOM_LOCKS — the weakest path across every
+  // way in) onto its card, so core.mjs unlockedFor shows the card exactly when
+  // the visitor could walk there. A locked room with NO descriptor REFUSES: a
+  // lock the catalog cannot honor must never ship silently. ──
+  for (const id of Object.keys(ROOM_LOCKS)) {
+    if (!records.some((r) => r.id === id && r.locked)) {
+      throw new Error('REFUSING: ROOM_LOCKS["' + id + '"] matches no locked PLACES record — stale lock row.');
+    }
+  }
+  records = records.map((r) => {
+    if (!r.locked) return r;
+    const lock = ROOM_LOCKS[r.id];
+    if (!lock) throw new Error('REFUSING: locked room "' + r.id + '" has no ROOM_LOCKS descriptor — the catalog cannot honor its reveal-lock.');
+    return { ...r, lock };
+  });
   // canonical field order, stable, pretty-printed for a readable diff. `entry`
   // (git depth-from-root) + `entryDate` (YYYY-MM-DD) are git-derived; `exhibits` is
-  // the estate-manifest join (§4.4) — both baked here.
-  const FIELD_ORDER = ['id', 'room', 'piece', 'glyph', 'accent', 'district', 'tier', 'wing', 'order', 'href', 'blurb', 'tag', 'locked', 'entry', 'entryDate', 'exhibits'];
+  // the estate-manifest join (§4.4); `lock` is the room reveal-lock (§6.5) — baked here.
+  const FIELD_ORDER = ['id', 'room', 'piece', 'glyph', 'accent', 'district', 'tier', 'wing', 'order', 'href', 'blurb', 'tag', 'locked', 'lock', 'entry', 'entryDate', 'exhibits'];
   const projected = records.map((r) => {
     const o = {};
     for (const f of FIELD_ORDER) if (r[f] !== undefined) o[f] = r[f];
