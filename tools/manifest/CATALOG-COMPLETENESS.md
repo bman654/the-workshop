@@ -138,8 +138,13 @@ The one allowed non-catalog *dir* remains `cabinet-of-honors` (ALLOWLIST, unchan
 
 1. **Quickening → ENROLLED** (gated + hidden). The earlier DENY rested on a factual error:
    it claimed quickening drops no breadcrumb, but `quickening.src.html:1216` calls
-   `WS.seen('quickening')` (the standard first-visit pattern). It has no static href — it's
-   reached only through the Undercroft metagame — so it's a true hidden secret. Enrolled as
+   `WS.seen('quickening')` (the standard first-visit pattern). There IS a walkable in-estate
+   path (no *static HTML* href, but a JS-rendered gated one): the Undercroft's constellation
+   (`undercroft/index.src.html`) carries a `quickening` node whose niche reveals a link to
+   `../sound-garden/quickening.html` once the visitor has earned it (seen game-of-life +
+   lattice) — `WS.unlocked(id,store)` gates it, never leaking into public source. So the
+   catalog entry is a COMPLEMENTARY second finding-aid (surfaced once `ws:seen:quickening`
+   is set by actually visiting), never the only way in. Enrolled as
    a gated+hidden `flat` row under the Sound Garden (its physical home), keyed on
    `ws:seen:quickening`, exactly as the-mere: the volume carries it, but `filterUnlocked`/
    `exhibitGated` keep it out of the index until the visitor has earned it. Policy upheld
