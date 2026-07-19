@@ -156,7 +156,14 @@ function decodeEntities(s) {
   const NAMED = {
     lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
     rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“',
-    mdash: '—', ndash: '–', hellip: '…', middot: '·', times: '×',
+    mdash: '—', ndash: '–', hellip: '…', middot: '·', times: '×', deg: '°',
+    // accented Latin — page titles carry these (e.g. "The Moiré Bench" = Moir&eacute;)
+    agrave: 'à', aacute: 'á', acirc: 'â', atilde: 'ã', auml: 'ä', aring: 'å', aelig: 'æ', ccedil: 'ç',
+    egrave: 'è', eacute: 'é', ecirc: 'ê', euml: 'ë', igrave: 'ì', iacute: 'í', icirc: 'î', iuml: 'ï',
+    ntilde: 'ñ', ograve: 'ò', oacute: 'ó', ocirc: 'ô', otilde: 'õ', ouml: 'ö', oslash: 'ø',
+    ugrave: 'ù', uacute: 'ú', ucirc: 'û', uuml: 'ü', yacute: 'ý', yuml: 'ÿ', szlig: 'ß',
+    Agrave: 'À', Aacute: 'Á', Acirc: 'Â', Auml: 'Ä', Ccedil: 'Ç', Egrave: 'È', Eacute: 'É',
+    Ecirc: 'Ê', Euml: 'Ë', Iacute: 'Í', Ntilde: 'Ñ', Oacute: 'Ó', Ocirc: 'Ô', Ouml: 'Ö', Uuml: 'Ü',
   };
   return String(s)
     .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
