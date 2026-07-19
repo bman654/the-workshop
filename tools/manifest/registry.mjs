@@ -124,6 +124,11 @@ export const INTERNAL = [
   // (the §4.4 lock-parity discipline — present-but-hidden, never a spoiler).
   { hub: 'the-reliquary', rule: 'flat', kind: 'exhibit', files: ['the-reliquary/the-mere.html'],
     gate: 'ws:seen:the-mere', hidden: true },
+  // the Living Lattice — an Undercroft-reached secret that lives in the Sound Garden. It
+  // DROPS its own `ws:seen:quickening` breadcrumb (quickening.src.html:1216), so — exactly
+  // as the-mere — it enrolls GATED+hidden: present in the volume, indexed only once found.
+  { hub: 'sound-garden', rule: 'flat', kind: 'bench', files: ['sound-garden/quickening.html'],
+    gate: 'ws:seen:quickening', hidden: true },
 ];
 
 /* ── STRAYS: the R3 re-homing table (DESIGN §7.1 R3) ──────────────────────────
@@ -273,8 +278,4 @@ export const DENY = {
   // ── secret: earned pages, spoiler-disciplined out of the visible index ──
   'undercroft/':
     'secret: the locked Undercroft’s interior pages — the room itself is catalogued (locked, gated at render); its inside stays unlisted',
-  'sound-garden/quickening.html':
-    'secret: an earned page reached only from the Undercroft — it drops no ws:seen breadcrumb of its own, '
-    + 'so it cannot join the earned index (lock-parity needs a key); denied rather than exposed. '
-    + '(If it ever drops one, enroll it like the-mere: a gated+hidden flat row.)',
 };

@@ -110,9 +110,9 @@ surveyor never leaks before the within is earned).
 - `the-aquarium/art-specs/`, `the-value-of-a-cut/art-specs/` — ART FOUNDRY spec previews
 - `undercroft/` — the locked Undercroft's interior; the room itself is catalogued
   (`locked: true`, render-gated), its inside stays unlisted
-- `sound-garden/quickening.html` — earned secret reached only from the Undercroft; it
-  drops **no ws:seen breadcrumb of its own**, so it cannot join the earned index (see
-  open questions)
+- ~~`sound-garden/quickening.html`~~ — **now ENROLLED** (see Resolutions below): it *does*
+  drop `ws:seen:quickening` (`quickening.src.html:1216`), so it enrols gated+hidden like
+  the-mere. Removed from DENY.
 
 The one allowed non-catalog *dir* remains `cabinet-of-honors` (ALLOWLIST, unchanged).
 
@@ -134,16 +134,31 @@ The one allowed non-catalog *dir* remains `cabinet-of-honors` (ALLOWLIST, unchan
    `Weather You Can Make &middot; The Cloud Bench` → `Weather You Can Make`). Verified
    none are baked into the sky slab (`derive-sky --check` green).
 
-## Open questions for Brandon
+## Resolutions (Claude's calls — Brandon delegated: "creative choice belongs to Claude")
 
-- **Quickening**: should it drop a `ws:seen:quickening` breadcrumb so it can enroll like
-  the-mere (gated + hidden, indexed once found)? Until then it stays denied — present on
-  disk, never advertised. (Wiring the breadcrumb means touching `sound-garden/quickening*`,
-  which I left untouched.)
-- **Adventure tales / Latch ateliers** (call #1 above): separate catalog entries, or
-  part-of-the-instrument as shipped?
-- **`colophon.html`** (root) sits at the front-door level with the map — deliberately
-  outside the page law's universe, like `index.html` itself. Fine?
+1. **Quickening → ENROLLED** (gated + hidden). The earlier DENY rested on a factual error:
+   it claimed quickening drops no breadcrumb, but `quickening.src.html:1216` calls
+   `WS.seen('quickening')` (the standard first-visit pattern). It has no static href — it's
+   reached only through the Undercroft metagame — so it's a true hidden secret. Enrolled as
+   a gated+hidden `flat` row under the Sound Garden (its physical home), keyed on
+   `ws:seen:quickening`, exactly as the-mere: the volume carries it, but `filterUnlocked`/
+   `exhibitGated` keep it out of the index until the visitor has earned it. Policy upheld
+   ("catalog every visitor page"), no metagame edit needed (the breadcrumb already exists).
+
+2. **Adventure tales / Latch ateliers → kept as part of their instrument** (as shipped).
+   They are *accounted for* by the §6.4 law (unit-interior claim — not orphans), so nothing
+   is missing. The remaining question was presentation granularity, and the editorial call
+   is: the bound volume indexes the estate at the ROOM + headline-EXHIBIT grain. The Lantern
+   is one adventure engine (its three tales are its content, like a book's tales); Latch is
+   one puzzle-atelier suite. A hub-with-internal-variety is one illuminated entry explored
+   as a unit — not exploded into a line per leaf, which would dilute a 63-card volume. The
+   parents are catalogued and lead the visitor in. (Noted trade-off: individual leaves like
+   the Warehouse aren't independently searchable — an acceptable cost for volume legibility;
+   leaf-level search is an additive future enhancement if ever wanted.)
+
+3. **`colophon.html` → kept outside the page law.** It sits at the front-door level with the
+   map, like `index.html` itself — estate chrome, not a visitor exhibit. Correctly out of
+   the law's universe; the gate is happy (forge --check green).
 
 ## Gate readout at HEAD (all green, run first-hand)
 
