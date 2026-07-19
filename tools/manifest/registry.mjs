@@ -96,8 +96,34 @@ export const INTERNAL = [
   { hub: 'the-barrel-house', rule: 'internal-links', file: 'the-barrel-house/index.html', firstClass: ['card'], kind: 'exhibit' },
   // `flat` — explicit visitor leaf pages that live DIRECTLY in a hub dir (not a
   // subdir, not in a js-manifest), so no scrape rule can find them. hours/almanac.html
-  // (the Almanac bench, WS4) is the first: a sibling leaf of the-hours.html.
-  { hub: 'hours', rule: 'flat', files: ['hours/almanac.html'], kind: 'bench' },
+  // (the Almanac bench, WS4) was the first: a sibling leaf of the-hours.html.
+  // A flat leaf is the ONE genuinely ambiguous page shape (a chapter of the room's
+  // own flow vs a separate bench vs maker meta), so flat pages stay EXPLICIT: the
+  // §6.4 page law refuses any flat page that is neither enrolled here nor DENIED
+  // below — a new flat page forces a deliberate call, never a silent hole.
+  { hub: 'hours', rule: 'flat', files: ['hours/almanac.html', 'hours/analemma.html'], kind: 'bench' },
+  // the Clockwork Automata chapters: ten distinct interactive benches presented
+  // off clockwork/index.html (the tokenizer, the temperature dial, …) — the same
+  // many-benches-one-room shape as the Cavern, just flat-filed.
+  { hub: 'clockwork', rule: 'flat', kind: 'bench', files: [
+    'clockwork/autoregress.html', 'clockwork/context.html', 'clockwork/measurement.html',
+    'clockwork/next-word.html', 'clockwork/partition.html', 'clockwork/spotlight.html',
+    'clockwork/temperature.html', 'clockwork/tokenizer.html', 'clockwork/turn.html',
+    'clockwork/unstamped-bag.html',
+  ] },
+  // NOTE (§6.4): adventure/ and latch/ are Workbench HERITAGE exhibits, not rooms —
+  // their interior pages (the three Lantern tales; the akari/slitherlink/warehouse
+  // ateliers) are claimed by the unit-interior rule, part of the exhibit itself.
+  // the Museum's front-door retrospective gallery.
+  { hub: 'museum', rule: 'flat', kind: 'exhibit', files: ['museum/ages.html'] },
+  // the Strange Garden's field-notes journal (real visitor reading, own page).
+  { hub: 'strange-garden', rule: 'flat', kind: 'exhibit', files: ['strange-garden/field-notes.html'] },
+  // the sealed room's diary — a hidden-until-found metagame page. It drops its own
+  // `ws:seen:the-mere` breadcrumb, so it enrolls GATED on that key (+hidden): the
+  // catalog carries it but indexes it only once the visitor has already found it
+  // (the §4.4 lock-parity discipline — present-but-hidden, never a spoiler).
+  { hub: 'the-reliquary', rule: 'flat', kind: 'exhibit', files: ['the-reliquary/the-mere.html'],
+    gate: 'ws:seen:the-mere', hidden: true },
 ];
 
 /* ── STRAYS: the R3 re-homing table (DESIGN §7.1 R3) ──────────────────────────
@@ -220,3 +246,35 @@ export const ALLOWLIST = [
   // in WS5, never enrolled); folded in when the picture house was raised.
   'trailer', 'trailer-bed',
 ];
+
+/* ── DENY: pages the §6.4 PAGE LAW must NOT catalogue — each with intent ─────────
+   The page law (manifest.mjs) walks every shipped .html on disk and demands that
+   each visitor-shaped page be claimed by exactly one channel: a room/exhibit href,
+   a HUBS `file:` page, the crossings/hidden claims, the ALLOWLIST (whole dirs,
+   recursive), or THIS table. A key is either an exact repo-relative page path or a
+   dir prefix ending in '/' (claims every page under it EXCEPT the dir's own
+   top-level index.html, which the room/dir law owns). An entry that matches
+   nothing on disk FAILS the gate — a stale denial is drift too. Nothing here may
+   overlap a catalogued href (the double-claim law extends to pages).
+
+   TWO honest reasons to deny: `meta:` (a maker-side / archival page that is not a
+   visitor exhibit) and `secret:` (an EARNED page kept out of the visible catalog
+   by spoiler discipline — same law that render-gates the hidden node). ── */
+export const DENY = {
+  // ── meta: maker-side + archival ──
+  'the-gate/audio-bench.html':
+    'meta: dev-only SFX render bench (the page titles itself "dev only") — a maker tool, not a visitor page',
+  'museum/archive/':
+    'meta: frozen point-in-time snapshots of other exhibits (trailer/talk props) — archival duplicates, never catalogue twice',
+  'the-aquarium/art-specs/':
+    'meta: ART FOUNDRY spec-preview pages (maker-side scaffolding for the room art)',
+  'the-value-of-a-cut/art-specs/':
+    'meta: ART FOUNDRY spec-preview pages (maker-side scaffolding for the room art)',
+  // ── secret: earned pages, spoiler-disciplined out of the visible index ──
+  'undercroft/':
+    'secret: the locked Undercroft’s interior pages — the room itself is catalogued (locked, gated at render); its inside stays unlisted',
+  'sound-garden/quickening.html':
+    'secret: an earned page reached only from the Undercroft — it drops no ws:seen breadcrumb of its own, '
+    + 'so it cannot join the earned index (lock-parity needs a key); denied rather than exposed. '
+    + '(If it ever drops one, enroll it like the-mere: a gated+hidden flat row.)',
+};
