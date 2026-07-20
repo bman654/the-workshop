@@ -21,12 +21,14 @@ dependencies** — all sound synthesised live with the Web Audio API, no audio f
 | **Carillon** (`carillon.html`) | A ring of tuned bells rung in slowly-evolving change-ringing permutations; long inharmonic decays overlap into shifting, resonant harmony. |
 | **Lattice** (`lattice.html`) | A glowing pitch × time grid (a Tenori-on you can *see*): a playhead column sweeps left→right; lit cells chime in scale and bloom as it crosses them. The seeded pattern is musical by construction and gently mutates so it never repeats. Pick scale/root/tempo/density/evolve; click cells to play along. |
 | **Grain Mill** (`grain-mill.html`) | The **granular** family the rack lacked (pluck/FM/additive/formant/Shepard/beating all present — never grains). Tip a held cello tone into a brass hopper and it shatters into hundreds of glowing **sound-grains**; slide GRAIN SIZE (long = pitch ↔ short = breath) and DENSITY (sparse plinks ↔ continuous wash) to melt one note into rain → a drone → mist. The luminous cloud is driven by the same grains it plays. (Grains of *sound*, not the number-grains of the Benford Mill.) |
+| **The Wind Chimes** (`the-wind-chimes/index.html`) | Five tuned tubes and a clapper on a cord, hung at warm dusk. Arm the estate's **air** and the air becomes the literal **wind** that plays them — the chimes ring themselves, and muting the estate lets them damp slowly to rest and hang silent. The tubes hang *nested* (highest nearest the middle), so a soft breeze only tinkles the short bright ones and it takes a real gust to swing the clapper out to the long low one — the lowest note is the one the wind works hardest for. Tuned to A-major-pentatonic, so no chord the wind strikes can sound wrong. A struck tube's glow decays on the *same envelope as its sound*, so the whole piece works with the sound off. Drag the clapper or flick a tube to play it in dead calm. |
 | **Gamelan** (`gamelan.html`) | Two interlocking parts — polos and sangsih — weave into one gap-free stream on inharmonic metallophones tuned to slendro or pelog (genuine non-12-TET, defined in cents). |
 | **Monochord** (`monochord.html`) | Pluck, slide, and touch one tensioned string — its overtones are an exactly even ladder you can see and hear (fₙ/f₁ = n). Pinch a node and the harmonic isolates. |
 
 A little ensemble: **melody** (Whitney), **harmony** (Drift), **rhythm** (Euclid),
 **texture** (Rain), **chordal motion** (Loom), **resonance** (Carillon), a
-**sequencer you can watch** (Lattice), and **grain texture** (Grain Mill).
+**sequencer you can watch** (Lattice), **grain texture** (Grain Mill), and an instrument
+the **weather** plays (The Wind Chimes).
 (`index.html` is the rack listing them; `instruments.js` is its manifest.)
 
 ## A note on verification

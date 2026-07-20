@@ -57,6 +57,12 @@ window.INSTRUMENTS = [
     accent: "#d9a441"
   },
   {
+    file: "the-wind-chimes/index.html",
+    name: "The Wind Chimes",
+    blurb: "five tuned tubes and a clapper on a cord, hung at dusk — give the estate its air and the air becomes the wind that plays them; a soft breeze only tinkles the short bright tubes, and it takes a real gust to reach the long low one",
+    accent: "#c9a24a"
+  },
+  {
     file: "grain-mill.html",
     name: "Grain Mill",
     blurb: "tip a held cello tone into a brass hopper and it shatters into hundreds of glowing sound-grains — slide GRAIN SIZE and DENSITY to melt one note into rain, a drone, then mist",
