@@ -275,7 +275,7 @@ const WING_FIXTURE = [
   {
     const m1 = C.marksFor(2027, 6, 7);
     ok(m1.length === 2 && m1[0].kind === 'founding' && m1[0].glyph === '✦'
-      && m1[0].text === C.ANNIVERSARIES[0].line + ', a year ago'
+      && m1[0].text === C.annById('founding').line + ', a year ago'
       && m1[1].kind === 'wing' && m1[1].text === 'Strange Garden was raised this day, a year ago',
       '(i) 2027-06-07: founding first ("a year ago") + the Strange Garden wing mark stacked');
     const m2 = C.marksFor(2026, 9, 15);
@@ -290,10 +290,14 @@ const WING_FIXTURE = [
         return x.kind === 'waypoint' && x.glyph === '☉' && x.text === C.WAYPOINT_LINES[w.id];
       });
     }), '(i) each computed 2026 waypoint date carries its waypoint line');
+    /* 8 June carries BOTH the tier-2 Front Door and four wings: era ✧ sorts
+       ahead of the wing ❈ (marksFor order), and the four wings join into one. */
     const m3 = C.marksFor(2027, 6, 8);
-    ok(m3.length === 1 && m3[0].kind === 'wing'
-      && m3[0].text === 'The Arcade, The Map Room, The Music Room and The Study were raised this day, a year ago',
-      '(i) stacked-wings join: "…, … and … were raised this day"');
+    ok(m3.length === 2 && m3[0].kind === 'era' && m3[0].glyph === '✧'
+      && m3[0].text === C.annById('front-door').line + ', a year ago'
+      && m3[1].kind === 'wing'
+      && m3[1].text === 'The Arcade, The Map Room, The Music Room and The Study were raised this day, a year ago',
+      '(i) stacked-wings join: "…, … and … were raised this day" (under the era mark)');
   }
 
   /* ── (j) age arithmetic ── */
@@ -388,7 +392,7 @@ const WING_FIXTURE = [
       '(l) EoT anchor: M*(2026-02-12) ∈ [699,713] — 720 excluded (got ' + Mfeb + ')');
     // the §3.3-3 mapping, exercised both ways on swept dates
     const mfF = C.momentManifest(2027, 6, 7, 9, Hours), mfW = C.momentManifest(2026, 6, 21, 12, Hours);
-    ok(mfF.annTier === 1 && mfF.annLabel === C.ANNIVERSARIES[0].line + ', a year ago',
+    ok(mfF.annTier === 1 && mfF.annLabel === C.annById('founding').line + ', a year ago',
       '(l) annTier/annLabel: the founding day maps to tier 1 with the composed founding text');
     ok(mfW.annTier === 0 && mfW.annLabel === null,
       '(l) annTier/annLabel: a waypoint-only day maps to tier 0 / null (waypoints never tier)');
