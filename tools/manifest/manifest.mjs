@@ -33,10 +33,12 @@ import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from '
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, normalize } from 'node:path';
 import { loadPlaces } from '../../card-catalog/reclaim.mjs';
+import { lockMet } from '../../card-catalog/core.mjs';
 import {
-  HUBS, INTERNAL, STRAYS, HERITAGE, COMPANIONS, WITHINS, CROSS, HIDDEN, ALLOWLIST, NONE,
+  HUBS, INTERNAL, STRAYS, HERITAGE, COMPANIONS, WITHINS, CROSS, HIDDEN, ALLOWLIST, DENY,
+  LOCKS, ROOM_LOCKS, NONE,
 } from './registry.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -70,16 +72,39 @@ function die(msg) { console.error('manifest: ' + msg); process.exit(1); }
    wave-end would violate arm-by-wave. `rooms = 60` is the design value verbatim (it clears
    the post-gather census of 62 by construction, and the pre-gather 94 with room to spare). */
 const ROOMS_FLOOR = 60;
-const PIECES_FLOOR = 324;   // W2.3: risen to the post-enrolment count (§10 W2.3). The R3 strays were
-                            // already enrolled at T2.1a, so the honest total is unchanged at 324 — the
-                            // W2.3 re-homing added on-page kin links, not new pieces. RISES toward ≥340
-                            // as the WITHINs (W2.5) and the gather (W2.7) enroll genuinely new pieces.
+const PIECES_FLOOR = 425;   // §6.4/§6.5 catalog-completeness sweeps: risen to the honest computed count
+                            // after the page law enrolled the sub-bench backlog (69 auto-discovered
+                            // benches + 1 gated soap-film sub-bench + 14 flat leaves + quickening) and
+                            // the both-or-neither law enrolled the 9 Undercroft place-secrets (each
+                            // locked on its own niche predicate). Clears the §6.2 ≥340 ship target.
+                            // RISES with future enrolments; never hand-inflate past the honest value
+                            // (a red gate must mean regression, not growth).
 
 /* ── the on-disk top-level dir universe ─────────────────────────────────────── */
 function topLevelDirs() {
   return readdirSync(ROOT)
     .filter((d) => { try { return statSync(join(ROOT, d)).isDirectory() && !d.startsWith('.'); } catch { return false; } })
     .sort();
+}
+
+/* ── the on-disk PAGE universe (§6.4): every shipped .html, repo-relative ───────
+   Recursive, deterministic (sorted, locale-free), skipping VCS/deps dirs and any
+   dot-dir. `.src.html` files are authored sources, not shipped pages — excluded. */
+function walkHtmlPages() {
+  const skip = new Set(['.git', 'node_modules']);
+  const out = [];
+  const walk = (rel) => {
+    let entries;
+    try { entries = readdirSync(join(ROOT, rel), { withFileTypes: true }); } catch { return; }
+    for (const ent of entries) {
+      if (ent.name.startsWith('.')) continue;
+      const r = rel ? rel + '/' + ent.name : ent.name;
+      if (ent.isDirectory()) { if (!skip.has(ent.name)) walk(r); }
+      else if (ent.isFile() && ent.name.endsWith('.html') && !ent.name.endsWith('.src.html')) out.push(r);
+    }
+  };
+  walk('');
+  return out.sort(cmp);
 }
 
 /* ── first-class scrape: dirs THIS hub links in its own exhibit idiom ────────── */
@@ -127,6 +152,28 @@ const nameCache = new Map();
 function titleCase(slug) {
   return String(slug).split('-').map((w) => w ? w[0].toUpperCase() + w.slice(1) : w).join(' ');
 }
+/* decode the handful of HTML entities that appear in page <h1>/<title>s, so a name
+   reads as TEXT in the catalog/search surface ("Predator & Prey", never
+   "Predator &amp; Prey"). Numeric first, named next, &amp; LAST (no double-decode). */
+function decodeEntities(s) {
+  const NAMED = {
+    lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+    rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“',
+    mdash: '—', ndash: '–', hellip: '…', middot: '·', times: '×', deg: '°',
+    // accented Latin — page titles carry these (e.g. "The Moiré Bench" = Moir&eacute;)
+    agrave: 'à', aacute: 'á', acirc: 'â', atilde: 'ã', auml: 'ä', aring: 'å', aelig: 'æ', ccedil: 'ç',
+    egrave: 'è', eacute: 'é', ecirc: 'ê', euml: 'ë', igrave: 'ì', iacute: 'í', icirc: 'î', iuml: 'ï',
+    ntilde: 'ñ', ograve: 'ò', oacute: 'ó', ocirc: 'ô', otilde: 'õ', ouml: 'ö', oslash: 'ø',
+    ugrave: 'ù', uacute: 'ú', ucirc: 'û', uuml: 'ü', yacute: 'ý', yuml: 'ÿ', szlig: 'ß',
+    Agrave: 'À', Aacute: 'Á', Acirc: 'Â', Auml: 'Ä', Ccedil: 'Ç', Egrave: 'È', Eacute: 'É',
+    Ecirc: 'Ê', Euml: 'Ë', Iacute: 'Í', Ntilde: 'Ñ', Oacute: 'Ó', Ocirc: 'Ô', Ouml: 'Ö', Uuml: 'Ü',
+  };
+  return String(s)
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)))
+    .replace(/&([a-zA-Z]+);/g, (m, n) => (n === 'amp' ? m : (NAMED[n] ?? m)))
+    .replace(/&amp;/g, '&');
+}
 function readName(relPathOrDir) {
   if (nameCache.has(relPathOrDir)) return nameCache.get(relPathOrDir);
   let file = join(ROOT, relPathOrDir);
@@ -143,7 +190,10 @@ function readName(relPathOrDir) {
     const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
     const t = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
     const raw = (h1 && h1[1]) || (t && t[1]) || '';
-    name = raw.replace(/<[^>]+>/g, '').split('·')[0].split('—')[0].replace(/\s+/g, ' ').trim() || null;
+    name = decodeEntities(raw.replace(/<[^>]+>/g, '')).split('·')[0].split('—')[0].replace(/\s+/g, ' ').trim() || null;
+    // a page that leads its <h1> with glyph decoration ("🌉 The Bridge House") is
+    // catalogued by its TEXT name; an all-glyph name keeps itself (never emptied).
+    if (name) name = name.replace(/^[^\p{L}\p{N}"'‘“(]+/u, '').trim() || name;
   }
   const slug = String(relPathOrDir).split('/').pop().replace(/\.html$/, '');
   const val = name || titleCase(slug);
@@ -177,6 +227,31 @@ function extractInternal(row) {
         seen.add(sub);
         out.push({ name: readName(row.hub + '/' + sub), href: row.hub + '/' + sub + '/index.html', kind: row.kind });
       }
+    }
+  } else if (row.rule === 'flat') {
+    // flat leaf pages: explicit visitor pages that live directly in a hub dir (not a
+    // subdir, not a js-manifest entry). Named from the page's own <h1>/<title>.
+    // A files entry is a string (a public leaf) or { href, lock } (a SECRET place —
+    // `lock` names a LOCKS descriptor, §6.5); a row-level `lock` applies to every
+    // file, `gate`(+`hidden`) is the legacy single-key form (withins discipline).
+    // A lock-carrying entry is hidden: the catalog carries it but reveals it only
+    // when the visitor's live store meets the SAME predicate that reveals the
+    // walkable link (core.mjs lockMet — the same-locks law).
+    for (const f of row.files) {
+      const href = typeof f === 'string' ? f : f.href;
+      const lockId = (typeof f === 'object' && f.lock) || row.lock || null;
+      const ex = { name: readName(href), href, kind: row.kind };
+      if (lockId) {
+        const desc = LOCKS[lockId];
+        if (!desc) die('flat row "' + href + '" names unknown LOCKS id "' + lockId + '"');
+        ex.lockId = lockId;
+        ex.lock = desc;
+        ex.hidden = true;
+      } else {
+        if (row.gate) ex.gate = row.gate;
+        if (row.hidden) ex.hidden = true;
+      }
+      out.push(ex);
     }
   }
   // §6.2 hard error: every extracted href must exist on disk (an exact file for
@@ -241,11 +316,21 @@ function build(opts = {}) {
 
   /* ── assemble exhibits per room ──────────────────────────────────────────── */
   const exhibitsByRoom = new Map();     // roomId -> [{name,href,kind,...}]
+  // §6.4 page-law ledgers, fed as exhibits are pushed:
+  //   claimedPages — every catalogued page href (room / exhibit / collection / hidden)
+  //   unitOf       — exhibit dir -> { roomDir, gate }: the units whose INTERIOR pages
+  //                  are part of the unit, and the hosts a nested sub-bench rides up to
+  const claimedPages = new Set(rooms.map((r) => r.href));
+  const unitOf = new Map();
   const pushEx = (hubDir, ex) => {
     const room = roomByDir.get(hubDir);
     if (!room) die('exhibit hub "' + hubDir + '" is not a PLACES room dir (piece ' + ex.href + ')');
     if (!exhibitsByRoom.has(room.id)) exhibitsByRoom.set(room.id, []);
     exhibitsByRoom.get(room.id).push(ex);
+    claimedPages.add(ex.href);
+    if (ex.href.endsWith('/index.html')) {
+      unitOf.set(ex.href.slice(0, -'/index.html'.length), { roomDir: hubDir, gate: ex.gate });
+    }
     return room;
   };
   const claimed = new Set([...roomDirs]);
@@ -330,6 +415,10 @@ function build(opts = {}) {
     pieces: crossOnDisk.map((d) => ({ name: readName(CROSS.dir + '/' + d), href: CROSS.dir + '/' + d + '/index.html' })),
   };
   stake(CROSS.dir, 'collection:' + CROSS.id);
+  for (const p of collection.pieces) {                       // §6.4: crossings are catalogued pages,
+    claimedPages.add(p.href);                                // and each crossing dir is a unit whose
+    unitOf.set(p.href.slice(0, -'/index.html'.length), { roomDir: null });  // interior belongs to it
+  }
   // hidden pieces carry their display name too, so the manifest "knows every piece's display
   // name + href" (§3.3) — the sky STAR_META resolver reads the name from here (e.g. the hidden
   // starlight-bend star's card, once ws:seen, shows its title), never re-scraping the page.
@@ -339,10 +428,279 @@ function build(opts = {}) {
   // allowlist (present-or-future; presence not required)
   for (const d of ALLOWLIST) if (allDirs.includes(d)) stake(d, 'allowlist');
 
+  /* ═══ §6.4 THE PAGE LAW — every shipped page below the front door, catalogued
+     or accounted ══════════════════════════════════════════════════════════════
+     The §6.2 dir law claims every TOP-LEVEL dir; this extends the same discipline
+     to the PAGE grain, so a wing's sub-benches can never orphan again (the pre-law
+     backlog was ~70 subdir benches the catalog never knew). The universe is every
+     shipped (non-.src) .html on disk. Claim channels — exactly one per page:
+       • the front-door level itself — root pages (index.html, colophon.html) and
+         each top-level <dir>/index.html: the dir law above already governs those
+       • a catalogued href           — room / exhibit / collection / hidden
+       • a HUBS `file:` page         — a room's own presenting page
+       • the ALLOWLIST, recursively  — an engine/meta dir claims its whole tree
+       • the hidden node, recursively— a secret dir's interior stays its secret
+       • a claimed unit's interior   — a non-index page inside an exhibit's own dir
+         is part of that exhibit, not a separate destination
+       • the DENY table              — an explicit, reasoned non-catalog page
+     AUTO-DISCOVERY: a <parent>/<sub>/index.html whose parent is a room dir (or an
+     enrolled exhibit unit) is a SUB-BENCH — enrolled mechanically as an exhibit of
+     the owning room (kind 'bench'; named from its own <h1>/<title>), riding up
+     through an exhibit parent with hostedVia + the parent's spoiler gate (a bench
+     inside a gated within stays gated — the §4.4 discipline). A NEW page needs no
+     registry edit: it enters the catalog on the next re-derive, and until that
+     re-derive is committed the --check staleness gate NAMES it. Anything that
+     resolves to no channel lands in `unclaimedPages` and FAILS the gate by name —
+     never a silent hole. opts.extraPages plants synthetic pages (FS-free
+     neg-control, the --plant-page hook). */
+  const htmlPages = [...new Set([...walkHtmlPages(), ...(opts.extraPages || [])])].sort(cmp);
+  const denyKeys = sorted(Object.keys(DENY));
+  const denyFor = (p) => denyKeys.find((k) => (k.endsWith('/') ? p.startsWith(k) : p === k));
+  const denyUsed = new Set();
+  const hubFilePages = new Set(HUBS.filter((h) => h.file).map((h) => h.file));
+  const hiddenTops = new Set(HIDDEN.map((h) => dirOf(h.href)));
+  const pageClaimClash = [];
+
+  // candidates: below the front-door level, outside allowlist/hidden trees, and not
+  // a top-level dir's own index.html (those belong to the §6.2 dir law above).
+  const pageCandidates = htmlPages.filter((p) => {
+    const segs = p.split('/');
+    if (segs.length < 2) return false;
+    if (allowSet.has(segs[0]) || hiddenTops.has(segs[0])) return false;
+    if (segs.length === 2 && segs[1] === 'index.html') return false;
+    return true;
+  });
+
+  // pass 1 — AUTO-DISCOVERY of sub-benches. Shallowest first so a nested unit's
+  // parent is enrolled (and in unitOf) before its children are resolved.
+  const subUnitPages = pageCandidates.filter((p) => p.endsWith('/index.html'))
+    .sort((a, b) => a.split('/').length - b.split('/').length || cmp(a, b));
+  for (const p of subUnitPages) {
+    if (claimedPages.has(p)) continue;         // an internal-rule exhibit (cavern/…), a crossing, …
+    if (denyFor(p)) continue;                  // denied — accounted (and use-marked) in pass 2
+    const unitDir = p.slice(0, -'/index.html'.length);
+    const parent = unitDir.slice(0, unitDir.lastIndexOf('/'));
+    if (roomByDir.has(parent)) {
+      pushEx(parent, { name: readName(unitDir), href: p, kind: 'bench' });
+    } else if (unitOf.has(parent) && unitOf.get(parent).roomDir) {
+      const host = unitOf.get(parent);
+      const ex = { name: readName(unitDir), href: p, kind: 'bench', hostedVia: parent };
+      if (host.gate) { ex.gate = host.gate; ex.hidden = true; }  // inherit the parent's spoiler gate
+      pushEx(host.roomDir, ex);
+    }
+    // an unresolvable sub-unit is left unclaimed — pass 2 surfaces it by name
+  }
+
+  // pass 2 — the sweep: every candidate must land in exactly one channel.
+  const unclaimedPages = [];
+  for (const p of pageCandidates) {
+    const dk = denyFor(p);
+    if (claimedPages.has(p) || hubFilePages.has(p)) {
+      // the page double-claim law: a catalogued page may not ALSO be denied
+      if (dk) pageClaimClash.push(p + ' <- [catalogued, DENY:' + dk + ']');
+      continue;
+    }
+    if (dk) { denyUsed.add(dk); continue; }
+    if (!p.endsWith('/index.html')) {
+      const dir = p.slice(0, p.lastIndexOf('/'));
+      if (unitOf.has(dir)) continue;                        // an exhibit unit's interior page
+    }
+    unclaimedPages.push(p);
+  }
+  // a DENY row that matches nothing on disk is drift too — surfaced, never ignored
+  const denyUnused = denyKeys.filter((k) => !denyUsed.has(k));
+
+  /* ═══ §6.5 BOTH-OR-NEITHER + SAME-LOCKS — the catalog mirrors the walkable
+     estate exactly ══════════════════════════════════════════════════════════════
+     The invariant (the keeper's, verbatim intent): the catalog catalogs everything
+     a visitor can FIND by walking, and honors the SAME hidden locks the walk
+     does. Three enforcement arms, all loud:
+       (a) LOCK FIDELITY — every LOCKS descriptor (registry.mjs) is PROVEN
+           equivalent to the live tools/ws/ws.js predicate it transcribes, by
+           driving the real WS.unlocked over a satisfied store, per-clause broken
+           stores, and the empty store — and lockMet (core.mjs, the render-side
+           evaluator) must agree on every one. A ws.js edit that drifts a lock
+           fails here BY ID.
+       (b) SECRET-PATH AUDIT — every kind:'place' secret in the Undercroft's
+           SECRETS table must resolve to a real page that is catalogued under the
+           SAME lock its niche reveals (or, for a room target, a locked room whose
+           ROOM_LOCK is no stronger than the niche path — the weakest-lock rule).
+       (c) REACHABILITY — every catalogued page must be referenced by some OTHER
+           shipped page (link tokens scraped from the shipped html, so gated
+           JS-built links count — the Undercroft's niches carry their hrefs as
+           string literals). A catalog-only entry no walk can reach fails BY NAME. */
+
+  /* (a) LOCK FIDELITY — ws.js is the authority; LOCKS is its data transcription. */
+  const lockDrift = [];
+  const mkStore = (map) => ({
+    ok: true,
+    has: (k) => Object.prototype.hasOwnProperty.call(map, k),
+    get: (k) => map[k],
+    all: map,
+  });
+  // LOCKS rows are flat { all: [leaves] } by construction (ws.js place predicates
+  // are conjunctions); the generator below depends on that shape and REFUSES others.
+  const lockStores = (desc) => {
+    if (!desc || !Array.isArray(desc.all)) return null;
+    const sat = {};
+    for (const leaf of desc.all) {
+      if (typeof leaf === 'string') sat[leaf] = '1';
+      else if (leaf && typeof leaf.key === 'string' && typeof leaf.min === 'number') sat[leaf.key] = String(leaf.min);
+      else return null;
+    }
+    const broken = desc.all.map((leaf) => {
+      const m = { ...sat };
+      if (typeof leaf === 'string') delete m[leaf];
+      else m[leaf.key] = String(leaf.min - 1);
+      return m;
+    });
+    return { sat, broken };
+  };
+  let WSmod = null;
+  try { WSmod = require('../ws/ws.js'); } catch (e) { lockDrift.push('tools/ws/ws.js failed to load: ' + (e && e.message)); }
+  if (WSmod) {
+    const wsIds = new Set(WSmod.SECRETS.map((s) => s.id));
+    for (const id of sorted(Object.keys(LOCKS))) {
+      const desc = LOCKS[id];
+      if (!wsIds.has(id)) { lockDrift.push('LOCKS["' + id + '"] names no ws.js secret'); continue; }
+      const st = lockStores(desc);
+      if (!st) { lockDrift.push('LOCKS["' + id + '"] is not a flat {all:[…]} conjunction — the proof generator cannot drive it'); continue; }
+      const cases = [
+        [mkStore(st.sat), true, 'satisfied store'],
+        [mkStore({}), false, 'empty store'],
+        ...st.broken.map((m, i) => [mkStore(m), false, 'clause ' + i + ' broken']),
+      ];
+      for (const [store, want, label] of cases) {
+        if (WSmod.unlocked(id, store) !== want) {
+          lockDrift.push('LOCKS["' + id + '"] ≠ ws.js WS.unlocked (' + label + ': ws.js says ' + !want + ')');
+        }
+        if (lockMet(desc, store) !== want) {
+          lockDrift.push('LOCKS["' + id + '"] lockMet disagrees with its own descriptor (' + label + ')');
+        }
+      }
+    }
+  }
+
+  /* (b) SECRET-PATH AUDIT — parse the Undercroft's SECRETS table (id/kind/href). */
+  const secretFaults = [];
+  const roomByHref = new Map(rooms.map((r) => [r.href, r]));
+  const exByHref = new Map();
+  for (const list of exhibitsByRoom.values()) for (const ex of list) exByHref.set(ex.href, ex);
+  const usedLockIds = new Set();
+  for (const list of exhibitsByRoom.values()) for (const ex of list) if (ex.lockId) usedLockIds.add(ex.lockId);
+  {
+    const ucPath = join(ROOT, 'undercroft', 'index.src.html');
+    let uc = null;
+    try { uc = readFileSync(ucPath, 'utf8'); } catch { secretFaults.push('undercroft/index.src.html unreadable — cannot audit the secret paths'); }
+    if (uc) {
+      const start = uc.indexOf('const SECRETS = [');
+      const end = start >= 0 ? uc.indexOf('\n];', start) : -1;
+      if (start < 0 || end < 0) secretFaults.push('undercroft SECRETS table not found — parser stale?');
+      else {
+        const block = uc.slice(start, end);
+        const heads = [...block.matchAll(/id:\s*'([^']+)'[\s\S]{0,200}?kind:\s*'(place|trophy)'/g)];
+        if (heads.length < 10) secretFaults.push('undercroft SECRETS parse recovered only ' + heads.length + ' rows — parser stale?');
+        for (let i = 0; i < heads.length; i++) {
+          const [, id, kind] = heads[i];
+          const seg = block.slice(heads[i].index, i + 1 < heads.length ? heads[i + 1].index : block.length);
+          const hm = seg.match(/href:\s*'([^']+)'/);
+          if (kind === 'trophy') {
+            // trophies are awards (the cabinet-of-honors world), never walkable pages
+            if (hm) secretFaults.push('trophy "' + id + '" carries an href (' + hm[1] + ') — a trophy must not be a page');
+            continue;
+          }
+          if (!hm) { secretFaults.push('place secret "' + id + '" has no href — a place must be walkable'); continue; }
+          const target = join('undercroft', hm[1]);   // normalizes ../ → repo-relative
+          if (!existsSync(join(ROOT, target))) { secretFaults.push('place secret "' + id + '" target missing on disk: ' + target); continue; }
+          const room = roomByHref.get(target);
+          if (room) {
+            // a niche that opens onto a ROOM: public room = fine (weakest lock is
+            // public); a locked room's ROOM_LOCK must open on this niche's path too.
+            if (room.locked) {
+              const rl = ROOM_LOCKS[room.id];
+              const st = lockStores(LOCKS[id] || null);
+              usedLockIds.add(id);
+              if (!rl) secretFaults.push('locked room "' + room.id + '" (niche "' + id + '") has no ROOM_LOCKS descriptor');
+              else if (!st) secretFaults.push('niche "' + id + '" has no provable LOCKS row to check the room lock against');
+              else if (!lockMet(rl, mkStore(st.sat))) {
+                secretFaults.push('ROOM_LOCKS["' + room.id + '"] is STRONGER than its niche path "' + id + '" — the weakest-lock rule is violated');
+              }
+            }
+            continue;
+          }
+          const ex = exByHref.get(target);
+          if (!ex) { secretFaults.push('place secret "' + id + '" (' + target + ') is NOT catalogued — both-or-neither violated'); continue; }
+          if (ex.lockId !== id) {
+            secretFaults.push('place secret "' + id + '" (' + target + ') is catalogued under lock "'
+              + (ex.lockId || ex.gate || 'PUBLIC') + '" — must carry the niche\'s own lock (or a documented weaker public path)');
+          }
+        }
+      }
+    }
+    // a LOCKS row no catalogued entry and no room audit uses is drift too
+    for (const id of sorted(Object.keys(LOCKS))) {
+      if (!usedLockIds.has(id)) secretFaults.push('LOCKS["' + id + '"] is used by no catalogued entry — stale transcription row');
+    }
+  }
+
+  /* (c) REACHABILITY — link tokens scraped from every shipped page. Quoted-string
+     tokens deliberately include JS-built links (href:'titration/index.html', the
+     Undercroft niches, STAR_META), so a GATED path counts as a path — the lock
+     side of the invariant is arms (a)/(b), not this scan. Generous matching keeps
+     false flags out (a prose mention counts as a reference; acceptable — the
+     failure mode we hunt is a catalog entry NO page references at all). */
+  const referencedFrom = new Map();          // repo-relative page -> Set(source page)
+  const addRef = (target, src) => {
+    if (!target || target.startsWith('..')) return;
+    if (!referencedFrom.has(target)) referencedFrom.set(target, new Set());
+    referencedFrom.get(target).add(src);
+  };
+  const PAGE_TOKEN = /["'`]((?:\.\.?\/)*[A-Za-z0-9_][A-Za-z0-9_./-]*\.html)(?:[#?][^"'`]*)?["'`]/g;
+  const DIR_TOKEN = /["'`(=]((?:\.\.?\/)*[A-Za-z0-9_][A-Za-z0-9_./-]*\/)["'`)]/g;
+  for (const src of htmlPages) {
+    if (!existsSync(join(ROOT, src))) continue;                  // planted extraPages
+    const text = readFileSync(join(ROOT, src), 'utf8');
+    const dir = src.includes('/') ? src.slice(0, src.lastIndexOf('/')) : '';
+    let m;
+    PAGE_TOKEN.lastIndex = 0;
+    while ((m = PAGE_TOKEN.exec(text))) {
+      const raw = m[1].replace(/^\.\//, '');
+      addRef(normalize(join(dir, raw)), src);
+      addRef(normalize(raw), src);
+    }
+    DIR_TOKEN.lastIndex = 0;
+    while ((m = DIR_TOKEN.exec(text))) {
+      const raw = m[1].replace(/^\.\//, '');
+      addRef(normalize(join(dir, raw, 'index.html')), src);
+      addRef(normalize(join(raw, 'index.html')), src);
+    }
+  }
+  const catalogued = [];                      // [href, unitDir|null]
+  for (const r of rooms) catalogued.push([r.href, null]);   // rooms: front-door PLACES
+  for (const list of exhibitsByRoom.values()) for (const ex of list) {
+    catalogued.push([ex.href, ex.href.endsWith('/index.html') ? ex.href.slice(0, -'/index.html'.length) : null]);
+  }
+  for (const p of collection.pieces) catalogued.push([p.href, p.href.slice(0, -'/index.html'.length)]);
+  for (const h of hidden) catalogued.push([h.href, dirOf(h.href)]);
+  const unreachable = [];
+  for (const [href, unit] of catalogued.sort((a, b) => cmp(a[0], b[0]))) {
+    const srcs = referencedFrom.get(href);
+    let ok = false;
+    if (srcs) {
+      for (const s of srcs) {
+        if (s === href) continue;                              // a self-link is no path
+        if (unit && s.startsWith(unit + '/')) continue;        // its own interior pages
+        ok = true; break;
+      }
+    }
+    if (!ok) unreachable.push(href);
+  }
+
   /* ── the completeness gate ───────────────────────────────────────────────── */
   const unclaimed = allDirs.filter((d) => !claimed.has(d)).sort(cmp);
   const doubleClaimed = [...claimBy.entries()].filter(([, chans]) => chans.length > 1)
-    .map(([dir, chans]) => dir + ' <- [' + chans.join(', ') + ']').sort(cmp);
+    .map(([dir, chans]) => dir + ' <- [' + chans.join(', ') + ']')
+    .concat(pageClaimClash).sort(cmp);
 
   /* ── piece counting (§6.1) ───────────────────────────────────────────────── */
   // per-district: room-pages + exhibits (top-level + internal + companion + within)
@@ -392,7 +750,11 @@ function build(opts = {}) {
     unclaimed,
   };
 
-  return { manifest, universe, primaryOf, shed, unclaimed, doubleClaimed, allDirs, claimed, districts };
+  return {
+    manifest, universe, primaryOf, shed, unclaimed, doubleClaimed, allDirs, claimed, districts,
+    unclaimedPages, denyUnused, htmlPages,
+    lockDrift, secretFaults, unreachable,
+  };
 }
 
 /* ═══ THE --check GATE (§6.2 / §6.3 / §9.4) ═══════════════════════════════════
@@ -406,6 +768,19 @@ function build(opts = {}) {
 function normalizeForCompare(manifestObj) {
   const { generatedAt, ...rest } = manifestObj;   // eslint-disable-line no-unused-vars
   return JSON.stringify(rest, null, 2);
+}
+
+/* every catalogued page href in a manifest (rooms + exhibits + collections + hidden) —
+   the staleness gate diffs fresh-vs-committed with this to NAME newly-added pages. */
+function collectHrefs(manifestObj) {
+  const out = new Set();
+  for (const d of (manifestObj.districts || [])) for (const r of (d.rooms || [])) {
+    out.add(r.href);
+    for (const ex of (r.exhibits || [])) out.add(ex.href);
+  }
+  for (const c of (manifestObj.collections || [])) for (const p of (c.pieces || [])) out.add(p.href);
+  for (const h of (manifestObj.hidden || [])) out.add(h.href);
+  return out;
 }
 
 /* §6.1/§6.3 consumer 2 — project the manifest into the pinned MANIFEST_TALLIES shape:
@@ -438,6 +813,34 @@ function evaluate(result, committedJson, committedTalliesJson) {
     failures.push('UNCLAIMED (' + result.unclaimed.length + '): ' + result.unclaimed.join(', ')
       + ' — claim each via a room href / an exhibit href / the crossings collection / the hidden node / the §6.2 allowlist');
   }
+  // 1b. the §6.4 PAGE law — every shipped page catalogued or explicitly accounted
+  const unclaimedPages = result.unclaimedPages || [];
+  if (unclaimedPages.length) {
+    failures.push('UNCLAIMED PAGES (' + unclaimedPages.length + '): ' + unclaimedPages.join(', ')
+      + ' — every shipped visitor page must be catalogued (a room/exhibit href, an auto-discovered'
+      + ' sub-bench, a HUBS file: page) or explicitly DENIED with a reason in registry.mjs');
+  }
+  const denyUnused = result.denyUnused || [];
+  if (denyUnused.length) {
+    failures.push('DENY rows matching nothing on disk (' + denyUnused.length + '): ' + denyUnused.join(', ')
+      + ' — prune or fix registry.mjs DENY (a stale denial is drift too)');
+  }
+  // 1c. the §6.5 both-or-neither + same-locks laws
+  const lockDrift = result.lockDrift || [];
+  if (lockDrift.length) {
+    failures.push('LOCK DRIFT vs ws.js (' + lockDrift.length + '): ' + lockDrift.join('; ')
+      + ' — re-transcribe registry.mjs LOCKS from tools/ws/ws.js WS.SECRETS (ws.js is the authority)');
+  }
+  const secretFaults = result.secretFaults || [];
+  if (secretFaults.length) {
+    failures.push('SECRET-PATH AUDIT (' + secretFaults.length + '): ' + secretFaults.join('; ')
+      + ' — every walkable place-secret must be catalogued under its own reveal-lock (both-or-neither / same-locks)');
+  }
+  const unreachable = result.unreachable || [];
+  if (unreachable.length) {
+    failures.push('CATALOGUED-BUT-UNREACHABLE (' + unreachable.length + '): ' + unreachable.join(', ')
+      + ' — no shipped page references these; a catalog entry must have a walkable in-estate path (or be pruned)');
+  }
   // 2. the double-claim law — a dir claimed by more than one channel
   if (result.doubleClaimed.length) {
     failures.push('DOUBLE-CLAIMED (' + result.doubleClaimed.length + '): ' + result.doubleClaimed.join('; ')
@@ -454,7 +857,13 @@ function evaluate(result, committedJson, committedTalliesJson) {
     try { committed = JSON.parse(committedJson); } catch { committed = null; }
     if (committed == null) failures.push('estate-manifest.json is unparseable — run `node tools/manifest/manifest.mjs`');
     else if (normalizeForCompare(m) !== normalizeForCompare(committed)) {
-      failures.push('estate-manifest.json is STALE — re-derive: `node tools/manifest/manifest.mjs` (then commit it in the same change)');
+      // NAME any pages the disk knows that the committed catalog does not — this is
+      // what a freshly-added page looks like at the gate (§6.4: the drift is loud
+      // AND actionable, not just "something differs").
+      const fresh = collectHrefs(m), old = collectHrefs(committed);
+      const added = sorted([...fresh].filter((h) => !old.has(h)));
+      failures.push('estate-manifest.json is STALE — re-derive: `node tools/manifest/manifest.mjs` (then commit it in the same change)'
+        + (added.length ? ' — pages on disk not yet in the committed catalog: ' + added.join(', ') : ''));
     }
   }
   // 5. the depth-tally projection (§6.3 consumer 2) must be fresh too — the map bakes it, so a
@@ -476,19 +885,25 @@ function main() {
   if (args.has('--check')) {
     // --plant=<name> is the §6.2 neg-control hook: inject a synthetic unclaimed dir so the
     // gate FAILS LOUD (used by manifest.test.mjs; FS-free, harms nothing).
+    // --plant-page=<path> is its §6.4 sibling: inject a synthetic on-disk PAGE so the
+    // page law FAILS LOUD (an unresolvable path) or the staleness gate names it (a
+    // path under a real room — auto-discovered, so the fresh derive outgrows the
+    // committed manifest).
     const plant = argv.filter((a) => a.startsWith('--plant=')).map((a) => a.slice('--plant='.length));
-    const result = build({ extraDirs: plant });
+    const plantPages = argv.filter((a) => a.startsWith('--plant-page=')).map((a) => a.slice('--plant-page='.length));
+    const result = build({ extraDirs: plant, extraPages: plantPages });
     const committed = existsSync(OUT) ? readFileSync(OUT, 'utf8') : null;
     const committedTallies = existsSync(TALLIES_OUT) ? readFileSync(TALLIES_OUT, 'utf8') : null;
     const { ok, failures } = evaluate(result, committed, committedTallies);
     const m = result.manifest;
-    console.log(`manifest --check: ${m.counts.districts} districts · ${m.counts.rooms} rooms · ${m.counts.pieces} pieces · unclaimed ${result.unclaimed.length} · floors rooms≥${ROOMS_FLOOR} pieces≥${PIECES_FLOOR}`);
-    if (ok) { console.log('manifest --check: OK — complete · no double-claim · floors met · not stale'); process.exit(0); }
+    console.log(`manifest --check: ${m.counts.districts} districts · ${m.counts.rooms} rooms · ${m.counts.pieces} pieces · unclaimed ${result.unclaimed.length} · unclaimed-pages ${result.unclaimedPages.length}/${result.htmlPages.length} · lock-drift ${result.lockDrift.length} · secret-faults ${result.secretFaults.length} · unreachable ${result.unreachable.length} · floors rooms≥${ROOMS_FLOOR} pieces≥${PIECES_FLOOR}`);
+    if (ok) { console.log('manifest --check: OK — complete (dirs + pages) · locks mirror ws.js · secrets path-true · all entries reachable · no double-claim · floors met · not stale'); process.exit(0); }
     console.error('manifest --check: FAIL\n  - ' + failures.join('\n  - '));
     process.exit(1);
   }
 
-  const { manifest, universe, shed, unclaimed, doubleClaimed } = build();
+  const { manifest, universe, shed, unclaimed, doubleClaimed, unclaimedPages, denyUnused, htmlPages,
+    lockDrift, secretFaults, unreachable } = build();
   const json = JSON.stringify(manifest, null, 2);
 
   if (!args.has('--dry')) {
@@ -511,16 +926,33 @@ function main() {
     console.log('--- Shed heritage (Workbench-primary): ' + shed.length + ' ---\n  ' + shed.join(', '));
     if (unclaimed.length) console.log('\n!!! UNCLAIMED (' + unclaimed.length + '):\n  ' + unclaimed.join('\n  '));
     else console.log('\n✓ unclaimed: [] — every top-level dir is claimed');
+    if (unclaimedPages.length) console.log('\n!!! UNCLAIMED PAGES (' + unclaimedPages.length + '):\n  ' + unclaimedPages.join('\n  '));
+    else console.log('✓ unclaimed pages: [] — every shipped page (' + htmlPages.length + ' on disk) is catalogued or accounted (§6.4)');
+    if (denyUnused.length) console.log('\n!!! DENY rows matching nothing (' + denyUnused.length + '):\n  ' + denyUnused.join('\n  '));
+    if (lockDrift.length) console.log('\n!!! LOCK DRIFT vs ws.js (' + lockDrift.length + '):\n  ' + lockDrift.join('\n  '));
+    else console.log('✓ locks mirror ws.js — every LOCKS descriptor proven equivalent to WS.unlocked (§6.5a)');
+    if (secretFaults.length) console.log('\n!!! SECRET-PATH AUDIT (' + secretFaults.length + '):\n  ' + secretFaults.join('\n  '));
+    else console.log('✓ secret paths true — every place-secret catalogued under its own reveal-lock (§6.5b)');
+    if (unreachable.length) console.log('\n!!! CATALOGUED-BUT-UNREACHABLE (' + unreachable.length + '):\n  ' + unreachable.join('\n  '));
+    else console.log('✓ every catalogued page is referenced by another shipped page (§6.5c)');
     if (doubleClaimed.length) console.log('\n!!! DOUBLE-CLAIMED (' + doubleClaimed.length + '):\n  ' + doubleClaimed.join('\n  '));
     else console.log('✓ no double-claim — every dir claimed by exactly one channel');
     console.log('\n--- per-district counts ---');
     for (const d of manifest.districts) console.log(`  ${d.id}: rooms ${d.counts.rooms} · pieces ${d.counts.pieces} · within ${d.counts.within}`);
   }
 
-  // arm the completeness law in write/report mode too (defense in depth): a broken
+  // arm the completeness laws in write/report mode too (defense in depth): a broken
   // manifest must not be silently written green. The full gate (floors + staleness) is --check.
-  if (unclaimed.length || doubleClaimed.length) {
-    console.error('manifest: FAIL — ' + (unclaimed.length ? unclaimed.length + ' unclaimed ' : '') + (doubleClaimed.length ? doubleClaimed.length + ' double-claimed' : ''));
+  if (unclaimed.length || doubleClaimed.length || unclaimedPages.length || denyUnused.length
+      || lockDrift.length || secretFaults.length || unreachable.length) {
+    console.error('manifest: FAIL — '
+      + (unclaimed.length ? unclaimed.length + ' unclaimed dir(s) ' : '')
+      + (unclaimedPages.length ? unclaimedPages.length + ' unclaimed page(s): ' + unclaimedPages.join(', ') + ' ' : '')
+      + (denyUnused.length ? denyUnused.length + ' stale DENY row(s) ' : '')
+      + (lockDrift.length ? lockDrift.length + ' lock-drift: ' + lockDrift.join('; ') + ' ' : '')
+      + (secretFaults.length ? secretFaults.length + ' secret-path fault(s): ' + secretFaults.join('; ') + ' ' : '')
+      + (unreachable.length ? unreachable.length + ' unreachable: ' + unreachable.join(', ') + ' ' : '')
+      + (doubleClaimed.length ? doubleClaimed.length + ' double-claimed' : ''));
     process.exit(1);
   }
 }

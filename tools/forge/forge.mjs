@@ -32,6 +32,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 const DIRECTIVE = /^[ \t]*<!--[ \t]*forge:include[ \t]+(.+?)[ \t]*-->[ \t]*$/;
 
@@ -448,6 +449,9 @@ Usage:
   node tools/forge/forge.mjs --check <file.src.html | --all [root]>
       Build in memory and compare to the on-disk .html. Reports drift and
       exits 1 if any shipped file is stale; exits 0 if all are current.
+      An estate-wide check (--all / no file list) ALSO runs the estate manifest
+      gate (tools/manifest/manifest.mjs --check) when present: a visitor page on
+      disk that the card catalog does not cover fails the build check by name.
 
   node tools/forge/forge.mjs --audit-seen [root] [--strict]
       Check every front-door PLACES page drops its own ws:seen:<id> breadcrumb
@@ -490,9 +494,10 @@ function main(argv) {
     let rest = args.slice(1);
     const strict = rest.includes('--strict');
     rest = rest.filter(a => a !== '--strict');     // strip the global flag from the file list
-    let files;
+    let files, checkRoot = null;
     if (rest[0] === '--all' || rest.length === 0) {
-      files = findSrcFiles(rest[1] ? path.resolve(rest[1]) : defaultRoot());
+      checkRoot = rest[1] ? path.resolve(rest[1]) : defaultRoot();
+      files = findSrcFiles(checkRoot);
     } else {
       files = rest.map(f => path.resolve(f));
     }
@@ -513,8 +518,30 @@ function main(argv) {
         drift++;
       }
     }
+    // ── THE CATALOG-COMPLETENESS GATE (manifest §6.4) ────────────────────────
+    // An estate-wide check (--all / no file list) is the BUILD gate, and "the build
+    // is current" must include "every visitor page on disk is in the card catalog".
+    // So it also runs the estate manifest gate, which re-derives the catalog from
+    // disk and FAILS LOUD — naming the orphan page(s) — whenever a shipped page is
+    // neither catalogued nor explicitly denied, or the committed manifest hasn't
+    // caught up with a newly added page. A new bench can therefore never ship
+    // uncatalogued through a green forge --check. Single-file checks skip this
+    // (they are page-local); a tree with no manifest tool (a subtree check) too.
+    let gateFailed = false;
+    if (checkRoot) {
+      const gate = path.join(checkRoot, 'tools', 'manifest', 'manifest.mjs');
+      if (fs.existsSync(gate)) {
+        const res = spawnSync(process.execPath, [gate, '--check'], { stdio: 'inherit' });
+        gateFailed = (res.status !== 0);
+      }
+    }
+
     if (drift) {
       console.error('\nforge --check: ' + drift + ' file(s) drifted. Re-run forge to regenerate.');
+      return 1;
+    }
+    if (gateFailed) {
+      console.error('\nforge --check: files current, but the estate manifest gate FAILED (see above) — the catalog does not cover the estate.');
       return 1;
     }
     console.log('\nforge --check: all ' + files.length + ' file(s) current.');

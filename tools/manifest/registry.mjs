@@ -94,7 +94,107 @@ export const INTERNAL = [
   { hub: 'strange-garden', rule: 'pieces-dir', dir: 'strange-garden/pieces', kind: 'piece' },
   { hub: 'cavern',       rule: 'internal-links', file: 'cavern/index.html', firstClass: ['bench'], kind: 'bench' },
   { hub: 'the-barrel-house', rule: 'internal-links', file: 'the-barrel-house/index.html', firstClass: ['card'], kind: 'exhibit' },
+  // `flat` — explicit visitor leaf pages that live DIRECTLY in a hub dir (not a
+  // subdir, not in a js-manifest), so no scrape rule can find them. hours/almanac.html
+  // (the Almanac bench, WS4) was the first: a sibling leaf of the-hours.html.
+  // A flat leaf is the ONE genuinely ambiguous page shape (a chapter of the room's
+  // own flow vs a separate bench vs maker meta), so flat pages stay EXPLICIT: the
+  // §6.4 page law refuses any flat page that is neither enrolled here nor DENIED
+  // below — a new flat page forces a deliberate call, never a silent hole.
+  { hub: 'hours', rule: 'flat', files: ['hours/almanac.html', 'hours/analemma.html'], kind: 'bench' },
+  // the Clockwork Automata chapters: ten distinct interactive benches presented
+  // off clockwork/index.html (the tokenizer, the temperature dial, …) — the same
+  // many-benches-one-room shape as the Cavern, just flat-filed.
+  { hub: 'clockwork', rule: 'flat', kind: 'bench', files: [
+    'clockwork/autoregress.html', 'clockwork/context.html', 'clockwork/measurement.html',
+    'clockwork/next-word.html', 'clockwork/partition.html', 'clockwork/spotlight.html',
+    'clockwork/temperature.html', 'clockwork/tokenizer.html', 'clockwork/turn.html',
+    'clockwork/unstamped-bag.html',
+  ] },
+  // NOTE (§6.4): adventure/ and latch/ are Workbench HERITAGE exhibits, not rooms —
+  // their interior pages (the three Lantern tales; the akari/slitherlink/warehouse
+  // ateliers) are claimed by the unit-interior rule, part of the exhibit itself.
+  // the Museum's front-door retrospective gallery.
+  { hub: 'museum', rule: 'flat', kind: 'exhibit', files: ['museum/ages.html'] },
+  // the Strange Garden's field-notes journal (real visitor reading, own page).
+  { hub: 'strange-garden', rule: 'flat', kind: 'exhibit', files: ['strange-garden/field-notes.html'] },
+  // ── the SECRET places (both-or-neither / same-locks law, §6.5) ──────────────
+  // Every entry below is a walkable page a visitor reaches through a REVEAL-LOCKED
+  // link (the Undercroft's niches, ws.js WS.SECRETS). Each enrolls hidden with
+  // `lock: '<ws-secret-id>'` — a reference into the LOCKS table below, the SAME
+  // predicate that reveals the walkable link — so the catalog shows an entry
+  // exactly when the visitor could walk to it, never before, never later. The
+  // manifest gate PROVES each LOCKS descriptor equivalent to the live ws.js
+  // predicate, so a ws.js change that drifts a lock fails the build by name.
+  // the sealed room's diary — reached from the Reliquary annex + the Undercroft
+  // niche, both revealed on its own grand key.
+  { hub: 'the-reliquary', rule: 'flat', kind: 'exhibit', files: ['the-reliquary/the-mere.html'],
+    lock: 'the-mere' },
+  // the Living Lattice — the Undercroft's quickening niche links it once the
+  // visitor has met BOTH ingredients (game-of-life + lattice): the true PATH lock
+  // (the old ws:seen:quickening gate was a visit-proxy — you could walk to it
+  // before the catalog admitted it existed).
+  { hub: 'sound-garden', rule: 'flat', kind: 'bench', files: ['sound-garden/quickening.html'],
+    lock: 'quickening' },
+  // the Undercroft's own earned rooms — each niche reveals its stair-level door on
+  // the predicate named here (the room card itself additionally sits behind the
+  // Undercroft's ROOM_LOCK, so nothing shows before the way down is even found).
+  { hub: 'undercroft', rule: 'flat', kind: 'exhibit', files: [
+    { href: 'undercroft/the-long-quiet.html',  lock: 'the-long-quiet' },
+    { href: 'undercroft/rosette.html',         lock: 'rosette' },
+    { href: 'undercroft/codex.html',           lock: 'codex' },
+    { href: 'undercroft/floating-ink.html',    lock: 'floating-ink' },
+    { href: 'undercroft/almanac.html',         lock: 'almanac' },
+    { href: 'undercroft/enigma.html',          lock: 'enigma' },
+    { href: 'undercroft/the-night-shift.html', lock: 'night-shift' },
+    { href: 'undercroft/light-mixer.html',     lock: 'light-mixer' },
+    { href: 'undercroft/keeper.html',          lock: 'm-keeper-of-tales' },
+  ] },
 ];
+
+/* ── LOCKS: reveal-lock descriptors, transcribed from tools/ws/ws.js WS.SECRETS ──
+   THE AUTHORITY IS ws.js — these are data transcriptions of its predicate
+   functions (functions cannot ride into a JSON slab), in the lockMet grammar
+   (card-catalog/core.mjs): a string leaf = key present; {key,min} = numeric ≥;
+   {distinctSeen:n} = n distinct ws:seen:* keys; {all:[…]}/{any:[…]} combinators.
+   The manifest gate PROVES each row equivalent to WS.unlocked(id, …) by driving
+   the real ws.js predicate over satisfied/broken synthetic stores — transcription
+   drift fails the build naming the id (the STRAYS seeds-and-checks pattern). */
+export const LOCKS = {
+  quickening:       { all: ['ws:seen:game-of-life', 'ws:seen:lattice'] },
+  'the-long-quiet': { all: ['ws:flag:patience'] },
+  rosette:          { all: ['ws:seen:game-of-life', 'ws:seen:lattice', 'ws:flag:patience',
+                            'ws:flag:eleven', { key: 'ws:best:swarm', min: 8 }] },
+  codex:            { all: ['ws:seen:verse', 'ws:seen:scriptorium'] },
+  'floating-ink':   { all: ['ws:seen:cartographer', 'ws:seen:scriptorium'] },
+  almanac:          { all: ['ws:seen:verse', 'ws:seen:orrery'] },
+  enigma:           { all: ['ws:seen:scriptorium', 'ws:seen:slipstick'] },
+  'night-shift':    { all: ['ws:flag:the-lamplighter-won', 'ws:flag:the-ferryman-won'] },
+  'light-mixer':    { all: ['ws:flag:earned-rainbow', 'ws:flag:earned-halo', 'ws:flag:earned-spyglass',
+                            'ws:flag:earned-camera', 'ws:flag:earned-spectroscope', 'ws:flag:earned-polariser',
+                            'ws:flag:earned-anamorphosis', 'ws:flag:earned-iridescence', 'ws:flag:earned-maze'] },
+  'm-keeper-of-tales': { all: ['ws:flag:the-lamplighter-won', 'ws:flag:the-ferryman-won',
+                               'ws:flag:the-clockmaker-won'] },
+  reliquary:        { all: ['ws:seen:reliquary-solved'] },
+  'the-mere':       { all: ['ws:seen:the-mere'] },
+};
+
+/* ── ROOM_LOCKS: reveal-locks for the LOCKED PLACES rooms (both-or-neither) ─────
+   Baked onto the locked slab cards by card-catalog/reclaim.mjs and evaluated by
+   core.mjs unlockedFor — the catalog shows a locked room exactly when the visitor
+   could WALK to it (weakest path across every way in):
+   • undercroft — the front-door stair becomes a LINK only once the rune is found
+     (ws:seen:undercroft-rune) or the cellar already visited. (The ≥4-distinct
+     broken-stair tile is a TEASER, not walkable — so it does not unlock.)
+   • reliquary — the front-door study tile is walkable at ≥8 distinct ws:seen
+     rooms (index.src.html revealReliquary); `-opening`/`-seen` keep it for
+     returning visitors; the Undercroft niche opens the same door on
+     ws:seen:reliquary-solved. Weakest of all four ways in. */
+export const ROOM_LOCKS = {
+  undercroft: { any: ['ws:seen:undercroft-rune', 'ws:seen:undercroft'] },
+  reliquary:  { any: [{ distinctSeen: 8 }, 'ws:seen:reliquary-opening',
+                      'ws:seen:reliquary', 'ws:seen:reliquary-solved'] },
+};
 
 /* ── STRAYS: the R3 re-homing table (DESIGN §7.1 R3) ──────────────────────────
    Post-epoch Workbench-only pieces given honest kin hubs. The generator computes
@@ -216,3 +316,30 @@ export const ALLOWLIST = [
   // in WS5, never enrolled); folded in when the picture house was raised.
   'trailer', 'trailer-bed',
 ];
+
+/* ── DENY: pages the §6.4 PAGE LAW must NOT catalogue — each with intent ─────────
+   The page law (manifest.mjs) walks every shipped .html on disk and demands that
+   each visitor-shaped page be claimed by exactly one channel: a room/exhibit href,
+   a HUBS `file:` page, the crossings/hidden claims, the ALLOWLIST (whole dirs,
+   recursive), or THIS table. A key is either an exact repo-relative page path or a
+   dir prefix ending in '/' (claims every page under it EXCEPT the dir's own
+   top-level index.html, which the room/dir law owns). An entry that matches
+   nothing on disk FAILS the gate — a stale denial is drift too. Nothing here may
+   overlap a catalogued href (the double-claim law extends to pages).
+
+   TWO honest reasons to deny: `meta:` (a maker-side / archival page that is not a
+   visitor exhibit) and `secret:` (an EARNED page kept out of the visible catalog
+   by spoiler discipline — same law that render-gates the hidden node). ── */
+export const DENY = {
+  // ── meta: maker-side + archival ──
+  'the-gate/audio-bench.html':
+    'meta: dev-only SFX render bench (the page titles itself "dev only") — a maker tool, not a visitor page',
+  'museum/archive/':
+    'meta: frozen point-in-time snapshots of other exhibits (trailer/talk props) — archival duplicates, never catalogue twice',
+  'the-aquarium/art-specs/':
+    'meta: ART FOUNDRY spec-preview pages (maker-side scaffolding for the room art)',
+  'the-value-of-a-cut/art-specs/':
+    'meta: ART FOUNDRY spec-preview pages (maker-side scaffolding for the room art)',
+  // (the Undercroft's interior places are no longer denied: §6.5 both-or-neither
+  //  enrolls each as a hidden exhibit locked on its own niche predicate above.)
+};

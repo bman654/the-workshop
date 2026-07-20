@@ -43,7 +43,7 @@ import { dirname, join } from 'node:path';
 import {
   ORDERINGS, buildTree, search, matches, matchInfo, searchText, subjectOf, SUBJECTS,
   filterUnlocked, unlockedFor, runSelfTest, verdict,
-  indexedExhibits, exhibitGated, exhibitPhrase, SEALED_CARDS
+  indexedExhibits, exhibitGated, exhibitPhrase, lockMet, SEALED_CARDS
 } from './core.mjs';
 import { parsePlacesText } from './reclaim.mjs';
 
@@ -71,6 +71,32 @@ const UNSEALED = storeOf(['ws:seen:undercroft-rune']);       // earned the way d
 const UNSEALED2 = storeOf(['ws:seen:undercroft']);           // returning visitor
 const STORAGE_OFF = storeOf([], false);                      // no localStorage
 const RELIQ_SEEN = storeOf(['ws:seen:reliquary']);           // #399 entered the sealed study (Reliquary key only)
+
+/* ── §6.5 lock-descriptor helpers (the same-locks law) ─────────────────────────
+   satMapOf builds a key→value map that SATISFIES a lock descriptor (first clause
+   of an `any`, every clause of an `all`, min-valued scores, n synthetic ws:seen
+   keys for distinctSeen); storeFromMap wraps it in the WS.store() shape. The
+   earned store for a gated exhibit comes from its lock when it carries one, else
+   from its single gate key (the legacy within discipline). */
+function satMapOf(lock) {
+  const m = {};
+  const add = (c) => {
+    if (typeof c === 'string') { m[c] = '1'; return; }
+    if (!c || typeof c !== 'object') return;
+    if (Array.isArray(c.all)) { c.all.forEach(add); return; }
+    if (Array.isArray(c.any)) { add(c.any[0]); return; }
+    if (typeof c.distinctSeen === 'number') { for (let i = 0; i < c.distinctSeen; i++) m['ws:seen:synth-' + i] = '1'; return; }
+    if (typeof c.key === 'string') m[c.key] = String(c.min);
+  };
+  add(lock);
+  return m;
+}
+function storeFromMap(map, ok = true) {
+  return { ok, has: (k) => k in map, get: (k) => map[k], all: map };
+}
+function earnedStoreFor(ex) {
+  return ex.lock != null ? storeFromMap(satMapOf(ex.lock)) : storeOf([ex.gate]);
+}
 
 function sortedIds(list) { return [...new Set(list.map((r) => r.id))].sort(); }
 function eqArr(a, b) { return a.length === b.length && a.every((v, i) => v === b[i]); }
@@ -196,9 +222,23 @@ section('(d) SEARCH is SOUND + COMPLETE vs an independent brute-force reference'
   // names (§4.4): a gated (within/hidden) exhibit joins the surface only once its
   // `gate` key is earned in `store`. Joined with '\x01' (as searchText does) so a
   // query can't straddle a field boundary.
+  // an INDEPENDENT lock evaluator (deliberately not core.lockMet) for the reference
+  const refLock = (c, store) => {
+    if (typeof c === 'string') return !!(store && store.ok && store.has(c));
+    if (!c || typeof c !== 'object') return false;
+    if (Array.isArray(c.all)) return c.all.every((x) => refLock(x, store));
+    if (Array.isArray(c.any)) return c.any.some((x) => refLock(x, store));
+    if (typeof c.distinctSeen === 'number') {
+      const all = (store && store.ok && store.all) || {};
+      return Object.keys(all).filter((k) => k.startsWith('ws:seen:')).length >= c.distinctSeen;
+    }
+    if (c.key) return (+((store && store.ok && store.get(c.key))) || 0) >= c.min;
+    return false;
+  };
   const idxExNames = (r, store) => (Array.isArray(r.exhibits) ? r.exhibits : []).filter((ex) => {
-    const gated = ex.kind === 'within' || ex.hidden === true;
+    const gated = ex.kind === 'within' || ex.hidden === true || ex.lock != null;
     if (!gated) return true;
+    if (ex.lock != null) return !!(store && store.ok) && refLock(ex.lock, store);
     return !!(ex.gate && store && store.ok && store.has(ex.gate));
   }).map((ex) => ex.name);
   const ref = (r, q, store) => {
@@ -214,7 +254,10 @@ section('(d) SEARCH is SOUND + COMPLETE vs an independent brute-force reference'
     'maze', 'star', 'A', 'time', 'number', 'magnetic', 'fold',
     'Census', 'Slipstick', 'Carillon', 'Bastion', 'planimeter'];
   // prove BOTH store branches so the spoiler gate is exercised in the sound+complete test
-  for (const [storeName, store] of [['SEALED', SEALED], ['UNSEALED', UNSEALED], ['STORAGE_OFF', STORAGE_OFF]]) {
+  // QUICKENED satisfies a real lock descriptor (quickening = game-of-life && lattice),
+  // so the sound+complete proof also exercises the §6.5 lock-descriptor branch.
+  const QUICKENED = storeOf(['ws:seen:game-of-life', 'ws:seen:lattice']);
+  for (const [storeName, store] of [['SEALED', SEALED], ['UNSEALED', UNSEALED], ['STORAGE_OFF', STORAGE_OFF], ['QUICKENED', QUICKENED]]) {
     let allMatch = true, firstBad = null;
     for (const q of QUERIES) {
       const got = sortedIds(search(unlocked, q, store));
@@ -275,8 +318,7 @@ section('(d2) EXHIBITS — the manifest join, the ↳via verdict, and the spoile
   check('the estate has gated (within/hidden) exhibits to guard', gatedExhibits.length > 0, gatedExhibits.length + ' gated');
   let spoilerOk = true, spoilerDetail = 'all gated pieces stay phantom until earned', testable = 0;
   for (const { r, ex } of gatedExhibits) {
-    const key = ex.gate;
-    const earned = storeOf([key]);
+    const earned = earnedStoreFor(ex);   // lock descriptor satisfied, or the single gate key
     const term = ex.name.replace(/^[^A-Za-z0-9]+/, '').slice(0, 12);  // a distinctive slice of the piece name
     // the piece name must not ALSO appear in the host's prose (else the test proves nothing)
     const inProse = String(r.room + (r.piece || '') + (r.blurb || '')).toLowerCase().includes(term.toLowerCase());
@@ -383,6 +425,75 @@ section('(g) LOCK PARITY — the way down hidden until earned (front-door predic
   check('unlockedFor(undercroft, SEALED) === false', unlockedFor(uc, SEALED) === false, '');
   check('unlockedFor(undercroft, UNSEALED) === true', unlockedFor(uc, UNSEALED) === true, '');
   check('unlockedFor(non-locked, SEALED) === true', unlockedFor(DATA.find((r) => !r.locked), SEALED) === true, '');
+
+  // ── §6.5 SAME-LOCKS: the room locks mirror every WALKABLE way in ──────────────
+  // The Reliquary's front-door tile is walkable at ≥8 distinct ws:seen (the study
+  // is SEALED, not hidden, once you've wandered enough); -opening / -seen keep it
+  // for returning visitors; the Undercroft niche opens it on reliquary-solved.
+  const rl2 = DATA.find((r) => r.id === 'reliquary');
+  if (rl2) {
+    const solvedOnly = storeOf(['ws:seen:reliquary-solved']);
+    const openingOnly = storeOf(['ws:seen:reliquary-opening']);
+    const seen8 = storeOf(Array.from({ length: 8 }, (_, i) => 'ws:seen:room-' + i));
+    const seen7 = storeOf(Array.from({ length: 7 }, (_, i) => 'ws:seen:room-' + i));
+    check('reliquary-solved (the Undercroft niche path) reveals the reliquary', unlockedFor(rl2, solvedOnly) === true, '');
+    check('reliquary-opening (the door grow-in witnessed) reveals the reliquary', unlockedFor(rl2, openingOnly) === true, '');
+    check('8 distinct ws:seen rooms reveal the reliquary (the door walkable-tile lock)', unlockedFor(rl2, seen8) === true, '');
+    check('7 distinct ws:seen rooms do NOT (below the door threshold)', unlockedFor(rl2, seen7) === false, '');
+    check('8 distinct ws:seen do NOT reveal the undercroft (its stair needs the rune)', unlockedFor(uc, seen8) === false,
+      'the ≥4-distinct broken stair is a teaser, never walkable');
+  }
+}
+
+// ═══════════════ (g2) LOCKED EXHIBITS — the same-locks law at the piece grain ═══
+section('(g2) LOCKED EXHIBITS — each secret hidden below its path-lock, revealed exactly at it');
+{
+  const lockedEx = [];
+  for (const r of DATA) for (const ex of (r.exhibits || [])) if (ex.lock != null) lockedEx.push({ r, ex });
+  check('the slab carries lock-descriptor exhibits (the §6.5 secret places)', lockedEx.length >= 11,
+    lockedEx.length + ' locked exhibits');
+  let below = 0, at = 0, ok = true, detail = 'every locked exhibit flips exactly at its lock';
+  for (const { r, ex } of lockedEx) {
+    // AT the lock: a satisfying store indexes the piece
+    const sat = storeFromMap(satMapOf(ex.lock));
+    if (!indexedExhibits(r, sat).some((e) => e.href === ex.href)) { ok = false; detail = 'MISS at-lock: ' + r.id + '/' + ex.name; break; }
+    at++;
+    // BELOW the lock: break each clause of a flat {all:[…]} individually — the
+    // piece must stay phantom with any single requirement missing/short
+    if (Array.isArray(ex.lock.all)) {
+      for (let i = 0; i < ex.lock.all.length && ok; i++) {
+        const leaf = ex.lock.all[i];
+        const m = satMapOf(ex.lock);
+        if (typeof leaf === 'string') delete m[leaf];
+        else if (leaf && leaf.key) m[leaf.key] = String((leaf.min || 1) - 1);
+        if (indexedExhibits(r, storeFromMap(m)).some((e) => e.href === ex.href)) {
+          ok = false; detail = 'LEAK below-lock (clause ' + i + '): ' + r.id + '/' + ex.name;
+        } else below++;
+      }
+      if (!ok) break;
+    }
+    // SEALED / storage-off: always phantom
+    if (indexedExhibits(r, SEALED).some((e) => e.href === ex.href)) { ok = false; detail = 'LEAK sealed: ' + r.id + '/' + ex.name; break; }
+    if (indexedExhibits(r, STORAGE_OFF).some((e) => e.href === ex.href)) { ok = false; detail = 'LEAK storage-off: ' + r.id + '/' + ex.name; break; }
+  }
+  check('each locked exhibit is revealed AT its lock and phantom BELOW it', ok,
+    ok ? at + ' at-lock + ' + below + ' below-lock stores driven' : detail);
+
+  // the evaluator itself, exhaustively (pure unit surface)
+  check('lockMet: all-conjunction needs every clause', lockMet({ all: ['a', 'b'] }, storeOf(['a'])) === false
+    && lockMet({ all: ['a', 'b'] }, storeOf(['a', 'b'])) === true, '');
+  check('lockMet: any-disjunction needs one clause', lockMet({ any: ['a', 'b'] }, storeOf(['b'])) === true
+    && lockMet({ any: ['a', 'b'] }, storeOf([])) === false, '');
+  check('lockMet: {key,min} is a numeric threshold', lockMet({ all: [{ key: 'ws:best:swarm', min: 8 }] }, storeFromMap({ 'ws:best:swarm': '8' })) === true
+    && lockMet({ all: [{ key: 'ws:best:swarm', min: 8 }] }, storeFromMap({ 'ws:best:swarm': '7' })) === false, '');
+  check('lockMet: distinctSeen counts ws:seen:* keys only', lockMet({ any: [{ distinctSeen: 2 }] }, storeFromMap({ 'ws:seen:a': '1', 'ws:seen:b': '1', 'ws:flag:c': '1' })) === true
+    && lockMet({ any: [{ distinctSeen: 3 }] }, storeFromMap({ 'ws:seen:a': '1', 'ws:seen:b': '1', 'ws:flag:c': '1' })) === false, '');
+  check('lockMet: nesting (any of alls)', lockMet({ any: [{ all: ['a', 'b'] }, 'c'] }, storeOf(['c'])) === true
+    && lockMet({ any: [{ all: ['a', 'b'] }, 'c'] }, storeOf(['a'])) === false, '');
+  check('lockMet: no store / storage-off / unknown clause ⇒ locked (safe default)',
+    lockMet({ all: ['a'] }, undefined) === false
+    && lockMet({ all: ['a'] }, storeOf(['a'], false)) === false
+    && lockMet({ bogus: 1 }, storeOf(['a'])) === false, '');
 }
 
 // ═══════════════ runSelfTest (the in-page pill's battery) ═══════════════

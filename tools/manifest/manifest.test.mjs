@@ -17,6 +17,12 @@
          a changed non-generatedAt field FAILS; a manifest differing ONLY in
          `generatedAt` PASSES (the load-bearing exclusion — else permanent false-red).
 
+   Plus the §6.4 PAGE LAW (catalog completeness at the page grain): the live repo
+   has zero unclaimed pages and zero stale DENY rows; a planted orphan page FAILS
+   LOUD by name (in-process and via `--check --plant-page=…`); a planted sub-bench
+   under a real room is AUTO-DISCOVERED and the staleness gate NAMES it until the
+   re-derived manifest is committed; a gated within's sub-bench inherits the gate.
+
    No deps beyond the sibling module + Node. Prints "manifest self-test: N/N PASS";
    exits non-zero on any failure.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -108,6 +114,93 @@ ok(live.manifest.counts.pieces >= PIECES_FLOOR, 'pieces clear the floor (' + liv
   // a missing committed file is a failure
   const r4 = evaluate(live, null, committedTallies);
   ok(!r4.ok && r4.failures.some((f) => f.includes('MISSING')), 'a missing committed manifest FAILS'); }
+
+/* ── (6) the §6.4 PAGE LAW — every shipped page catalogued or accounted ───────── */
+{ // the live repo is page-complete: no orphan pages, no stale DENY rows
+  ok(live.unclaimedPages.length === 0, 'live repo: unclaimedPages is [] (got ' + live.unclaimedPages.length + ': ' + live.unclaimedPages.join(', ') + ')');
+  ok(live.denyUnused.length === 0, 'live repo: every DENY row matches a real page (' + live.denyUnused.join(', ') + ')');
+  ok(live.htmlPages.length > 400, 'the page walk sees the estate (' + live.htmlPages.length + ' shipped pages)');
+  // the gated sub-bench: a bench discovered INSIDE a gated within inherits the gate
+  // (spoiler discipline §4.4 — the Soap-Film Surveyor stays unlisted until earned)
+  let surveyor = null;
+  for (const d of live.manifest.districts) for (const r of d.rooms) {
+    for (const ex of r.exhibits) if (ex.href === 'soap-film/surveyor/index.html') surveyor = ex;
+  }
+  ok(!!surveyor, 'the soap-film sub-bench is auto-discovered');
+  ok(surveyor && surveyor.gate === 'ws:seen:soap-film' && surveyor.hidden === true && surveyor.hostedVia === 'soap-film',
+    'a sub-bench of a gated within INHERITS the gate + hidden + hostedVia (got ' + JSON.stringify(surveyor) + ')'); }
+
+/* ── (6-neg) planted pages FAIL LOUD by name ──────────────────────────────────── */
+const PLANT_PAGE = '__negctl_pages__/nowhere/index.html';   // resolves to NO room/unit
+{ const planted = build({ extraPages: [PLANT_PAGE, 'conservatory/__negctl_note__.html'] });
+  ok(planted.unclaimedPages.includes(PLANT_PAGE), 'an unresolvable planted sub-unit lands in unclaimedPages');
+  ok(planted.unclaimedPages.includes('conservatory/__negctl_note__.html'),
+    'a planted FLAT page under a room is NOT silently claimed (rooms do not swallow flats)');
+  const { ok: gok, failures } = evaluate(planted, committedJson, committedTallies);
+  ok(!gok, 'planted pages make evaluate FAIL');
+  ok(failures.some((f) => f.includes(PLANT_PAGE) && f.includes('UNCLAIMED PAGES')), 'the failure NAMES the planted page (loud)'); }
+{ // a planted sub-bench under a REAL room is AUTO-DISCOVERED (this is how a brand-new
+  // page enters the catalog) — and vs the committed manifest the gate turns STALE and
+  // NAMES the newcomer, so un-re-derived drift is loud AND actionable.
+  const planted = build({ extraPages: ['conservatory/__negctl_bench__/index.html'] });
+  let found = null;
+  for (const d of planted.manifest.districts) for (const r of d.rooms) {
+    for (const ex of r.exhibits) if (ex.href === 'conservatory/__negctl_bench__/index.html') found = r.id;
+  }
+  ok(found === 'conservatory', 'a new sub-bench under a room dir is auto-enrolled under that room');
+  ok(planted.unclaimedPages.length === 0, 'the auto-enrolled newcomer is claimed, not orphaned');
+  const { ok: gok, failures } = evaluate(planted, committedJson, committedTallies);
+  ok(!gok, 'a newcomer not yet in the committed manifest turns the gate red');
+  ok(failures.some((f) => f.includes('STALE') && f.includes('conservatory/__negctl_bench__/index.html')),
+    'the STALE failure NAMES the not-yet-committed page'); }
+{ // a stale DENY row (matching nothing on disk) is drift and FAILS
+  const synth = { manifest: deepClone(live.manifest), unclaimed: [], doubleClaimed: [], unclaimedPages: [], denyUnused: ['no-such-page.html'] };
+  const { ok: gok, failures } = evaluate(synth, committedJson, committedTallies);
+  ok(!gok, 'a DENY row matching nothing FAILS');
+  ok(failures.some((f) => f.includes('no-such-page.html')), 'the failure names the stale DENY row'); }
+
+/* ── (6-neg CLI) the real --check CLI exits LOUD on a planted page ────────────── */
+{ let failedLoud = false, named = false;
+  try { execFileSync('node', [MANIFEST, '--check', '--plant-page=' + PLANT_PAGE], { stdio: 'pipe' }); }
+  catch (e) { failedLoud = (e.status === 1); named = String(e.stdout || '').includes(PLANT_PAGE) || String(e.stderr || '').includes(PLANT_PAGE); }
+  ok(failedLoud, 'CLI `--check --plant-page=…` exits non-zero (FAILS LOUD)');
+  ok(named, 'CLI failure output names the planted page'); }
+
+/* ── (7) the §6.5 BOTH-OR-NEITHER + SAME-LOCKS laws ───────────────────────────── */
+{ // live repo: every LOCKS descriptor proven ≡ ws.js; every place-secret catalogued
+  // under its own reveal-lock; every catalogued page referenced by another page.
+  ok(live.lockDrift.length === 0, 'live repo: zero lock drift vs ws.js (' + live.lockDrift.join('; ') + ')');
+  ok(live.secretFaults.length === 0, 'live repo: secret-path audit clean (' + live.secretFaults.join('; ') + ')');
+  ok(live.unreachable.length === 0, 'live repo: every catalogued page reachable (' + live.unreachable.join(', ') + ')');
+  // the re-gated quickening: the catalog lock is the PATH lock, not the visit-proxy
+  let quick = null;
+  for (const d of live.manifest.districts) for (const r of d.rooms) {
+    for (const ex of r.exhibits) if (ex.href === 'sound-garden/quickening.html') quick = ex;
+  }
+  ok(!!quick && quick.lockId === 'quickening' && quick.hidden === true
+    && JSON.stringify(quick.lock) === JSON.stringify({ all: ['ws:seen:game-of-life', 'ws:seen:lattice'] }),
+    'quickening carries its true PATH lock (game-of-life && lattice), not a visit-proxy (got ' + JSON.stringify(quick && quick.lock) + ')');
+  // the 9 Undercroft place-secrets are enrolled, each hidden with a lock
+  const uc = [];
+  for (const d of live.manifest.districts) for (const r of d.rooms) {
+    for (const ex of r.exhibits) if (ex.href.startsWith('undercroft/')) uc.push(ex);
+  }
+  ok(uc.length === 9 && uc.every((e) => e.hidden === true && e.lock && e.lockId),
+    'the 9 Undercroft place-secrets are catalogued hidden+locked (got ' + uc.length + ')'); }
+
+/* ── (7-neg) the §6.5 failure modes are LOUD ──────────────────────────────────── */
+{ const base = { manifest: deepClone(live.manifest), unclaimed: [], doubleClaimed: [], unclaimedPages: [], denyUnused: [] };
+  const r1 = evaluate({ ...base, lockDrift: ['LOCKS["x"] ≠ ws.js'] }, committedJson, committedTallies);
+  ok(!r1.ok && r1.failures.some((f) => f.includes('LOCK DRIFT')), 'lock drift FAILS loud');
+  const r2 = evaluate({ ...base, secretFaults: ['place secret "y" is NOT catalogued'] }, committedJson, committedTallies);
+  ok(!r2.ok && r2.failures.some((f) => f.includes('SECRET-PATH AUDIT') && f.includes('"y"')), 'a secret-path fault FAILS naming the secret');
+  const r3 = evaluate({ ...base, unreachable: ['ghost/index.html'] }, committedJson, committedTallies);
+  ok(!r3.ok && r3.failures.some((f) => f.includes('UNREACHABLE') && f.includes('ghost/index.html')), 'an unreachable entry FAILS by name'); }
+{ // REAL wiring: a planted sub-bench is auto-enrolled but NO page references it —
+  // the reachability arm must flag exactly that newcomer.
+  const planted = build({ extraPages: ['conservatory/__negctl_bench__/index.html'] });
+  ok(planted.unreachable.includes('conservatory/__negctl_bench__/index.html'),
+    'the reachability arm flags an enrolled page nothing links (both-or-neither, catalog side)'); }
 
 /* ── (5) the depth-tally projection (§6.3 consumer 2) is checked too ──────────── */
 { // a stale tallies file (a district count nudged) is caught

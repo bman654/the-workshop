@@ -781,6 +781,41 @@
     });
   }
 
+  /* ── Shared BACKGROUND-AIR courtesy waiver (the single key ws:pref:air-bg) ──
+     Same house convention (DESIGNING.md): ONE shared key, set once, held
+     everywhere. A hidden tab stills the estate's air by default, because an
+     estate that follows you into another window is rude. This is the visitor
+     waiving that courtesy on purpose — "keep humming while I work elsewhere" —
+     so it is OPT-IN, and absent means the courtesy stands.
+
+     The cross-tab listener is load-bearing, not boilerplate: the whole use for
+     this preference is several estate tabs open at once, so flipping it in one
+     must take effect live in the rest, exactly as the mute already does. */
+  var AIRBG_KEY = 'ws:pref:air-bg';
+  var airBgSubs = [];
+  WS.airBackground = function () { return lsGet(AIRBG_KEY) === '1'; };
+  WS.setAirBackground = function (v) {
+    var on = !!v;
+    lsSet(AIRBG_KEY, on ? '1' : '0');
+    for (var i = 0; i < airBgSubs.length; i++) {
+      try { airBgSubs[i](on); } catch (e) {}
+    }
+    return on;
+  };
+  WS.onAirBackgroundChange = function (fn) {
+    if (typeof fn === 'function') airBgSubs.push(fn);
+  };
+  // cross-tab: the waiver set on ANOTHER estate tab fires our subscribers live.
+  if (root && root.addEventListener) {
+    root.addEventListener('storage', function (e) {
+      if (!e || e.key !== AIRBG_KEY) return;
+      var on = WS.airBackground();
+      for (var i = 0; i < airBgSubs.length; i++) {
+        try { airBgSubs[i](on); } catch (e2) {}
+      }
+    });
+  }
+
   /* ── Writers ──────────────────────────────────────────────────────────────
      All wrapped so storage-off is harmless. */
 
@@ -2515,6 +2550,438 @@
   // dual-use module guard (forge strips exactly this braced single line)
 })(typeof globalThis !== 'undefined' ? globalThis : this);
   </script>
+  <!-- the calendar cores (E1/E8): calendar.js publishes window.Calendar; calendar-gate.js
+       extends it with Calendar.gate.season / .precipKind / .wildlife. The front door does
+       NOT include calendar-gate.js — its budget is untouched; the gate is the showcase. -->
+  <script>
+/* calendar.js — THE LIVING CALENDAR's core: the estate's sense of the date.
+   Solar-λ season + computed waypoints (the proven dial.js sun) · hour
+   register · seeds · the authored dressing · anniversaries (decorate, never
+   gate) · momentManifest (the score's one input). PURE: no clock/PRNG-
+   global/storage/DOM reads; the Hours core is INJECTED; exactly TWO Date
+   constructions (jdOfLocalNoon, nextHour's rollover), integer params in.
+   Dual-use IIFE: `Calendar` browser global / module export under Node. */
+
+(function(root){
+'use strict';
+var C={};
+var D2R=Math.PI/180,TAU=Math.PI*2;
+
+/* TIME & SUN — COPIED VERBATIM from tools/dial/dial.js (the proven solar
+   core) — do not edit here. */
+// Julian Date from a UTC Date. (dial.js:41)
+function julianDate(d){ return d.getTime()/86400000+2440587.5; }
+// solar ecliptic longitude (deg) from JD, ~0.01°. (dial.js:55-61)
+function sunEclipticLonDeg(jd){
+  var n=jd-2451545.0;
+  var L=(280.460+0.9856474*n)%360;          // mean longitude
+  var g=((357.528+0.9856003*n)%360)*D2R;    // mean anomaly
+  var lam=L+1.915*Math.sin(g)+0.020*Math.sin(2*g);
+  return ((lam%360)+360)%360;
+}
+
+// season phase: 0 vernal · .25 summer sol · .5 autumnal · .75 winter;
+// jdOfLocalNoon = estate-clock noon — Date construction 1/2.
+function jdOfLocalNoon(y,m,d){ return julianDate(new Date(Date.UTC(y,m-1,d,12,0,0))); }
+function seasonPhase(jd){ return sunEclipticLonDeg(jd)/360; }
+function seasonName(p){ p=((p%1)+1)%1; return p<0.25?'spring':p<0.5?'summer':p<0.75?'autumn':'winter'; }
+function seasonDepth(p){ return Math.abs(Math.sin(TAU*p)); }
+var SW=('early spring,full spring,late spring,early summer,high summer,late summer,'
+ +'early autumn,deep autumn,late autumn,early winter,midwinter,late winter').split(',');
+function seasonPhrase(p){ p=((p%1)+1)%1; var q=Math.min(3,Math.floor(p/0.25)),t=(p-q*0.25)/0.25;
+  return SW[q*3+(t<1/3?0:t<2/3?1:2)]; }
+
+// waypoints — upward zero crossing of wrap180(λ−target) + 24× bisection.
+C.WAYPOINTS=['vernal-equinox','summer-solstice','autumnal-equinox','winter-solstice']
+  .map(function(id,i){ return {id:id,lamDeg:i*90,name:'the '+id.replace('-',' ')}; });
+function wrap180(x){ return ((x+180)%360+360)%360-180; }
+function waypointsOfYear(y){
+  var jd0=jdOfLocalNoon(y,1,1),out=[];
+  C.WAYPOINTS.forEach(function(W){
+    function f(x){ return wrap180(sunEclipticLonDeg(x)-W.lamDeg); }
+    for(var k=0;k<366;k++){
+      var fA=f(jd0+k),fB=f(jd0+k+1);
+      if(fA<0&&fB>=0&&fB-fA<180){
+        var a=jd0+k,b=a+1,mid;
+        for(var i=0;i<24;i++){ mid=(a+b)/2; if(f(mid)<0)a=mid; else b=mid; }
+        mid=(a+b)/2;
+        var md=dateOfDoy(y,Math.floor(mid-jd0+0.5)+1);
+        out.push({id:W.id,name:W.name,m:md.m,d:md.d,jd:mid});
+        return;
+      }
+    }
+  });
+  return out;
+}
+// the Almanac's countdown
+function nextWaypoint(jd,y){
+  var today=Math.floor(jd+0.5),L=waypointsOfYear(y).concat(waypointsOfYear(y+1));
+  for(var i=0;i<L.length;i++){
+    var wd=Math.floor(L[i].jd+0.5);
+    if(wd>=today) return {id:L[i].id,name:L[i].name,m:L[i].m,d:L[i].d,daysUntil:wd-today};
+  }
+  return null;
+}
+
+// doy — the ONE 1-based ordinal (doyOf(2026,6,21)===172===CANON_DOY) +
+// inverse + the date-aware hour increment (Date construction 2/2).
+function doyOf(y,m,d){ return Math.round((Date.UTC(y,m-1,d)-Date.UTC(y,0,1))/86400000)+1; }
+function isLeap(y){ return (y%4===0&&y%100!==0)||y%400===0; }
+var MLEN=[31,28,31,30,31,30,31,31,30,31,30,31];
+function dateOfDoy(y,doy){  // → {m,d}; the wheel's pointer→date map
+  var L=MLEN.slice(); if(isLeap(y))L[1]=29;
+  var m=1,d=doy; while(d>L[m-1]){ d-=L[m-1]; m++; } return {m:m,d:d};
+}
+// the ONE way any consumer advances a (date,hour) bucket
+function nextHour(y,m,d,hour){
+  if(hour<23) return {y:y,m:m,d:d,hour:hour+1};
+  var t=new Date(Date.UTC(y,m-1,d)+86400000);
+  return {y:t.getUTCFullYear(),m:t.getUTCMonth()+1,d:t.getUTCDate(),hour:0};
+}
+
+// hour register — mirrors Hours.phaseName's exact bands
+C.REGISTERS=['deep-night','astro-twilight','civil-twilight','golden-hour','full-day','high-noon'];
+function hourRegister(a){ return a<=-18?'deep-night':a<-6?'astro-twilight':a<-0.8?'civil-twilight'
+  :a<6?'golden-hour':a<35?'full-day':'high-noon'; }
+function registerIndex(reg){ return C.REGISTERS.indexOf(reg); }
+
+// seeds — estate-standard PRNG, VERBATIM (the-gate audio builders' recipe)
+function mulberry32(seed){
+  let s=(seed>>>0)||1;
+  return function(){
+    s|=0; s=(s+0x6D2B79F5)|0;
+    let t=Math.imul(s^(s>>>15),1|s);
+    t=(t+Math.imul(t^(t>>>7),61|t))^t;
+    return ((t^(t>>>14))>>>0)/4294967296;
+  };
+}
+function hash2(a,b){
+  let h=(a|0)^0x9E3779B9;
+  h=Math.imul(h^(b|0),0x85EBCA6B);
+  h^=h>>>13;
+  h=Math.imul(h,0xC2B2AE35);
+  h^=h>>>16;
+  return h>>>0;
+}
+var SEED_SALT=0x0CA1E0DA;
+function dateSeed(y,m,d){ return hash2(hash2(SEED_SALT,y),m*100+d); }
+function airSeed(y,m,d,hour){ return hash2(dateSeed(y,m,d),hour); }
+
+// the dressing — authored curves: 8 anchors, mix/S walks, shared endpoints.
+function S(a,b,x){ if(b===a) return x<a?0:1; var t=Math.max(0,Math.min(1,(x-a)/(b-a))); return t*t*(3-2*t); }
+function lerp(a,b,t){ return a+(b-a)*t; }
+function mix(c1,c2,t){ return [Math.round(lerp(c1[0],c2[0],t)),Math.round(lerp(c1[1],c2[1],t)),Math.round(lerp(c1[2],c2[2],t))]; }
+function hx(h){ return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]; }
+// phase k/8 → [washRgb,washA,crownRgb,crownA] (r19: wash = constant-low-L hue-rotated,
+// α ∈ [.12,.16]; SP-FLAG #8 nudge holds autumn→winter ΔB ≤ 85 under the B4 cap).
+var DRESS=[
+  [hx('#7fae72'),.14,hx('#8fae6a'),.18],
+  [hx('#84ad5f'),.14,hx('#84a05a'),.22],
+  [hx('#d8c884'),.13,hx('#84a05a'),.26],
+  [hx('#d4c07a'),.13,hx('#84a05a'),.26],
+  [hx('#c79a52'),.14,hx('#a8783e'),.30],
+  [hx('#bf8455'),.15,hx('#c47a42'),.34],
+  [hx('#6f8a9b'),.13,hx('#6f6038'),.06],
+  [hx('#6883b0'),.13,hx('#6f6038'),.04]];
+function bell(p,c,w){ var d=Math.abs(p-c); d=Math.min(d,1-d); return d>=w?0:0.5*(1+Math.cos(Math.PI*d/w)); }
+function dressing(phase){
+  var p=((phase%1)+1)%1,k=Math.min(7,Math.floor(p*8)),t=S(k/8,(k+1)/8,p);
+  var A=DRESS[k],B=DRESS[(k+1)%8];
+  return {wash:{rgb:mix(A[0],B[0],t),a:lerp(A[1],B[1],t)},
+    foliage:{rgb:mix(A[2],B[2],t),a:lerp(A[3],B[3],t)},
+    snow:bell(p,0.80,0.16),bloom:bell(p,0.07,0.07),turn:bell(p,0.60,0.11)};
+}
+
+// history — the authored anniversary table (decorate, never gate); dates
+// fixed at design time from git author dates; lines verbatim estate voice.
+// THE RULE a row must satisfy (the Almanac states it to the visitor, §c):
+// a red-letter day marks a FIRST the estate can only have once — tier 1 the
+// Founding · tier 2 a day the estate became something it had not been (a
+// name, a memory, a threshold, a face, a whole new shape) · tier 3 the day a
+// wing first stood. Benches, exhibits and repairs never earn one. Every date
+// below is a REAL git author date from the estate's own record — never
+// invented; a row with no verifiable date does not get written.
+C.FOUNDING={y:2026,m:6,d:7};
+function estateAgeDays(y,m,d){ return Math.round((Date.UTC(y,m-1,d)-Date.UTC(2026,5,7))/86400000); }
+C.MILESTONES=[100,500,1000,10000]; // day-365 IS the first founding anniversary
+C.ANNIVERSARIES=[
+  {m:6,d:7,y:2026,tier:1,kind:'founding',id:'founding',name:'the Founding',
+   line:'the Founding — the estate broke ground this day'},
+  {m:6,d:8,y:2026,tier:2,kind:'era',id:'front-door',name:'the Front Door',
+   line:'the Front Door — the estate first showed a face to the road this day'},
+  {m:6,d:14,y:2026,tier:2,kind:'ledger',id:'ledger-opens',name:'the Ledger opens',
+   line:'the Ledger opened — the Cairn laid the first stone this day'},
+  {m:6,d:15,y:2026,tier:2,kind:'era',id:'the-naming',name:'the Naming',
+   line:'the Naming — this place took the name The Orrery Estate this day'},
+  {m:6,d:23,y:2026,tier:2,kind:'era',id:'the-gate',name:'the Gate',
+   line:'the Gate was raised — the estate got a threshold to be arrived at this day'},
+  {m:7,d:4,y:2026,tier:2,kind:'era',id:'polar-reorg',name:'the Great Reorganization',
+   line:'the Great Reorganization — the estate took its polar form this day'},
+  {m:7,d:5,y:2026,tier:2,kind:'era',id:'first-showing',name:'the first Showing',
+   line:'the first Showing — the estate learned to walk a visitor through itself this day'},
+  {m:7,d:16,y:2026,tier:2,kind:'era',id:'the-almanac',name:'the Almanac',
+   line:'the Almanac — the estate began to keep its own calendar this day'}];
+// row lookup by id — the stable handle (positions shift as the table grows)
+C.annById=function(id){ for(var i=0;i<C.ANNIVERSARIES.length;i++)
+  if(C.ANNIVERSARIES[i].id===id) return C.ANNIVERSARIES[i]; return null; };
+// the 20 wing birthdays (tier 3, y 2026)
+[[6,7,'strange-garden','Strange Garden'],[6,8,'arcade','The Arcade'],
+ [6,8,'map-room','The Map Room'],[6,8,'music-room','The Music Room'],
+ [6,8,'study','The Study'],[6,10,'observatory','The Observatory'],
+ [6,10,'hedge-maze','The Hedge Maze'],[6,11,'print-room','The Print Room'],
+ [6,11,'threshold','Threshold'],[6,12,'makers-shed',"The Maker's Shed"],
+ [6,13,'hall-of-mirrors','Hall of Mirrors'],[6,13,'cavern','The Cavern'],
+ [6,14,'engine-room','The Engine Room'],[6,14,'numbers-room','The Numbers Room'],
+ [6,14,'clockwork','Clockwork Automata'],[6,15,'conservatory','The Conservatory'],
+ [6,15,'alchemy-lab','The Alchemy Lab'],[6,15,'puzzle-pavilion','Puzzle Pavilion'],
+ [6,16,'tabularium','The Tabularium'],[6,16,'hours','The Hours']
+].forEach(function(w){ C.ANNIVERSARIES.push(
+  {m:w[0],d:w[1],y:2026,tier:3,kind:'wing',id:'wing-'+w[2],name:w[3]}); });
+C.MILESTONE_LINES={
+  100:'the estate is one hundred days old today',
+  500:'the estate is five hundred days old today',
+  1000:'the estate is one thousand days old today',
+  10000:'the estate is ten thousand days old today — an old place now'};
+C.WAYPOINT_LINES={
+  'vernal-equinox':'the vernal equinox — day and night stand equal; the year begins its round',
+  'summer-solstice':'the summer solstice — the sun stands highest; the longest day',
+  'autumnal-equinox':'the autumnal equinox — day and night stand equal; the light begins to leave',
+  'winter-solstice':'the winter solstice — the sun stands lowest; the longest night'};
+var YW=['two','three','four','five','six','seven','eight','nine','ten','eleven','twelve'];
+function yearsPhrase(n){ return n===1?'a year ago':(n>=2&&n<=12?YW[n-2]:n)+' years ago'; }
+function annsOn(y,m,d){
+  var out=[],i,r;
+  for(i=0;i<C.ANNIVERSARIES.length;i++){
+    r=C.ANNIVERSARIES[i];
+    if(r.m===m&&r.d===d&&y>r.y) out.push(Object.assign({},r,{years:y-r.y}));
+  }
+  return out;
+}
+function joinNames(ns){ return ns.length===1?ns[0]:ns.slice(0,-1).join(', ')+' and '+ns[ns.length-1]; }
+// the ordered mark list, texts FULLY COMPOSED — founding ✦ · milestone ✶ ·
+// era/ledger ✧ · waypoint ☉ · wings ❈ (stacked by day).
+function marksFor(y,m,d){
+  var anns=annsOn(y,m,d),marks=[],el=[],wings=[],yrs=0,i,r;
+  function mk(k,g,t){ marks.push({kind:k,glyph:g,text:t}); }
+  for(i=0;i<anns.length;i++){ r=anns[i];
+    if(r.kind==='founding') mk('founding','✦',r.line+', '+yearsPhrase(r.years));
+    else if(r.kind==='wing'){ wings.push(r.name); yrs=r.years; }
+    else el.push(r); }
+  var age=estateAgeDays(y,m,d);
+  if(C.MILESTONES.indexOf(age)!==-1) mk('milestone','✶',C.MILESTONE_LINES[age]);
+  for(i=0;i<el.length;i++) mk(el[i].kind,'✧',el[i].line+', '+yearsPhrase(el[i].years));
+  var wps=waypointsOfYear(y);
+  for(i=0;i<wps.length;i++)
+    if(wps[i].m===m&&wps[i].d===d) mk('waypoint','☉',C.WAYPOINT_LINES[wps[i].id]);
+  if(wings.length) mk('wing','❈',joinNames(wings)
+    +(wings.length>1?' were raised this day, ':' was raised this day, ')+yearsPhrase(yrs));
+  return marks;
+}
+
+// the moment manifest — the score's ONE input; H = the injected Hours core.
+function momentManifest(y,m,d,hour,H){
+  var doy=doyOf(y,m,d),lat=H.ESTATE.latDeg,altCurve=[],i;
+  for(i=0;i<=4;i++) altCurve.push(H.solarAltitudeDeg(lat,doy,hour*60+i*15)); // min 0/15/30/45/60, DEG
+  // solarNoonMin: argmax minute-scan, civilMin 600..840, FIRST max
+  var best=-Infinity,M=600,cm,a;
+  for(cm=600;cm<=840;cm++){ a=H.solarAltitudeDeg(lat,doy,cm); if(a>best){ best=a; M=cm; } }
+  // annTier/annLabel: the top NON-waypoint mark; tiers 1 founding/milestone
+  // · 2 era/ledger · 3 wing · 0 none
+  var marks=marksFor(y,m,d),tier=0,label=null,mk;
+  for(i=0;i<marks.length;i++){ mk=marks[i];
+    if(mk.kind==='waypoint') continue;
+    tier=(mk.kind==='founding'||mk.kind==='milestone')?1:(mk.kind==='wing')?3:2;
+    label=mk.text; break; }
+  return {seed:airSeed(y,m,d,hour),dateInt:y*10000+m*100+d,hour:hour,
+    seasonPhase:seasonPhase(jdOfLocalNoon(y,m,d)),altCurve:altCurve,
+    solarNoonMin:(Math.floor(M/60)===hour)?(M-hour*60):null,annTier:tier,annLabel:label};
+}
+
+// selfTest — the PURE battery s1–s8; the Node twin runs this same function
+// plus the twin-only checks.
+function selfTest(){
+  var R=[],pass=true,z;
+  function ok(n,c){ c=!!c; if(!c)pass=false; R.push({name:n,pass:c,info:''}); }
+  ok('s1 doy',doyOf(2026,1,1)===1&&doyOf(2026,6,21)===172&&doyOf(2028,12,31)===366);
+  z=[[2026,1,1,1],[2026,172,6,21],[2028,366,12,31]].every(function(q){
+    var r=dateOfDoy(q[0],q[1]); return r.m===q[2]&&r.d===q[3]; });
+  ok('s1 inverse',z);
+  var wps=waypointsOfYear(2026);
+  z=wps.length===4&&wps.every(function(w,i){
+    return (i===0||w.jd>wps[i-1].jd)
+      && Math.abs(wrap180(sunEclipticLonDeg(w.jd)-C.WAYPOINTS[i].lamDeg))<0.05; });
+  ok('s2 waypoints',z);
+  z=[[2026,7,7],[2026,12,21],[2027,3,1]].every(function(q){
+    var d=((seasonPhase(jdOfLocalNoon(q[0],q[1],q[2]+1))
+           -seasonPhase(jdOfLocalNoon(q[0],q[1],q[2])))%1+1)%1;
+    return d>=0.9/365&&d<=1.1/365; });
+  ok('s3 phase',z);
+  z=[0.02,0.10,0.30,0.45,0.60,0.70,0.86,0.95].every(function(p){
+    var d=dressing(p);
+    return d.wash.a>=0.12&&d.wash.a<=0.16&&d.foliage.a>=0&&d.foliage.a<=0.40
+      &&d.snow>=0&&d.snow<=1&&d.bloom>=0&&d.bloom<=1&&d.turn>=0&&d.turn<=1
+      &&((p>0.60&&p<0.99)||d.snow===0)&&(p<0.14||p>0.99||d.bloom===0)
+      &&((p>0.49&&p<0.71)||d.turn===0); });
+  ok('s4 dressing',z);
+  z=C.REGISTERS.length===6&&[-18,-6,-0.8,6,35].every(function(t,j){
+    return hourRegister(t-0.05)===C.REGISTERS[j]&&hourRegister(t+0.05)===C.REGISTERS[j+1]; });
+  ok('s5 registers',z);
+  var m1=marksFor(2027,6,7);
+  ok('s6 founding',m1.length===2&&m1[0].kind==='founding'&&m1[0].glyph==='✦'
+    &&m1[0].text===C.annById('founding').line+', a year ago'
+    &&m1[1].kind==='wing'&&m1[1].text==='Strange Garden was raised this day, a year ago');
+  var m2=marksFor(2026,9,15);
+  ok('s6 day-100',m2.length===1&&m2[0].kind==='milestone'&&m2[0].text===C.MILESTONE_LINES[100]);
+  ok('s6 plain',marksFor(2026,8,1).length===0);
+  var m4=marksFor(2027,6,14);
+  ok('s6 ledger',m4.length===2&&m4[0].kind==='ledger'
+    &&m4[0].text===C.annById('ledger-opens').line+', a year ago'&&m4[1].kind==='wing');
+  ok('s7 age',estateAgeDays(2026,7,7)===30&&estateAgeDays(2026,9,15)===100
+    &&estateAgeDays(2027,6,7)===365);
+  z=[[2026,12,31,23,2027,1,1,0],[2028,2,28,23,2028,2,29,0],[2027,2,28,23,2027,3,1,0],
+     [2026,6,30,23,2026,7,1,0],[2026,7,7,14,2026,7,7,15]].every(function(q){
+    var t=nextHour(q[0],q[1],q[2],q[3]);
+    return t.y===q[4]&&t.m===q[5]&&t.d===q[6]&&t.hour===q[7]; });
+  ok('s8 nextHour',z);
+  return {pass:pass,results:R};
+}
+
+Object.assign(C,{julianDate,sunEclipticLonDeg,doyOf,dateOfDoy,nextHour,
+  jdOfLocalNoon,seasonPhase,seasonName,seasonDepth,seasonPhrase,waypointsOfYear,
+  nextWaypoint,hourRegister,registerIndex,mulberry32,hash2,dateSeed,airSeed,
+  dressing,estateAgeDays,annsOn,marksFor,yearsPhrase,momentManifest,selfTest});
+
+if(root) root.Calendar=C;
+// dual-use module guard (forge strips exactly this braced single line)
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+  </script>
+  <script>
+/* calendar-gate.js - THE GATE'S SEASONS (E1-E8, DESIGN 9.2/9.3/9.5/9.6).
+   Extends the Calendar object calendar.js already made with the gate-only
+   curves: foliage turn, cool cast, bare-winter ramp, precip phase, wildlife.
+   PURE (1.1): no Date.now / Math.random / storage / DOM. A SEPARATE IIFE -
+   the helpers are local verbatim PORTS; under Node the require cache hands
+   back calendar.js's own instance, so twin and page share one object. */
+
+(function (root) {
+  'use strict';
+  var Calendar = (typeof module !== 'undefined' && module.exports)
+                   ? require('./calendar.js')     // Node: the SAME instance the twin has
+                   : root.Calendar;               // browser: the inlined global
+  Calendar.gate = Calendar.gate || {};
+
+  // local helper PORTS of calendar.js's private idioms (gate r2 impl-m1):
+  var TAU = Math.PI * 2;
+  function wrap(p){ return ((p % 1) + 1) % 1; }
+  function S(a, b, x){ x = Math.min(1, Math.max(0, (x - a) / (b - a)));
+    return x * x * (3 - 2 * x); }
+  function mix(a, b, t){ return a + (b - a) * t; }
+  function bell(p, c, w){ var d = Math.abs(p - c); d = Math.min(d, 1 - d);
+    return d >= w ? 0 : 0.5 * (1 + Math.cos(Math.PI * d / w)); }
+  function dz(v){ return v < 0.004 ? 0 : v; }               // the identity dead-zone
+  function trip(hex){ hex = String(hex).replace('#','');    // '#rrggbb' -> [r,g,b]
+    return [parseInt(hex.slice(0,2),16), parseInt(hex.slice(2,4),16),
+            parseInt(hex.slice(4,6),16)]; }
+
+  var COOL_CAST = '#aebfd8', GRASS_STRAW = '#9a8a5c';       // authored ONCE, here
+
+  // the 9.3 anchor table, trip()'d once at load - hex lives only here:
+  var FOLIAGE = [
+    [0.000,'#5e5444',.80],[0.060,'#7d9052',.45],[0.125,'#66984c',.15],
+    [0.250,'#4f7b3a',.00],[0.375,'#74853f',.18],[0.500,'#a87c3e',.45],
+    [0.625,'#a2582c',.78],[0.750,'#7a5f3e',.85],[0.875,'#6f5f46',.85]
+  ].map(function (r) { return { p: r[0], rgb: trip(r[1]), mix: r[2] }; });
+  // r24: the two deep-winter anchors re-aimed WARM (0.750 #6b5a42->#7a5f3e spent
+  // copper-tan, 0.875 #575046->#6f5f46 weathered held-leaf). In deep winter every
+  // tree canopy is OFF (9.3 r24 binary law), so these anchors are worn only by the
+  // bushes, the tufts, and the marc-leaf marks - they must read as dead LEAF/twig,
+  // brown/tan, never grey-green. Touched legs peak <= ~1.4/channel/day, far under
+  // the s9b caps; the budbreak leg (4.09) remains the sweep maximum.
+
+  // the walk (2.3 family): one smoothstep leg between adjacent anchors, shared
+  // endpoints, wrapped (0.875 -> 0.000 across p = 1). UNROUNDED float triples.
+  function foliageWalk(p) {
+    p = wrap(p);
+    var n = FOLIAGE.length, i = 0;
+    while (i < n - 1 && FOLIAGE[i + 1].p <= p) i++;    
+    var a = FOLIAGE[i], b = FOLIAGE[(i + 1) % n];
+    var span = (i === n - 1) ? (1 - a.p) : (b.p - a.p);
+    var t = S(0, 1, (p - a.p) / span);
+    return { rgb: [ mix(a.rgb[0], b.rgb[0], t), mix(a.rgb[1], b.rgb[1], t),
+                    mix(a.rgb[2], b.rgb[2], t) ],
+             mix: mix(a.mix, b.mix, t) };
+  }
+
+  // 9.3's literal bare ramp - the fall / bare / leaf-out ramps:
+  function bareK(p){ p = wrap(p);
+    if (p >= 0.66 && p < 0.82) return S(0.66, 0.82, p);     // the fall
+    if (p >= 0.82 || p < 0.02) return 1;                    // bare
+    if (p < 0.10) return 1 - S(0.02, 0.10, p);              // leaf-out
+    return 0;                                               // in leaf (dz-snapped)
+  }
+
+  // r24 - the two NEW pure curves (twin-tested like every other, 9.8):
+  // groundSnowCover: how much of the ground is WHITE (9.4). A smoothstep of the
+  // shared snow bell - 0 at snow <= .04 (exactly where precipKind leaves 'rain', so
+  // white ground never lies under plain rain), saturating to 1.0 at snow >= .62
+  // (both deep-winter cells - Jan-30 snow .672, solstice .769 - land FULL cover;
+  // Dec-5's .343 lands ~.53, a half-covered shoulder). dz keeps midsummer exact.
+  Calendar.gate.groundSnowCover = function (snow) {
+    return dz(S(0.04, 0.62, +snow || 0));
+  };
+  // springK: the flowering bell (9.4-spring) - center .09 (~ Apr 22), width .085,
+  // nonzero on (0.005, 0.175) ~ Mar 22 - May 24. Disjoint from the snow envelope
+  // (0.64, 0.96) by construction - snow and bloom can never co-occur - and its
+  // upper edge sits ~27 days clear of the midsummer pin (phase 0.25040).
+  function springK(p){ return dz(bell(p, 0.09, 0.085)); }
+  // autumnK (r25 - the litter driver, 9.4-autumn): fallen leaves build with the
+  // turn (rise Sep 22 -> full ~ Oct 29), hold through peak russet (~ Nov 7), and are
+  // gone ~ Nov 29 - dz snaps the fall-leg tail at p ~ 0.683, where groundSnowCover
+  // is still <= ~.13, so litter never lies on white ground (asserted as the s9d
+  // implication: cover >= .2 => autumn === 0; cover first reaches .2 at p ~ 0.688).
+  // Max slope ~ .068/day (the .06-wide fall leg at the smoothstep's 1.5x mid-leg
+  // gain) - under s9b's .08/day cap. Exact 0 at midsummer (S(0.50,..) = 0 at 0.25040).
+  function autumnK(p){ p = wrap(p);
+    return dz( S(0.50, 0.60, p) * (1 - S(0.625, 0.685, p)) );
+  }
+
+  Calendar.gate.season = function (phase) {
+    var p = wrap(phase);
+    var f = foliageWalk(p);
+    var fmix = dz(f.mix);        // NOT named `mix` - that name is the lerp helper above
+    var sn = dz(Calendar.dressing(p).snow);        // 2.3's bell - echoed, never re-derived
+    return {
+      foliage:  { rgb: f.rgb, mix: fmix },
+      grassMix: dz(0.45 * fmix),
+      cool:     dz((1 - Math.sin(TAU * p)) / 2),
+      bare:     dz(bareK(p)),
+      snow:     sn,
+      snowCover: Calendar.gate.groundSnowCover(sn),// r24 - the ground-whitening driver
+      spring:   springK(p),                        // r24 - the flowering driver
+      autumn:   autumnK(p),                        // r25 - the fallen-litter driver
+      cast:     trip(COOL_CAST),
+      straw:    trip(GRASS_STRAW)
+    };
+  };
+
+  // 9.5 - precip phase from the shared winter (r19 bell, center .80, width .16):
+  // the solstice lands SNOW (bell(0.75) ~ 0.77); sleet at the cold edges.
+  Calendar.gate.precipKind = function (phase) {
+    var s = Calendar.dressing(phase).snow;
+    return s >= 0.5 ? 'snow' : s >= 0.04 ? 'sleet' : 'rain';
+  };
+
+  // 9.6 - the wildlife register (E5): crickets window + winter birdsong thin.
+  Calendar.gate.wildlife = function (phase) {
+    var p = wrap(phase);
+    return {
+      crickets: (p > 0.21 && p < 0.60),
+      birdK: 1 + 1.4 * bell(p, 0.86, 0.20)
+    };
+  };
+
+}(this));
+  </script>
 
   <!-- ════ gate modules (attach to window.Gate.*) ════ -->
   <script>
@@ -2629,6 +3096,10 @@
       'hill':              '#5d7e44',
       'tree.foliage':      '#4f7b3a',
       'tree.trunk':        '#5a4630',
+      'snow.drift':        '#eef3fa',
+      'spring.blush':      '#e8a8c4',
+      'spring.gold':       '#ecc94e',
+      'spring.berry':      '#c23b30',
       'stone':             '#9aa0a8',
       'mist':              '#dfe8f2',
       'rep.swatch1':       '#9aa0a8',
@@ -2653,6 +3124,10 @@
       'hill':              '#5a5a3c',
       'tree.foliage':      '#586537',
       'tree.trunk':        '#4f3c2c',
+      'snow.drift':        '#e9d9cb',
+      'spring.blush':      '#d99aa8',
+      'spring.gold':       '#dfae5e',
+      'spring.berry':      '#ad4438',
       'stone':             '#9a8e8a',
       'mist':              '#e7c6b0',
       'rep.swatch1':       '#9a8e8a',
@@ -2677,6 +3152,10 @@
       'hill':              '#2c3742',
       'tree.foliage':      '#2c3a40',
       'tree.trunk':        '#2a2620',
+      'snow.drift':        '#b6c2d4',
+      'spring.blush':      '#8f93b0',
+      'spring.gold':       '#96906e',
+      'spring.berry':      '#713a40',
       'stone':             '#6a7079',
       'mist':              '#7c8aa0',
       'rep.swatch1':       '#6a7079',
@@ -2798,6 +3277,80 @@
     }
     return out;
   };
+
+  /* ── applySeasonColors: the season stage (E8, §9.2) — the exact sibling of
+     applyRepColors. gs = Calendar.gate.season(phase), passed in by the boot (colormap
+     stays Calendar-free — it receives numbers, like it receives repColors). Re-derives
+     each touched role from the BASE palette hex: mix in hex space FIRST, dim(B) SECOND. */
+  var SEASON_CAST_K = {                       // per-role strength of the winter cast (E8)
+    'sky.top':.16, 'sky.horizon':.16, 'mist':.16,               // the light itself
+    'manor.wall':.10, 'road':.10, 'stone':.10, 'greenhouse.glass':.10,
+    'grass':.12, 'hill':.12,                                    // ground (also turns, below)
+    'manor.roof':.06, 'manor.trim':.06, 'observatory.dome':.06, 'observatory.body':.06,
+    'greenhouse.frame':.06, 'gate.iron':.06, 'tree.trunk':.06,  // structure: a touch
+    'brass.stroke':.05, 'brass.bright':.05                      // the estate's metal: least
+    // absent = untouched: tree.foliage (owned by the turn), snow.drift, rep.swatch*
+    //          (a rep's colors are the rep's own statement), and every GLOW role —
+    //          emissives are palette-immune by the file's own contract.
+  };
+  var SEASON_BAND_K = { day:1.0, dusk:0.7, night:0.35 };  // moonlight drains color —
+                                                          // scotopic honesty; also keeps the
+                                                          // authored night palette's cool
+                                                          // register in charge at night
+  var SNOW_COVER_K = {                        // r24 — the BOLD winter (§9.4): how far each
+    'grass':1.0, 'hill':0.78,                 // role whitens toward the band's OWN
+    'manor.roof':0.92, 'observatory.dome':0.88 // snow.drift row at full ground cover.
+  };                                          // hill < grass ⇒ the grade bands read as
+                                              // GRAY drift-shadow, never flat white.
+  CM.applySeasonColors = function (out, band, B, gs) {
+    if (!out || !gs) return out;
+    var pal = PALETTES[String(band||'night').toUpperCase()] || PALETTES.NIGHT;
+    var bk = SEASON_BAND_K[band] || 1.0;
+    var snowT = (gs.snowCover > 0) ? hexTrip(pal['snow.drift']) : null;  // band-honest white
+    // (1) the FOLIAGE TURN (E2): trees, bushes, tufts — all read tree.foliage
+    if (gs.foliage && gs.foliage.mix > 0)
+      out['--tree.foliage'] = dim(mixHex(pal['tree.foliage'], gs.foliage.rgb,
+                                         gs.foliage.mix * bk), B);
+    // (2) the GROUND turn + the COOL CAST + (r24) the SNOW COVER, per role, ONE chain
+    //     (mix in hex space FIRST, dim(B) LAST — the applyRepColors law holds):
+    for (var role in SEASON_CAST_K) {
+      if (!Object.prototype.hasOwnProperty.call(pal, role)) continue;
+      var c = pal[role];
+      if ((role === 'grass' || role === 'hill') && gs.grassMix > 0)
+        c = mixHex(c, gs.straw, gs.grassMix * bk);               // straw before the cast
+      var k = gs.cool * SEASON_CAST_K[role] * bk;
+      if (k > 0) c = mixHex(c, gs.cast, k);
+      if (snowT && SNOW_COVER_K[role])                           // r24: snow lies OVER the
+        c = mixHex(c, snowT, gs.snowCover * SNOW_COVER_K[role]); // field — LAST, and with
+                                                                 // NO bk (snow is white at
+                                                                 // night too; the band lives
+                                                                 // in the snow.drift row)
+      if (c !== pal[role]) out['--' + role] = dim(c, B);
+    }
+    // (3) r24 — the SPRING marks' roles (spring.blush/.gold/.berry, §9.4-spring) are
+    //     plain PALETTE rows: resolve() dims them like any role, the stage never
+    //     touches them (a bloom's color is authored per band, not derived).
+    return out;
+  };
+  // mixHex(hex, rgbTarget, k): integer-rounded RGB lerp. CONTRACT: arg 1 is a '#rrggbb'
+  // STRING, arg 2 an [r,g,b] TRIPLE, and it RETURNS a '#rrggbb' STRING (its output is
+  // re-fed to mixHex and to dim(), and dim's hexToRgb parses '#rrggbb' ONLY). The
+  // ROUNDING is binding (Math.round per channel, so a sub-half-unit shift is a true
+  // no-op and the identity anchor is exact). hexToRgb is the file's OWN parser (:33) and
+  // returns an {r,g,b} OBJECT.
+  function mixHex(hex, t, k) {
+    var c = hexToRgb(hex);
+    var r = Math.round(c.r + (t[0] - c.r) * k),
+        g = Math.round(c.g + (t[1] - c.g) * k),
+        b = Math.round(c.b + (t[2] - c.b) * k);
+    return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+  }
+  // hexTrip(hex): '#rrggbb' → [r,g,b] via the file's OWN hexToRgb (:33) — derived once
+  // per applySeasonColors call, only when snowCover > 0 (midsummer allocates nothing).
+  function hexTrip(hex) { var c = hexToRgb(hex); return [c.r, c.g, c.b]; }
+  // No k clamp is needed: both call sites keep k in [0,1] (max mix .85; cool*K*bk <= .16)
+  // and both endpoints are already integers in [0,255], so r/g/b are too — the (1<<24)
+  // bit-trick re-emit is exact for them.
 
   /* ── apply: write a var-map onto an element's inline style ──────────────────── */
   CM.apply = function (el, vars) {
@@ -5090,6 +5643,124 @@ Gate.sfx.crickets = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
   </script>
   <script>
 'use strict';
+/*
+ * Gate.sfx.sleet — procedural ICE-TICK bed (WebAudio, dual-use offline/live, r24).
+ * Sleet SOUNDS different from rain: icy pellets ticking on stone. This bed rides
+ * OVER the rain loop (bus 0.5) — bright/dry ICE against rain's low patter (§9.6):
+ *   • a sparse TICK FIELD ~28–40 ticks/s; each tick a 2–6 ms noise burst band-
+ *     passed HIGH (seeded centre 3.2–6.0 kHz, Q ~8), sharp attack / exp decay;
+ *   • ~every 4th tick a BOUNCE (−6..−9 dB, higher centre, 30–70 ms later) — the
+ *     pellet skittering after its strike, on a distinct non-overlapping chain;
+ *   • one shared seeded white-noise source → two band-pass→gate chains; a master
+ *     highpass keeps it airy (the low band is the rain loop's, not the ice's).
+ * Determinism: a seeded mulberry32 PRNG, never Math.random — a {seed} renders
+ * bit-identical. Zero assets (B1). A stationary dur-second bed that loops cleanly.
+ */
+window.Gate = window.Gate || {};
+Gate.sfx = Gate.sfx || {};
+
+Gate.sfx.sleet = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
+  var t0 = ctx.currentTime + when;
+  var sr = ctx.sampleRate;
+
+  // ── Seeded PRNG (mulberry32): deterministic uniform [0,1) ────────────────
+  var a = (seed >>> 0) || 1;
+  function rng() {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  function range(lo, hi) { return lo + rng() * (hi - lo); }
+
+  // ── One seeded white-noise buffer, shared by both chains ─────────────────
+  var nlen = Math.max(1, Math.ceil((dur + 0.25) * sr));
+  var nbuf = ctx.createBuffer(1, nlen, sr);
+  var nd = nbuf.getChannelData(0);
+  for (var n = 0; n < nlen; n++) nd[n] = rng() * 2 - 1;
+  var src = ctx.createBufferSource();
+  src.buffer = nbuf;
+
+  // ── Master: keep the energy bright/dry (high centroid) — a highpass strips
+  //    any low rumble; the rain loop owns the low band. Modest overall gain. ──
+  var master = ctx.createGain();
+  master.gain.value = 0.62;
+  var hp = ctx.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 2200;
+  hp.connect(master).connect(dest);
+
+  // ── Two band-pass → gate chains: the tick FIELD and the BOUNCE. Each tick
+  //    schedules the chain's band-pass centre + a short raised gain grain. ──
+  function chain() {
+    var bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 8;                     // narrow — an icy ping, not a hiss
+    var gate = ctx.createGain();
+    gate.gain.setValueAtTime(0.0001, t0);
+    src.connect(bp).connect(gate).connect(hp);
+    return { bp: bp, gate: gate };
+  }
+  var field = chain(), bounce = chain();
+
+  var NENV = 24;
+  // a per-tick grain: sharp attack, exponential decay (the dry ice crack).
+  function grain(level) {
+    var e = new Float32Array(NENV), i;
+    for (i = 0; i < NENV; i++) {
+      var x = i / (NENV - 1);
+      var atk = x < 0.12 ? x / 0.12 : 1;                 // sharp attack
+      var dec = Math.exp(-6.5 * Math.max(0, x - 0.12));  // exponential decay
+      e[i] = Math.max(0.0001, level * atk * dec);
+    }
+    return e;
+  }
+  function tick(ch, at, durS, centreHz, level) {
+    ch.bp.frequency.setValueAtTime(centreHz, at);
+    ch.gate.gain.setValueCurveAtTime(grain(level), at, durS);
+    ch.gate.gain.setValueAtTime(0.0001, at + durS);
+  }
+
+  // ── Schedule the tick field ──────────────────────────────────────────────
+  var t = t0 + 0.005, guard = 0, lastBounceEnd = t0;
+  while (t < t0 + dur && guard < 4000) {
+    var centre = range(3200, 6000);
+    var burst = range(0.002, 0.006);
+    var lvl = range(0.7, 1.0);                    // per-tick level jitter
+    tick(field, t, burst, centre, lvl);
+    if (rng() < 0.25) {                           // ~every 4th tick: a bounce
+      var bt = t + range(0.030, 0.070);
+      if (bt < t0 + dur && bt > lastBounceEnd + 0.004) {   // keep bounces ordered
+        var bBurst = range(0.002, 0.005);
+        var bCentre = Math.min(7500, centre * range(1.15, 1.4));   // higher
+        var bLvl = lvl * range(0.355, 0.501);     // −9..−6 dB below its strike
+        tick(bounce, bt, bBurst, bCentre, bLvl);
+        lastBounceEnd = bt + bBurst;
+      }
+    }
+    t += 1 / range(28, 40);                       // seeded inter-tick interval
+    guard++;
+  }
+
+  src.start(t0);
+  src.stop(t0 + dur + 0.15);
+
+  // ── Live-use handle: fade the master out cleanly at a given time. ─────────
+  return {
+    stop: function (at) {
+      var when_s = at != null ? at : ctx.currentTime;
+      try {
+        master.gain.cancelScheduledValues(when_s);
+        master.gain.setValueAtTime(master.gain.value || 0.62, when_s);
+        master.gain.linearRampToValueAtTime(0.0001, when_s + 0.08);
+      } catch (e) {}
+      try { src.stop(when_s + 0.1); } catch (e) {}
+    }
+  };
+};
+  </script>
+  <script>
+'use strict';
 // ─────────────────────────────────────────────────────────────────────────────
 // Gate.sfx["owl"] — "A Distant Owl At Night"
 //
@@ -5560,6 +6231,12 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
   var DUCK_HOLD    = 0.70; // held under the crack + early roll
   var DUCK_RELEASE = 1.7;  // bed eases back up over the rolling tail
 
+  // r25.2 (THE DUCK SURVIVES THE STRIKE): the level the rain bus was actually
+  // STARTED at — the SINGLE AUTHORITY duckBed restores to (never the hardcoded
+  // RAIN_BUS), so a strike can't shove a ducked sleet floor back up. Reset to the
+  // safe shipped default on kill; also the initial value.
+  A._rainLvl = RAIN_BUS;
+
   // ambient layer handles (each = { node, src } returned by a Gate.sfx builder,
   // routed through its own sub-bus gain so we can cross-fade independently).
   var amb = {
@@ -5606,6 +6283,38 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
   }
   // rain INTENSITY only exists in storm.
   function rainIntensityFor(w) { return w === 'storm' ? 0.9 : 0; }
+
+  // the SEASON, read live (null off the calendar, like weatherNow/bandNow).
+  function seasonNow() { try { return Gate.season || null; } catch (e) { return null; } }
+
+  /* A.plan(band, w, season): ONE pure gating policy the selftest table-checks
+     (§9.6). Numbers in, a truth-row out; every branch routes through it. */
+  A.plan = function (band, w, season) {
+    var storming = (w === 'storm');                        // the CLOUD
+    var snowing  = storming && !!season && season.kind === 'snow';
+    var sleeting = storming && !!season && season.kind === 'sleet';   // r24
+    var wl = (season && season.wildlife) || { crickets: true, birdK: 1 };
+    return {
+      rain:   storming && !snowing,      // rain loop — snow-hush gate (E4)
+      rainLvl: sleeting ? 0.15 : RAIN_BUS, // r25: the rain BUS LEVEL — DUCKED under
+                                         // sleet (0.15) so the ticks read; plain rain
+                                         // keeps the shipped RAIN_BUS (= 0.78) exactly
+                                         // — SYMBOLIC (r25.1/#14) so the plan can never
+                                         // drift from the code (§9.6, THE DUCK)
+      sleet:  sleeting,                  // r24: the ice-tick bed RIDES ON the rain loop
+      roll:   storming && !snowing,      // distant rolling thunder rides with it
+      chimes: !storming,                 // chimes gate on the CLOUD, as shipped
+      wind:   snowing ? 0.35             // snowfall STILLS the air (E4/B7): below
+              : windStrengthFor(w),      // even cloudy .5 — quiet in FACT
+      creature: storming ? null          // creatures gate on the CLOUD
+              : band === 'day'  ? 'birds'
+              : band === 'dusk' ? (wl.crickets ? 'crickets' : null)   // winter dusk silent
+              : 'owl',                   // owls call year-round
+      birdMin: Math.round(10 * wl.birdK),  // birdsong THINS: interval widens
+      birdMax: Math.round(26 * wl.birdK),  //   (10–26 s → 24–62 s deep winter)
+      thunder: !snowing                  // ENFORCED upstream at the strike (§9.5)
+    };
+  };
 
   /* ── unlock(): first opening click. Create/resume the ctx, publish it, build
      the master gain, start the ambient bed. Idempotent. ──────────────────── */
@@ -5733,24 +6442,35 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
   /* ── ambient(): the live ambient mixer. Re-evaluated on weather change. ──── */
   A.ambient = function () {
     if (!ctx) return;     // nothing until unlock()
-    var w = weatherNow();
-    var raining = (w === 'storm');
+    // ONE plan per call (§9.6): every branch routes through it, so the
+    // season/weather gating is a single table-checkable policy.
+    var P = A.plan(bandNow(), weatherNow(), seasonNow());
 
-    // RAIN — only in storm, scaled by intensity. Cross-fade in/out. The rain is
-    // the brightest, highest-RMS bed (the dominant masker of the clap's crack
-    // band), so it sits a touch under its old level (0.85 → 0.78) to give the
-    // strike room; the sidechain duck in thunder() does the rest.
-    if (raining) {
-      startTexture('rain', 'rain', { intensity: rainIntensityFor(w) }, RAIN_BUS);
+    // RAIN — the storm loop, and NEVER under snowfall (the snow-hush gate, E4).
+    // Started at the plan's bus level (r25: P.rainLvl — 0.15 ducked under sleet,
+    // RAIN_BUS otherwise); record it so duckBed restores to THIS, not the constant
+    // (r25.2 — THE DUCK SURVIVES THE STRIKE).
+    if (P.rain) {
+      A._rainLvl = P.rainLvl;
+      startTexture('rain', 'rain', { intensity: rainIntensityFor(weatherNow()) }, P.rainLvl);
     } else {
+      A._rainLvl = RAIN_BUS;
       killTexture('rain', 0.9);
     }
 
-    // WIND — always present, strength clear < cloudy < storm.
-    startTexture('wind', 'wind', { strength: windStrengthFor(w) }, WIND_BUS);
+    // SLEET — the ice-tick bed (r24) rides OVER the ducked rain loop; storm-sleet
+    // only. Bus 0.6 (r25 — was 0.5) so the ticks DOMINATE the barely-there wet floor.
+    if (P.sleet) {
+      startTexture('sleet', 'sleet', {}, 0.6);
+    } else {
+      killTexture('sleet', 0.8);
+    }
 
-    // WINDCHIMES — occasional, ONLY when NOT raining (clear / cloudy).
-    if (!raining) {
+    // WIND — always present; snowfall stills it to a low breath (P.wind, E4).
+    startTexture('wind', 'wind', { strength: P.wind }, WIND_BUS);
+
+    // WINDCHIMES — occasional, ONLY off the storm CLOUD.
+    if (P.chimes) {
       scheduleSparse('chimes', 14, 34, function () {
         if (weatherNow() === 'storm') return;             // re-check at fire time
         playOnce('windchimes', { dur: 6 }, 0.5);
@@ -5759,9 +6479,8 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
       clearSparse('chimes');
     }
 
-    // DISTANT ROLLING THUNDER — occasional, ONLY in storm, at a distant/quiet
-    // level (distinct from the loud per-strike thunder() on the lightning edge).
-    if (raining) {
+    // DISTANT ROLLING THUNDER — with the rain family (P.roll); silent under snow.
+    if (P.roll) {
       scheduleSparse('roll', 18, 40, function () {
         if (weatherNow() !== 'storm') return;
         playOnce('thunderroll', { dur: 5, distance: 'distant' }, 0.5);
@@ -5770,23 +6489,14 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
       clearSparse('roll');
     }
 
-    // CREATURE ROTATION — exactly ONE creature voice at a time, picked by the
-    // time-of-day BAND, and ONLY when it is NOT raining (clear OR cloudy; silent
-    // in storm). The band's onChange already re-calls ambient(), so a band change
-    // cross-fades the creatures (the old key's sparse timer is cleared, the new
-    // key's starts). Each fire re-checks weather+band so a change mid-interval is
-    // honoured.
-    //   day   → birdsong   (broadened from clear-only to any non-storm)
-    //   dusk  → crickets
-    //   night → owl
-    var band = bandNow();
-    var creature = !raining
-      ? (band === 'day' ? 'birds' : band === 'dusk' ? 'crickets' : 'owl')
-      : null;
+    // CREATURE ROTATION — one voice, picked by band + gated on the CLOUD/season
+    // (P.creature: 'birds'/'crickets'/'owl' or null — winter dusk silent). Each
+    // fire re-checks weather+band verbatim.
+    var creature = P.creature;
 
-    // birdsong (day): clear/cloudy, daytime.
+    // birdsong (day): the interval widens as winter thins the song (P.birdMin/Max).
     if (creature === 'birds') {
-      scheduleSparse('birds', 10, 26, function () {
+      scheduleSparse('birds', P.birdMin, P.birdMax, function () {
         if (weatherNow() === 'storm' || bandNow() !== 'day') return;
         playOnce('birdsong', { dur: 6 }, 0.6);
       });
@@ -5832,7 +6542,12 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
     } catch (e) { try { g.gain.value = baseLevel; } catch (e2) {} }
   }
   function duckBed() {
-    duckOne('rain', RAIN_BUS, DUCK_RAIN_TO);
+    // r25.2: restore to the level the rain bus was STARTED at (A._rainLvl), never the
+    // hardcoded RAIN_BUS, and duck TO the min so a strike can NEVER LIFT an already-
+    // ducked floor (sleet: min(0.30, 0.15) = 0.15 — the bus holds FLAT through the
+    // flash; plain rain: 0.78/0.30, bit-identical to the shipped surface). The duck is
+    // down-only, by law (THE DUCK SURVIVES THE STRIKE, §9.6).
+    duckOne('rain', A._rainLvl, Math.min(DUCK_RAIN_TO, A._rainLvl));
     duckOne('wind', WIND_BUS, DUCK_WIND_TO);
   }
 
@@ -5901,6 +6616,14 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
      null before unlock(). Lets the e2e harness assert mute forces the master to
      0 and unmute restores it — without reaching into module internals. ─────── */
   A._masterGainValue = function () { return master ? master.gain.value : null; };
+
+  /* ── read-only QA probe: the current gain of ONE ambient sub-bus (or null if
+     never built / faded out). The master hook can't tell rain from wind, so the
+     snow-hush probe (§9.6) reads BUS truth: under snow rain null-or-≈0, wind > 0.
+     No new bus, no new ws: key. ─────────────────────────────────────────────── */
+  A._busGainValue = function (key) {
+    return (ambBus[key] && ambBus[key].gain) ? ambBus[key].gain.value : null;
+  };
 
   Gate.audio = A;
 
@@ -8495,6 +9218,7 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
     // sky), darker hollows lower/forward. Deterministic so it never jitters.
     var mott = group('grass-mottle', parent);
     var mr = groundsRng(91);
+    S._groundOvals.length = 0;                        // §9.4-spring r26: the DARK ovals are the spring-cluster substrate (SINGLE SOURCE)
     for (var mi = 0; mi < 26; mi++) {
       var my = groundTop + 30 + mr() * 300;
       var depth = (my - groundTop) / 330;            // 0 at horizon → 1 forward
@@ -8505,6 +9229,9 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
       el('ellipse', { cx: g1f(mx), cy: g1f(my), rx: g1f(mw), ry: g1f(mh),
         fill: light ? BRI : '#000',
         opacity: (light ? (0.05 + depth * 0.04) : (0.07 + depth * 0.07)).toFixed(3) }, mott);
+      // register the DARK (hollow) ovals as the spring-cluster substrate — the SINGLE SOURCE the
+      // r26 two-population meadow reads (drawSpring never re-derives this formula; §9.4-spring):
+      if (!light) S._groundOvals.push({ cx: g1f(mx), cy: g1f(my), rx: g1f(mw), ry: g1f(mh) });
     }
 
     // ════ THE DRIVE — a raked-gravel ribbon from the gate seam (front, wide) back to
@@ -8771,7 +9498,9 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
      reduced-motion = no sway (the boot simply never ticks it → crowns stay upright). */
   var WIND_AMP = { none: 0, light: 1.5, strong: 3.4 };   // peak sway, degrees
   var WIND_DUR = { none: 4, light: 3.6, strong: 2.1 };   // base sway period, seconds
-  S._foliage = [];                  // [{el,px,py,phase,per,heavy}] — swayable crowns
+  S._foliage = [];                  // [{el,px,py,phase,per,heavy,kind,marc,mul}] swayable crowns
+  S._groundSeats = [];              // [{x,y,r}] tree/bush foot rings for snow dressing (§9.4)
+  S._groundOvals = [];              // [{cx,cy,rx,ry}] the DARK grass-mottle ovals — spring-cluster substrate (§9.4-spring r26)
   S._windLevel = 'light';
   S._windAmp = WIND_AMP.light;      // current (eased) amplitude
   S._windAmpTarget = WIND_AMP.light;
@@ -8803,7 +9532,7 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
     for (var i = 0; i < fol.length; i++) {
       var f = fol[i];
       var omega = twoPi / (S._windDur * f.per);
-      var ang = (amp * 0.62 + amp * 0.5 * Math.sin(t * omega + f.phase)) * f.heavy;
+      var ang = (amp * 0.62 + amp * 0.5 * Math.sin(t * omega + f.phase)) * f.heavy * (f.mul == null ? 1 : f.mul);
       f.el.setAttribute('transform', 'rotate(' + (Math.round(ang * 1000) / 1000) + ' ' + f.px + ' ' + f.py + ')');
     }
   };
@@ -8821,6 +9550,7 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
   function drawTrees(parent) {
     var g = group('trees', parent);
     S._foliage.length = 0;            // rebuild the swayable-crown list from scratch
+    S._groundSeats.length = 0;        // + the foot-ring seats (§9.4)
     // LEFT cluster — frames the observatory rise + flanks the cairn slot. Kept OUT
     // of the room-rep slot CORE (x152..308 below y492) so a tall rep isn't crowded:
     // the big tree sits at x96 (crown to ~x150), the others at x250/x348 keep their
@@ -8894,6 +9624,25 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
     el('line', { x1: f1f(x - topW * 0.7), y1: f1f(trunkTopY + 4 * sc), x2: f1f(x - rootW * 0.7), y2: f1f(baseY - 6 * sc),
       stroke: BRI, 'stroke-width': '1', opacity: '0.14' }, g);
 
+    // bare-winter ARMATURE (E2, §9.3): 3 rising limbs, each forking once = SIX
+    // 'bare-armature' strokes, opacity 0 (scene-dressing reveals them in winter); into
+    // g so they stand while the crown sways; inert at rest. Left/high, center, right/mid:
+    var ARM = [   // [tipX,tipY, ctrlX,ctrlY, w·sc]
+      [x - crownRX * 0.50, crownCY - crownRY * 0.55, x - crownRX * 0.42, crownCY + crownRY * 0.02, 2.2],
+      [x + crownRX * 0.05, crownCY - crownRY * 0.78, x - crownRX * 0.10, crownCY - crownRY * 0.20, 1.8],
+      [x + crownRX * 0.55, crownCY - crownRY * 0.20, x + crownRX * 0.42, crownCY + crownRY * 0.06, 1.4]
+    ];
+    for (var ai = 0; ai < ARM.length; ai++) {
+      var Aa = ARM[ai], atx = Aa[0], aty = Aa[1];
+      el('path', { d: 'M ' + f1f(x) + ' ' + f1f(trunkTopY) + ' Q ' + f1f(Aa[2]) + ' ' + f1f(Aa[3]) + ' ' + f1f(atx) + ' ' + f1f(aty),
+        fill: 'none', stroke: TRK, 'stroke-width': f1f(Aa[4] * sc), 'stroke-linecap': 'round', 'class': 'bare-armature', opacity: '0' }, g);
+      var fx0 = x + (atx - x) * 0.7, fy0 = trunkTopY + (aty - trunkTopY) * 0.7;   // fork ~0.7 along, ~0.35 len, ~25°
+      var fdx = (atx - x) * 0.35, fdy = (aty - trunkTopY) * 0.35;
+      var frx = fdx * 0.906 - fdy * 0.423, fry = fdx * 0.423 + fdy * 0.906;
+      el('path', { d: 'M ' + f1f(fx0) + ' ' + f1f(fy0) + ' Q ' + f1f(fx0 + frx * 0.5) + ' ' + f1f(fy0 + fry * 0.5) + ' ' + f1f(fx0 + frx) + ' ' + f1f(fy0 + fry),
+        fill: 'none', stroke: TRK, 'stroke-width': f1f(1.0 * sc), 'stroke-linecap': 'round', 'class': 'bare-armature', opacity: '0' }, g);
+    }
+
     // ── FOLIAGE MASS — a single crown <g> (the natural sway pivot) built in layers:
     //    (1) a dark SHADOW belly offset down/forward,
     //    (2) the mid BODY mass in tree.foliage,
@@ -8954,7 +9703,11 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
     // Bigger trees sway a touch less (heavy = 1/√sc); per-crown period + phase desync.
     S._foliage.push({ el: crown, px: f1f(x), py: f1f(trunkTopY),
       phase: rnd() * Math.PI * 2, per: 0.82 + rnd() * 0.36,
-      heavy: Math.max(0.7, Math.min(1.2, 1 / Math.sqrt(sc))) });
+      heavy: Math.max(0.7, Math.min(1.2, 1 / Math.sqrt(sc))),
+      kind: 'tree', marc: manicured, mul: 1,
+      cx: f1f(x), cy: f1f(crownCY), rx: f1f(crownRX), ry: f1f(crownRY),   // §9.4 r24: crown envelope (spring berries · marc-leaf marks)
+      bx: f1f(x), by: f1f(baseY) });                                       // §9.4-autumn r25: trunk-base anchor (fallen-litter placement)
+    S._groundSeats.push({ x: f1f(x), y: f1f(baseY), r: f1f(18 * sc) });
   }
 
   function drawBush(parent, x, baseY, sc) {
@@ -9012,7 +9765,9 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
     // register the bush crown for wind sway — pivots at the ground line; gentler than a
     // tree (low + springy, close to the ground), with a faster rustle period.
     S._foliage.push({ el: crown, px: f1f(x), py: f1f(baseY),
-      phase: rnd() * Math.PI * 2, per: 0.7 + rnd() * 0.3, heavy: 0.7 });
+      phase: rnd() * Math.PI * 2, per: 0.7 + rnd() * 0.3, heavy: 0.7,
+      kind: 'bush', mul: 1 });                       // marc:false implicit
+    S._groundSeats.push({ x: f1f(x), y: f1f(baseY), r: f1f(14 * sc) });
   }
 
   /* ── LAYER 6 — the room-rep (Cairn) + label, in front of the observatory rise ── */
@@ -12870,6 +13625,327 @@ Gate.sfx['logotune'] = function ({ ctx, dest, dur, when = 0, seed = 1 }) {
 })(typeof globalThis !== 'undefined' ? globalThis : this);
   </script>
   <script>
+/* scene-dressing.js — THE CALENDAR'S SEASONAL DRESSING (E2/E3a/spring/autumn, DESIGN §9.3/§9.4, r25):
+   one post-build pass — the bare winter (the BINARY canopy law + per-tree threshold + the
+   optional marc-leaf held-leaf marks), the fallen snow (seat marks over the palette-whitened
+   ground/roofs), the spring flowering, and the autumn fallen litter. Pure; rest-state writes
+   NOTHING (§9.1). r24: canopy opacity is per-tree {0,1} ONLY (every fade retired); the seat
+   table is v2 (a white greenhouse ROOF-PLANE replaces the retired stall lenses; the ground
+   rings + horizon band are retired — the whole ground now whitens in the palette,
+   §9.2/colormap); spring blooms. r25: the meadow DENSIFIES with spring depth k (THE ONE-FORMULA
+   LAW, shared verbatim by drawSpring + plan — more flowers, never bigger); a modest autumn
+   litter of fallen maple leaves at the trees' feet (drawAutumn, salt 0xFA11); plan goes
+   four-scalar plan(s,k,bare,a). r26: the meadow is TWO POPULATIONS — ~4× flowers (nF=44+416·k),
+   dense CLUSTERS filling the DARK grass-mottle ovals (S._groundOvals, the SINGLE SOURCE) + the
+   r25-class thin SPRINKLE everywhere else; the spring AND autumn dress groups go INTO
+   #layer-midground before the trees/bushes (the OCCLUSION LAW — flowers/leaves lie UNDER the
+   canopies). SIZE curve, counts (plan==count), and rest-state law all unchanged. */
+
+(function (root) {
+  'use strict';
+  var Gate = root.Gate = root.Gate || {};
+  var SD = Gate.scenedressing = Gate.scenedressing || {};
+
+  // §9.3 DESIGN PROPERTY — TUNE (SP-SEE-G-tunable; defaults BINDING at build, retuned only by
+  // design revision inside the identity law). r24: crownFade* are DELETED (no fade path exists);
+  // base/spread set each tree's BINARY canopy threshold on the shared bare ramp.
+  SD.TUNE = { bareThreshBase: 0.35, bareThreshSpread: 2.5, armOpacity: 0.9, marcLeafMarks: true };
+  // authored ART (design property; changes only by revision) — indexed in _foliage order:
+  var BARE_JIT = [0, .12, .05, .09, .14, .03, .07, .11];
+
+  var SNOW  = 'var(--snow-drift-ref, #b6c2d4)';     // §9.4 — snow is a palette role
+  var BLUSH = 'var(--spring-blush-ref, #e8a8c4)';   // §9.4-spring — the flowering palette roles
+  var GOLD  = 'var(--spring-gold-ref, #ecc94e)';
+  var BERRY = 'var(--spring-berry-ref, #c23b30)';
+  var LEAF  = 'var(--tree-foliage-ref, #2c3a40)';   // the foliage role — a warm dead-leaf tan in
+                                                    // deep winter (the r24 anchors), worn by the marks
+  // the front-door autumn cartouche maple leaf (index.src.html drawMotif('autumn')), centred
+  // at 0,0; scene-dressing shrinks it ~0.22 for the marcescent held-leaf marks (§9.3 r24).
+  var MAPLE = 'M0 -25 L5 -16 L3.5 -13.5 L8 -8 L15 -10 L24 -3 L16 1 L9.5 4 L17 10 L19 15 ' +
+              'L7 17.5 L0 21 L-7 17.5 L-19 15 L-17 10 L-9.5 4 L-16 1 L-24 -3 L-15 -10 L-8 -8 ' +
+              'L-3.5 -13.5 L-5 -16 Z';
+
+  function f(n) { return Math.round(n * 10) / 10; }
+  function o(v) { return (v < 0 ? 0 : v > 1 ? 1 : v).toFixed(3); }
+  // per-tree canopy threshold on the shared bare ramp (§9.3 r24): TH_i staggered by BARE_JIT.
+  function thI(i) { return SD.TUNE.bareThreshBase + SD.TUNE.bareThreshSpread * (i < BARE_JIT.length ? BARE_JIT[i] : 0); }
+  function rngOf(date, salt) {
+    var C = (typeof Calendar !== 'undefined') ? Calendar : root.Calendar;
+    return (C && C.mulberry32 && date)
+      ? C.mulberry32(C.hash2(C.dateSeed(date.y, date.m, date.d), salt))
+      : function () { return 0.5; };
+  }
+  function foliage() { var S = Gate.scene; return (S && S._foliage) ? S._foliage : []; }
+
+  // §9.4 r26 — THE OCCLUSION LAW: a dress group goes INTO #layer-midground, BEFORE the
+  // trees/bushes group, so a canopy or building occludes any flower/leaf behind it (paint order
+  // grass < mottle < drive < FLOWERS/LITTER < trees/bushes < furniture < gate). Fixes the r25
+  // insert-after-#layer-midground sibling placement (the meadow/litter painted ON TOP of canopies).
+  function placeUnderCanopies(svg, node) {
+    var mid = svg.querySelector('#layer-midground');
+    var trees = svg.querySelector('#trees');
+    if (mid && trees && trees.parentNode === mid) mid.insertBefore(node, trees);
+    else if (mid) mid.appendChild(node);
+    else svg.appendChild(node);
+  }
+
+  // §9.4-spring — THE ONE-FORMULA LAW (r25): the meadow densifies with spring depth k. Stated
+  // ONCE here, used verbatim by BOTH drawSpring and SD.plan so s9c predicts counts from the
+  // cell's own k (never a constant). Seed-free; SIZE is pinned elsewhere (more flowers, never bigger).
+  function nF(k)     { return 44 + Math.round(416 * k); }    // r26: total flowers — 61 at k=.04 → 460 at k=1 (~4× r25)
+  function nGold(k)  { return Math.round(0.4 * nF(k)); }     // gold split (~40%)
+  function nBlush(k) { return nF(k) - nGold(k); }            // blush split (~60%)
+  function nW(k)     { return 4 + Math.round(4 * k); }        // meadow washes: 4 → 8
+
+  // ── the manifest (the tooth, §9.8-s9c) — plan(s,k,bare) is pure/seed-free; count() reads DOM ──
+  function skeleton() {
+    return {
+      gate:   { 'snow-pier-cap': 0, 'snow-pier-edge': 0, 'snow-crest': 0 },
+      roofs:  { 'snow-gh-roof': 0, 'snow-ridge': 0 },
+      ground: { 'snow-lamp': 0, 'snow-lip-line': 0, 'snow-lip-patch': 0, 'snow-drive': 0 },
+      spring: { 'spring-flower': 0, 'spring-wash': 0 },
+      autumn: { 'autumn-leaf': 0 },                   // §9.4-autumn r25 — own dress group
+      crown:  { 'spring-berry': 0, 'marc-leaf': 0 }   // crown-hosted → whole-SVG class scan
+    };
+  }
+  // plan(s, k, bare, a) — snow + spring + bare + autumn scalars (r25: FOUR-scalar). Counts are
+  // pure/seed-free: snow + autumn fixed per tier, spring by THE ONE-FORMULA LAW (§9.4). No seed.
+  SD.plan = function (s, k, bare, a) {
+    s = +s || 0; k = +k || 0; bare = +bare || 0; a = +a || 0;
+    var p = skeleton(), fol = foliage(), i, trees = 0, marcBare = 0;
+    for (i = 0; i < fol.length; i++) {
+      if (fol[i].kind === 'tree') { trees++; if (fol[i].marc && bare >= thI(i)) marcBare++; }
+    }
+    if (s > 0.15) { p.gate['snow-pier-cap'] = 2; p.gate['snow-pier-edge'] = 2; p.roofs['snow-gh-roof'] = 1; }
+    if (s > 0.30) { p.roofs['snow-ridge'] = 1; p.ground['snow-lamp'] = 2; p.ground['snow-lip-line'] = 1; }
+    if (s > 0.45) { p.gate['snow-crest'] = 1; p.ground['snow-lip-patch'] = 5; }
+    if (s > 0.60) { p.ground['snow-drive'] = 3; }
+    if (k > 0.04) { p.spring['spring-flower'] = nF(k); p.spring['spring-wash'] = nW(k); p.crown['spring-berry'] = 6 * trees; }
+    if (a > 0.04) { p.autumn['autumn-leaf'] = 4 * trees; }   // §9.4-autumn — 4 leaves per open-grown tree
+    p.crown['marc-leaf'] = SD.TUNE.marcLeafMarks ? 5 * marcBare : 0;
+    return p;
+  };
+  // count() — what was actually drawn (per group/class; crown marks via a whole-SVG scan):
+  SD.count = function () {
+    var p = skeleton();
+    var svg = Gate.scene && Gate.scene.refs && Gate.scene.refs.svg;
+    if (!svg) return p;
+    var idOf = { 'dress-snow-gate': 'gate', 'dress-snow-roofs': 'roofs',
+                 'dress-snow-ground': 'ground', 'dress-spring-ground': 'spring',
+                 'dress-autumn-ground': 'autumn' };
+    for (var id in idOf) {
+      var g = svg.querySelector('#' + id); if (!g) continue;
+      var kids = g.childNodes, bucket = p[idOf[id]];
+      for (var i = 0; i < kids.length; i++) {
+        var c = kids[i].getAttribute && kids[i].getAttribute('class');
+        if (c && bucket.hasOwnProperty(c)) bucket[c]++;
+      }
+    }
+    p.crown['spring-berry'] = svg.querySelectorAll('.spring-berry').length;
+    p.crown['marc-leaf'] = svg.querySelectorAll('.marc-leaf').length;
+    return p;
+  };
+
+  // §9.4 — fallen snow: three id'd groups; one seeded stream (geometry only), fixed seat order.
+  // The ground/roofs WHITEN in the palette (§9.2 SNOW_COVER_K); this pass draws only the marks
+  // the palette can't reach. drawn once at build; s ≤ .15 writes NOTHING (rest-state).
+  function drawSnow(S, s, snowCover, date) {
+    if (!(s > 0.15)) return;
+    var svg = S.refs && S.refs.svg; if (!svg) return;
+    var el = S.el;
+    var mid = svg.querySelector('#layer-midground');
+    var furn = svg.querySelector('#layer-furniture');
+    var gate = svg.querySelector('#layer-gate');
+    var gGround = el('g', { id: 'dress-snow-ground' });
+    if (mid && mid.parentNode) mid.parentNode.insertBefore(gGround, mid.nextSibling); else svg.appendChild(gGround);
+    var gRoofs = el('g', { id: 'dress-snow-roofs' }, furn || svg);
+    var gGate  = el('g', { id: 'dress-snow-gate' }, gate || svg);
+    var rng = rngOf(date, 0x6A7E);
+    function lens(g, cx, cy, rx, ry, op_, cls) {
+      el('ellipse', { cx: f(cx), cy: f(cy), rx: f(rx), ry: f(ry), fill: SNOW, opacity: o(op_), 'class': cls }, g);
+    }
+    function line(g, d, w, op_, cls) {
+      el('path', { d: d, fill: 'none', stroke: SNOW, 'stroke-width': w, opacity: o(op_), 'class': cls }, g);
+    }
+    // pier caps ×2 (gate): a lens + a top-edge stroke — r24: whiter, heavier
+    var pry = 6.5 * (0.55 + 0.45 * s);
+    [436, 1164].forEach(function (cx) {
+      lens(gGate, cx, 197, 33, pry, 0.7 + 0.3 * s, 'snow-pier-cap');
+      line(gGate, 'M ' + f(cx - 28) + ' ' + f(197 - pry * 0.2) + ' Q ' + cx + ' ' + f(197 - pry * 1.4) +
+        ' ' + f(cx + 28) + ' ' + f(197 - pry * 0.2), 1.6, 0.65 * s, 'snow-pier-edge');
+    });
+    // greenhouse ROOF-PLANE (roofs) — r24, REPLACES the retired stall lenses; a white-TOPPED
+    // roof (never snow piled at the base). Opacity by ground cover, not seat depth.
+    el('path', { d: 'M 1331.7 478.6 L 1455.8 452.2 L 1496.1 503.6 L 1372 512.9 Z',
+      fill: SNOW, opacity: o(0.25 + 0.6 * snowCover), 'class': 'snow-gh-roof' }, gRoofs);
+    if (s > 0.30) {  // greenhouse ridge + lamp caps ×2 + apron lip line
+      line(gRoofs, 'M 1331.7 478.6 L 1455.8 452.2', 2, 0.45 * s, 'snow-ridge');
+      [600, 1000].forEach(function (lx) { lens(gGround, lx, 443, 7, 2.2, 0.55 + 0.3 * s, 'snow-lamp'); });
+      line(gGround, 'M -40 811 L 1640 811', 2.4, 0.5 * s, 'snow-lip-line');
+    }
+    if (s > 0.45) {  // gate crest + apron lip patches ×5 (seeded)
+      line(gGate, 'M 472 166 Q 800 126 1128 166', 2.2, 0.4 * s, 'snow-crest');
+      for (var j = 0; j < 5; j++) {
+        lens(gGround, 200 + 1200 * rng(), 820 + 60 * (0.15 + 0.7 * (j / 4)),
+          26 + rng() * 34, 4 + rng() * 3, 0.2 + 0.4 * s, 'snow-lip-patch');
+      }
+    }
+    if (s > 0.60) {  // drive dusting ×3 (seeded) — never a cap on the kept ribbon
+      for (var m = 0; m < 3; m++) {
+        var dt = 0.2 + 0.3 * m, hw = 94 - 62 * dt;
+        lens(gGround, 800 + (rng() - 0.5) * hw * 0.6, 900 - 422 * dt,
+          hw * 0.5 * (0.7 + rng() * 0.3), 3 + rng() * 1.5, 0.28 * s, 'snow-drive');
+      }
+    }
+  }
+
+  // §9.4-spring (r26) — the flowering: crown berries (into each crown <g>, ride the sway), and a
+  // TWO-POPULATION meadow — dense CLUSTERS filling the DARK grass-mottle ovals + the r25-class thin
+  // SPRINKLE everywhere else (nF=44+416·k, ~4× r25). One seeded stream, fixed draw order
+  // (blush-clusters → blush-sprinkle → gold-clusters → gold-sprinkle → washes); k ≤ .04 writes
+  // NOTHING (rest-state / midsummer). The split is PLACEMENT-ONLY — counts stay plan==count.
+  function drawSpring(S, k, date) {
+    if (!(k > 0.04)) return;
+    var svg = S.refs && S.refs.svg; if (!svg) return;
+    var el = S.el, rng = rngOf(date, 0x5B10), fol = foliage(), i;
+    // crown BERRIES — 6 per tree × all trees, appended INTO the registered crown <g>:
+    for (i = 0; i < fol.length; i++) {
+      var fo = fol[i];
+      if (fo.kind !== 'tree' || !fo.el || fo.cx == null) continue;
+      var sc = fo.rx / (fo.marc ? 33 : 40);   // tree scale from the crown envelope (§9.4)
+      for (var b = 0; b < 6; b++) {
+        var bx = fo.cx + (rng() * 2 - 1) * fo.rx * 0.7;
+        var by = (fo.cy - fo.ry * 0.15) + (rng() * 2 - 1) * fo.ry * 0.45;
+        var br = (1.5 + rng() * 0.8) * sc;
+        el('circle', { cx: f(bx), cy: f(by), r: f(br), fill: BERRY,
+          opacity: o(0.55 + 0.45 * k), 'class': 'spring-berry' }, fo.el);
+      }
+    }
+    // ground FLOWERS + meadow washes — dress-spring-ground, UNDER the canopies (§9.4 r26 occlusion):
+    var gG = el('g', { id: 'dress-spring-ground' });
+    placeUnderCanopies(svg, gG);
+    function rails(y) { var t = (900 - y) / 422; return [706 + 62 * t, 894 - 62 * t]; }   // §drive taper
+    // the DARK grass-mottle ovals are the cluster substrate (SINGLE SOURCE, §9.4-spring r26):
+    var ovals = (S._groundOvals && S._groundOvals.length) ? S._groundOvals : null;
+    var cdf = null, tot = 0, j;
+    if (ovals) { cdf = []; for (j = 0; j < ovals.length; j++) { tot += ovals[j].rx * ovals[j].ry; cdf.push(tot); } }
+    // ONE ellipse per flower — the SIZE curve is PINNED (r25, re-pinned r26: more flowers, never
+    // bigger); the drive stays kept (reflect out — CLUSTER and SPRINKLE alike, after meadow-bound):
+    function flower(fill, x, y) {
+      var r = rails(y), L = r[0] - 8, R = r[1] + 8;
+      if (x > L && x < R) x = (x - L < R - x) ? (2 * L - x) : (2 * R - x);
+      var depth = (y - 470) / 430;                  // nearer flowers larger (the mottle's perspective)
+      var rx = (1.5 + rng() * 1.3) * (0.7 + 0.55 * depth);
+      var op = o((0.55 + 0.35 * rng()) * (0.35 + 0.65 * k));
+      el('ellipse', { cx: f(x), cy: f(y), rx: f(rx), ry: f(rx * 0.8), fill: fill,
+        opacity: op, 'class': 'spring-flower' }, gG);
+    }
+    // SPRINKLE — the r25 uniform scatter (unchanged in character): x ∈ [30,1570], y ∈ [486,806]:
+    function sprinkle(fill, n) {
+      for (var s = 0; s < n; s++) flower(fill, 30 + rng() * 1540, 486 + rng() * 320);
+    }
+    // CLUSTERS — dense fills of the DARK ovals: area-weighted oval pick (w=rx·ry, CDF) then the
+    // area-uniform disk map (θ, r=√u fills ACROSS the oval, ×0.9 inside the soft edge), meadow-bound
+    // count-preserving by reflection. No ovals ⇒ fall back to sprinkle placement (count held):
+    function cluster(fill, n) {
+      for (var c = 0; c < n; c++) {
+        var x, y;
+        if (ovals) {
+          var u = rng() * tot, oj = ovals[ovals.length - 1], jj;
+          for (jj = 0; jj < cdf.length; jj++) { if (u <= cdf[jj]) { oj = ovals[jj]; break; } }
+          var th = rng() * Math.PI * 2, rr = Math.sqrt(rng());
+          x = oj.cx + Math.cos(th) * rr * oj.rx * 0.9;
+          y = oj.cy + Math.sin(th) * rr * oj.ry * 0.9;
+          if (y > 806) y = 1612 - y; else if (y < 486) y = 972 - y;
+        } else { x = 30 + rng() * 1540; y = 486 + rng() * 320; }
+        flower(fill, x, y);
+      }
+    }
+    // fixed draw order: within each color nSpr=round(0.25·n) join the SPRINKLE, the rest CLUSTER:
+    var nBl = nBlush(k), nGo = nGold(k);
+    var blSpr = Math.round(0.25 * nBl), goSpr = Math.round(0.25 * nGo);
+    cluster(BLUSH, nBl - blSpr); sprinkle(BLUSH, blSpr);
+    cluster(GOLD,  nGo - goSpr); sprinkle(GOLD,  goSpr);
+    for (var w = 0, nWa = nW(k); w < nWa; w++) {    // soft drifts of bloom (the between-patch wash)
+      el('ellipse', { cx: f(30 + rng() * 1540), cy: f(486 + rng() * 320),
+        rx: f(18 + rng() * 24), ry: f(4 + rng() * 4), fill: BLUSH,
+        opacity: o(0.14 * k), 'class': 'spring-wash' }, gG);
+    }
+  }
+
+  // §9.4-autumn (r25) — the fallen litter: a modest seeded scatter of fallen maple leaves at the
+  // open-grown trees' feet (4 per kind:'tree' registration → 20). One seeded stream (salt 0xFA11),
+  // fixed draw order (registration order); a ≤ .04 writes NOTHING (rest-state / midsummer). Fill is
+  // the foliage role (amber→russet across the turn — the one-light law, zero new palette rows).
+  function drawAutumn(S, a, date) {
+    if (!(a > 0.04)) return;
+    var svg = S.refs && S.refs.svg; if (!svg) return;
+    var el = S.el, rng = rngOf(date, 0xFA11), fol = foliage(), i;
+    var gA = el('g', { id: 'dress-autumn-ground' });   // r26: UNDER the canopies (§9.4 occlusion law)
+    placeUnderCanopies(svg, gA);
+    for (i = 0; i < fol.length; i++) {
+      var fo = fol[i];
+      if (fo.kind !== 'tree' || fo.bx == null) continue;
+      for (var lf = 0; lf < 4; lf++) {                 // 4 leaves per open-grown tree
+        var lx = fo.bx + (rng() * 2 - 1) * fo.rx * 0.9;  // spread to the dripline
+        var ly = fo.by - 2 + rng() * 12;                 // a shallow ground band hugging the trunk
+        var sca = 0.15 + rng() * 0.10;                   // the marc marks' ~0.22 size class
+        var rot = rng() * 360;                           // seeded rotation
+        var op = o((0.6 + 0.35 * rng()) * (0.35 + 0.65 * a));
+        el('path', { d: MAPLE, fill: LEAF, opacity: op, 'class': 'autumn-leaf',
+          transform: 'translate(' + f(lx) + ' ' + f(ly) + ') rotate(' + f(rot) + ') scale(' + sca.toFixed(3) + ')' }, gA);
+      }
+    }
+  }
+
+  // §9.3 — the bare winter (BINARY canopy law). Rest-state: bare === 0 writes NOTHING (the
+  // threshold TH_i ≥ .35 sits above bare === 0, so no canopy toggles and no write happens).
+  function applyBare(S, bare, date) {
+    if (!(bare > 0)) return;
+    var fol = S._foliage || [], T = SD.TUNE, mrng = rngOf(date, 0x1EAF);   // marc-leaf scatter stream
+    for (var i = 0; i < fol.length; i++) {
+      var fo = fol[i];
+      var jit = i < BARE_JIT.length ? BARE_JIT[i] : 0;
+      var bareT = bare * (1 - jit);
+      fo.mul = 1 - 0.7 * bareT;                    // sway damping — EVERY registration (dead twig stiffer)
+      if (fo.kind !== 'tree') continue;            // BUSHES never toggle (binary law: constantly 1)
+      var off = bare >= thI(i);                    // canopy OFF iff bare ≥ TH_i; else attribute absent = 1.0
+      if (fo.el && off) fo.el.setAttribute('opacity', '0');
+      if (fo.el && fo.el.parentNode && off) {      // armature toggles BINARY with its tree
+        var arms = fo.el.parentNode.querySelectorAll('.bare-armature');
+        for (var a = 0; a < arms.length; a++) arms[a].setAttribute('opacity', String(T.armOpacity));
+      }
+      // marcescent held-leaf marks (the manicured pair) — a FIXED 15-draw budget per MARC tree
+      // (the marc set is phase-invariant, so positions are phase-stable), drawn into the trunk
+      // group (visible on the bare crown) only when THIS tree's canopy is off:
+      if (fo.marc) {
+        var pos = [];
+        for (var q = 0; q < 5; q++) pos.push([mrng(), mrng(), mrng()]);
+        if (off && T.marcLeafMarks && fo.el && fo.el.parentNode && fo.cx != null) {
+          var g = fo.el.parentNode;
+          for (var q2 = 0; q2 < 5; q2++) {
+            var mx = fo.cx + (pos[q2][0] * 2 - 1) * fo.rx * 0.6;
+            var my = fo.cy + (pos[q2][1] * 2 - 1) * fo.ry * 0.5;
+            S.el('path', { d: MAPLE, fill: LEAF, opacity: '1', 'class': 'marc-leaf',
+              transform: 'translate(' + f(mx) + ' ' + f(my) + ') rotate(' + f(pos[q2][2] * 360) + ') scale(0.22)' }, g);
+          }
+        }
+      }
+    }
+  }
+
+  // the one wiring seam (§9.1): once, after S.build(host). Null season / midsummer ⇒ NOTHING.
+  SD.apply = function (S, season) {
+    if (!S || !season || !season.dress) return;
+    var d = season.dress, date = season.date;
+    applyBare(S, +d.bare || 0, date);              // the bare winter (canopy · armature · marc-leaf · sway)
+    drawSnow(S, +d.snow || 0, +d.snowCover || 0, date);  // fallen-snow seat marks
+    drawSpring(S, +d.spring || 0, date);           // the spring flowering
+    drawAutumn(S, +d.autumn || 0, date);           // the autumn fallen litter (§9.4-autumn r25)
+  };
+}(typeof globalThis !== 'undefined' ? globalThis : this));
+  </script>
+  <script>
 /* ═══════════════════════════════════════════════════════════════════════════
    sky-core.mjs — the Front Gate's self-contained sky math (Sun + Moon phase).
 
@@ -13154,6 +14230,7 @@ if (typeof globalThis !== 'undefined') {
 
   var VB_W = 1600, VB_H = 900;
   var WIND_STRONG = 3.4;            // == scene.js WIND_AMP.strong (sway peak, deg)
+  var TAU = Math.PI * 2;
 
   // ── per-weather cloud targets (eased toward in draw). The fleet is TWO tiers:
   //   tier 0 (base)  — shown for cloudy AND storm
@@ -13181,6 +14258,11 @@ if (typeof globalThis !== 'undefined') {
   var rainCur = 0, rainTgt = 0;     // eased rain intensity 0..1
   var MAX_DROPS = 240;
 
+  // precipitation KIND (E4) — a pure derivation from the shared winter, set once by
+  // the boot via WFX.setSeason. COERCED so it is never null. 'rain' | 'sleet' | 'snow'.
+  var precip = 'rain';
+  var wxT = 0;                       // wobble clock (snow-waft phase), advanced in draw()
+
   // per-weather rain intensity target (eased into rainCur). cloudy is a LIGHT
   // drizzle, storm a HEAVY downpour; both wet the ground (→ splashes), clear is dry.
   var RAIN = { clear: 0, cloudy: 0.42, storm: 1 };
@@ -13198,6 +14280,7 @@ if (typeof globalThis !== 'undefined') {
   // in front of the gate base) — fractions of canvas height, never the sky.
   var BAND_TOP = 0.80, BAND_BOT = 1.0;
   var splashRng = mkRng(7777);
+  var respawnRng = mkRng(24601);    // seeded off-screen respawn scatter (was Math.random)
 
   // lightning state machine (seconds)
   var nextStrike = 2.5;
@@ -13334,7 +14417,10 @@ if (typeof globalThis !== 'undefined') {
         y: rng() * ch,
         len: 12 + rng() * 16,
         spd: 760 + rng() * 520,
-        a: 0.25 + rng() * 0.4
+        a: 0.25 + rng() * 0.4,
+        rad: 1.2 + rng() * 1.4,     // snow-disc radius (E4)
+        wob: rng() * TAU,           // snow-waft phase
+        wr: 0.25 + rng() * 0.35     // snow-waft rate
       });
     }
   }
@@ -13343,25 +14429,51 @@ if (typeof globalThis !== 'undefined') {
     if (rainCur < 0.02) return;
     ensureDrops(cw, ch);
     var slant = 0.16 + windNorm() * 0.5;     // dx per unit of fall (always rightward)
-    var live = Math.floor(MAX_DROPS * rainCur);
+    var snow = precip === 'snow', sleet = precip === 'sleet';
+    // snow: fewer, larger flakes (×0.6 count); rain/sleet: the full field.
+    var live = Math.floor(MAX_DROPS * rainCur * (snow ? 0.6 : 1));
     var bandA = bandRainAlpha();
     ctx.lineCap = 'round';
     for (var i = 0; i < live; i++) {
       var d = drops[i];
-      d.y += d.spd * dt;
-      d.x += d.spd * dt * slant;
-      if (d.y - d.len > ch) {                 // recycle off the bottom
-        d.y = -d.len - Math.random() * 30;
-        d.x = Math.random() * cw * 1.25 - cw * 0.12;
-      } else if (d.x - d.len > cw) {
-        d.x = -d.len; d.y = Math.random() * ch;
+      // fall speed by kind: snow drifts down slow (×0.15), sleet falls hard (×1.12).
+      var spd = snow ? d.spd * 0.15 : sleet ? d.spd * 1.12 : d.spd;
+      d.y += spd * dt;
+      if (snow) {                             // the waft: a per-flake seeded sine,
+        d.x += spd * dt * slant * 0.35 +      // independent of the rightward wind lean
+               Math.sin(wxT * d.wr * TAU + d.wob) * 10 * dt;
+      } else {
+        d.x += spd * dt * slant;
       }
-      ctx.strokeStyle = 'rgba(202,222,255,' + (d.a * rainCur * bandA).toFixed(3) + ')';
-      ctx.lineWidth = 1.05;
-      ctx.beginPath();
-      ctx.moveTo(d.x, d.y);
-      ctx.lineTo(d.x - d.len * slant, d.y - d.len);
-      ctx.stroke();
+      if (d.y - d.len > ch) {                 // recycle off the bottom
+        d.y = -d.len - respawnRng() * 30;
+        d.x = respawnRng() * cw * 1.25 - cw * 0.12;
+      } else if (d.x - d.len > cw) {
+        d.x = -d.len; d.y = respawnRng() * ch;
+      }
+      if (snow) {                             // discs, near-white
+        ctx.fillStyle = 'rgba(238,244,252,' + (d.a * rainCur * bandA * 1.15).toFixed(3) + ')';
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, d.rad, 0, TAU);
+        ctx.fill();
+      } else if (sleet && i % 3 === 2) {      // every 3rd sleet drop = an ice pellet
+        // r24: the r2 pellet (1.3px, streak-colored) was sub-perceptual — sleet read as
+        // rain; sleet's PRIMARY signature now moves to SOUND (§9.6). The visual becomes a
+        // light honest nudge: grow to 1.8px, brighten to the snow-disc near-white ×1.2 —
+        // visibly icy among the blue streaks, still restrained.
+        ctx.fillStyle = 'rgba(238,244,252,' + (d.a * rainCur * bandA * 1.2).toFixed(3) + ')';
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, 1.8, 0, TAU);
+        ctx.fill();
+      } else {                                // rain (and 2/3 of sleet): streaks
+        var len = sleet ? d.len * 0.55 : d.len;   // sleet is shorter, harder
+        ctx.strokeStyle = 'rgba(202,222,255,' + (d.a * rainCur * bandA).toFixed(3) + ')';
+        ctx.lineWidth = 1.05;
+        ctx.beginPath();
+        ctx.moveTo(d.x, d.y);
+        ctx.lineTo(d.x - len * slant, d.y - len);
+        ctx.stroke();
+      }
     }
   }
 
@@ -13404,11 +14516,12 @@ if (typeof globalThis !== 'undefined') {
      concentric, FLATTENED (ground-perspective) ring-arcs that grow + fade, plus a
      tiny upward tick early in life. Intensity-scaled spawning happens here too. */
   function drawSplashes(cw, ch, dt) {
-    if (rainCur < 0.02) return;
+    if (rainCur < 0.02 || precip === 'snow') return;    // snow does not splash (E4)
     ensureSplashes();
     // intensity-scaled spawn rate: storm (rainCur→1) ≫ cloudy (rainCur≈0.42).
     // a touch super-linear so light rain stays sparse and storm feels busy.
     var rate = STORM_SPAWN * rainCur * rainCur;
+    if (precip === 'sleet') rate *= 0.5;                // ice splatters less
     spawnAcc += rate * dt;
     while (spawnAcc >= 1) {
       spawnAcc -= 1;
@@ -13483,6 +14596,24 @@ if (typeof globalThis !== 'undefined') {
     }
   }
 
+  /* drawStaticFlakeHints (reduced motion + snow): 4 fixed, seeded flake dots in the
+     same apron band as the wet-ground hints, same alpha discipline — so a reduced-
+     motion visitor still reads "snow-weather" rather than "dry storm" (§9.5). */
+  function drawStaticFlakeHints(cw, ch) {
+    if (rainCur < 0.02) return;
+    var bandA = bandRainAlpha();
+    var rng = mkRng(516);                                        // fixed layout, stable
+    for (var i = 0; i < 4; i++) {
+      var x = (0.2 + rng() * 0.6) * cw;
+      var y = (BAND_TOP + rng() * (BAND_BOT - BAND_TOP) * 0.9) * ch;
+      var rad = 1.2 + rng() * 1.4;
+      ctx.fillStyle = 'rgba(238,244,252,' + (0.22 * rainCur * bandA).toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.arc(x, y, rad, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
   /* ── LIGHTNING ─────────────────────────────────────────────────────────────── */
   function buildBolt(cw, ch, rng) {
     var pts = [];
@@ -13528,9 +14659,10 @@ if (typeof globalThis !== 'undefined') {
   }
 
   function tickLightning(cw, ch, dt) {
-    var stormy = Gate.weather && Gate.weather.weather && Gate.weather.weather() === 'storm';
+    var stormy = Gate.weather && Gate.weather.weather && Gate.weather.weather() === 'storm'
+                 && precip !== 'snow';        // snow hushes thunder at the strike source (E4)
 
-    if (force) {                              // ?flash dev pin: hold a strike lit
+    if (force) {                              // ?flash dev pin: hold a strike lit (wins)
       if (!bolt) bolt = buildBolt(cw, ch, mkRng(99));
       env = 1;
       setFlash(true);
@@ -13597,6 +14729,13 @@ if (typeof globalThis !== 'undefined') {
     }
   };
 
+  /* setSeason(kind): the calendar's derived precipitation kind (§9.5). COERCES — a
+     null/undefined kind (calendar failed) can never leave precip null; anything but
+     'snow'/'sleet' lands 'rain'. The boot calls it once after init. */
+  WFX.setSeason = function (kind) {
+    precip = (kind === 'snow' || kind === 'sleet') ? kind : 'rain';
+  };
+
   /* setForceFlash(on): dev pin (?flash) — hold a lightning strike lit so the
      storm-night reveal payoff can be screenshotted deterministically. */
   WFX.setForceFlash = function (on) { force = !!on; if (!on) { env = 0; bolt = null; setFlash(false); } };
@@ -13610,10 +14749,13 @@ if (typeof globalThis !== 'undefined') {
     var ch = canvas.clientHeight || (canvas.height / (dpr || 1));
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cw, ch);
+    wxT += dt;                          // advance the snow-waft clock every frame
     rainCur += (rainTgt - rainCur) * Math.min(1, dt * 1.5);
     if (!reduced) {
       drawRain(cw, ch, dt);
       drawSplashes(cw, ch, dt);
+    } else if (precip === 'snow') {
+      drawStaticFlakeHints(cw, ch);     // static flake dots under snow (§9.5)
     } else {
       drawStaticSplashHints(cw, ch);
     }
@@ -13704,6 +14846,21 @@ if (typeof globalThis !== 'undefined') {
       moon: (q.moon != null && q.moon !== '' && !isNaN(+q.moon)) ? Math.max(0, Math.min(1, +q.moon)) : null,
       wx: (['clear', 'cloudy', 'storm'].indexOf(q.wx) >= 0) ? q.wx : null,
       seed: (q.seed != null && q.seed !== '' && !isNaN(+q.seed)) ? (+q.seed) : null,
+      // ?cal=YYYY-MM-DD[THH] — pin the calendar DATE (season phase -> dressing, foliage,
+      // precip kind, wildlife). The THH tail is the front door's air-hour pin; the gate
+      // ACCEPTS and IGNORES it (the gate's hour axis is ?t=) so one URL suffix works
+      // estate-wide. Invalid -> null (live clock). Parity: the front door's edge
+      // range-checks the date IDENTICALLY (malformed month/day -> live clock on EVERY
+      // surface; both then normalize a well-formed-but-unreal day like Feb 31 through the
+      // same Date.UTC), so "one URL suffix" means one BEHAVIOR — the sole designed axis
+      // difference is the THH tail (honored 0-23 on the front door, accepted-ignored here).
+      cal: (function () {
+        var m = /^(\d{4})-(\d{2})-(\d{2})(?:T\d{2})?$/.exec(q.cal || '');
+        if (!m) return null;
+        var y = +m[1], mo = +m[2], d = +m[3];
+        if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+        return { y: y, m: mo, d: d };
+      })(),
       // ?undercroft — TRI-STATE dev override (null = earned-only; 'closed' = force
       // the found-but-sealed doors-shut state; 'open' = force the open hatch). The
       // truthy aliases (1/true/open) map to 'open'; closed/2 map to 'closed';
@@ -14238,6 +15395,166 @@ if (typeof globalThis !== 'undefined') {
       check('determinism: R.pick() stable within a load', false, '[Gate.rooms unavailable]');
     }
 
+    /* ── 5. THE SEASONS (§9.8 s9a–s9f) — render-blind, a negative control per family ── */
+    var C = root.Calendar, CM = Gate.colormap, A = Gate.audio, SD = Gate.scenedressing;
+
+    /* s9a — midsummer identity + turned-phase color validity */
+    if (!C || !C.gate || !CM) { check('s9a: gate+colormap present', false, ''); }
+    else {
+      var pj = C.seasonPhase(C.jdOfLocalNoon(2026, 6, 21)), gj = C.gate.season(pj);
+      check('s9a: midsummer knobs all 0 (incl snowCover/spring/autumn)', gj.foliage.mix === 0 && gj.grassMix === 0 && gj.cool === 0 && gj.bare === 0 && gj.snow === 0 && gj.snowCover === 0 && gj.spring === 0 && gj.autumn === 0, '');
+      var idOk = true, bx;
+      for (bx = 0; bx < 3; bx++) { var b = S_BANDS[bx]; if (JSON.stringify(CM.applySeasonColors(CM.resolve(b, 1), b, 1, gj)) !== JSON.stringify(CM.resolve(b, 1))) idOk = false; }
+      check('s9a: applySeasonColors identity @midsummer (3 bands)', idOk, '');
+      var gsl = C.gate.season(C.seasonPhase(C.jdOfLocalNoon(2026, 12, 21))), mv = JSON.stringify(CM.applySeasonColors(CM.resolve('day', 1), 'day', 1, gsl)) !== JSON.stringify(CM.resolve('day', 1));
+      check('s9a NEG: solstice moves color + cool>.999', mv && gsl.cool > 0.999, '[cool=' + gsl.cool.toFixed(4) + ']');
+      var gw = C.gate.season(C.seasonPhase(C.jdOfLocalNoon(2027, 1, 30))), vOk = true, vx, vk;
+      for (vx = 0; vx < 3; vx++) { var vb = S_BANDS[vx], vm = CM.applySeasonColors(CM.resolve(vb, 1), vb, 1, gw); for (vk in vm) if (!s_rgb(vm[vk])) vOk = false; }
+      var bs = s_rgb(CM.resolve('day', 1)['--tree.foliage']), em = s_rgb(CM.applySeasonColors(CM.resolve('day', 1), 'day', 1, gw)['--tree.foliage']), wa = bs && [0, 1, 2].map(function (c) { return Math.round(bs[c] + (gw.foliage.rgb[c] - bs[c]) * gw.foliage.mix); });
+      check('s9a: winter colors valid rgb + day foliage==lerp (no mixHex)', vOk && !!em && !!wa && em[0] === wa[0] && em[1] === wa[1] && em[2] === wa[2], '');
+    }
+
+    /* s9b — foliage-curve determinism + continuity (40-day, day-equivalent sweep) */
+    if (!C || !C.gate) { check('s9b: gate present', false, ''); }
+    else {
+      var dOk = true;
+      [.02, .10, .30, .45, .60, .70, .86, .95].forEach(function (p) { if (JSON.stringify(C.gate.season(p)) !== JSON.stringify(C.gate.season(p))) dOk = false; });
+      check('s9b: season double-eval identical (8 phases)', dOk, '');
+      var cOk = true, wr = 0, wm = 0, wsc = 0, wsp = 0, wau = 0, pg = null, pd = 0, sx, t0 = Date.UTC(2026, 0, 1);
+      for (sx = 0; sx <= 40; sx++) {
+        var dy = Math.round(sx * 366 / 40), dt = new Date(t0 + dy * 864e5), g = C.gate.season(C.seasonPhase(C.jdOfLocalNoon(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate())));
+        if (pg) {
+          var gp = (dy - pd) || 1, cc; for (cc = 0; cc < 3; cc++) { var dr = Math.abs(g.foliage.rgb[cc] - pg.foliage.rgb[cc]) / gp; if (dr > wr) wr = dr; if (dr > 5) cOk = false; }
+          var dm = Math.abs(g.foliage.mix - pg.foliage.mix) / gp; if (dm > wm) wm = dm; if (dm > .025) cOk = false;
+          var dsc = Math.abs(g.snowCover - pg.snowCover) / gp; if (dsc > wsc) wsc = dsc; if (dsc > .08) cOk = false;
+          var dsp = Math.abs(g.spring - pg.spring) / gp; if (dsp > wsp) wsp = dsp; if (dsp > .06) cOk = false;
+          var dau = Math.abs(g.autumn - pg.autumn) / gp; if (dau > wau) wau = dau; if (dau > .08) cOk = false;   // r25 — the fall-leg litter driver
+        }
+        pg = g; pd = dy;
+      }
+      check('s9b: |drgb|<=5 |dmix|<=.025 |dsnowCover|<=.08 |dspring|<=.06 |dautumn|<=.08 /day (40pt)', cOk, '[' + wr.toFixed(2) + '/' + wm.toFixed(4) + '/' + wsc.toFixed(4) + '/' + wsp.toFixed(4) + '/' + wau.toFixed(4) + ']');
+    }
+
+    /* s9c — dressing presence by phase (r25: snow, spring, marc-leaf, AND autumn litter; + palette whitening) */
+    if (!SD || !SD.plan || !SD.count) { check('s9c: scenedressing present', false, ''); }
+    else {
+      var tnF = function (k) { return 44 + Math.round(416 * k); }, tnW = function (k) { return 4 + Math.round(4 * k); };   // §9.4-spring density formula — the test's OWN oracle (never a hard count; r26: 4× flowers, 44+416·k)
+      var dd = (Gate.season && Gate.season.dress) || { snow: 0, spring: 0, bare: 0, autumn: 0 };
+      check('s9c: count()==plan(snow,spring,bare,autumn)', JSON.stringify(SD.count()) === JSON.stringify(SD.plan(+dd.snow || 0, +dd.spring || 0, +dd.bare || 0, +dd.autumn || 0)),
+        '[s=' + (+dd.snow || 0).toFixed(2) + ' k=' + (+dd.spring || 0).toFixed(2) + ' b=' + (+dd.bare || 0).toFixed(2) + ' a=' + (+dd.autumn || 0).toFixed(2) + ']');
+      var p0 = SD.plan(0, 0, 0, 0), pW = SD.plan(.95, 0, 1, 0), pS = SD.plan(0, .9, 0, 0), pA = SD.plan(0, 0, 0, .9);
+      var trees = 0, fol = (S && S._foliage) ? S._foliage : [], ti; for (ti = 0; ti < fol.length; ti++) if (fol[ti].kind === 'tree') trees++;
+      check('s9c: plan(0,0,0,0) all zero', s_tot(p0) === 0, '');
+      check('s9c: plan(.95,0,1,0) snow18 + marc10 = 28', s_snowmarc(pW) === 28 && pW.crown['marc-leaf'] === 10, '[' + s_snowmarc(pW) + '/' + pW.crown['marc-leaf'] + ']');
+      check('s9c: plan(0,.9,0,0) nF(.9) flowers + nW(.9) washes + 6xtree berries (formula)', pS.spring['spring-flower'] === tnF(.9) && pS.spring['spring-wash'] === tnW(.9) && pS.crown['spring-berry'] === 6 * trees, '[' + s_spring(pS) + ']');
+      check('s9c: plan(0,0,0,.9) 4xtree autumn-leaf litter', pA.autumn['autumn-leaf'] === 4 * trees, '[' + s_autumn(pA) + ']');
+      var scP = [SD.plan(0, 0, 0, 0), SD.plan(.5, 0, 1, 0), SD.plan(.95, 0, 1, 0)], spP = [SD.plan(0, 0, 0, 0), SD.plan(0, .5, 0, 0), SD.plan(0, .95, 0, 0)], auP = [SD.plan(0, 0, 0, 0), SD.plan(0, 0, 0, .5), SD.plan(0, 0, 0, .95)], capOk = true, ci;
+      for (ci = 0; ci < 3; ci++) { if (s_snowmarc(scP[ci]) > 40) capOk = false; if (s_spring(spP[ci]) > 520) capOk = false; if (s_autumn(auP[ci]) > 24) capOk = false; }
+      check('s9c: restraint snow+marc-leaf<=40, spring<=520, autumn<=24', capOk, '');
+      var sv = S && S.refs && S.refs.svg, rOk = true;
+      if (sv) { var rg = sv.querySelector('#dress-snow-roofs'), rk = rg ? rg.childNodes : [], ri; for (ri = 0; ri < rk.length; ri++) { var e = s_ext(rk[ri]); if (e && (e.y > 592 || e.x < 1232)) rOk = false; } }
+      check('s9c: drawn snow-roofs y<=592 / x>=1232', rOk, '');
+      var alOk = true, alN = 0;   // AUTUMN cell (cal=2026-10-31, a=1): every drawn leaf's x OUTSIDE [700,900] (the kept-drive bound)
+      if (sv) { var ag = sv.querySelector('#dress-autumn-ground'); if (ag) { var ak = ag.querySelectorAll('.autumn-leaf'), ax; for (ax = 0; ax < ak.length; ax++) { alN++; var alx = s_tx(ak[ax]); if (alx !== null && alx >= 700 && alx <= 900) alOk = false; } } }
+      check('s9c: drawn autumn-leaf x outside [700,900] (kept-drive bound)', alOk, '[n=' + alN + ']');
+      var GO = (S && S._groundOvals) || null, goOk = !!(GO && GO.length), gk;   // r26: the DARK grass-mottle ovals — the cluster substrate; non-empty + inside the mottle formula's derived bounds
+      if (goOk) for (gk = 0; gk < GO.length; gk++) { var ov = GO[gk]; if (!(ov.cx >= 0 && ov.cx <= 1600 && ov.cy >= 500 && ov.cy <= 800 && ov.rx >= 70 && ov.rx <= 310 && ov.ry >= 14 && ov.ry <= 52)) goOk = false; }
+      check('s9c: _groundOvals non-empty + inside mottle bounds (cluster substrate)', goOk, '[n=' + (GO ? GO.length : 0) + ']');
+      var occOk = true, ogids = ['dress-spring-ground', 'dress-autumn-ground'], ogi;   // r26 OCCLUSION LAW: each dress-ground group, when present, is a child of #layer-midground preceding the trees/bushes group in document order
+      if (sv) { var midL = sv.querySelector('#layer-midground'), trG = sv.querySelector('#trees'); for (ogi = 0; ogi < ogids.length; ogi++) { var dg = sv.querySelector('#' + ogids[ogi]); if (dg) { if (dg.parentNode !== midL) occOk = false; else if (trG && (dg.compareDocumentPosition(trG) & 4) === 0) occOk = false; } } }
+      check('s9c: dress-ground groups under #layer-midground before #trees (occlusion order)', occOk, '');
+      check('s9c NEG: plan(0,0,0,0)!=plan(.95,0,1,0) && !=plan(0,.9,0,0) && !=plan(0,0,0,.9)', JSON.stringify(p0) !== JSON.stringify(pW) && JSON.stringify(p0) !== JSON.stringify(pS) && JSON.stringify(p0) !== JSON.stringify(pA), '');
+      if (CM && C && C.gate) {   // r24 palette WHITENING reference checks (deep-winter, day, B=1 — inline lerp, never mixHex)
+        var gwc = C.gate.season(C.seasonPhase(C.jdOfLocalNoon(2027, 1, 30))), gjc = C.gate.season(C.seasonPhase(C.jdOfLocalNoon(2026, 6, 21)));
+        var CK = [['grass', .12, 1.0, 1], ['hill', .12, .78, 1], ['manor.roof', .06, .92, 0], ['observatory.dome', .06, .88, 0]];
+        var res0 = CM.resolve('day', 1), appW = CM.applySeasonColors(CM.resolve('day', 1), 'day', 1, gwc), appJ = CM.applySeasonColors(CM.resolve('day', 1), 'day', 1, gjc);
+        var drift = s_rgb(res0['--snow.drift']), pOk = true, mOkP = true, pi;
+        for (pi = 0; pi < CK.length; pi++) {
+          var role = CK[pi][0], ck = CK[pi][1], skk = CK[pi][2], strawFlag = CK[pi][3], base = s_rgb(res0['--' + role]);
+          if (!base || !drift) { pOk = false; continue; }
+          var c = base;
+          if (strawFlag && gwc.grassMix > 0) c = s_lerp(c, gwc.straw, gwc.grassMix);
+          var kk = gwc.cool * ck; if (kk > 0) c = s_lerp(c, gwc.cast, kk);
+          c = s_lerp(c, drift, gwc.snowCover * skk);
+          var emc = s_rgb(appW['--' + role]);
+          if (!emc || Math.abs(emc[0] - c[0]) > 1 || Math.abs(emc[1] - c[1]) > 1 || Math.abs(emc[2] - c[2]) > 1) pOk = false;
+          if (appJ['--' + role] !== res0['--' + role]) mOkP = false;   // midsummer: none of the four written
+        }
+        var grEm = s_rgb(appW['--grass']), grOk = !!(grEm && drift) && Math.abs(grEm[0] - drift[0]) <= 1 && Math.abs(grEm[1] - drift[1]) <= 1 && Math.abs(grEm[2] - drift[2]) <= 1;
+        check('s9c: winter grass==snow.drift@cover1 + 4 roles match inline chain', pOk && grOk, '');
+        check('s9c: midsummer writes none of grass/hill/roof/dome', mOkP, '');
+      }
+    }
+
+    /* s9d — precip-phase thresholds couple to the snow curve (r24: ground-coupling implication) */
+    if (!C || !C.gate || typeof C.dressing !== 'function') { check('s9d: precip present', false, ''); }
+    else {
+      var kOk = true, gcOk = true, liOk = true, di;
+      for (di = 0; di < 40; di++) { var pp = di / 40, sd = C.dressing(pp).snow, kd = C.gate.precipKind(pp); if (kd !== (sd >= .5 ? 'snow' : sd >= .04 ? 'sleet' : 'rain')) kOk = false; if (C.gate.groundSnowCover(sd) > 0 && kd === 'rain') gcOk = false; if (C.gate.groundSnowCover(sd) >= 0.2 && C.gate.season(pp).autumn !== 0) liOk = false; }   // r25 — leaves never on white ground
+      check('s9d: precipKind couples to snow (40pt sweep)', kOk, '');
+      check('s9d: groundSnowCover>0 => not rain (40pt sweep)', gcOk, '');
+      check('s9d: groundSnowCover>=.2 => autumn===0 (litter off white ground)', liOk, '');
+      var pk = function (y, m, d) { return C.gate.precipKind(C.seasonPhase(C.jdOfLocalNoon(y, m, d))); };
+      check('s9d anchors: 01-30 snow, 12-05 sleet, 06-21 rain', pk(2027, 1, 30) === 'snow' && pk(2026, 12, 5) === 'sleet' && pk(2026, 6, 21) === 'rain', '');
+      check('s9d NEG: midsummer NOT snow + groundSnowCover(0)==0', pk(2026, 6, 21) !== 'snow' && C.gate.groundSnowCover(0) === 0, '');
+    }
+
+    /* s9e — the audio gating truth-table (over the pure A.plan; r24: the sleet rows) */
+    if (!A || !A.plan || !C || !C.gate) { check('s9e: audio.plan+gate present', false, ''); }
+    else {
+      var se = function (y, m, d) { var p = C.seasonPhase(C.jdOfLocalNoon(y, m, d)); return { kind: C.gate.precipKind(p), wildlife: C.gate.wildlife(p) }; };
+      var wi = se(2027, 1, 30), su = se(2026, 6, 21), sl = se(2026, 12, 5), h = A.plan('night', 'storm', wi), lv = A.plan('night', 'storm', su), sp = A.plan('night', 'storm', sl), wd = A.plan('day', 'clear', wi);
+      check('s9e: (storm,snow) hush rain/roll/thunder/sleet off, creature null, wind .35', h.rain === false && h.roll === false && h.thunder === false && h.sleet === false && h.creature === null && h.wind === 0.35, '');
+      check('s9e: (storm,rain) rain+thunder on, sleet off, wind 1.0, rainLvl .78 (live control)', lv.rain === true && lv.thunder === true && lv.sleet === false && lv.wind === 1 && lv.rainLvl === 0.78, '[rainLvl=' + lv.rainLvl + ']');
+      check('s9e: (storm,sleet) rain+sleet+roll+thunder on, rainLvl DUCKED .15', sp.rain === true && sp.sleet === true && sp.roll === true && sp.thunder === true && sp.rainLvl === 0.15, '[rainLvl=' + sp.rainLvl + ']');
+      check('s9e: (cloudy/clear,sleet) sleet off (a storm voice)', A.plan('night', 'cloudy', sl).sleet === false && A.plan('day', 'clear', sl).sleet === false, '');
+      check('s9e: dusk winter->null, dusk summer->crickets, night->owl', A.plan('dusk', 'clear', wi).creature === null && A.plan('dusk', 'clear', su).creature === 'crickets' && A.plan('night', 'clear', su).creature === 'owl', '');
+      check('s9e: (day, deep winter) birds, birdMin 24 / birdMax 62', wd.creature === 'birds' && wd.birdMin === 24 && wd.birdMax === 62, '[' + wd.birdMin + '/' + wd.birdMax + ']');
+      var nc = A.plan('day', 'clear', null), ns = A.plan('day', 'storm', null);
+      check('s9e NEG: season=null -> shipped (clear birds 10/26 wind .2 sleet off rainLvl .78; storm rain wind 1 sleet off rainLvl .78)', nc.creature === 'birds' && nc.birdMin === 10 && nc.birdMax === 26 && nc.wind === 0.2 && nc.sleet === false && nc.rainLvl === 0.78 && ns.rain === true && ns.wind === 1 && ns.sleet === false && ns.rainLvl === 0.78, '');
+    }
+
+    /* s9f — the bare winter is WIRED (r24: the BINARY-CANOPY law + per-tree threshold) */
+    if (!S || !S._foliage || !SD || !SD.TUNE) { check('s9f: foliage+TUNE present', false, ''); }
+    else {
+      var fl = S._foliage, T = SD.TUNE, fkOk = true, mc = 0, tr = 0, fi;
+      for (fi = 0; fi < fl.length; fi++) { var fk = fl[fi].kind; if (fk !== 'tree' && fk !== 'bush') fkOk = false; if (fk === 'tree') tr++; if (fl[fi].marc === true) mc++; }
+      check('s9f: every entry kind in {tree,bush}, exactly 2 marc', fkOk && mc === 2, '[marc=' + mc + ']');
+      var maxJit = 0; for (fi = 0; fi < S_JIT.length; fi++) if (S_JIT[fi] > maxJit) maxJit = S_JIT[fi];
+      check('s9f: threshold guarantee base+spread*maxJit<=0.85', T.bareThreshBase + T.bareThreshSpread * maxJit <= 0.85, '');
+      var ba = (Gate.season && Gate.season.dress) ? +Gate.season.dress.bare : 0, opOk = true, oi;
+      for (oi = 0; oi < fl.length; oi++) {   // THE OPACITY LAW — at THIS phase, every crown is ABSENT or exactly '0'
+        var fo = fl[oi], op = fo.el ? fo.el.getAttribute('opacity') : null, thI = T.bareThreshBase + T.bareThreshSpread * (oi < S_JIT.length ? S_JIT[oi] : 0);
+        if (op !== null && op !== '0') opOk = false;
+        if (fo.kind === 'bush') { if (op !== null) opOk = false; }
+        else { var want0 = ba >= thI; if (want0 && op !== '0') opOk = false; if (!want0 && op !== null) opOk = false; }
+      }
+      check('s9f: crown opacity {absent|0} per TH_i (binary law)', opOk, '[bare=' + ba.toFixed(3) + ']');
+      var ml = (S.refs && S.refs.svg) ? S.refs.svg.querySelectorAll('.marc-leaf').length : 0;
+      if (ba > 0) {
+        var mOk = true, aOk = true, ac = 0, marcOff = 0, fj, aj;
+        for (fj = 0; fj < fl.length; fj++) {
+          var f2 = fl[fj], jit = (fj < S_JIT.length ? S_JIT[fj] : 0), bt = ba * (1 - jit), off2 = f2.kind === 'tree' && ba >= (T.bareThreshBase + T.bareThreshSpread * jit);
+          if (Math.abs(f2.mul - (1 - 0.7 * bt)) > 1e-9) mOk = false;
+          if (f2.kind === 'tree' && f2.el && f2.el.parentNode) { var ar = f2.el.parentNode.querySelectorAll('.bare-armature'), ao = off2 ? String(T.armOpacity) : '0'; ac += ar.length; for (aj = 0; aj < ar.length; aj++) if (ar[aj].getAttribute('opacity') !== ao) aOk = false; }
+          if (f2.marc && off2) marcOff++;
+        }
+        check('s9f: mul==1-.7*bareT per entry (BARE_JIT oracle)', mOk, '');
+        check('s9f: armature opacity binary with tree (armOpacity|0)', aOk, '');
+        check('s9f: .bare-armature count==6x trees', ac === 6 * tr, '[' + ac + '=6x' + tr + ']');
+        check('s9f: marc-leaf count==(marcLeafMarks?5x marc-off:0)', ml === (T.marcLeafMarks ? 5 * marcOff : 0), '[' + ml + ']');
+      } else {
+        var reOk = true, rj, rk2;
+        for (rj = 0; rj < fl.length; rj++) {
+          var f3 = fl[rj];
+          if (f3.mul !== undefined && f3.mul !== 1) { reOk = false; break; }
+          if (f3.el && f3.el.hasAttribute('opacity')) { reOk = false; break; }
+          if (f3.kind === 'tree' && f3.el && f3.el.parentNode) { var ra = f3.el.parentNode.querySelectorAll('.bare-armature'); for (rk2 = 0; rk2 < ra.length; rk2++) if (ra[rk2].getAttribute('opacity') !== '0') reOk = false; }
+        }
+        check('s9f: REST mul 1, crown opacity absent, armatures 0, 0 marc-leaf (identity)', reOk && ml === 0, '');
+      }
+    }
+
     var passed = 0;
     for (var i = 0; i < results.length; i++) if (results[i].pass) passed++;
     return { pass: passed === results.length, total: results.length, passed: passed, results: results };
@@ -14249,6 +15566,19 @@ if (typeof globalThis !== 'undefined') {
   }
   function fmt(n) { return typeof n === 'number' ? n.toFixed(6) : String(n); }
   function astName(a) { return a === null ? 'null' : (a && a.name ? '"' + a.name + '"' : String(a)); }
+
+  /* ── season selftest helpers (s9a–s9f, §9.8); terse for the itemized byte budget ── */
+  var S_BANDS = ['day', 'dusk', 'night'];
+  var S_JIT = [0, .12, .05, .09, .14, .03, .07, .11];   // §9.3 authored BARE_JIT (test oracle)
+  function s_rgb(s) { var m = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec('' + (s == null ? '' : s)); if (!m) return null; var t = [+m[1], +m[2], +m[3]], i; for (i = 0; i < 3; i++) if (!(t[i] >= 0 && t[i] <= 255)) return null; return t; }
+  function s_tot(p) { var n = 0, a, b; for (a in p) for (b in p[a]) n += p[a][b]; return n; }
+  function s_grp(g) { var n = 0, b; for (b in g) n += g[b]; return n; }                          // one manifest group's sum
+  function s_snowmarc(p) { return s_grp(p.gate) + s_grp(p.roofs) + s_grp(p.ground) + p.crown['marc-leaf']; }  // snow + held-leaf marks
+  function s_spring(p) { return s_grp(p.spring) + p.crown['spring-berry']; }                       // flowers + washes + berries
+  function s_autumn(p) { return s_grp(p.autumn); }                                                 // fallen-leaf litter (r25)
+  function s_tx(o) { if (!o || !o.getAttribute) return null; var t = o.getAttribute('transform'); if (!t) return null; var m = /translate\(\s*(-?\d+(?:\.\d+)?)/.exec(t); return m ? +m[1] : null; }   // the translate x of an autumn-leaf (r25)
+  function s_lerp(base, tgt, k) { return [Math.round(base[0] + (tgt[0] - base[0]) * k), Math.round(base[1] + (tgt[1] - base[1]) * k), Math.round(base[2] + (tgt[2] - base[2]) * k)]; }  // integer-rounded RGB lerp (the mixHex oracle, s9c)
+  function s_ext(o) { if (!o || !o.getAttribute) return null; if ((o.tagName || '').toLowerCase() === 'ellipse') return { x: +o.getAttribute('cx') - +o.getAttribute('rx'), y: +o.getAttribute('cy') + +o.getAttribute('ry') }; var d = o.getAttribute('d'); if (!d) return null; var u = d.match(/-?\d+(\.\d+)?/g) || [], x = 1 / 0, y = -1 / 0, i; for (i = 0; i + 1 < u.length; i += 2) { if (+u[i] < x) x = +u[i]; if (+u[i + 1] > y) y = +u[i + 1]; } return { x: x, y: y }; }
 
   /* ════════════════════════════════════════════════════════════════════════════
      DOM CHIP — the small brass pill. Subtle at rest (low opacity), brightens on
@@ -14441,6 +15771,32 @@ if (typeof globalThis !== 'undefined') {
       url.reliquary = 'open';
     }
 
+    // ── THE GATE'S CALENDAR EDGE (E1/E6) — the season's one clock read, frozen ────────
+    var NOW = new Date();                 // ONE wall-clock read for every SEASON consumer;
+                                          // the moon-phase line below is EDITED to consume
+                                          // this same read (was: moonPhase(julianDate(new
+                                          // Date()))) so season and moon can never straddle
+                                          // midnight against each other. Gate.timeofday keeps
+                                          // its OWN clock read for band/doy (an independent,
+                                          // already-shipped axis this design does NOT route
+                                          // through the season edge.)
+    Gate.season = null;                   // null => every consumer degrades to the shipped
+                                          // scene (the Hours-envelope try/catch discipline) —
+                                          // rain stays rain, no cast, no dressing.
+    try {
+      if (typeof Calendar !== 'undefined' && Calendar.gate) {
+        var cd = url.cal || { y: NOW.getFullYear(), m: NOW.getMonth()+1, d: NOW.getDate() };
+        var sp = Calendar.seasonPhase(Calendar.jdOfLocalNoon(cd.y, cd.m, cd.d));   // §1.3
+        Gate.season = {
+          phase:    sp,
+          dress:    Calendar.gate.season(sp),     // foliage turn · cool cast · bare · snow
+          kind:     Calendar.gate.precipKind(sp), // 'rain' | 'sleet' | 'snow'  (E4)
+          wildlife: Calendar.gate.wildlife(sp),   // crickets gate · birdsong cadence (E5)
+          date: cd, pinned: !!url.cal
+        };
+      }
+    } catch (e) { Gate.season = null; }
+
     // ── init subsystems with any pins ────────────────────────────────────────
     Gate.timeofday.init({ pin: url.t });
     Gate.weather.init({ pin: url.wx, seed: url.seed });
@@ -14452,7 +15808,7 @@ if (typeof globalThis !== 'undefined') {
     // lit side ('right' waxing / 'left' waning). The ?moon=<0..1> dev pin OVERRIDES
     // the computed fraction (and re-derives its lit side) so a preview can sweep
     // new→half→full at will; an explicit ?moon ALWAYS wins over the clock value.
-    var ph = moonPhase(julianDate(new Date()));
+    var ph = moonPhase(julianDate(NOW));   // shares THE GATE'S CALENDAR EDGE clock read
     var term = terminator(ph.illuminatedFraction, ph.waxing);
     var moonFrac = ph.illuminatedFraction, moonSide = term.litSide;
     if (url.moon != null) {                          // ?moon=<0..1> dev override
@@ -14487,6 +15843,8 @@ if (typeof globalThis !== 'undefined') {
       var band = Gate.timeofday.band();
       var B = currentB();
       var out = CM.resolve(band, B);
+      if (Gate.season && Gate.season.dress)                                    // season BEFORE reps
+        CM.applySeasonColors(out, band, B, Gate.season.dress);
       if (repPick && repPick.repColors) CM.applyRepColors(out, band, B, repPick.repColors);
       return out;
     }
@@ -14497,6 +15855,11 @@ if (typeof globalThis !== 'undefined') {
     // ── build the scene ──────────────────────────────────────────────────────
     paintImmediate();                 // set vars BEFORE first paint (no flash of unstyled)
     S.build(host);
+    // the calendar's seasonal dressing (E2/E3a, §9.3/§9.4): fallen snow + the bare winter,
+    // one post-build pass. Null season / midsummer rest-state writes nothing (§9.1).
+    if (Gate.scenedressing && Gate.scenedressing.apply) {
+      try { Gate.scenedressing.apply(S, Gate.season); } catch (e) {}
+    }
     // ── the HONESTY SELF-TEST CHIP — mount it now (AFTER build, so S._moonFrac/_moonSide
     // and the room/asterism picks are live), but it starts hidden so it never shows during
     // the splash. The boot reveals it (Gate.selftest.show) once the idle scene is in. It
@@ -14741,6 +16104,7 @@ if (typeof globalThis !== 'undefined') {
     // lightning (foreground #fx canvas). Driven by this same rAF below. Reduced
     // motion → static clouds, no rain, no flashing (passed through swayOff).
     Gate.weatherfx.init({ canvas: fx, scene: S, onFlash: setFlash, reduced: swayOff });
+    Gate.weatherfx.setSeason(Gate.season && Gate.season.kind);   // precip kind (E4)
     if (url.flash) Gate.weatherfx.setForceFlash(true);   // dev: hold a strike lit
     function loop(now) {
       requestAnimationFrame(loop);

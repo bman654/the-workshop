@@ -43,6 +43,7 @@
 
   var VB_W = 1600, VB_H = 900;
   var WIND_STRONG = 3.4;            // == scene.js WIND_AMP.strong (sway peak, deg)
+  var TAU = Math.PI * 2;
 
   // ── per-weather cloud targets (eased toward in draw). The fleet is TWO tiers:
   //   tier 0 (base)  — shown for cloudy AND storm
@@ -70,6 +71,11 @@
   var rainCur = 0, rainTgt = 0;     // eased rain intensity 0..1
   var MAX_DROPS = 240;
 
+  // precipitation KIND (E4) — a pure derivation from the shared winter, set once by
+  // the boot via WFX.setSeason. COERCED so it is never null. 'rain' | 'sleet' | 'snow'.
+  var precip = 'rain';
+  var wxT = 0;                       // wobble clock (snow-waft phase), advanced in draw()
+
   // per-weather rain intensity target (eased into rainCur). cloudy is a LIGHT
   // drizzle, storm a HEAVY downpour; both wet the ground (→ splashes), clear is dry.
   var RAIN = { clear: 0, cloudy: 0.42, storm: 1 };
@@ -87,6 +93,7 @@
   // in front of the gate base) — fractions of canvas height, never the sky.
   var BAND_TOP = 0.80, BAND_BOT = 1.0;
   var splashRng = mkRng(7777);
+  var respawnRng = mkRng(24601);    // seeded off-screen respawn scatter (was Math.random)
 
   // lightning state machine (seconds)
   var nextStrike = 2.5;
@@ -223,7 +230,10 @@
         y: rng() * ch,
         len: 12 + rng() * 16,
         spd: 760 + rng() * 520,
-        a: 0.25 + rng() * 0.4
+        a: 0.25 + rng() * 0.4,
+        rad: 1.2 + rng() * 1.4,     // snow-disc radius (E4)
+        wob: rng() * TAU,           // snow-waft phase
+        wr: 0.25 + rng() * 0.35     // snow-waft rate
       });
     }
   }
@@ -232,25 +242,51 @@
     if (rainCur < 0.02) return;
     ensureDrops(cw, ch);
     var slant = 0.16 + windNorm() * 0.5;     // dx per unit of fall (always rightward)
-    var live = Math.floor(MAX_DROPS * rainCur);
+    var snow = precip === 'snow', sleet = precip === 'sleet';
+    // snow: fewer, larger flakes (×0.6 count); rain/sleet: the full field.
+    var live = Math.floor(MAX_DROPS * rainCur * (snow ? 0.6 : 1));
     var bandA = bandRainAlpha();
     ctx.lineCap = 'round';
     for (var i = 0; i < live; i++) {
       var d = drops[i];
-      d.y += d.spd * dt;
-      d.x += d.spd * dt * slant;
-      if (d.y - d.len > ch) {                 // recycle off the bottom
-        d.y = -d.len - Math.random() * 30;
-        d.x = Math.random() * cw * 1.25 - cw * 0.12;
-      } else if (d.x - d.len > cw) {
-        d.x = -d.len; d.y = Math.random() * ch;
+      // fall speed by kind: snow drifts down slow (×0.15), sleet falls hard (×1.12).
+      var spd = snow ? d.spd * 0.15 : sleet ? d.spd * 1.12 : d.spd;
+      d.y += spd * dt;
+      if (snow) {                             // the waft: a per-flake seeded sine,
+        d.x += spd * dt * slant * 0.35 +      // independent of the rightward wind lean
+               Math.sin(wxT * d.wr * TAU + d.wob) * 10 * dt;
+      } else {
+        d.x += spd * dt * slant;
       }
-      ctx.strokeStyle = 'rgba(202,222,255,' + (d.a * rainCur * bandA).toFixed(3) + ')';
-      ctx.lineWidth = 1.05;
-      ctx.beginPath();
-      ctx.moveTo(d.x, d.y);
-      ctx.lineTo(d.x - d.len * slant, d.y - d.len);
-      ctx.stroke();
+      if (d.y - d.len > ch) {                 // recycle off the bottom
+        d.y = -d.len - respawnRng() * 30;
+        d.x = respawnRng() * cw * 1.25 - cw * 0.12;
+      } else if (d.x - d.len > cw) {
+        d.x = -d.len; d.y = respawnRng() * ch;
+      }
+      if (snow) {                             // discs, near-white
+        ctx.fillStyle = 'rgba(238,244,252,' + (d.a * rainCur * bandA * 1.15).toFixed(3) + ')';
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, d.rad, 0, TAU);
+        ctx.fill();
+      } else if (sleet && i % 3 === 2) {      // every 3rd sleet drop = an ice pellet
+        // r24: the r2 pellet (1.3px, streak-colored) was sub-perceptual — sleet read as
+        // rain; sleet's PRIMARY signature now moves to SOUND (§9.6). The visual becomes a
+        // light honest nudge: grow to 1.8px, brighten to the snow-disc near-white ×1.2 —
+        // visibly icy among the blue streaks, still restrained.
+        ctx.fillStyle = 'rgba(238,244,252,' + (d.a * rainCur * bandA * 1.2).toFixed(3) + ')';
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, 1.8, 0, TAU);
+        ctx.fill();
+      } else {                                // rain (and 2/3 of sleet): streaks
+        var len = sleet ? d.len * 0.55 : d.len;   // sleet is shorter, harder
+        ctx.strokeStyle = 'rgba(202,222,255,' + (d.a * rainCur * bandA).toFixed(3) + ')';
+        ctx.lineWidth = 1.05;
+        ctx.beginPath();
+        ctx.moveTo(d.x, d.y);
+        ctx.lineTo(d.x - len * slant, d.y - len);
+        ctx.stroke();
+      }
     }
   }
 
@@ -293,11 +329,12 @@
      concentric, FLATTENED (ground-perspective) ring-arcs that grow + fade, plus a
      tiny upward tick early in life. Intensity-scaled spawning happens here too. */
   function drawSplashes(cw, ch, dt) {
-    if (rainCur < 0.02) return;
+    if (rainCur < 0.02 || precip === 'snow') return;    // snow does not splash (E4)
     ensureSplashes();
     // intensity-scaled spawn rate: storm (rainCur→1) ≫ cloudy (rainCur≈0.42).
     // a touch super-linear so light rain stays sparse and storm feels busy.
     var rate = STORM_SPAWN * rainCur * rainCur;
+    if (precip === 'sleet') rate *= 0.5;                // ice splatters less
     spawnAcc += rate * dt;
     while (spawnAcc >= 1) {
       spawnAcc -= 1;
@@ -372,6 +409,24 @@
     }
   }
 
+  /* drawStaticFlakeHints (reduced motion + snow): 4 fixed, seeded flake dots in the
+     same apron band as the wet-ground hints, same alpha discipline — so a reduced-
+     motion visitor still reads "snow-weather" rather than "dry storm" (§9.5). */
+  function drawStaticFlakeHints(cw, ch) {
+    if (rainCur < 0.02) return;
+    var bandA = bandRainAlpha();
+    var rng = mkRng(516);                                        // fixed layout, stable
+    for (var i = 0; i < 4; i++) {
+      var x = (0.2 + rng() * 0.6) * cw;
+      var y = (BAND_TOP + rng() * (BAND_BOT - BAND_TOP) * 0.9) * ch;
+      var rad = 1.2 + rng() * 1.4;
+      ctx.fillStyle = 'rgba(238,244,252,' + (0.22 * rainCur * bandA).toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.arc(x, y, rad, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
   /* ── LIGHTNING ─────────────────────────────────────────────────────────────── */
   function buildBolt(cw, ch, rng) {
     var pts = [];
@@ -417,9 +472,10 @@
   }
 
   function tickLightning(cw, ch, dt) {
-    var stormy = Gate.weather && Gate.weather.weather && Gate.weather.weather() === 'storm';
+    var stormy = Gate.weather && Gate.weather.weather && Gate.weather.weather() === 'storm'
+                 && precip !== 'snow';        // snow hushes thunder at the strike source (E4)
 
-    if (force) {                              // ?flash dev pin: hold a strike lit
+    if (force) {                              // ?flash dev pin: hold a strike lit (wins)
       if (!bolt) bolt = buildBolt(cw, ch, mkRng(99));
       env = 1;
       setFlash(true);
@@ -486,6 +542,13 @@
     }
   };
 
+  /* setSeason(kind): the calendar's derived precipitation kind (§9.5). COERCES — a
+     null/undefined kind (calendar failed) can never leave precip null; anything but
+     'snow'/'sleet' lands 'rain'. The boot calls it once after init. */
+  WFX.setSeason = function (kind) {
+    precip = (kind === 'snow' || kind === 'sleet') ? kind : 'rain';
+  };
+
   /* setForceFlash(on): dev pin (?flash) — hold a lightning strike lit so the
      storm-night reveal payoff can be screenshotted deterministically. */
   WFX.setForceFlash = function (on) { force = !!on; if (!on) { env = 0; bolt = null; setFlash(false); } };
@@ -499,10 +562,13 @@
     var ch = canvas.clientHeight || (canvas.height / (dpr || 1));
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cw, ch);
+    wxT += dt;                          // advance the snow-waft clock every frame
     rainCur += (rainTgt - rainCur) * Math.min(1, dt * 1.5);
     if (!reduced) {
       drawRain(cw, ch, dt);
       drawSplashes(cw, ch, dt);
+    } else if (precip === 'snow') {
+      drawStaticFlakeHints(cw, ch);     // static flake dots under snow (§9.5)
     } else {
       drawStaticSplashHints(cw, ch);
     }

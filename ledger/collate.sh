@@ -96,6 +96,25 @@ fi
 repo_root="$(cd "$dir/.." && pwd)"
 forge="$repo_root/tools/forge/forge.mjs"
 
+# ── PHASE 0: re-derive the ESTATE MANIFEST before any reclaim hook runs. The
+# card catalog's reclaim (PHASE 1) joins each room's exhibits FROM the committed
+# manifest, and the manifest itself (§6.4) auto-discovers every sub-bench page on
+# disk — so a page added during this cycle enrolls in the catalog at seal time
+# only if the manifest is re-derived FIRST. Ordering matters: manifest → reclaim
+# hooks → forge. Same graceful degradation as the phases below: a failure SHOUTS
+# (and the estate gate `forge --check --all` stays red until fixed) but does not
+# abort the collate.
+manifest_tool="$repo_root/tools/manifest/manifest.mjs"
+if [ -f "$manifest_tool" ]; then
+  if node "$manifest_tool" >/dev/null; then
+    echo "manifest: re-derived (estate-manifest.json + estate-tallies.json current)"
+  else
+    echo "WARNING: estate manifest re-derivation FAILED — the catalog may be missing pages (run: node tools/manifest/manifest.mjs)" >&2
+  fi
+else
+  echo "WARNING: manifest tool absent — estate manifest NOT re-derived (manifest=$manifest_tool)" >&2
+fi
+
 # ── PHASE 1: discover + run every ledger-bound room's reclaim hook by convention.
 # Scan the repo root's immediate child dirs for a reclaim.mjs, skipping the VCS /
 # deps dirs. No room is named here; enrollment is "ship a reclaim.mjs".
