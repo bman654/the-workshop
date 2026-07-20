@@ -105,7 +105,7 @@ worklog/NOTES entry **"writ · served before #N"** so the number stays free for 
    that waiver OVERRIDES the silence: in BOTH maker-visible channels you MAY name that writ and link its seeds to
    it, exactly as the writ permits — honor the writ's own instruction over the default. (The default silence still
    governs every writ that grants no such waiver.)
-6. **SEAL THE CYCLE** (see the SEAL section at the bottom) — the seal records cadence-neutrally (`--mode WRIT
+7. **SEAL THE CYCLE** (see the SEAL section at the bottom) — the seal records cadence-neutrally (`--mode WRIT
    --track writ`), collates, commits, and pushes the REPO changes only (operational repo files + the ROADMAP
    edits; the vault write / message the steward made is already done and is not a repo artifact). **COMMIT
    SUBJECT — apply the CO-OCCURRENCE RULE from step 5** (the subject you write into the seal's message file is
@@ -172,13 +172,24 @@ worklog/NOTES entry **"writ · served before #N"** so the number stays free for 
    visibly broken.
 3. (Optional) if a screen you reviewed shows SCALING STRAIN (a crowded map, a hard-to-read screen, a real perf
    issue), you MAY `bed sow` a `⚡` spark. Invited, never required.
-4. **BOOKKEEPING:** worklog block (newest-first) + INDEX line + REPLACE the NOTES current-state block. **PRUNE
+4. (Optional) **NOMINATE A RED-LETTER DAY.** The Almanac's wheel (`hours/almanac.html`) studs the year with
+   the estate's red-letter days, and the table behind it is `C.ANNIVERSARIES` in `tools/calendar/calendar.js`.
+   The ring is meant to keep filling as the place ages. So: if this cycle did something the estate can only do
+   **once** — a wing first stood, or the estate became something it had not been before (took a name, opened a
+   memory, raised a threshold, learned a new way to be visited) — you MAY add ONE row for it. Three standing
+   conditions, no exceptions: the date must be the REAL git author date of the commit that did the thing (`git
+   log --format='%ad' --date=short <path>` — the section is headed *from the ledger's own record*, so an
+   invented or flattering date is a lie the wheel then tells forever); it must be a **first**, not good work —
+   a bench, an exhibit, a rework or a repair never earns one, however fine, or the ring silts up and stops
+   being readable; and it decorates only — B6, never gate. Re-forge and run `node tools/calendar/calendar.test.cjs`
+   after. Invited, never required, and rare by nature: most cycles earn no day at all, and that is correct.
+5. **BOOKKEEPING:** worklog block (newest-first) + INDEX line + REPLACE the NOTES current-state block. **PRUNE
    the grown/reworked seed to a bloomed tombstone:** `bed rm "<the seed's **bold title**>" --reason BLOOMED
    --at "<the piece's path, e.g. aerodrome/slingshot/>"` (provenance → the piece's CHANGELOG + the worklog). A
    `rework` blooms exactly like any sow — the re-souled piece is the bloom.
-5. **CLEANUP:** tear down YOUR http server / browser session (the specific one — never a broad pkill); delete
+6. **CLEANUP:** tear down YOUR http server / browser session (the specific one — never a broad pkill); delete
    stray /tmp prototypes; if a `.src.html` was touched run `forge --check --all`; confirm the tree has nothing stray.
-6. **SEAL THE CYCLE** (see the SEAL section at the bottom) — one atomic script records the gauge (`--mode BUILD
+7. **SEAL THE CYCLE** (see the SEAL section at the bottom) — one atomic script records the gauge (`--mode BUILD
    --track <track>`, DERIVED from the bed diff, pass NO counts), collates the ledger, commits, and pushes. Your
    summary must describe what shipped (COMMITTED + PUSHED), what you CAUGHT & fixed in review, and the final
    verification.
