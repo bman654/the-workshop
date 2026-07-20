@@ -32,6 +32,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import vm from 'node:vm';
 import { spawnSync } from 'node:child_process';
 
 const DIRECTIVE = /^[ \t]*<!--[ \t]*forge:include[ \t]+(.+?)[ \t]*-->[ \t]*$/;
@@ -152,17 +153,51 @@ function inlineJson(incPath, rel, srcFile) {
    already inlined (one core importing another's slab into the same page) — so we
    drop it. We remove: any `if (typeof module !== 'undefined' && module.exports)`
    guard (single-line or multi-line `{ … }` block); a leading `export ` keyword on
-   declarations; and a whole-line static `import` statement (`import … from '…';`,
-   `import '…';`, default / namespace / named forms). Dynamic `import(…)` calls are
-   NOT line-anchored static imports and are left untouched. */
-const STATIC_IMPORT = /^[ \t]*import\b(?:[^'"]*\bfrom\b)?\s*['"][^'"]+['"]\s*;?[ \t]*$/;
-function stripModuleGuard(src) {
+   declarations; and a static `import` STATEMENT — however many lines it spans
+   (`import … from '…';`, `import '…';`, default / namespace / named forms).
+   Dynamic `import(…)` calls and `import.meta` are NOT static imports and are left
+   untouched. */
+
+/* A line that OPENS a static import statement. The negative lookahead is what
+   keeps the two non-static `import` forms alive: `import(` (a dynamic import call)
+   and `import.` (`import.meta.url`). The `\b` keeps an identifier like
+   `importantThing` from ever looking like a keyword. */
+const IMPORT_START = /^[ \t]*import\b(?![ \t]*[.(])/;
+/* The WHOLE statement, matched against the accumulated (possibly multi-line) text.
+   `[^'"]*?` spans newlines (a negated class matches \n), so the clause may be broken
+   across as many lines as the author likes; the statement ENDS at the module
+   specifier string with an optional `;`. Because everything before the first quote
+   is matched quote-blind, braces in the clause are irrelevant — and because the
+   specifier is `['"][^'"]*['"]`, a `from` or a `{` INSIDE the specifier string can
+   never be mistaken for structure. */
+const IMPORT_STATEMENT = /^[ \t]*import\b[^'"]*?['"][^'"]*['"][ \t]*;?[ \t]*$/;
+
+function stripModuleGuard(src, srcName = '<source>') {
   const lines = src.split('\n');
   const out = [];
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
-    // drop a whole-line static ES import (its symbols come from a sibling include)
-    if (STATIC_IMPORT.test(line)) continue;
+    // drop a static ES import statement, however many lines it spans (its symbols
+    // come from a sibling include). Recognize the START, then consume forward to the
+    // terminator — the same shape the `export { … }` / `export default` arms use.
+    if (IMPORT_START.test(line)) {
+      let j = i, joined = line;
+      while (!IMPORT_STATEMENT.test(joined) && j + 1 < lines.length) {
+        j++;
+        joined += '\n' + lines[j];
+      }
+      if (!IMPORT_STATEMENT.test(joined)) {
+        // Silent skip is banned: an import we cannot terminate would leave a bare
+        // `import` (or an orphaned `} from '…';` tail) in a classic <script> and kill
+        // the whole block. Fail the build LOUD instead.
+        throw new ForgeError(
+          'unterminated static import in "' + srcName + '" at line ' + (i + 1) + ':\n' +
+          '  ' + line.trim() + '\n' +
+          '  (forge could not find the statement\'s module specifier before end of file.)');
+      }
+      i = j;   // skip through the statement's final line
+      continue;
+    }
     // drop a named re-export list `export { … };` (single-line or multi-line block).
     // It has no meaning in an inlined script, and is illegal if the inline sits in a
     // nested scope (e.g. a parent core wrapped in a scoping IIFE). Declarations keep
@@ -212,6 +247,97 @@ function stripModuleGuard(src) {
     out.push(line);
   }
   return out.join('\n');
+}
+
+/* ── THE SYNTAX GATE ─────────────────────────────────────────────────────────
+   The root cause of the multi-line-import bug was not the regex — it was the
+   SILENCE. forge verified byte-drift and the manifest gate but never asked whether
+   the JavaScript it had just inlined actually PARSES. A classic <script> that fails
+   to parse is a DEAD page that renders at 60fps with a clean-looking console, so
+   the failure is invisible to every downstream check we own.
+
+   So: after a page is built, parse every inlined CLASSIC script block. `new
+   vm.Script(text)` compiles in-process (no temp files, no spawn) with exactly the
+   grammar a browser's classic <script> uses — sloppy mode, HTML-like comments
+   allowed, top-level `return`/`await` illegal (as they are in a real page). A parse
+   failure fails the build LOUD, naming the page, the line, and V8's message.
+
+   Deliberately NOT gated: `type="module"` (different grammar — and forge's whole
+   job is to turn modules into classic scripts, so a module block is the author's
+   own business), `application/json` and every other non-JS type (templates, data
+   islands, x-shader), and `<script src=…>` (nothing inlined to parse).
+
+   The block finder is a small SCANNER, not one regex, because the two containers
+   nest asymmetrically and a naive match gets both wrong:
+     · an HTML COMMENT may contain the text `<script>` (the aquarium's art banner
+       literally does) — the browser never sees a script there, so neither may we;
+     · a SCRIPT may contain `<!--` (Annex B) — its body is raw text to the browser's
+       tokenizer, running to `</script`, so we must NOT treat that as a comment.
+   Scanning left to right and taking whichever opens FIRST reproduces the browser's
+   own precedence exactly. */
+const CLASSIC_TYPES = new Set([
+  '', 'text/javascript', 'application/javascript', 'text/ecmascript',
+  'application/ecmascript', 'text/jscript',
+]);
+
+/* Is this <script>'s attribute string a CLASSIC (parse-as-a-script) block? */
+function isClassicScript(attrs) {
+  if (/\bsrc\s*=/i.test(attrs)) return false;                 // external: nothing inlined
+  const m = /\btype\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrs);
+  if (!m) return true;                                        // no type ⇒ classic
+  const type = (m[1] ?? m[2] ?? m[3] ?? '').trim().toLowerCase();
+  return CLASSIC_TYPES.has(type);
+}
+
+const OPEN_TAG = /<script\b/ig;
+const CLOSE_TAG = /<\/script[\s>]/i;
+
+/* Walk the document and yield every <script> ELEMENT the browser would see,
+   as { attrs, text, index }. Comments are skipped wholesale. */
+function findScriptBlocks(html) {
+  const blocks = [];
+  let pos = 0;
+  while (pos < html.length) {
+    const comment = html.indexOf('<!--', pos);
+    OPEN_TAG.lastIndex = pos;
+    const om = OPEN_TAG.exec(html);
+    const script = om ? om.index : -1;
+    // Whichever container opens first wins — that is the browser's own precedence.
+    if (comment >= 0 && (script < 0 || comment < script)) {
+      const end = html.indexOf('-->', comment + 4);
+      if (end < 0) break;                       // unterminated comment: nothing more is markup
+      pos = end + 3;
+      continue;
+    }
+    if (script < 0) break;                      // no more scripts
+    const tagEnd = html.indexOf('>', script);
+    if (tagEnd < 0) break;
+    const attrs = html.slice(script + 7, tagEnd);
+    // The body is RAW TEXT to `</script` — comments inside it are not markup.
+    const close = html.slice(tagEnd + 1).search(CLOSE_TAG);
+    if (close < 0) break;                       // unterminated script tag
+    blocks.push({ attrs, text: html.slice(tagEnd + 1, tagEnd + 1 + close), index: script });
+    pos = tagEnd + 1 + close;
+  }
+  return blocks;
+}
+
+function checkInlinedScripts(html, srcFile) {
+  for (const { attrs, text, index } of findScriptBlocks(html)) {
+    if (!isClassicScript(attrs) || !text.trim()) continue;
+    try {
+      new vm.Script(text, { filename: rel(srcFile) });
+    } catch (e) {
+      const line = html.slice(0, index).split('\n').length;
+      throw new ForgeError(
+        'inlined <script> does not parse — "' + rel(outPathFor(srcFile)) +
+        '" would ship a DEAD page.\n' +
+        '  block opens at line ' + line + ' of the built page\n' +
+        '  ' + e.message + '\n' +
+        '  (a classic <script> with a syntax error runs NOTHING and reports nothing\n' +
+        '   in a headless console — so forge refuses to emit it.)');
+    }
+  }
 }
 
 /* Read the engine's LANTERN_VERSION for the banner stamp (graceful fallback). */
@@ -283,7 +409,10 @@ function buildOne(srcFile, strict = false) {
         '  (resolved to ' + incPath + ', relative to ' + srcFile + ')');
     }
     let content = readText(incPath);
-    if (/\.[cm]?js$/.test(incPath)) content = stripModuleGuard(content);
+    // NB: `rel` (the pretty-path helper) is shadowed by the loop's `const rel`
+    // above, so name the include by its own relative path — which is the more
+    // useful thing to print anyway.
+    if (/\.[cm]?js$/.test(incPath)) content = stripModuleGuard(content, rel);
     // An inline directive INSIDE an included partial still folds.
     content = applyInline(content, srcDir, srcFile, strict, tally);
     // Inline verbatim (trim a single trailing newline so the block sits flush;
@@ -319,7 +448,12 @@ function buildOne(srcFile, strict = false) {
   }
 
   // Preserve a single trailing newline.
-  return body.replace(/\n*$/, '\n');
+  body = body.replace(/\n*$/, '\n');
+
+  // THE SYNTAX GATE — never emit a page whose own inlined script cannot parse.
+  checkInlinedScripts(body, srcFile);
+
+  return body;
 }
 
 /* The on-disk output path for a given .src.html. */

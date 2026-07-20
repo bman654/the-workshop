@@ -170,6 +170,144 @@ try {
   const rOnly = runForge([onlySrc]);
   assert('asset-only page (no include) builds', rOnly.code === 0, rOnly.stderr);
 
+  /* ═══ THE IMPORT STRIPPER + THE SYNTAX GATE ═══════════════════════════════
+     Bug #413: STATIC_IMPORT was anchored whole-line, so an import broken across
+     lines was not seen as ONE statement — the head line survived (or, worse, was
+     consumed) and the orphaned `} from '…';` tail became syntax garbage that
+     killed the ENTIRE inlined <script>. Silently: a dead classic script logs
+     nothing in a headless console. Each case below FAILS against the old code.
+
+     Helper: forge one .js include inside a classic <script> and return the built
+     page text (or the failure). `page(name, js)` keeps the cases one-liners. */
+  const page = (name, js, extraHtml = '') => {
+    fs.writeFileSync(path.join(tmp, name + '.js'), js);
+    const p = path.join(tmp, name + '.src.html');
+    fs.writeFileSync(p,
+      '<!doctype html>\n<html><body>\n' + extraHtml + '<script>\n' +
+      '<!-- forge:include ' + name + '.js -->\n' +
+      '</script>\n</body></html>\n');
+    const r = runForge([p]);
+    let out = '';
+    try { out = fs.readFileSync(path.join(tmp, name + '.html'), 'utf8'); } catch { /* build failed */ }
+    return { ...r, html: out };
+  };
+
+  // ── (d) multi-line NAMED import strips WHOLE — no residue, page parses ──────
+  const dNamed = page('mlnamed',
+    "import {\n  alpha,\n  beta\n} from './x.js';\nconst USE = 1;\n");
+  assert('(d) multi-line named import → build exits 0', dNamed.code === 0, dNamed.stderr);
+  assert('(d) no `import` residue', !/\bimport\b/.test(dNamed.html), 'head line consumed');
+  assert('(d) no orphaned `} from` tail', !/\}\s*from\s*'\.\/x\.js'/.test(dNamed.html),
+    'the exact original bug: the tail must not survive');
+  assert('(d) the rest of the file survives', dNamed.html.includes('const USE = 1;'), 'only the import went');
+
+  // ── (e) default+named, namespace, and side-effect forms strip whole ─────────
+  const eDef = page('mldefault',
+    "import Foo,\n  { bar }\n  from './y.js';\nconst E1 = 1;\n");
+  assert('(e) multi-line default+named strips whole',
+    eDef.code === 0 && !/\bimport\b|\bfrom\b/.test(eDef.html) && eDef.html.includes('const E1 = 1;'),
+    eDef.stderr || eDef.html);
+  const eNs = page('mlns', "import * as ns\n  from\n  './z.js';\nconst E2 = 2;\n");
+  assert('(e) multi-line namespace strips whole',
+    eNs.code === 0 && !/\bimport\b|\bfrom\b/.test(eNs.html) && eNs.html.includes('const E2 = 2;'),
+    eNs.stderr || eNs.html);
+  const eSide = page('mlside', "import\n  './side.js';\nconst E3 = 3;\n");
+  assert('(e) multi-line side-effect import strips whole',
+    eSide.code === 0 && !/\bimport\b/.test(eSide.html) && eSide.html.includes('const E3 = 3;'),
+    eSide.stderr || eSide.html);
+  // a specifier carrying braces / the word `from` must not fool the terminator
+  const eTricky = page('mltricky',
+    "import {\n  q\n} from './a{b}-from-c.js';\nconst E4 = 4;\n");
+  assert('(e) specifier with braces + "from" inside it still terminates correctly',
+    eTricky.code === 0 && !/\bimport\b/.test(eTricky.html) && eTricky.html.includes('const E4 = 4;'),
+    eTricky.stderr || eTricky.html);
+
+  // ── (f) NEGATIVE CONTROL — dynamic import() and import.meta SURVIVE ─────────
+  // The regression the fix could most easily cause: a looser matcher eating the
+  // two non-static `import` forms. Both are legal in a classic script (import.meta
+  // only in a module — so it sits inside a string here, exactly as a real core
+  // guards it) and MUST come through untouched.
+  const fNeg = page('negctl',
+    "const load = () => import('./x.js');\n" +
+    "const META = 'import.meta.url';\n" +
+    "const importantThing = 42;\n" +
+    "import { gone } from './strip-me.js';\n" +
+    "const KEEP = importantThing;\n");
+  assert('(f) build exits 0', fNeg.code === 0, fNeg.stderr);
+  assert('(f) dynamic import() SURVIVES', fNeg.html.includes("import('./x.js')"), 'not a static import');
+  assert('(f) import.meta reference SURVIVES', fNeg.html.includes('import.meta.url'), 'not a static import');
+  assert('(f) an identifier named importantThing SURVIVES',
+    fNeg.html.includes('const importantThing = 42;'), '\\b keeps the keyword honest');
+  assert('(f) the real static import still goes', !fNeg.html.includes('strip-me.js'), 'still stripped');
+
+  // ── (g) an UNTERMINATED import throws a ForgeError naming the file ──────────
+  const gTrunc = page('unterm', "import {\n  never,\n  closed\n");
+  assert('(g) unterminated import → exit 1', gTrunc.code === 1, gTrunc.stdout);
+  assert('(g) unterminated import → names the file + line',
+    gTrunc.stderr.includes('unterminated static import') && gTrunc.stderr.includes('unterm.js'),
+    gTrunc.stderr);
+
+  // ── (h) THE SYNTAX GATE — a non-parsing classic <script> FAILS the build ────
+  // (h1) the EXACT original bug, hand-planted: an orphaned `} from '…';` tail.
+  //      Before the gate this produced a silent dead page; now it is a build error.
+  const h1 = path.join(tmp, 'orphan.src.html');
+  fs.writeFileSync(path.join(tmp, 'orphan.js'), "} from './x.js';\nconst DEAD = 1;\n");
+  fs.writeFileSync(h1, '<!doctype html>\n<html><body>\n<script>\n' +
+    '<!-- forge:include orphan.js -->\n</script>\n</body></html>\n');
+  const rH1 = runForge([h1]);
+  assert('(h1) orphaned `} from` tail → build exits 1 (was: a silent dead page)',
+    rH1.code === 1, rH1.stdout);
+  assert('(h1) the failure NAMES the page', rH1.stderr.includes('orphan.html'), rH1.stderr);
+  assert('(h1) the failure says the script does not parse',
+    rH1.stderr.includes('does not parse'), rH1.stderr);
+  assert('(h1) no dead page is written', !fs.existsSync(path.join(tmp, 'orphan.html')),
+    'forge refuses to emit it');
+
+  // (h2) the HTML-comment-in-a-script landmine (a real past debug cycle) is caught.
+  const h2 = path.join(tmp, 'htmlcomment.src.html');
+  fs.writeFileSync(path.join(tmp, 'hc.js'), 'const HC = 1;\n');
+  fs.writeFileSync(h2, '<!doctype html>\n<html><body>\n<script>\n' +
+    '<!-- a multi-line HTML comment\n     that lands INSIDE the script -->\n' +
+    '<!-- forge:include hc.js -->\n</script>\n</body></html>\n');
+  const rH2 = runForge([h2]);
+  assert('(h2) multi-line HTML comment inside a <script> → build exits 1',
+    rH2.code === 1, rH2.stdout);
+
+  // (h3) FALSE-POSITIVE GUARD — the gate must not touch non-classic blocks.
+  //      A JSON data island and a module block ride through untouched, and a
+  //      healthy classic script is silent.
+  const h3 = path.join(tmp, 'ok.src.html');
+  fs.writeFileSync(path.join(tmp, 'ok.js'), 'const OK = 1;\n');
+  fs.writeFileSync(h3, '<!doctype html>\n<html><body>\n' +
+    '<script type="application/json">{"a": 1}</script>\n' +
+    '<script type="text/x-template"><div>{{ not js }}</div></script>\n' +
+    '<script type="module">import { z } from "./z.js"; export const Q = z;</script>\n' +
+    '<script src="./external.js"></script>\n' +
+    '<script>\n<!-- forge:include ok.js -->\n</script>\n</body></html>\n');
+  const rH3 = runForge([h3]);
+  assert('(h3) json / template / module / src blocks do NOT trip the gate',
+    rH3.code === 0, rH3.stderr);
+
+  // (h4) SCANNER NESTING — the two containers nest asymmetrically, and a naive
+  //      single regex gets both wrong. Both halves are REAL: the first was an
+  //      actual false positive this gate raised against the-aquarium on its very
+  //      first estate-wide run (its art banner names `<script>` in prose).
+  const h4 = path.join(tmp, 'nesting.src.html');
+  fs.writeFileSync(path.join(tmp, 'nest.js'),
+    'const N = 1;\n' +
+    '<!-- a one-line HTML-like comment is LEGAL JS (Annex B)\n' +
+    'const M = 2;\n');
+  fs.writeFileSync(h4, '<!doctype html>\n<html><body>\n' +
+    '<!-- a banner comment that mentions <script> in prose, and even\n' +
+    '     an unbalanced </script> — the browser sees NO element here -->\n' +
+    '<script>\n<!-- forge:include nest.js -->\n</script>\n</body></html>\n');
+  const rH4 = runForge([h4]);
+  assert('(h4) a <script> named inside an HTML comment is NOT scanned',
+    rH4.code === 0, rH4.stderr);
+  assert('(h4) an HTML-like comment INSIDE a script is raw text, not markup',
+    rH4.code === 0 && fs.readFileSync(path.join(tmp, 'nesting.html'), 'utf8').includes('const M = 2;'),
+    'the block body runs to </script>, and Annex B keeps it parsing');
+
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }
