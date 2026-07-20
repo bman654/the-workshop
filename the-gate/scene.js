@@ -1112,7 +1112,8 @@
     'cartographer-rep': function (g, baseX, baseY, pick) { drawRepCartographer(g, baseX, baseY, pick); },
     'arcade-rep': function (g, baseX, baseY, pick) { drawRepArcade(g, baseX, baseY, pick); },
     'verse-rep': function (g, baseX, baseY, pick) { drawRepVerse(g, baseX, baseY, pick); },
-    'daedalus-rep': function (g, baseX, baseY, pick) { drawRepDaedalus(g, baseX, baseY, pick); }
+    'daedalus-rep': function (g, baseX, baseY, pick) { drawRepDaedalus(g, baseX, baseY, pick); },
+    'compositor-rep': function (g, baseX, baseY, pick) { drawRepCompositor(g, baseX, baseY, pick); }
   };
 
   function drawRoomRep(parent) {
@@ -4366,6 +4367,248 @@
     }
 
     S.refs.daedalusRep = g;
+  }
+
+  function drawRepCompositor(parent, cx, baseY, pick) {
+    // The Print Room — a letterpress composing galley seen HEAD-ON, looking DOWN onto
+    // the bed: a heavy rectangular IRON CHASE lying wide + low on short legs, holding a
+    // locked-up FORME of set type — fine ruled rows of tiny sorts (dense grid of short
+    // box-glyphs, never spelled) — gripped along the right + near edges by tapered oak
+    // QUOINS that lock the forme into the upper-left corner. ONE sort high in the forme
+    // is still glossy with fresh WET INK: a warm-gold self-lit sort that BLAZES at night
+    // and recedes to a faint sheen by day (rep.glow1, on a private #compositor-ink-glow).
+    // TAKE 3 — "the top-down bed": a foreshortened top plane (looking down into the
+    // chase) so the type reads unmistakably as rows lying flat in an iron frame, firmly
+    // distinct from the upright verse lectern. Brass idiom, lit from above.
+    var g = group('compositor-rep', parent);
+    var OAK = 'var(--rep-swatch1-ref, #6a5c4c)';         // swappable oak quoin body (darker wedge)
+    var OAKL = 'var(--rep-swatch2-ref, #8a6f52)';        // swappable lighter light-catch oak (upper wedge / bevel)
+    var DARK = 'rgba(11,14,22,.85)';                     // estate brass dark body (the iron chase)
+    var BRASS = 'var(--brass-stroke-ref, #9c8350)';      // brass edge stroke
+    var BRI = 'var(--brass-bright-ref, #cdb375)';        // brass-bright TOP sheen (lit from above)
+    var GLOW = 'var(--rep-glow1-ref, #ffd98a)';          // EMISSIVE wet-ink gold
+    var fx = function (n) { return (Math.round(n * 10) / 10); };
+    // deterministic PRNG so the set type + word-gaps are stable across renders
+    var seed = 90210;
+    var rnd = function () { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+    // ── geometry: WIDE + SHORT top-view bed, bottom-aligned at baseY, centred on cx ──
+    // The chase's TOP FACE is a shallow trapezoid (near edge wider, far edge inset) so
+    // the eye reads it as a flat bed seen from slightly above. Below it a thin front
+    // wall gives the iron its mass; short stub legs stand it on the grass.
+    var nearY = baseY - 28;               // y692 — near (front) edge of the bed top
+    var farY = baseY - 74;                // y646 — far (back) edge of the bed top
+    var nearL = cx - 76, nearR = cx + 76; // x154 .. x306  (W = 152, WIDE)
+    var farL = cx - 65, farR = cx + 65;   // x165 .. x295  (far edge inset → looking down)
+    var wallFootY = baseY - 14;           // y706 — front wall foot (legs lift the last 14)
+
+    // bilinear point on the top plane: u 0→1 left→right, v 0→1 near→far
+    var P = function (u, v) {
+      var lx = nearL + (farL - nearL) * v;
+      var rx = nearR + (farR - nearR) * v;
+      return { x: lx + (rx - lx) * u, y: nearY + (farY - nearY) * v };
+    };
+    var poly = function (pts) {
+      var d = 'M ' + fx(pts[0].x) + ' ' + fx(pts[0].y);
+      for (var i = 1; i < pts.length; i++) d += ' L ' + fx(pts[i].x) + ' ' + fx(pts[i].y);
+      return d + ' Z';
+    };
+
+    // private soft-feather filter for the wet-ink glow (UNIQUE id — not another rep's)
+    var defs = parent.ownerSVGElement && parent.ownerSVGElement.querySelector('defs');
+    if (defs && !defs.querySelector('#compositor-ink-glow')) {
+      var fG = el('filter', { id: 'compositor-ink-glow', x: '-160%', y: '-160%', width: '420%', height: '420%' }, defs);
+      el('feGaussianBlur', { 'in': 'SourceGraphic', stdDeviation: '2.6' }, fG);
+    }
+
+    // ── soft contact shadow so the chase sits ON the grass (light from above) ──
+    el('ellipse', { cx: cx + 5, cy: baseY + 2, rx: 82, ry: 8,
+      fill: '#000', opacity: '0.30', filter: 'url(#glow-soft)' }, g);
+
+    // ════════════ SHORT LEGS — stout iron stubs under the front corners ═══════════
+    var legs = [ nearL + 12, nearR - 12 ];
+    for (var li = 0; li < legs.length; li++) {
+      el('rect', { x: fx(legs[li] - 4), y: fx(wallFootY - 1), width: 8, height: fx(baseY - wallFootY + 1), rx: 1.4,
+        fill: DARK, stroke: BRASS, 'stroke-width': '1.3' }, g);
+      // a faint brass-bright catch on the leg's up-facing outer corner
+      el('line', { x1: fx(legs[li] - 3.4), y1: fx(wallFootY), x2: fx(legs[li] - 3.4), y2: fx(baseY - 3),
+        stroke: BRI, 'stroke-width': '1', opacity: '0.24' }, g);
+    }
+
+    // ════════════ FRONT WALL — the iron chase's forward face (its thickness) ══════
+    // A shadowed forward-facing band below the near edge → reads as the heavy frame's
+    // mass. Down/forward face, so NO brass-bright here (light grazes from above).
+    el('path', { d: 'M ' + fx(nearL) + ' ' + fx(nearY) + ' L ' + fx(nearR) + ' ' + fx(nearY) +
+      ' L ' + fx(nearR) + ' ' + fx(wallFootY) + ' L ' + fx(nearL) + ' ' + fx(wallFootY) + ' Z',
+      fill: DARK, stroke: BRASS, 'stroke-width': '1.4' }, g);
+    // a deeper shadow reveal along the very bottom of the front wall
+    el('rect', { x: fx(nearL + 1), y: fx(wallFootY - 4), width: fx(nearR - nearL - 2), height: 4,
+      fill: 'rgba(0,0,0,.28)' }, g);
+
+    // ════════════ THE CHASE — heavy iron top frame (the bed's rim) ════════════════
+    // The full top plane is the iron chase; a recessed WELL inside it holds the forme.
+    el('path', { d: poly([P(0,0), P(1,0), P(1,1), P(0,1)]),
+      fill: DARK, stroke: BRASS, 'stroke-width': '1.9' }, g);
+    // the recessed WELL floor (a touch darker, so the frame rim reads as raised iron)
+    var wu0 = 0.055, wu1 = 0.945, wv0 = 0.06, wv1 = 0.93;
+    el('path', { d: poly([P(wu0, wv0), P(wu1, wv0), P(wu1, wv1), P(wu0, wv1)]),
+      fill: 'rgba(6,9,15,.92)', stroke: 'rgba(0,0,0,.34)', 'stroke-width': '1' }, g);
+    // inner-rim shadow on the near + right well walls (recess reads as sunken)
+    el('path', { d: 'M ' + fx(P(wu0, wv0).x) + ' ' + fx(P(wu0, wv0).y) +
+      ' L ' + fx(P(wu1, wv0).x) + ' ' + fx(P(wu1, wv0).y) +
+      ' L ' + fx(P(wu1, wv1).x) + ' ' + fx(P(wu1, wv1).y),
+      fill: 'none', stroke: 'rgba(0,0,0,.30)', 'stroke-width': '1.6' }, g);
+    // brass-bright lit inner bevel on the FAR + LEFT well rim (up-facing frame edges)
+    el('path', { d: 'M ' + fx(P(wu1, wv1).x) + ' ' + fx(P(wu1, wv1).y) +
+      ' L ' + fx(P(wu0, wv1).x) + ' ' + fx(P(wu0, wv1).y) +
+      ' L ' + fx(P(wu0, wv0).x) + ' ' + fx(P(wu0, wv0).y),
+      fill: 'none', stroke: BRI, 'stroke-width': '1', opacity: '0.34' }, g);
+
+    // ════════════ THE FORME — ruled rows of locked-up set TYPE ════════════════════
+    // The type fills the well as a JUSTIFIED block (locked to the full measure — that
+    // is what the quoins clamp). Each row reads as a LINE of text: a run of thin type
+    // bodies of varying width, broken by word gaps, so the block reads as set type —
+    // NOT a regular grid of keys. Sparse bright glints catch the overhead light on a
+    // few faces. One short last line + a paragraph gap sell it as words, not a bar.
+    var uT0 = 0.075, uT1 = 0.84, vT0 = 0.15, vT1 = 0.85;   // forme window (near→far)
+    var nRows = 9, wetRow = 6, wetSort = -1, wetPt = null, wetW = 0, wetH = 0;
+    var paraRow = 3;                                        // a paragraph break sits here
+    for (var r = 0; r < nRows; r++) {
+      var v = vT0 + (vT1 - vT0) * (r / (nRows - 1));
+      var vN = vT0 + (vT1 - vT0) * ((r + 1) / (nRows - 1));
+      var lp = P(uT0, v), rp = P(uT1, v);
+      var rowY = lp.y;
+      var rowStep = Math.abs((P(uT0, vN).y) - rowY) || 4.2;   // pixel gap to next row up
+      var sc = 1 - 0.30 * v;                                  // perspective: near sorts bigger
+      var sortH = rowStep * 0.60;
+      var topY = rowY - sortH;
+      // a faint dark LEAD line ruling the base of the row (the reglet between lines)
+      el('line', { x1: fx(lp.x), y1: fx(rowY + 0.5), x2: fx(rp.x), y2: fx(rowY + 0.5),
+        stroke: 'rgba(0,0,0,.36)', 'stroke-width': '0.6', opacity: '0.7' }, g);
+      // one short LAST line (the paragraph tail) so the block reads as prose, not a slab
+      var isShort = (r === nRows - 1);
+      var endX = isShort ? (lp.x + (rp.x - lp.x) * (0.34 + rnd() * 0.14)) : (rp.x - 1.0);
+      // a hair of extra indent under the paragraph break
+      var px = lp.x + (r === paraRow + 1 ? 3.0 * sc : 1.0);
+      var si = 0;
+      while (px < endX - 0.8) {
+        var wobble = rnd();
+        var sw = (0.9 + wobble * wobble * 2.4) * sc;         // mostly THIN strokes, a few wide
+        if (px + sw > endX) sw = endX - px;
+        if (sw < 0.6) break;
+        // the type BODY (dark lead) — a thin vertical stroke (a letter face)
+        el('rect', { x: fx(px), y: fx(topY), width: fx(sw), height: fx(sortH), rx: 0.3,
+          fill: 'rgba(18,22,30,.94)' }, g);
+        // a SPARSE bright glint on some faces (overhead light on an ascender), not every one
+        if (wobble > 0.62) el('line', { x1: fx(px + 0.2), y1: fx(topY + 0.5), x2: fx(px + sw - 0.2), y2: fx(topY + 0.5),
+          stroke: BRI, 'stroke-width': '0.7', opacity: fx(0.24 + (wobble - 0.62) * 0.7) }, g);
+        // remember a good mid-row sort in the wet row for the ink payoff
+        if (r === wetRow && wetSort < 0 && px > (lp.x + (rp.x - lp.x) * 0.40)) {
+          wetSort = si; wetPt = { x: px, y: topY }; wetW = Math.max(2.0, sw); wetH = sortH;
+        }
+        px += sw + (0.5 + rnd() * 0.5) * sc;                 // set tight, a hair of spacing
+        // frequent WORD GAPS so each row reads as set WORDS, not a solid rule
+        if (rnd() < 0.24) px += (1.8 + rnd() * 1.8) * sc;
+        si++;
+      }
+    }
+
+    // ════════════ THE WET-INK SORT — the one still glossy with fresh ink ══════════
+    // Fallback placement if the walk never flagged one (keeps the payoff guaranteed).
+    if (!wetPt) {
+      var wv = vT0 + (vT1 - vT0) * (wetRow / (nRows - 1));
+      var wl = P(uT0, wv), wr = P(uT1, wv);
+      wetPt = { x: wl.x + (wr.x - wl.x) * 0.46, y: wl.y - 3.0 }; wetW = 3.6 * (1 - 0.30 * wv); wetH = 3.0;
+    }
+    var wcx = wetPt.x + wetW / 2, wcy = wetPt.y + wetH / 2;
+    // 1) a soft gold bloom pooled on the wet sort (rep.glow1 → blazes night, fades day)
+    var wetHalo = el('ellipse', { cx: fx(wcx), cy: fx(wcy), rx: fx(wetW * 2.4 + 3), ry: fx(wetH * 2.4 + 3),
+      fill: GLOW, opacity: '0.42', filter: 'url(#compositor-ink-glow)' }, g);
+    // 2) the wet sort itself, self-lit gold (over-drawn on its dark body)
+    el('rect', { x: fx(wetPt.x - 0.3), y: fx(wetPt.y - 0.4), width: fx(wetW + 0.6), height: fx(wetH + 0.8), rx: 0.5,
+      fill: GLOW, opacity: '0.96', filter: 'url(#compositor-ink-glow)' }, g);
+    // 2b) a white-HOT inner CORE — the thickest pool of fresh wet ink, blazing at night
+    el('rect', { x: fx(wetPt.x + wetW * 0.16), y: fx(wetPt.y + wetH * 0.10), width: fx(Math.max(1, wetW * 0.66)), height: fx(Math.max(1, wetH * 0.62)), rx: 0.5,
+      fill: '#fff7e0', opacity: '0.6', filter: 'url(#compositor-ink-glow)' }, g);
+    // 3) a hot wet highlight glinting off the top of the fresh-inked face
+    el('rect', { x: fx(wetPt.x + 0.4), y: fx(wetPt.y - 0.2), width: fx(Math.max(1, wetW - 0.8)), height: 1.1, rx: 0.4,
+      fill: '#fff6df', opacity: '0.72', filter: 'url(#compositor-ink-glow)' }, g);
+
+    // ════════════ THE QUOINS — tapered oak wedges locking the forme ═══════════════
+    // A pair of opposed wooden wedges reads as one rectangular block split on the
+    // sliding diagonal (drive the wedges apart → they lengthen + clamp). One pair on
+    // the RIGHT edge presses the type left; one on the NEAR edge presses it back.
+    var drawQuoin = function (a, b, c, d, upEdge) {
+      // a,b,c,d clockwise from the near-left corner of the wedge block. Two opposed
+      // oak WEDGES meet on the diagonal a→c (the sliding face): darker lower wedge +
+      // lighter light-catch upper wedge.
+      el('path', { d: poly([a, b, c]), fill: OAK, stroke: BRASS, 'stroke-width': '1.2' }, g);
+      el('path', { d: poly([a, c, d]), fill: OAKL, stroke: BRASS, 'stroke-width': '1.2' }, g);
+      // wood GRAIN running with each wedge's taper (a few thin fibres)
+      for (var qg = 1; qg <= 3; qg++) {
+        var t = qg / 4;
+        // grain in the lower (dark) wedge: parallel to b→c
+        el('line', { x1: fx(a.x + (b.x - a.x) * t), y1: fx(a.y + (b.y - a.y) * t),
+          x2: fx(a.x + (c.x - a.x) * (0.35 + t * 0.5)), y2: fx(a.y + (c.y - a.y) * (0.35 + t * 0.5)),
+          stroke: 'rgba(0,0,0,.18)', 'stroke-width': '0.6' }, g);
+        // grain in the upper (light) wedge: parallel to d→c
+        el('line', { x1: fx(a.x + (d.x - a.x) * t), y1: fx(a.y + (d.y - a.y) * t),
+          x2: fx(c.x + (d.x - c.x) * (1 - t) * 0.5), y2: fx(c.y + (d.y - c.y) * (1 - t) * 0.5),
+          stroke: BRI, 'stroke-width': '0.5', opacity: '0.12' }, g);
+      }
+      // the sliding-bevel seam between the two wedges (a dark line + a bright lip)
+      el('line', { x1: fx(a.x), y1: fx(a.y), x2: fx(c.x), y2: fx(c.y),
+        stroke: 'rgba(0,0,0,.44)', 'stroke-width': '1' }, g);
+      el('line', { x1: fx(a.x), y1: fx(a.y), x2: fx(c.x), y2: fx(c.y),
+        stroke: BRI, 'stroke-width': '0.7', opacity: '0.34' }, g);
+      // brass-bright sheen on the wedge's up-facing outer edge (lit from above)
+      if (upEdge) el('line', { x1: fx(upEdge[0].x), y1: fx(upEdge[0].y), x2: fx(upEdge[1].x), y2: fx(upEdge[1].y),
+        stroke: BRI, 'stroke-width': '1.1', opacity: '0.52' }, g);
+    };
+    // RIGHT quoin pair — a bold wedge block in the right border strip (u 0.82..0.945),
+    // widened so the 'forme locked by a tapered oak QUOIN' read is unmistakable
+    var rq = [ P(0.82, 0.16), P(0.945, 0.16), P(0.945, 0.86), P(0.82, 0.86) ];
+    drawQuoin(rq[0], rq[1], rq[2], rq[3], [rq[3], rq[2]]);
+    // NEAR quoin pair — a wedge block in the near border strip (v 0.055..0.135)
+    var nq = [ P(0.09, 0.055), P(0.9, 0.055), P(0.9, 0.135), P(0.09, 0.135) ];
+    drawQuoin(nq[3], nq[2], nq[1], nq[0], [nq[3], nq[2]]);
+
+    // ════════════ BRASS-BRIGHT TOP-LIT EDGES — sheen on the chase's up-facing rails ═
+    // The far rail + the left rail are the up-facing frame edges the overhead light
+    // grazes → the estate brass idiom's top-lit read.
+    el('path', { d: 'M ' + fx(P(0, 1).x) + ' ' + fx(P(0, 1).y) + ' L ' + fx(P(1, 1).x) + ' ' + fx(P(1, 1).y),
+      fill: 'none', stroke: BRI, 'stroke-width': '1.4', opacity: '0.6', filter: 'url(#glow-soft)' }, g);
+    el('path', { d: 'M ' + fx(P(0, 0).x) + ' ' + fx(P(0, 0).y) + ' L ' + fx(P(0, 1).x) + ' ' + fx(P(0, 1).y),
+      fill: 'none', stroke: BRI, 'stroke-width': '1.2', opacity: '0.4' }, g);
+    // a couple of forged CHASE BOLTS on the far rail (the frame's fastenings)
+    var boltVs = [0.24, 0.76];
+    for (var bti = 0; bti < boltVs.length; bti++) {
+      var bp = P(boltVs[bti], 0.985);
+      el('circle', { cx: fx(bp.x), cy: fx(bp.y + 2.2), r: 2, fill: DARK, stroke: BRASS, 'stroke-width': '1.1' }, g);
+      el('circle', { cx: fx(bp.x - 0.5), cy: fx(bp.y + 1.7), r: 0.8, fill: BRI, opacity: '0.8' }, g);
+    }
+    // forged CORNER BOSSES at the two NEAR (front) corners — the heavy chase's
+    // fastening bosses, the most-visible corners in the top-down view (added mass)
+    var bosses = [ P(0.035, 0.05), P(0.965, 0.05) ];
+    for (var bo = 0; bo < bosses.length; bo++) {
+      el('circle', { cx: fx(bosses[bo].x), cy: fx(bosses[bo].y), r: 2.7, fill: DARK, stroke: BRASS, 'stroke-width': '1.4' }, g);
+      el('circle', { cx: fx(bosses[bo].x - 0.7), cy: fx(bosses[bo].y - 0.7), r: 1.05, fill: BRI, opacity: '0.85' }, g);
+    }
+
+    // ════════════ MOTION — the faintest wet-ink shimmer on the ONE fresh sort ══════
+    // A rep is a quiet calling card; a STATIC read is preferred. The single permitted
+    // touch is a whisper-slow breath on the wet sort's bloom — reads as fresh ink still
+    // catching the light. Reduced-motion-safe: base opacity is the static value, so a
+    // paused/reduced frame is exactly the still rep.
+    var prefersReduced = (typeof window !== 'undefined' && window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if (!prefersReduced && wetHalo) {
+      el('animate', { attributeName: 'opacity', values: '0.42;0.62;0.42',
+        keyTimes: '0;0.5;1', dur: '4.6s', repeatCount: 'indefinite', calcMode: 'spline',
+        keySplines: '0.4 0 0.6 1;0.4 0 0.6 1' }, wetHalo);
+    }
+
+    S.refs.compositorRep = g;
   }
 
   /* ── the GLYPH STAND — the fallback rep for every room WITHOUT a bespoke rep

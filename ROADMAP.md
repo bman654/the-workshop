@@ -141,16 +141,15 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 (the already-built Music Room rep) `[rep] **The Music Room rep** — a rank of graduated brass organ pipes · aspect:vertical · room:sound-garden · accent:#cf7bff`.
 
 <!-- gauge:foundry-seeds:start -->
-- [rep] **The Print Room rep** — a letterpress composing galley seen head-on: a heavy iron CHASE holding a locked-up forme of set type (fine ruled rows of tiny inverted sorts) gripped by wooden quoins, with ONE sort still glossy with fresh WET INK glowing warm gold high in the forme · aspect:horizontal · room:compositor · accent:#ffcf7a. 2nd-oldest backlog (entry 76, manor); distinct silhouette from the verse lectern; fills the scarce horizontal shape (only 2 of 12 reps are wide/short). (sown #406 · contest #7)
 - [rep] **The Keystone Arch rep** — a dry-stacked semicircular ring of nine cut voussoir wedges standing free on two springer feet, the brass KEYSTONE dropped at the crown catching the light, a faint emissive line-of-thrust threading the joints · aspect:vertical · room:the-keystone-arch · accent:#c9974c. Fills the ENTIRELY-BLANK lowerworks district (0 of 12 reps). The estate's most iconic structural front-elevation — a standing wedge-ring reads at a glance. (sown #406 · contest #7)
 - [rep] **The Stellar Forge rep** — a brass beam-balance whose one pan bears a small glowing star-orb weighed against a stack of mass-weights on the other, the beam tipping under its degeneracy load: a star literally put on the SCALES · aspect:horizontal · room:stellar-forge · accent:#9db4ff (cool star-glow on warm brass). The room's own weighed-not-watched theme (Chandrasekhar mass), distinct from firmament's dome; relieves the 1-of-13 observatory. 2nd horizontal for the scarce shape. (sown #406 · contest #7)
 - [rep] **The Deep Hearth rep** — a squat side-on CUT through the living planet: a ground-hugging wedge of dark faceted crust with a magma CHAMBER pooling ember-orange low within and an ember hint of the core at the base, glow brightest deep and fading to the rim · aspect:mound · room:the-deep-hearth · accent:#e24a2a. Claims the estate's unclaimed FIRE accent; the proven Cavern/Strange-Garden glowing-mound grammar in fire instead of teal — distinct register, not a second cavern. (sown #406 · contest #7)
 - [rep] **The Turning Lantern rep** — a zoetrope DRUM on a turned spindle-and-pedestal: a short brass-hooped upright cylinder pierced by a ring of tall viewing-SLITS, a strip of little running figures glimpsed mid-stride within; warm lamplight spills OUT through the slits (a ring of glowing bars), reduced-motion-safe micro-drift reading as the drum turning · aspect:vertical · room:the-faithful-drum · accent:#f0b24a. Newest un-repped room (entry 912); the slate's DELIGHT-FIRST pick — a toy you spin, proving nothing, pure newcomer bait. (sown #406 · contest #7)
-<!-- ✝ DECAYED #397: The Hedge Maze rep · after 8e0cbb6 -->
 <!-- ✝ DECAYED #397: The Hall of Mirrors rep · after 8e0cbb6 -->
 <!-- ✝ DECAYED #397: The Engine Room rep · after 8e0cbb6 -->
 <!-- ✝ DECAYED #397: The Deep Hearth rep · after 8e0cbb6 -->
 <!-- ✝ BLOOMED #415: The Hedge Maze rep → the-gate/scene.js drawRepDaedalus · after ff7c5ab -->
+<!-- ✝ BLOOMED #423: The Print Room rep → the-gate/scene.js drawRepCompositor · after 0647a7c -->
 <!-- gauge:foundry-seeds:end -->
 
 ---
