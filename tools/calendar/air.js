@@ -11,9 +11,14 @@ var A={};
 // ===== AIR POLICY — BEGIN =====
 // DESIGN §8.3 — the pure core. No suspend axis: the platform suspends, entering
 // HERE as ctxRunning, so the was-held guard IS the policy (r4-M2/M3).
+// THE COURTESY AXIS: a hidden tab stills the air, because an estate that follows
+// you into another window is rude. `background` is the visitor's own OPT-IN to
+// waive that courtesy — absent (the default) it is false and the policy is
+// exactly what it always was.
 var AIR_LEVEL=0.28;
 function airTargets(s){
-  var w=!!(s.armed&&s.everGesture),on=!!(w&&s.visible&&!s.muted&&s.ctxRunning);
+  var w=!!(s.armed&&s.everGesture),here=!!(s.visible||s.background),
+      on=!!(w&&here&&!s.muted&&s.ctxRunning);
   return {wantCtx:w,schedulerOn:on,masterLevel:on?AIR_LEVEL:0,held:!!(w&&!s.ctxRunning)};
 }
 // ===== AIR POLICY — END =====
@@ -67,12 +72,21 @@ A.SEAM=SEAM; A.BUDGET=BUDGET; A.SUB=SUB; A.AHEAD=AHEAD; A.HORIZON=HORIZON;
 var ctx=null,mst=null,bus=null,timer=null,armed=false,gest=false,heldNow=false,
     subbed=false,recov=false,epoch=0,bk=null,man=null,live=[],eps=null,q=null,
     srcs=null,derived=null,dnext=null,pumpStarts=0,ann=null,annBase=0,annSlip=null,
-    btn=null,L=null,gEl=null,tEl=null,onState=null,onVis=null;
+    btn=null,L=null,gEl=null,tEl=null,onState=null,onVis=null,chipMode=false;
 function now(){ return ctx?ctx.currentTime:0; }
 function perf(){ try{ return performance.now(); }catch(e){ return Date.now(); } }
 function vis(){ try{ return document.visibilityState==='visible'; }catch(e){ return true; } }
 function mut(){ try{ return WS.muted(); }catch(e){ return false; } }
-function inputs(){ return {armed:armed,muted:mut(),visible:vis(),
+// The background OPT-IN lives in WS beside the estate mute — ONE shared ws:pref
+// key, read and written through the same module, so the waiver is set once and
+// held everywhere (and a flip on another estate tab arrives here live).
+function bg(){ try{ return WS.airBackground(); }catch(e){ return false; } }
+A.background=function(v){
+  if(v===undefined) return bg();
+  try{ WS.setAirBackground(!!v); }catch(e){}
+  return bg();
+};
+function inputs(){ return {armed:armed,muted:mut(),visible:vis(),background:bg(),
   ctxRunning:!!(ctx&&ctx.state==='running'),everGesture:gest}; }
 function busFor(k){ if(!bus[k]){ var g=ctx.createGain(); g.gain.value=1;
   g.connect(mst); bus[k]=g; } return bus[k]; }
@@ -282,10 +296,13 @@ A.arm=function(){
   if(!muted) ramp(mst,AIR_LEVEL,0.4);   // §6-A2 — level BEFORE the +0.5 s
   respond(muted);
   onState=function(){ courtesy(ctx.state!=='running'); applyAir(); }; watch(ctx);
-  onVis=function(){ courtesy(!vis()); applyAir(); };
+  onVis=function(){ courtesy(!vis()&&!bg()); applyAir(); };   // bg opt-in waives the courtesy discard
   try{ document.addEventListener('visibilitychange',onVis); }catch(e){}
   if(!subbed){ subbed=true;   // §6-B — one subscription, ever
-    try{ WS.onMuteChange(function(){ courtesy(false); applyAir(); }); }catch(e){} }
+    try{ WS.onMuteChange(function(){ courtesy(false); applyAir(); }); }catch(e){}
+    // the courtesy waiver, from THIS tab's chip or another estate tab's: turning
+    // it off while hidden stills the sound at once; turning it on restarts the pump.
+    try{ WS.onAirBackgroundChange(function(on){ courtesy(!vis()&&!on); applyAir(); }); }catch(e){} }
   try{ localStorage.setItem('ws:pref:air','1'); }catch(e){}
   root.__AIR__={state:state};   // §6-A4 — the debug hook
   applyAir(m);
@@ -389,7 +406,10 @@ function label(){
   var r=!armed?L.off:heldNow?L.held:!gest?L.wait:mut()?L.mute:L.on;
   if(gEl) gEl.textContent=r[0];
   if(tEl) tEl.data=' '+r[1];
-  btn.title=r[2];
+  // the CHIP owns its own tooltip, so the native `title` would double up on it;
+  // a bare button (the old idiom) still gets one. The accessible name is the same
+  // prose either way.
+  if(!chipMode) btn.title=r[2];
   btn.setAttribute('aria-label',r[2]); btn.setAttribute('aria-pressed',armed?'true':'false');
 }
 
@@ -450,6 +470,231 @@ function state(){
     pumpStarts:pumpStarts,announce:ann,held:heldNow};
 }
 A.state=state;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE CHIP — the air as a widget any page can wear.
+
+   Before this, the air's on-ramp was hand-built per page: the front door carried
+   a two-line affordance in its brass dock, the Almanac a whole prose section far
+   below the fold, and a visitor could explore a page in silence and never learn
+   the estate could hum at all. So the on-ramp becomes ONE mountable thing:
+
+       Air.mount(document.getElementById('somewhere'))
+
+   and the page has a chip — the same compact dark pill idiom the estate's
+   self-test chips wear, placed wherever the page's author wants it. The chip IS
+   the button. The whole explanation — the prose, the register line, the season,
+   today's figure, the third-and-key gloss — lives in a tooltip that opens on
+   hover, on focus, and on a touch tap, styled like the Almanac's boxed plaque.
+
+   The widget carries its own words and its own stylesheet, so a page that wants
+   the air needs no CSS and no copy of its own: forge air.js in, call mount, done.
+   A page with different words passes them in. Any page WITHOUT an audible
+   experience of its own may wear one; a page that already sings should not.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+// §5.2's five label rows, now the WIDGET's defaults (a page may still override).
+// Each row is [glyph, text, title]; the glyph is state-dependent (♫ disarmed,
+// ♪ once armed), which is why it needs a slot of its own.
+A.LABELS={
+  off:  ['♫','give the estate its air',
+         'arm the air — a quiet hum keyed to the hour and the season; nothing plays until you ask, and the estate mute stills it'],
+  on:   ['♪','the air plays · still it',
+         'the air is playing — click to still it'],
+  mute: ['♪','the air is armed · the estate is muted',
+         'unmute the estate to hear the air — the mute is estate-wide'],
+  wait: ['♪','the air remembers · touch here to resume',
+         'you armed the air on an earlier visit — touch this button to resume it'],
+  held: ['♪','the air is held · touch here to resume',
+         'the platform paused the sound — touch this button to resume it']
+};
+A.PROSE={
+  lede:'THE AIR — the estate can hum. A quiet air in the estate’s own voice, keyed to the '+
+       'hour and the season; no two days carry quite the same tune, and today’s is today’s '+
+       'alone. It never plays unasked: arm it once and the estate remembers your choice; the '+
+       'estate-wide mute stills it anywhere; long silences are part of the music.',
+  gloss:'The bright third is the major third, the dark third the minor. The Gate’s own key is '+
+        'A major — the key of the six-note air the front gate itself sings.',
+  bg:'keep the air playing while this tab sits behind another',
+  bgNote:'Off by default: the estate stills itself when you look away, which is its manners. '+
+         'Turn this on and it keeps humming while you work elsewhere.',
+  more:'the Almanac tells more'
+};
+
+// The chip's own stylesheet — tokens with fallbacks, because pages name their
+// tokens differently (the front door's --mono / --serif, the Almanac's
+// --font-mono / --font-serif) and a page with neither must still look right.
+var CHIP_CSS=[
+'.air-chip{ position:relative; display:inline-block; vertical-align:middle; }',
+'.air-chip-btn{ appearance:none; -webkit-appearance:none; cursor:pointer; white-space:nowrap;',
+'  font:600 10.5px/1 var(--font-mono,var(--mono,ui-monospace,Menlo,monospace)); letter-spacing:.3px;',
+'  padding:6px 11px; border-radius:20px; border:1px solid var(--accent-edge,rgba(214,176,108,.34));',
+'  background:rgba(0,0,0,.4); color:var(--muted,#8b95a8); transition:.2s; }',
+'.air-chip-btn:hover, .air-chip-btn:focus-visible{ color:var(--brass-bright,#f0d489);',
+'  border-color:var(--brass,#c9a24a); background:rgba(0,0,0,.55); outline:none; }',
+'.air-chip-btn:disabled{ cursor:default; opacity:.55; }',
+'.air-chip-btn .g{ color:var(--brass,#c9a24a); }',
+'.air-chip-btn:hover .g, .air-chip-btn:focus-visible .g{ color:var(--brass-bright,#f0d489); }',
+'.air-chip-btn[aria-pressed="true"]{ color:var(--brass-bright,#f0d489);',
+'  border-color:var(--brass,#c9a24a); background:rgba(230,189,111,.10); }',
+'.air-chip-btn[aria-pressed="true"] .g{ color:var(--brass-bright,#f0d489); }',
+/* the tip is a TRANSPARENT container with padding — the padding is the bridge the
+   pointer crosses from chip to card without ever leaving the widget. */
+'.air-chip-tip{ position:absolute; top:100%; left:0; z-index:80; padding:8px 0 0;',
+'  width:min(430px,86vw); opacity:0; visibility:hidden; transition:opacity .18s, visibility .18s; }',
+'.air-chip-tip.up{ top:auto; bottom:100%; padding:0 0 8px; }',
+'.air-chip.open > .air-chip-tip{ opacity:1; visibility:visible; }',
+'.air-chip-card{ background:var(--paper,#10141f); border:1px solid var(--accent-edge,rgba(214,176,108,.34));',
+'  border-left:2px solid var(--brass,#c9a24a); border-radius:0 8px 8px 0; padding:13px 15px;',
+'  box-shadow:0 14px 44px rgba(0,0,0,.62); text-align:left; }',
+'.air-chip-card p{ margin:0; }',
+'.air-chip-lede{ font:13.5px/1.66 var(--font-serif,var(--serif,Georgia,serif));',
+'  color:var(--ink,#eaf0fa); opacity:.94; }',
+'.air-chip-state{ font:11.5px/1.7 var(--font-mono,var(--mono,ui-monospace,Menlo,monospace));',
+'  color:var(--ink-dim,#b8a172); margin:10px 0 0; }',
+'.air-chip-state .now{ color:var(--muted,#8b95a8); }',
+'.air-chip-fig{ font:italic 12.5px/1.6 var(--font-serif,var(--serif,Georgia,serif));',
+'  color:var(--ink,#eaf0fa); margin:6px 0 0 !important; }',
+'.air-chip-gloss{ font:11px/1.6 var(--font-mono,var(--mono,ui-monospace,Menlo,monospace));',
+'  color:var(--muted,#8b95a8); margin:9px 0 0 !important; }',
+'.air-chip-pref{ display:block; margin:11px 0 0; padding:9px 0 0;',
+'  border-top:1px solid rgba(214,176,108,.16); cursor:pointer; }',
+'.air-chip-pref .lbl{ display:flex; align-items:flex-start; gap:8px;',
+'  font:11px/1.5 var(--font-mono,var(--mono,ui-monospace,Menlo,monospace)); color:var(--ink-dim,#b8a172); }',
+'.air-chip-pref input{ margin:1px 0 0; accent-color:var(--brass,#c9a24a); cursor:pointer; flex:none; }',
+'.air-chip-prefnote{ font:italic 11px/1.55 var(--font-serif,var(--serif,Georgia,serif));',
+'  color:var(--muted,#8b95a8); margin:5px 0 0 !important; padding-left:20px; }',
+'.air-chip-more{ margin:10px 0 0 !important;',
+'  font:11px/1.5 var(--font-mono,var(--mono,ui-monospace,Menlo,monospace)); }',
+'.air-chip-more a{ color:var(--brass,#c9a24a); text-decoration:none;',
+'  border-bottom:1px solid rgba(201,162,74,.4); }',
+'.air-chip-more a:hover, .air-chip-more a:focus-visible{ color:var(--brass-bright,#f0d489); }',
+'@media (prefers-reduced-motion:reduce){ .air-chip-tip{ transition:none; } }'
+].join('\n');
+
+function css(d){
+  if(d.getElementById('air-chip-style')) return;
+  var s=d.createElement('style'); s.id='air-chip-style'; s.appendChild(d.createTextNode(CHIP_CSS));
+  (d.head||d.documentElement).appendChild(s);
+}
+function mk(d,n,c,txt){ var e=d.createElement(n); if(c) e.className=c;
+  if(txt!=null) e.appendChild(d.createTextNode(txt)); return e; }
+
+/* the tooltip's LIVE rows — read fresh every time the tip opens, so `now:` is
+   actually now. The page's score core (describe/airMoment) and Calendar/Hours
+   are globals wherever the calendar stack is forged in; a page missing them
+   simply gets the static prose and no register. */
+function fillState(d,card){
+  var st=card.querySelector('.air-chip-state'),fg=card.querySelector('.air-chip-fig');
+  if(!st||!fg) return;
+  try{
+    if(typeof Calendar==='undefined'||typeof Hours==='undefined'||
+       typeof describe!=='function'||typeof airMoment!=='function') throw 0;
+    var mo=airMoment(),ds=describe(Calendar.momentManifest(mo.y,mo.m,mo.d,mo.hour,Hours));
+    while(st.firstChild) st.removeChild(st.firstChild);
+    st.appendChild(mk(d,'span','now','now:'));
+    st.appendChild(d.createTextNode(' '+ds.registerLine));
+    st.appendChild(d.createElement('br'));
+    st.appendChild(d.createTextNode(ds.seasonLine));
+    if(ds.annLine){ st.appendChild(d.createElement('br'));
+      st.appendChild(d.createTextNode(ds.annLine)); }
+    fg.textContent=ds.figureLine;
+    st.style.display=''; fg.style.display='';
+  }catch(e){ st.style.display='none'; fg.style.display='none'; }
+}
+
+function buildCard(d,o){
+  var card=mk(d,'div','air-chip-card'),P=o.prose;
+  card.appendChild(mk(d,'p','air-chip-lede',P.lede));
+  card.appendChild(mk(d,'div','air-chip-state'));
+  card.appendChild(mk(d,'p','air-chip-fig'));
+  card.appendChild(mk(d,'p','air-chip-gloss',P.gloss));
+  var lab=mk(d,'label','air-chip-pref'),row=mk(d,'span','lbl'),
+      cb=d.createElement('input');
+  cb.type='checkbox'; cb.className='air-chip-bg'; cb.checked=bg();
+  cb.addEventListener('change',function(){ A.background(!!cb.checked); });
+  // an open card must not lie while another estate tab flips the same key.
+  try{ WS.onAirBackgroundChange(function(on){ cb.checked=!!on; }); }catch(e){}
+  row.appendChild(cb); row.appendChild(mk(d,'span',null,P.bg));
+  lab.appendChild(row); lab.appendChild(mk(d,'p','air-chip-prefnote',P.bgNote));
+  card.appendChild(lab);
+  if(o.almanacHref){
+    var m=mk(d,'p','air-chip-more'),a=mk(d,'a',null,P.more);
+    a.setAttribute('href',o.almanacHref); m.appendChild(a); card.appendChild(m);
+  }
+  return card;
+}
+
+/* placement: below by default, flipped above when below has no room, and always
+   clamped inside the viewport — the chip may be docked at any edge of any page. */
+function place(wrap,tip){
+  try{
+    tip.style.left='0px'; tip.classList.remove('up');
+    var w=wrap.getBoundingClientRect(),
+        vw=root.innerWidth||d0().documentElement.clientWidth||1024,
+        vh=root.innerHeight||d0().documentElement.clientHeight||768,
+        t=tip.getBoundingClientRect();
+    if(t.height+8>vh-w.bottom && w.top>vh-w.bottom) tip.classList.add('up');
+    var dx=0,L=w.left,R=L+t.width;
+    if(R>vw-8) dx=vw-8-R;
+    if(L+dx<8) dx=8-L;
+    tip.style.left=Math.round(dx)+'px';
+  }catch(e){}
+}
+function d0(){ return document; }
+
+A.mount=function(target,opts){
+  try{
+    if(typeof document==='undefined') return null;
+    var d=document;
+    if(typeof target==='string') target=d.querySelector(target);
+    if(!target) return null;
+    var o=opts||{},P={},k;
+    for(k in A.PROSE) P[k]=A.PROSE[k];
+    if(o.prose) for(k in o.prose) P[k]=o.prose[k];
+    o={id:o.id||'cal-air',labels:o.labels||A.LABELS,almanacHref:o.almanacHref||null,prose:P};
+    css(d);
+    var wrap=mk(d,'span','air-chip'),b=d.createElement('button');
+    b.type='button'; b.id=o.id; b.className='air-chip-btn';
+    b.setAttribute('aria-pressed','false'); b.disabled=true;
+    // the IDENTITY LAW (r14.4): the button's children are EXACTLY [span.g, text],
+    // and the conductor writes CHARACTER DATA into them — never structure.
+    b.appendChild(mk(d,'span','g',o.labels.off[0]));
+    b.appendChild(d.createTextNode(' '+o.labels.off[1]));
+    var tip=mk(d,'div','air-chip-tip'); tip.id=o.id+'-tip';
+    tip.setAttribute('role','tooltip');
+    var card=buildCard(d,o); tip.appendChild(card);
+    b.setAttribute('aria-describedby',tip.id);
+    wrap.appendChild(b); wrap.appendChild(tip);
+    target.appendChild(wrap);
+
+    var open=false;
+    function show(){ if(open) return; open=true;
+      var cb=card.querySelector('.air-chip-bg'); if(cb) cb.checked=bg();
+      fillState(d,card); wrap.classList.add('open'); place(wrap,tip); }
+    function hide(){ if(!open) return; open=false; wrap.classList.remove('open'); }
+    wrap.addEventListener('pointerenter',function(ev){
+      if(ev.pointerType==='touch') return; show(); });
+    wrap.addEventListener('pointerleave',function(ev){
+      if(ev.pointerType==='touch') return; hide(); });
+    // TOUCH never hovers, so the explanation must not depend on a pointer that
+    // does: a tap arms the air AND opens the card that says what just happened.
+    b.addEventListener('pointerdown',function(ev){
+      if(ev.pointerType==='touch') show(); });
+    wrap.addEventListener('focusin',show);
+    wrap.addEventListener('focusout',function(ev){
+      if(!wrap.contains(ev.relatedTarget)) hide(); });
+    wrap.addEventListener('keydown',function(ev){
+      if(ev.key==='Escape'&&open){ hide(); try{ b.blur(); }catch(e){} } });
+    d.addEventListener('pointerdown',function(ev){
+      if(open&&!wrap.contains(ev.target)) hide(); },true);
+
+    chipMode=true;
+    A.attach(b,o.labels);
+    A.chipEl=wrap;
+    return wrap;
+  }catch(e){ return null; }
+};
 
 if(root) root.Air=A;
 // dual-use module guard (forge strips exactly this braced single line)

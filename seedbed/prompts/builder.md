@@ -97,6 +97,26 @@ quietly. So:
   graph is producing output (audio-lens a captured render if useful); never assume — silent failure is the
   whole hazard here.
 
+### The estate's air — an optional chip, yours if you want it
+
+A page with **no audible experience of its own** may, if you like, wear the estate's own air: the quiet hum
+keyed to the hour and the season that the front door and the Almanac already carry. It is one line —
+
+```html
+<!-- forge:include ../tools/calendar/air.js -->   <!-- + calendar.js, and the page's score core -->
+```
+```js
+Air.mount(document.getElementById('wherever-you-want-it'), { almanacHref: '../hours/almanac.html' });
+```
+
+— and you get a dark chip in the same idiom as the self-test chips, placed wherever you put the slot, whose
+hover/focus/tap card carries the whole explanation and the listener's preferences. It brings its own styling
+and its own words; it never plays unasked; it honours the shared mute. Nothing here obliges you: a page that
+already sings should NOT wear it (two beds at once is a mess), and a page whose subject is silence is right
+to stay silent. It exists so that "this room would be nicer with the estate humming in it" costs you one line
+instead of an afternoon. See the front door (`index.src.html`) and `hours/almanac.src.html` for both idioms —
+docked in the chrome, and sat in the topbar beside the proof chip.
+
 ## IN-HOUSE ART — the art foundry (never forage)
 
 **All creative assets — audio AND gfx — are built IN-HOUSE. NEVER forage art from the web** (no stock

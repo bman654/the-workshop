@@ -838,16 +838,28 @@ async function main() {
     // ════════════════════════════════════════════════════════════════════════════
     //  G — THE AIR'S ARM AFFORDANCE (WS4 §5.1/§5.2, DESIGN §8.4 item g). The gate rides
     //  the code it guards: it lands with the affordance so the on-ramp is never
-    //  structurally unguarded between waves. Everything here is the STATIC two-line
-    //  affordance + its conductor wiring; the dressing's own assertions arrive with the
-    //  dressing. Runs LAST because it re-opens the page on its own URLs.
+    //  structurally unguarded between waves. The dressing's own assertions arrive with
+    //  the dressing. Runs LAST because it re-opens the page on its own URLs.
+    //
+    //  RE-AUTHORED with the air CHIP. The affordance used to be a static two-line block
+    //  written into this page by hand — a bare button plus a teaser sub-line — and these
+    //  checks asserted that markup literally. It is now the shared widget air.js mounts
+    //  (Air.mount), so the same rigour is aimed at the new design rather than retired:
+    //  the button's identity law and its rest colours are unchanged law and still checked
+    //  exactly as before; the sub-line's JOB — the explanation must not depend on a hover
+    //  a touch device never performs — is now the tooltip's job, so Gb now proves the
+    //  tooltip carries the whole explanation AND opens on a non-pointer path. Ge is new:
+    //  the courtesy waiver the tooltip now hosts.
     // ════════════════════════════════════════════════════════════════════════════
 
-    // Ga — a PLAIN load: the affordance is structurally whole and at REST. The ♫ glyph's
+    // Ga — a PLAIN load: the chip is structurally whole and at REST. The ♫ glyph's
     // resting colour is the BRASS TOKEN while the label text stays MUTED (§5.1 move 1's
     // split — read against the resolved custom properties, never a hard-coded hex), the
-    // box is never hidden, and the button is ENABLED (the static `disabled` ships on
-    // purpose and air.js's attach() lifts it — "enabled IFF the conductor is wired").
+    // box is never hidden, and the button is ENABLED (the mounted button ships `disabled`
+    // and air.js's attach() lifts it — "enabled IFF the conductor is wired"). The chip's
+    // own new law: it is a MOUNTED widget (the page ships an empty slot, so a chip present
+    // proves Air.mount ran), it wears the dark PILL the estate's self-test chips wear, and
+    // it owns a tooltip that is CLOSED at rest and correctly announced to a screen reader.
     // The settle MUST outlast the glint: on a plain load move 2 fires at 2.5 s and runs
     // 1.2 s, so a shorter wait samples the ANIMATION's brass→brass-bright ramp and reads a
     // colour that is neither token. "Resting" is the steady state the keyframes return to.
@@ -857,58 +869,128 @@ async function main() {
       function tok(n){ var d=document.createElement('span'); d.style.color=cs.getPropertyValue(n).trim();
         document.body.appendChild(d); var v=getComputedStyle(d).color; d.remove(); return v; }
       var box=document.getElementById('cal-airbox'), btn=document.getElementById('cal-air'),
-          g=btn&&btn.querySelector('.g'), sub=document.querySelector('.cal-air-sub');
+          g=btn&&btn.querySelector('.g'), wrap=box&&box.querySelector('.air-chip'),
+          tip=document.getElementById('cal-air-tip'), ts=tip?getComputedStyle(tip):null,
+          bs=btn?getComputedStyle(btn):null;
       return JSON.stringify({
         box:!!box, btn:!!btn, glyph:g?g.textContent:null,
         kids: btn?Array.prototype.map.call(btn.childNodes,function(n){ return n.nodeType===1?n.nodeName.toLowerCase()+'.'+n.className:'#text'; }):null,
         glyphColor:g?getComputedStyle(g).color:null, brass:tok('--brass'),
-        labelColor:btn?getComputedStyle(btn).color:null, muted:tok('--muted'),
+        labelColor:btn?bs.color:null, muted:tok('--muted'),
         boxOpacity:box?getComputedStyle(box).opacity:null,
         pressed:btn?btn.getAttribute('aria-pressed'):null, disabled:btn?btn.disabled:null,
-        subText:sub?(sub.textContent||'').replace(/\\s+/g,' ').trim():null,
-        subLink:!!document.querySelector('.cal-air-sub a[href="hours/almanac.html"]'),
         inDock:!!(box&&box.parentElement&&box.parentElement.id==='brassdock'),
-        aria:btn?btn.getAttribute('aria-label'):null });
+        aria:btn?btn.getAttribute('aria-label'):null,
+        /* the widget's own structure */
+        mounted:!!wrap, btnInWrap:!!(wrap&&btn&&btn.parentElement===wrap),
+        chipClass:btn?btn.className:null, styled:!!document.getElementById('air-chip-style'),
+        radius:bs?bs.borderTopLeftRadius:null, borderW:bs?bs.borderTopWidth:null,
+        label:btn?(btn.textContent||'').replace(/\\s+/g,' ').trim():null,
+        tip:!!tip, tipRole:tip?tip.getAttribute('role'):null,
+        described:btn?btn.getAttribute('aria-describedby'):null,
+        tipVis:ts?ts.visibility:null, tipOp:ts?ts.opacity:null,
+        open:!!(wrap&&wrap.classList.contains('open')) });
     })()`);
-    check('Ga — the arm affordance rests whole (#cal-air in #brassdock, children EXACTLY [span.g, text], the ♫ glyph brass while the label stays muted, #cal-airbox opacity 1, aria-pressed=false, enabled by the conductor)',
+    check('Ga — the air CHIP rests whole (mounted into #cal-airbox in #brassdock, button children EXACTLY [span.g, text], the ♫ glyph brass while the label stays muted, a dark pill carrying its own stylesheet, aria-pressed=false, enabled by the conductor, tooltip present and CLOSED)',
       g0.box === true && g0.btn === true && g0.glyph === '♫' &&
       JSON.stringify(g0.kids) === JSON.stringify(['span.g', '#text']) &&
       g0.glyphColor === g0.brass && g0.labelColor === g0.muted &&
       g0.boxOpacity === '1' && g0.pressed === 'false' && g0.disabled === false &&
-      g0.inDock === true && typeof g0.aria === 'string' && g0.aria.length > 0,
+      g0.inDock === true && typeof g0.aria === 'string' && g0.aria.length > 0 &&
+      g0.mounted === true && g0.btnInWrap === true && g0.chipClass === 'air-chip-btn' &&
+      g0.styled === true && parseFloat(g0.radius) >= 12 && parseFloat(g0.borderW) > 0 &&
+      /give the estate its air/.test(g0.label || '') &&
+      g0.tip === true && g0.tipRole === 'tooltip' && g0.described === 'cal-air-tip' &&
+      g0.tipVis === 'hidden' && g0.tipOp === '0' && g0.open === false,
       '[glyph=' + g0.glyph + ', kids=' + JSON.stringify(g0.kids) + ', glyphColor=' + g0.glyphColor +
-      ' (brass=' + g0.brass + '), label=' + g0.labelColor + ' (muted=' + g0.muted + '), opacity=' + g0.boxOpacity + ', disabled=' + g0.disabled + ']');
+      ' (brass=' + g0.brass + '), label=' + g0.labelColor + ' (muted=' + g0.muted + '), opacity=' + g0.boxOpacity +
+      ', disabled=' + g0.disabled + ', mounted=' + g0.mounted + ', radius=' + g0.radius +
+      ', tip=' + g0.tip + '/' + g0.tipVis + '/' + g0.tipOp + ']');
 
-    // Gb — the touch-surviving teaser (soul r1-M3): the sub-line really says what the
-    // button does AND carries the every-day Almanac link — the on-ramp must not depend on
-    // a hover tooltip, which touch never sees.
-    check('Gb — .cal-air-sub carries the teaser prose + the every-day a[href="hours/almanac.html"] Almanac link (the on-ramp survives touch)',
-      g0.subLink === true && /a quiet hum, keyed to the hour and the season/.test(g0.subText || '') &&
-      /the Almanac tells more/.test(g0.subText || ''),
-      '[link=' + g0.subLink + ', sub="' + (g0.subText || '') + '"]');
+    // Gb — THE CARD CARRIES THE WHOLE EXPLANATION, and a REAL HOVER opens it. Opened with
+    // agent-browser `hover` — a genuine CDP Input.dispatchMouseEvent mouseMoved to the
+    // element's painted centre, not a synthetic dispatch, which is the only kind of hover
+    // that exercises the real pointerenter path. The teaser sub-line the old affordance
+    // carried is gone, so this card must be the whole explanation and not a fragment of
+    // one: the prose, a live `now:` register, the season, today's figure, the
+    // third-and-key gloss, and the every-day Almanac link. Gc proves the NON-hover path.
+    ab('hover', '#cal-air'); ab('wait', '400');
+    const gb = abEval(`(function(){
+      var wrap=document.querySelector('.air-chip'), card=document.querySelector('.air-chip-card'),
+          tip=document.getElementById('cal-air-tip'), ts=tip?getComputedStyle(tip):null,
+          st=document.querySelector('.air-chip-state'), fg=document.querySelector('.air-chip-fig');
+      return JSON.stringify({
+        open:!!(wrap&&wrap.classList.contains('open')),
+        vis:ts?ts.visibility:null, op:ts?ts.opacity:null,
+        text:card?(card.textContent||'').replace(/\\s+/g,' ').trim():null,
+        now:st?(st.textContent||'').replace(/\\s+/g,' ').trim():null,
+        fig:fg?(fg.textContent||'').replace(/\\s+/g,' ').trim():null,
+        link:(function(){ var a=card&&card.querySelector('.air-chip-more a');
+          return a?a.getAttribute('href'):null; })() });
+    })()`);
+    check('Gb — a REAL input-level HOVER opens the chip\'s card, and the card carries the WHOLE explanation — the prose, a live `now:` register, the season, today\'s figure, the bright/dark-third gloss, and the a[href="hours/almanac.html"] link',
+      gb.open === true && gb.vis === 'visible' && gb.op === '1' &&
+      /THE AIR — the estate can hum/.test(gb.text || '') &&
+      /It never plays unasked/.test(gb.text || '') &&
+      /^now:/.test(gb.now || '') && (gb.now || '').length > 20 &&
+      /today’s figure is|today's figure is/.test(gb.fig || '') &&
+      /The bright third is the major third/.test(gb.text || '') &&
+      gb.link === 'hours/almanac.html',
+      '[open=' + gb.open + '/' + gb.vis + '/' + gb.op + ', now="' + (gb.now || '') +
+      '", fig="' + (gb.fig || '') + '", link=' + gb.link + ']');
 
-    // Gc — a REAL input click ARMS: aria-pressed toggles, the glyph turns ♪, and the click
-    // NEVER navigates or descends (the affordance is fixed HTML outside the SVG, so it can
-    // steal no map hit-test). The box stays fully visible — opacity 1 at ALL times.
+    // Gc — a REAL input click ARMS, and — THE TOUCH-SURVIVAL LAW (soul r1-M3, re-aimed) —
+    // opens the same card WITHOUT ANY HOVER. The old affordance discharged that law with a
+    // static sub-line, because a touch device never hovers and a tooltip-only explanation
+    // would be no explanation at all for it. The chip discharges it because a tap both
+    // arms the air and opens the card that says what just happened: one gesture, both
+    // outcomes. The pointer is parked FAR from the chip first, so nothing here can be a
+    // leftover of Gb's hover — the card must be re-opened by the click alone.
+    //
+    // Also: aria-pressed toggles, the glyph turns ♪, the label and the accessible name
+    // become the PLAYING row, and the click NEVER navigates or descends (the chip is fixed
+    // HTML outside the SVG, so it can steal no map hit-test). The box stays fully visible —
+    // opacity 1 at ALL times. The identity law is the load-bearing one: the conductor may
+    // write CHARACTER DATA into the glyph span and the text node, never structure, or the
+    // glint animation loses the element it animates.
     const hrefBefore = abEval(`JSON.stringify({ href: location.href })`).href;
+    ab('mouse', 'move', '700', '80'); ab('wait', '350');
+    const gcShut = abEval(`(function(){ var w=document.querySelector('.air-chip');
+      return JSON.stringify({ open:!!(w&&w.classList.contains('open')) }); })()`);
+    check('Gc(pre) — moving the real pointer AWAY closes the card again (the hover state is honest, not a one-way latch)',
+      gcShut.open === false, '[open=' + gcShut.open + ']');
     realClick('#cal-air');
     ab('wait', '900');
     const g1 = abEval(`(function(){
       var btn=document.getElementById('cal-air'), box=document.getElementById('cal-airbox'),
-          g=btn&&btn.querySelector('.g'), vp=document.getElementById('viewport');
+          g=btn&&btn.querySelector('.g'), vp=document.getElementById('viewport'),
+          wrap=box&&box.querySelector('.air-chip');
       return JSON.stringify({
         pressed:btn?btn.getAttribute('aria-pressed'):null, glyph:g?g.textContent:null,
         glyphAlive:!!(g&&g.parentElement===btn),
         kids: btn?Array.prototype.map.call(btn.childNodes,function(n){ return n.nodeType===1?n.nodeName.toLowerCase()+'.'+n.className:'#text'; }):null,
+        label:btn?(btn.textContent||'').replace(/\\s+/g,' ').trim():null,
+        aria:btn?btn.getAttribute('aria-label'):null,
+        stillMounted:!!(wrap&&document.getElementById('cal-air-tip')),
+        opened:!!(wrap&&wrap.classList.contains('open')),
+        cardText:(function(){ var c=document.querySelector('.air-chip-card');
+          return c?(c.textContent||'').replace(/\\s+/g,' ').trim():null; })(),
         boxOpacity:box?getComputedStyle(box).opacity:null,
         href:location.href, lod:vp?(/lod-estate/.test(vp.getAttribute('class')||'')?'estate':'other'):null });
     })()`);
-    check('Gc — a REAL click on #cal-air toggles aria-pressed false→true and re-labels to ♪ WITHOUT destroying the glyph span (the identity law: character data only), never navigates, never descends, and #cal-airbox stays opacity 1',
+    check('Gc — a REAL click on #cal-air toggles aria-pressed false→true, re-labels to ♪ + the PLAYING row (text and accessible name) WITHOUT destroying the glyph span (the identity law: character data only), leaves the chip and its tooltip mounted, never navigates, never descends, and #cal-airbox stays opacity 1',
       g1.pressed === 'true' && g1.glyph === '♪' && g1.glyphAlive === true &&
       JSON.stringify(g1.kids) === JSON.stringify(['span.g', '#text']) &&
+      /the air plays/.test(g1.label || '') && /the air is playing/.test(g1.aria || '') &&
+      g1.stillMounted === true &&
       g1.boxOpacity === '1' && g1.href === hrefBefore && g1.lod === 'estate',
       '[pressed=' + g1.pressed + ', glyph=' + g1.glyph + ', kids=' + JSON.stringify(g1.kids) +
-      ', opacity=' + g1.boxOpacity + ', lod=' + g1.lod + ', navigated=' + (g1.href !== hrefBefore) + ']');
+      ', label="' + (g1.label || '') + '", opacity=' + g1.boxOpacity + ', lod=' + g1.lod +
+      ', navigated=' + (g1.href !== hrefBefore) + ']');
+    check('Gc(touch-survival) — that SAME click, with the pointer parked far away and no hover anywhere in it, ALSO opened the card carrying the full explanation: a tap arms the air and explains itself in one gesture, so the on-ramp never depends on a hover a touch device cannot perform',
+      g1.opened === true && /THE AIR — the estate can hum/.test(g1.cardText || '') &&
+      /The bright third is the major third/.test(g1.cardText || ''),
+      '[opened=' + g1.opened + ', card="' + (g1.cardText || '').slice(0, 90) + '…"]');
 
     // Gd — THE CANON SEES PURE REST: under ?hours=allon no glint arm is installed at all,
     // so the `glint` class never appears — polled ACROSS the whole settle wait (the primary
@@ -924,6 +1006,66 @@ async function main() {
     }
     check('Gd — with ?hours=allon the `glint` class NEVER appears through the settle wait (no arm is installed under the canon pin — canon screenshots see pure rest)',
       glintSeen === false, '[polled ' + polls + '× across ~' + (polls * 0.5) + 's, glint seen=' + glintSeen + ']');
+
+    // Ge — THE COURTESY WAIVER. A hidden tab stills the air; the waiver is the visitor
+    // asking us to keep humming while they work elsewhere. Three things must hold, and
+    // each is a way this could quietly go wrong: it must be OPT-IN (default off, or the
+    // estate follows people into other windows uninvited); it must persist through WS's
+    // ONE shared ws:pref key rather than a private localStorage touch (or a visitor would
+    // have to set it per page); and a flip must NOTIFY subscribers — including on another
+    // estate tab — because several tabs open at once is the entire use case. The checkbox
+    // is driven by a REAL input click on the rendered control, never a synthetic change.
+    ab('open', URL); ab('wait', '--load', 'networkidle'); ab('wait', '2500');
+    abEval(`(function(){ try{ localStorage.removeItem('ws:pref:air-bg'); }catch(e){} return JSON.stringify({}); })()`);
+    ab('hover', '#cal-air'); ab('wait', '350');
+    const ge0 = abEval(`(function(){
+      var cb=document.querySelector('.air-chip-bg');
+      return JSON.stringify({ present:!!cb, checked:cb?!!cb.checked:null,
+        stored:(function(){ try{ return localStorage.getItem('ws:pref:air-bg'); }catch(e){ return 'ERR'; } })(),
+        ws:(typeof WS!=='undefined'&&WS.airBackground)?WS.airBackground():null,
+        api:(typeof WS!=='undefined')&&typeof WS.setAirBackground==='function'&&typeof WS.onAirBackgroundChange==='function',
+        note:(function(){ var p=document.querySelector('.air-chip-pref');
+          return p?(p.textContent||'').replace(/\\s+/g,' ').trim():null; })() });
+    })()`);
+    // subscribe BEFORE the click, then click the real control and read what fired.
+    abEval(`(function(){ window.__bgSeen=[];
+      try{ WS.onAirBackgroundChange(function(v){ window.__bgSeen.push(v); }); }catch(e){}
+      return JSON.stringify({}); })()`);
+    realClick('.air-chip-bg');
+    ab('wait', '400');
+    const ge1 = abEval(`(function(){
+      var cb=document.querySelector('.air-chip-bg');
+      return JSON.stringify({ checked:cb?!!cb.checked:null,
+        stored:(function(){ try{ return localStorage.getItem('ws:pref:air-bg'); }catch(e){ return 'ERR'; } })(),
+        ws:(typeof WS!=='undefined'&&WS.airBackground)?WS.airBackground():null,
+        fired:window.__bgSeen||null,
+        air:(typeof Air!=='undefined'&&Air.background)?Air.background():null });
+    })()`);
+    // the CROSS-TAB path: a `storage` event is what another estate tab's write looks like
+    // from in here, and it must drive the same subscribers (this is why the listener in
+    // ws.js is load-bearing, not boilerplate).
+    const ge2 = abEval(`(function(){
+      window.__bgSeen=[];
+      try{ localStorage.setItem('ws:pref:air-bg','0'); }catch(e){}
+      var ev;
+      try{ ev=new StorageEvent('storage',{key:'ws:pref:air-bg',oldValue:'1',newValue:'0'}); }
+      catch(e){ ev=document.createEvent('Event'); ev.initEvent('storage',false,false); ev.key='ws:pref:air-bg'; }
+      window.dispatchEvent(ev);
+      var cb=document.querySelector('.air-chip-bg');
+      return JSON.stringify({ fired:window.__bgSeen||null, checked:cb?!!cb.checked:null,
+        ws:(typeof WS!=='undefined'&&WS.airBackground)?WS.airBackground():null });
+    })()`);
+    check('Ge — the courtesy waiver is OPT-IN, lives in WS\'s ONE shared ws:pref:air-bg key, and NOTIFIES: it rests unchecked with nothing stored; a REAL click on the tooltip\'s control writes \'1\' through WS and fires subscribers; and a cross-tab `storage` write drives the same subscribers AND re-checks the rendered box, so several estate tabs never disagree',
+      ge0.present === true && ge0.checked === false && ge0.stored === null &&
+      ge0.ws === false && ge0.api === true && /keep the air playing/.test(ge0.note || '') &&
+      ge1.checked === true && ge1.stored === '1' && ge1.ws === true &&
+      Array.isArray(ge1.fired) && ge1.fired.length >= 1 && ge1.fired[ge1.fired.length - 1] === true &&
+      ge1.air === true &&
+      Array.isArray(ge2.fired) && ge2.fired.length >= 1 && ge2.fired[ge2.fired.length - 1] === false &&
+      ge2.checked === false && ge2.ws === false,
+      '[rest: present=' + ge0.present + ' checked=' + ge0.checked + ' stored=' + ge0.stored + ' api=' + ge0.api +
+      ' | click: checked=' + ge1.checked + ' stored=' + ge1.stored + ' fired=' + JSON.stringify(ge1.fired) +
+      ' | cross-tab: fired=' + JSON.stringify(ge2.fired) + ' checked=' + ge2.checked + ']');
 
     // ════════════════════════════════════════════════════════════════════════════
     //  THE SEASONAL DRESSING (WS4 §2, DESIGN §8.4 items a–e, g-wash, h–l — r17 DRAWN TREES

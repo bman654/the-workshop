@@ -217,9 +217,12 @@ const TABLE = [
 const AIR_LEVEL = A.AIR_LEVEL;
 ok(AIR_LEVEL === 0.28, '(a) AIR_LEVEL is the ratified 0.28 master (§5.5 / SCORE §5.1)', 'got ' + AIR_LEVEL);
 
-/* every row evaluated, and the enumeration itself proven complete */
+/* every row evaluated, and the enumeration itself proven complete. The 32 rows are
+   the COURTESY-STANDING half — background:false, the default — and they are the law
+   verbatim as it always was: the waiver is opt-in, so its absence must change nothing. */
 const rows = TABLE.map(function (r) {
-  const inputs = { armed: !!r[0], muted: !!r[1], visible: !!r[2], ctxRunning: !!r[3], everGesture: !!r[4] };
+  const inputs = { armed: !!r[0], muted: !!r[1], visible: !!r[2], ctxRunning: !!r[3],
+                   everGesture: !!r[4], background: false };
   const c = call(inputs);
   return {
     inputs: inputs,
@@ -250,6 +253,70 @@ const rows = TABLE.map(function (r) {
   });
 }
 
+/* ── (a2) THE COURTESY WAIVER — the sixth axis, `background` ──────────────────
+   A hidden tab stills the air, because an estate that follows you into another
+   window is rude. The waiver is the visitor asking us to keep humming while they
+   work elsewhere, so the law it adds is exactly this and nothing more:
+
+     with background TRUE, a hidden tab behaves EXACTLY as the visible tab would;
+     with background FALSE OR ABSENT, the policy is untouched.
+
+   That is stated here as a row-for-row equivalence over the full 2^5 rather than a
+   hand-transcribed second table: transcription could drift into agreeing with
+   whatever the code happens to do, while the equivalence pins the meaning — the
+   waiver may only ever move the `visible` gate, never soften mute, arm, gesture or
+   ctxRunning. The two anchors below are spelled out literally so the sweep cannot
+   pass vacuously. */
+{
+  const bgRows = TABLE.map(function (r) {
+    const base = { armed: !!r[0], muted: !!r[1], visible: !!r[2],
+                   ctxRunning: !!r[3], everGesture: !!r[4] };
+    const on = call(Object.assign({}, base, { background: true }));
+    const seen = call(Object.assign({}, base, { visible: true, background: false }));
+    const off = call(Object.assign({}, base, { background: false }));
+    const absent = call(base);                       // no `background` key AT ALL
+    return { base: base, on: on, seen: seen, off: off, absent: absent,
+             key: '' + r[0] + r[1] + r[2] + r[3] + r[4] };
+  });
+  ok(bgRows.length === 32, '(a2) the waiver is swept across the COMPLETE 2^5 of the other five inputs');
+
+  ok(bgRows.every(function (r) { return r.on.ok && r.seen.ok && r.off.ok && r.absent.ok; }),
+    '(a2) the policy stays TOTAL on the sixth axis — no input combination throws');
+
+  ok(bgRows.every(function (r) {
+    return JSON.stringify(r.absent.val) === JSON.stringify(r.off.val);
+  }), '(a2) an ABSENT `background` is identical to background:false on all 32 rows — the waiver is OPT-IN, and a page that never heard of it keeps the old policy exactly (this is what makes the 32-row table above still the whole law for everyone else)');
+
+  ok(bgRows.every(function (r) {
+    return JSON.stringify(r.on.val) === JSON.stringify(r.seen.val);
+  }), '(a2) with the waiver TRUE every row equals its VISIBLE twin — a hidden tab behaves exactly as a watched one, and the waiver moves the `visible` gate and nothing else',
+    bgRows.filter(function (r) { return JSON.stringify(r.on.val) !== JSON.stringify(r.seen.val); })
+      .map(function (r) { return r.key + ': on=' + JSON.stringify(r.on.val) + ' seen=' + JSON.stringify(r.seen.val); }).join(' | '));
+
+  ok(bgRows.filter(function (r) { return r.base.visible; }).every(function (r) {
+    return JSON.stringify(r.on.val) === JSON.stringify(r.off.val);
+  }), '(a2) on a VISIBLE tab the waiver is inert — it can only ever speak about hidden tabs');
+
+  // the two literal anchors: the one row the waiver rescues, and the mute it must not.
+  const rescued = call({ armed: true, muted: false, visible: false, ctxRunning: true,
+                         everGesture: true, background: true }).val;
+  ok(rescued && rescued.wantCtx === true && rescued.schedulerOn === true
+    && rescued.masterLevel === AIR_LEVEL && rescued.held === false,
+    '(a2) ANCHOR — armed/unmuted/HIDDEN/running/gesture + waiver SOUNDS at AIR_LEVEL (this is the whole feature: Brandon listening while he works in another tab)',
+    'got ' + JSON.stringify(rescued));
+  const stillMuted = call({ armed: true, muted: true, visible: false, ctxRunning: true,
+                            everGesture: true, background: true }).val;
+  ok(stillMuted && stillMuted.schedulerOn === false && stillMuted.masterLevel === 0,
+    '(a2) ANCHOR — the waiver NEVER overrides the estate-wide mute: hidden + muted + waiver is still silent',
+    'got ' + JSON.stringify(stillMuted));
+  const noGesture = call({ armed: true, muted: false, visible: false, ctxRunning: true,
+                           everGesture: false, background: true }).val;
+  ok(noGesture && noGesture.wantCtx === false && noGesture.schedulerOn === false
+    && noGesture.masterLevel === 0,
+    '(a2) ANCHOR — the waiver NEVER manufactures a gesture: no autoplay into a hidden tab on a fresh load',
+    'got ' + JSON.stringify(noGesture));
+}
+
 /* ── (b) the named invariants, each quantified over the whole table ── */
 {
   ok(rows.filter(function (r) { return !r.inputs.armed; }).every(function (r) { return !r.got.wantCtx; }),
@@ -264,7 +331,7 @@ const rows = TABLE.map(function (r) {
 
   ok(rows.filter(function (r) { return !r.inputs.visible; }).every(function (r) {
     return !r.got.schedulerOn && r.got.masterLevel === 0;
-  }), '(b) hidden ⇒ scheduler off AND masterLevel 0 for EVERY value of the other four inputs — a hidden-tab unmute can never sound (r4-M3)');
+  }), '(b) hidden ⇒ scheduler off AND masterLevel 0 for EVERY value of the other four inputs, THE COURTESY STANDING — a hidden-tab unmute can never sound unless the visitor has waived the courtesy on purpose (r4-M3; the waiver is (a2)\'s axis)');
 
   ok(rows.filter(function (r) { return !r.inputs.ctxRunning; }).every(function (r) {
     return !r.got.schedulerOn;
@@ -277,8 +344,26 @@ const rows = TABLE.map(function (r) {
 
   const sounding = rows.filter(function (r) { return r.got.masterLevel > 0; });
   ok(sounding.length === 1 && sounding[0].key === '10111',
-    '(b) EXACTLY ONE of the 32 rows sounds: armed + unmuted + visible + running + gesture',
+    '(b) EXACTLY ONE of the 32 courtesy-standing rows sounds: armed + unmuted + visible + running + gesture',
     'sounding rows: ' + sounding.map(function (r) { return r.key; }).join(' '));
+  // and across the FULL 2^6, exactly three: that one, plus its waived pair (hidden and
+  // visible) — the waiver opens exactly one new door and no other.
+  {
+    let all = [];
+    for (let b = 0; b < 64; b++) {
+      const i = { armed: !!(b & 32), muted: !!(b & 16), visible: !!(b & 8),
+                  ctxRunning: !!(b & 4), everGesture: !!(b & 2), background: !!(b & 1) };
+      const c = call(i);
+      if (c.ok && c.val.masterLevel > 0)
+        all.push([i.armed, i.muted, i.visible, i.ctxRunning, i.everGesture, i.background]
+          .map(function (v) { return v ? 1 : 0; }).join(''));
+    }
+    // in armed·muted·visible·ctxRunning·everGesture·background order: the waived HIDDEN
+    // row, the classic visible row, and the visible row with the waiver merely set.
+    ok(all.length === 3 && all.slice().sort().join(' ') === '100111 101110 101111',
+      '(b) across the FULL 2^6 exactly THREE rows sound — armed/unmuted/running/gesture, visible either way once waived — so the sixth axis opens exactly one new door and widens nothing else',
+      'sounding rows: ' + all.join(' '));
+  }
   ok(rows.every(function (r) { return r.got.schedulerOn === (r.got.masterLevel > 0); }),
     '(b) scheduler and master agree on every row — the pump never runs into a silent master, and never the reverse');
 }
@@ -300,11 +385,14 @@ const rows = TABLE.map(function (r) {
   const rd = /\bs\.([A-Za-z_$][\w$]*)/g;
   let m;
   while ((m = rd.exec(region))) reads.add(m[1]);
-  const FIVE = ['armed', 'ctxRunning', 'everGesture', 'muted', 'visible'];
-  ok(FIVE.every(function (k) { return reads.has(k); }),
-    '(c) the policy reads all five named inputs', 'reads ' + [...reads].sort().join(','));
-  ok([...reads].sort().join(',') === FIVE.join(','),
-    '(c) the policy reads EXACTLY the five named inputs and no more — the r6 layers (wind, pads) add NO policy input (r6-r3)',
+  // SIX, not five: `background` is the courtesy waiver (a2). The r6 layers (wind, pads)
+  // still add NO policy input — this axis is the VISITOR's, and it is the only one the
+  // policy has gained. The list stays exhaustive so the next layer cannot smuggle one in.
+  const SIX = ['armed', 'background', 'ctxRunning', 'everGesture', 'muted', 'visible'];
+  ok(SIX.every(function (k) { return reads.has(k); }),
+    '(c) the policy reads all six named inputs', 'reads ' + [...reads].sort().join(','));
+  ok([...reads].sort().join(',') === SIX.join(','),
+    '(c) the policy reads EXACTLY the six named inputs and no more — the r6 layers (wind, pads) add NO policy input (r6-r3), and the courtesy waiver added exactly one',
     'reads ' + [...reads].sort().join(','));
 
   const out = call({ armed: true, muted: false, visible: true, ctxRunning: true, everGesture: true }).val || {};

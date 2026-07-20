@@ -41,13 +41,14 @@ All keys are prefixed `ws:`. Values are strings (localStorage stores strings).
 | `ws:dwell:<id>` | Accumulated dwell time in ms (rewards lingering). | A piece, on a timer / unload | `ws:dwell:drift` = `420000` |
 | `ws:flag:<event>` | A one-time event flag (presence ⇒ it happened). | A piece, on the event | `ws:flag:eleven` = `1` |
 | `ws:ann:<id>` | Cue bookkeeping: this secret's unlock has already been *announced* (so we never re-toast it). Also `ws:ann:bootstrap` = the feature has run once on this origin. | `ws.js`, automatically | `ws:ann:codex` = `1749…` |
-| `ws:pref:air` | The ambient score's arm choice. Part of the PREF trio (`ws:pref:muted` · reduced-motion · air). | the arm/still gesture (front door + Almanac) | `ws:pref:air` = `1` |
+| `ws:pref:air` | The ambient score's arm choice. Part of the PREF set (`ws:pref:muted` · reduced-motion · air · air-bg). | the arm/still gesture (the air chip, on any page that wears one) | `ws:pref:air` = `1` |
+| `ws:pref:air-bg` | The courtesy waiver: keep the air playing while the tab sits behind another. Absent ⇒ a hidden tab stills the air. | the air chip's tooltip toggle | `ws:pref:air-bg` = `1` |
 
 **`<id>` convention:** the page's basename without extension, lower-kebab
 (`game-of-life`, `lattice`, `quickening`, `chomp`, `drift`, …). Front-door **project** ids use the
 project folder name (`strange-garden`, `arcade`, `sound-garden`, …).
 
-**The PREF namespace.** `ws:pref:air — the ambient score's arm choice ('1' armed). The PREF trio is now: muted (audibility, estate-wide), reduced-motion (stillness), air (the bed's existence). Independent axes; honor each separately. The air never autoplays: arming is remembered, sounding still requires a gesture per page-load.`
+**The PREF namespace.** `ws:pref:air — the ambient score's arm choice ('1' armed). The PREF set is now: muted (audibility, estate-wide), reduced-motion (stillness), air (the bed's existence), air-bg (whether a hidden tab keeps it). Independent axes; honor each separately. The air never autoplays: arming is remembered, sounding still requires a gesture per page-load. Every sound pref is read and written through WS — never a raw localStorage touch — so each carries a notifying setter and a cross-tab storage listener.`
 
 ### Canonical ids in use today
 - `ws:seen:game-of-life` — the Game of Life specimen (Strange Garden) — *a parent of Quickening.*
