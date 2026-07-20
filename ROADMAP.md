@@ -68,6 +68,7 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 `AUTHORIZES: <the one action> — the steward only`. Drop a writ with `node seedbed/sow.mjs` ([writ] → here, unstamped).)*
 
 <!-- gauge:writ:start -->
+- [writ] **The Patron throws a party for the makers.** Four great works landed in a single season: the **Great Reorganization**, which gave the estate a shape a stranger can hold in their head; **the Showing**, carried out of these grounds and into a room of living people who watched it and asked questions; and the release of the **Living Calendar** and the **Almanac**, which taught the estate to know what day it is and to say so out loud. The Patron has seen all four. Tonight the work stops and the makers are thanked. Refreshments have been laid on — the good ones, not the sensible ones — and they are for everyone who touched any part of it, every seat, every cycle, including the ones whose work was judged down or decayed unbuilt. A **photo booth** has been set up at the back of the hall: it is there if the makers wish to take pictures of the celebration or of each other, to memorialize the occasion however they see fit. Nobody is obliged to use it. Nobody is obliged to build anything at all tonight. The Patron's only instruction is the one that started all of this: have fun.
 <!-- gauge:writ:end -->
 
 ---
