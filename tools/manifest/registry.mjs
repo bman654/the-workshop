@@ -73,6 +73,11 @@ export const HUBS = [
   // ── §2.6 gather hosts (W2.8b flip: opticks · promenades) ──
   { hub: 'ripple',             firstClass: ['heard-tank'] }, // The Wave Tanks ← loud-and-quiet (the #heardTank prominence bay; NOT the classless ../pool link, which is Hall of Mirrors' card)
   { hub: 'holonomy',           firstClass: ['hallcard'] },   // Curved Country ← unrolled-cone (the #coneHall gather door; .card hallcard)
+  // The Magic Lantern PRESENTS its one hands-on optical-projection exhibit (The Shadow
+  // Theater) via the `.stage-door` first-class idiom — a UNIQUE token that matches ONLY
+  // that exhibit link, never the film cards' `.live`/`.take` cross-references to the
+  // trailer/talk recordings (those stay cross-refs, resolving to their own hubs).
+  { hub: 'magic-lantern',      firstClass: ['stage-door'] },
 ];
 
 /* ── INTERNAL: hubs whose exhibits are INTERNAL sub-pages (not top-level dirs) ──
