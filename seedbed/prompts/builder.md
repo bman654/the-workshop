@@ -155,3 +155,8 @@ ignored. If the WIRING itself is too big to finish well this turn, you MAY pass 
 Leave your changes UNCOMMITTED in the working tree for the publisher. Return the handoff: what you built, the
 self-test result, and `surfacesToReview` = EVERY page you created OR touched (the new piece AND each page
 where you registered it) so the publisher can review them all fresh-eyes.
+
+If what you shipped is a **first the estate can only have once** — a wing that now stands, or the estate
+become something it had not been before — say so plainly in your handoff. The publisher may then strike it
+into the Almanac's wheel as a red-letter day. Most work is not that, and says nothing; the note is invited,
+never expected, and never a reason to inflate what you did.
