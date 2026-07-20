@@ -80,10 +80,22 @@ const PIECES_FLOOR = 425;   // §6.4/§6.5 catalog-completeness sweeps: risen to
                             // RISES with future enrolments; never hand-inflate past the honest value
                             // (a red gate must mean regression, not growth).
 
+/* A NESTED CHECKOUT — a git worktree or clone inside the estate. Its copy of every page
+   is NOT part of this estate and must never enter the universe: a worktree at the repo
+   root registers as a bogus district and lands all ~455 of its pages as UNCLAIMED,
+   failing the gate on work that does not exist. Dot-dirs are already skipped below, so
+   `.claude/worktrees/*` was covered by accident — this covers a worktree made ANYWHERE.
+   Every checkout carries a `.git` entry at its root: a directory in a clone, a FILE in a
+   worktree — so test existence, never isDirectory(). */
+function isNestedCheckout(abs) {
+  try { return existsSync(join(abs, '.git')); } catch { return false; }
+}
+
 /* ── the on-disk top-level dir universe ─────────────────────────────────────── */
 function topLevelDirs() {
   return readdirSync(ROOT)
-    .filter((d) => { try { return statSync(join(ROOT, d)).isDirectory() && !d.startsWith('.'); } catch { return false; } })
+    .filter((d) => { try { return statSync(join(ROOT, d)).isDirectory() && !d.startsWith('.')
+                             && !isNestedCheckout(join(ROOT, d)); } catch { return false; } })
     .sort();
 }
 
@@ -99,7 +111,7 @@ function walkHtmlPages() {
     for (const ent of entries) {
       if (ent.name.startsWith('.')) continue;
       const r = rel ? rel + '/' + ent.name : ent.name;
-      if (ent.isDirectory()) { if (!skip.has(ent.name)) walk(r); }
+      if (ent.isDirectory()) { if (!skip.has(ent.name) && !isNestedCheckout(join(ROOT, r))) walk(r); }
       else if (ent.isFile() && ent.name.endsWith('.html') && !ent.name.endsWith('.src.html')) out.push(r);
     }
   };

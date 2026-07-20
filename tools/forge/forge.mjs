@@ -74,7 +74,10 @@ const MIME = Object.freeze({
 const HARD_BYTES = 24 * 1024 * 1024;   // 24 MiB encoded → ALWAYS fatal
 const WARN_BYTES = 4 * 1024 * 1024;    // 4 MiB encoded (~3 MiB raw) → warn / --strict-fatal
 
-const SKIP_DIRS = new Set(['.git', 'node_modules']);
+/* `.claude` holds the estate's worktrees (.claude/worktrees/*) and agent scratch — never
+   forge territory. Nested checkouts are ALSO caught structurally by isNestedCheckout(),
+   so a worktree made anywhere else is skipped too; this name is the cheap first guard. */
+const SKIP_DIRS = new Set(['.git', 'node_modules', '.claude']);
 
 /* A forge-level error we present cleanly (no raw stack at the user). */
 class ForgeError extends Error {}
@@ -324,7 +327,20 @@ function outPathFor(srcFile) {
   return srcFile.replace(/\.src\.html$/, '.html');
 }
 
-/* Recursively find every *.src.html under root (skipping .git, node_modules). */
+/* A NESTED CHECKOUT — a git worktree or clone living inside the tree. Its own copy of
+   every .src.html must never join this run: in --check it inflates the count with
+   duplicates (the estate's own worktrees made `--all` report 795 = 159 x 5), and in
+   BUILD mode it is destructive — forge would write .html forged from THIS branch's
+   sources into a sibling worktree sitting on a DIFFERENT branch, silently dirtying it.
+   Detected by the `.git` entry every checkout carries at its root: a directory in a
+   clone, a FILE in a worktree — so test existence, never isDirectory(). */
+function isNestedCheckout(dir) {
+  try { return fs.existsSync(path.join(dir, '.git')); }
+  catch { return false; }
+}
+
+/* Recursively find every *.src.html under root (skipping .git, node_modules, .claude,
+   and any nested checkout wherever it sits). */
 function findSrcFiles(root) {
   const out = [];
   const walk = (dir) => {
@@ -334,7 +350,9 @@ function findSrcFiles(root) {
     for (const ent of entries) {
       if (ent.isDirectory()) {
         if (SKIP_DIRS.has(ent.name)) continue;
-        walk(path.join(dir, ent.name));
+        const sub = path.join(dir, ent.name);
+        if (isNestedCheckout(sub)) continue;   // a worktree/clone owns its own forge
+        walk(sub);
       } else if (ent.isFile() && ent.name.endsWith('.src.html')) {
         out.push(path.join(dir, ent.name));
       }
