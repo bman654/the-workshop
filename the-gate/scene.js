@@ -1111,7 +1111,8 @@
     'strange-garden-rep': function (g, baseX, baseY, pick) { drawRepStrangeGarden(g, baseX, baseY, pick); },
     'cartographer-rep': function (g, baseX, baseY, pick) { drawRepCartographer(g, baseX, baseY, pick); },
     'arcade-rep': function (g, baseX, baseY, pick) { drawRepArcade(g, baseX, baseY, pick); },
-    'verse-rep': function (g, baseX, baseY, pick) { drawRepVerse(g, baseX, baseY, pick); }
+    'verse-rep': function (g, baseX, baseY, pick) { drawRepVerse(g, baseX, baseY, pick); },
+    'daedalus-rep': function (g, baseX, baseY, pick) { drawRepDaedalus(g, baseX, baseY, pick); }
   };
 
   function drawRoomRep(parent) {
@@ -4071,6 +4072,300 @@
     }
 
     S.refs.verseRep = g;
+  }
+
+  function drawRepDaedalus(parent, cx, baseY, pick) {
+    // The Hedge Maze — a formal boxwood parterre seen strictly HEAD-ON (front
+    // elevation). TAKE 1 — "the framed portal": a symmetric stepped skyline of
+    // clipped hedge masses (a tall central tunnel-block flanked by two shorter
+    // outer blocks and two low outer nubs → a squat mound that steps DOWN from
+    // the centre), an arched dark MAZE MOUTH cut into the tall centre block, and
+    // Ariadne's teal CLEW spilling from the throat, draping over the plinth lip,
+    // and coiling into a luminous pool on the ground. Faceted clipped masses
+    // (crisp topiary planes, sparse architectural stipple — never a fuzzy blob),
+    // lit from above, brass stroke + brass-bright top sheen. The clew + the mouth
+    // interior are the one bright accent (rep.glow1): they BLAZE at night and
+    // RECEDE to a quiet cool line by day. A slow teal glimmer travels the clew
+    // (the labyrinth solving itself), reduced-motion-safe.
+    var g = group('daedalus-rep', parent);
+    var BODY = 'var(--rep-swatch1-ref, #3a7a4a)';       // swappable LIT boxwood face
+    var SHADE = 'var(--rep-swatch2-ref, #2c5c3b)';      // swappable shadow green / recesses / right faces
+    var DARK = 'rgba(11,14,22,.85)';                    // estate brass dark body
+    var BRASS = 'var(--brass-stroke-ref, #9c8350)';     // brass edge stroke
+    var BRI = 'var(--brass-bright-ref, #cdb375)';       // brass-bright TOP sheen (lit from above)
+    var GLOW = 'var(--rep-glow1-ref, #5fe0c4)';         // EMISSIVE teal clew + mouth interior
+    var fx = function (n) { return (Math.round(n * 10) / 10); };
+    // a small deterministic PRNG so the leaf stipple is stable across renders
+    var seed = 1337;
+    var rnd = function () { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+    // ── geometry: LOW + WIDE mound, bottom-aligned at baseY, centred on cx ──
+    var halfW = 75;                                     // hedge/plinth half-width → 150 wide
+    var L = cx - halfW, R = cx + halfW;                 // x155 .. x305
+    var plinthH = 18;                                   // low masonry base
+    var plinthTopY = baseY - plinthH;                   // y702 — the hedges seat here
+    // stepped skyline tops (descend outward from the tall tunnel-block)
+    var centreTopY = baseY - 118;                       // y602 — tallest, holds the mouth arch
+    var outerTopY = baseY - 82;                         // y638
+    var nubTopY = baseY - 58;                           // y662 — low buttress nubs
+    // clipped-hedge masses, shoulder to shoulder across the mound width
+    var blocks = [
+      { x0: 155, x1: 168, top: nubTopY,   shade: 4 },   // left nub
+      { x0: 168, x1: 194, top: outerTopY, shade: 5 },   // left outer
+      { x0: 194, x1: 266, top: centreTopY, shade: 6 },  // central tunnel-block
+      { x0: 266, x1: 292, top: outerTopY, shade: 5 },   // right outer
+      { x0: 292, x1: 305, top: nubTopY,   shade: 4 }    // right nub
+    ];
+    // the maze mouth (cut into the central block)
+    var mCx = cx, mW = 28, mHalf = mW / 2;
+    var mL = mCx - mHalf, mR = mCx + mHalf;             // x216 .. x244
+    var mFloorY = plinthTopY;                           // mouth floor = plinth top
+    var mSpringY = baseY - 74;                          // arch springs here
+    var mApexY = baseY - 96;                            // arch crown (below the hedge crest)
+
+    // private soft-feather filter for the teal clew + mouth glow (unique id)
+    var defs = parent.ownerSVGElement && parent.ownerSVGElement.querySelector('defs');
+    if (defs && !defs.querySelector('#daedalus-clew-glow')) {
+      var fG = el('filter', { id: 'daedalus-clew-glow', x: '-120%', y: '-120%', width: '340%', height: '340%' }, defs);
+      el('feGaussianBlur', { 'in': 'SourceGraphic', stdDeviation: '3' }, fG);
+    }
+
+    // ── soft contact shadow so the mound sits ON the grass (light from above) ──
+    el('ellipse', { cx: cx + 5, cy: baseY + 2, rx: halfW * 0.98, ry: 8,
+      fill: '#000', opacity: '0.30', filter: 'url(#glow-soft)' }, g);
+
+    // a faint teal spill onto the grass at the plinth foot (light off the clew
+    // pool escaping) — rep.glow1 so it BLAZES at night + fades by day, automatic.
+    el('ellipse', { cx: cx - 16, cy: baseY + 2, rx: 26, ry: 5,
+      fill: GLOW, opacity: '0.26', filter: 'url(#daedalus-clew-glow)' }, g);
+
+    // ════════════ STONE PLINTH — a low two-course masonry parterre base ══════════
+    // swappable shadow-green stone edge? no — the plinth is architectural stone via
+    // the brass idiom (dark body + brass stroke), so it reads as the built base the
+    // living hedges are planted in, distinct from the green masses above.
+    el('rect', { x: fx(L), y: fx(baseY - plinthH), width: fx(R - L), height: plinthH, rx: 2,
+      fill: DARK, stroke: BRASS, 'stroke-width': '1.4' }, g);
+    // a slightly inset upper capstone course the hedges seat on
+    el('rect', { x: fx(L + 4), y: fx(plinthTopY - 4), width: fx(R - L - 8), height: 6, rx: 1.2,
+      fill: DARK, stroke: BRASS, 'stroke-width': '1.2' }, g);
+    // brass-bright TOP-lit lips on each up-facing plinth edge (light from above)
+    el('line', { x1: fx(L + 2), y1: fx(baseY - plinthH + 0.8), x2: fx(R - 2), y2: fx(baseY - plinthH + 0.8),
+      stroke: BRI, 'stroke-width': '1', opacity: '0.30' }, g);
+    el('line', { x1: fx(L + 5), y1: fx(plinthTopY - 3.2), x2: fx(R - 5), y2: fx(plinthTopY - 3.2),
+      stroke: BRI, 'stroke-width': '1', opacity: '0.42' }, g);
+    // a shadowed reveal along the plinth's forward foot
+    el('rect', { x: fx(L + 1), y: fx(baseY - 5), width: fx(R - L - 2), height: 4,
+      fill: 'rgba(0,0,0,.24)' }, g);
+    // a couple of faint masonry joints
+    el('line', { x1: fx(cx - 44), y1: fx(baseY - 3), x2: fx(cx - 44), y2: fx(baseY - plinthH + 3),
+      stroke: 'rgba(0,0,0,.22)', 'stroke-width': '1' }, g);
+    el('line', { x1: fx(cx + 40), y1: fx(baseY - 3), x2: fx(cx + 40), y2: fx(baseY - plinthH + 3),
+      stroke: 'rgba(0,0,0,.22)', 'stroke-width': '1' }, g);
+
+    // ════════════ CLIPPED HEDGE MASSES — faceted topiary blocks ══════════════════
+    // Each block: a LIT boxwood front face (BODY) with a squared clipped top, a
+    // SHADE right/recess facet so it reads as a distinct clipped mass turning away,
+    // a bold brass-bright sheen along its flat-clipped crown (lit from above), and
+    // a sparse architectural leaf stipple. Drawn shoulder-to-shoulder; the seams
+    // between them are shadow-green recesses.
+    var drawBlock = function (b) {
+      var w = b.x1 - b.x0;
+      var topR = 4;                                    // softly-clipped top corners
+      // front face (lit boxwood), squared with slightly rounded clipped top
+      el('path', { d: 'M ' + fx(b.x0) + ' ' + fx(plinthTopY) +
+        ' L ' + fx(b.x0) + ' ' + fx(b.top + topR) +
+        ' Q ' + fx(b.x0) + ' ' + fx(b.top) + ' ' + fx(b.x0 + topR) + ' ' + fx(b.top) +
+        ' L ' + fx(b.x1 - topR) + ' ' + fx(b.top) +
+        ' Q ' + fx(b.x1) + ' ' + fx(b.top) + ' ' + fx(b.x1) + ' ' + fx(b.top + topR) +
+        ' L ' + fx(b.x1) + ' ' + fx(plinthTopY) + ' Z',
+        fill: BODY, stroke: BRASS, 'stroke-width': '1.3' }, g);
+      // SHADE facet down the right edge (the clipped side turning away from light) —
+      // a broad, deep shadow plane so the lit face vs the turned face read distinctly
+      // (the tell of a sheared boxwood mass catching a single overhead light).
+      el('path', { d: 'M ' + fx(b.x1 - b.shade - 2) + ' ' + fx(b.top + topR + 1) +
+        ' L ' + fx(b.x1 - 0.5) + ' ' + fx(b.top + topR + 2) +
+        ' L ' + fx(b.x1 - 0.5) + ' ' + fx(plinthTopY) +
+        ' L ' + fx(b.x1 - b.shade - 2) + ' ' + fx(plinthTopY) + ' Z',
+        fill: SHADE, opacity: '0.9' }, g);
+      // a faint LIT reveal down the left up-facing edge (the mass turning INTO the
+      // light) — pairs with the right shadow so the block reads rounded, not a flat panel.
+      el('rect', { x: fx(b.x0 + 0.9), y: fx(b.top + topR), width: fx(Math.min(4.5, w * 0.16)),
+        height: fx(plinthTopY - b.top - topR - 0.5), fill: BRI, opacity: '0.07' }, g);
+      // a thin SHADE band just under the clipped crown (the top's forward shadow)
+      el('rect', { x: fx(b.x0 + 1.5), y: fx(b.top + 4), width: fx(w - 3), height: 3,
+        fill: SHADE, opacity: '0.5' }, g);
+      // the FLAT-CLIPPED TOP plane — a lit band riding the squared crown so the shear
+      // reads as an architectural clipped surface (crisp top edge, not a soft bush dome).
+      el('rect', { x: fx(b.x0 + topR), y: fx(b.top + 0.6), width: fx(w - 2 * topR), height: 3.2,
+        fill: BRI, opacity: '0.13' }, g);
+      // brass-bright sheen riding the flat-clipped crown (lit from above) — heavier rim
+      el('line', { x1: fx(b.x0 + topR), y1: fx(b.top + 1), x2: fx(b.x1 - topR), y2: fx(b.top + 1),
+        stroke: BRI, 'stroke-width': '1.5', opacity: '0.64', filter: 'url(#glow-soft)' }, g);
+      // faint vertical CLIPPED-GRAIN hairlines down the face — the tell-tale texture
+      // of a sheared boxwood hedge, kept architectural (a few thin darker verticals).
+      var nGrain = Math.max(2, Math.round(w / 10));
+      for (var gi = 1; gi <= nGrain; gi++) {
+        var gx = b.x0 + (w * gi) / (nGrain + 1) + (rnd() - 0.5) * 2;
+        el('line', { x1: fx(gx), y1: fx(b.top + 7), x2: fx(gx + (rnd() - 0.5) * 1.5), y2: fx(plinthTopY - 2),
+          stroke: SHADE, 'stroke-width': '0.7', opacity: '0.32' }, g);
+      }
+      // leaf stipple: darker flecks (depth) low + lit flecks catching the clipped
+      // crown — a denser, higher-contrast foliage grain so the mass reads as sheared
+      // boxwood (many small clipped leaves), never smooth enamel, never a fuzzy blob.
+      var n = Math.max(9, Math.round(w / 3.4));
+      for (var i = 0; i < n; i++) {
+        var sx = b.x0 + 3 + rnd() * (w - 6);
+        var sy = b.top + 5 + rnd() * (plinthTopY - b.top - 8);
+        var up = (sy - b.top) < (plinthTopY - b.top) * 0.4;    // near the lit crown?
+        el('circle', { cx: fx(sx), cy: fx(sy), r: fx(0.6 + rnd() * 0.9),
+          fill: up ? BRI : SHADE, opacity: up ? '0.46' : '0.58' }, g);
+      }
+      // a few sunlit leaf specks catching the top light along the clipped crown
+      var nc = Math.max(2, Math.round(w / 12));
+      for (var ci = 0; ci < nc; ci++) {
+        el('circle', { cx: fx(b.x0 + 4 + rnd() * (w - 8)), cy: fx(b.top + 3.5 + rnd() * 3),
+          r: fx(0.7 + rnd() * 0.5), fill: BRI, opacity: '0.36' }, g);
+      }
+    };
+    for (var bi = 0; bi < blocks.length; bi++) drawBlock(blocks[bi]);
+
+    // shadow-green recess seams between shoulder-to-shoulder blocks (so the masses
+    // read as separate clipped hedges pressed together, not one flat wall).
+    var seams = [168, 194, 266, 292];
+    for (var si = 0; si < seams.length; si++) {
+      var seamTop = Math.min(
+        blocks[si].top, blocks[si + 1].top);
+      el('line', { x1: fx(seams[si]), y1: fx(seamTop + 6), x2: fx(seams[si]), y2: fx(plinthTopY - 1),
+        stroke: SHADE, 'stroke-width': '1.6', opacity: '0.7' }, g);
+      // a thin dark core in the recess
+      el('line', { x1: fx(seams[si]), y1: fx(seamTop + 8), x2: fx(seams[si]), y2: fx(plinthTopY - 2),
+        stroke: 'rgba(0,0,0,.28)', 'stroke-width': '0.8' }, g);
+    }
+    // the vertical STEP faces where the tall centre block rises above its shorter
+    // neighbours (up-facing-but-turned side planes → SHADE, reading the step).
+    el('rect', { x: fx(194), y: fx(centreTopY + 4), width: 5, height: fx(outerTopY - centreTopY - 4),
+      fill: SHADE, opacity: '0.55' }, g);
+    el('rect', { x: fx(261), y: fx(centreTopY + 4), width: 5, height: fx(outerTopY - centreTopY - 4),
+      fill: SHADE, opacity: '0.7' }, g);
+
+    // ════════════ THE MAZE MOUTH — arched tunnel cut into the centre block ════════
+    // A dark arched opening glowing teal from within (rep.glow1). Drawn OVER the
+    // centre block so it reads as a tunnel cut into the hedge, foliage crowning the
+    // arch. Pooled emissive: soft halo → dark cavity → teal throat column → bright
+    // core, then a brass-stroked arch rim + brass-bright keystone sheen.
+    var archD =
+      'M ' + fx(mL) + ' ' + fx(mFloorY) +
+      ' L ' + fx(mL) + ' ' + fx(mSpringY) +
+      ' Q ' + fx(mL) + ' ' + fx(mApexY) + ' ' + fx(mCx) + ' ' + fx(mApexY) +
+      ' Q ' + fx(mR) + ' ' + fx(mApexY) + ' ' + fx(mR) + ' ' + fx(mSpringY) +
+      ' L ' + fx(mR) + ' ' + fx(mFloorY) + ' Z';
+    // 1) soft teal halo blooming out of the mouth into the surrounding hedge
+    el('ellipse', { cx: mCx, cy: (mSpringY + mFloorY) / 2, rx: mHalf * 1.5, ry: (mFloorY - mApexY) * 0.5,
+      fill: GLOW, opacity: '0.24', filter: 'url(#daedalus-clew-glow)' }, g);
+    // 2) the dark tunnel cavity
+    el('path', { d: archD, fill: 'rgba(6,12,10,.96)' }, g);
+    // 3) a teal glow COLUMN standing in the throat (light from deep in the maze)
+    el('ellipse', { cx: mCx, cy: (mSpringY + mFloorY) / 2 + 2, rx: mHalf * 0.62, ry: (mFloorY - mApexY) * 0.42,
+      fill: GLOW, opacity: '0.55', filter: 'url(#daedalus-clew-glow)' }, g);
+    // 4) a hot core pooled low in the throat (brightest, where the clew emerges)
+    el('ellipse', { cx: mCx, cy: mFloorY - 12, rx: mHalf * 0.44, ry: 12,
+      fill: GLOW, opacity: '0.92', filter: 'url(#daedalus-clew-glow)' }, g);
+    el('ellipse', { cx: mCx, cy: mFloorY - 11, rx: mHalf * 0.2, ry: 6,
+      fill: '#eafff6', opacity: '0.32', filter: 'url(#daedalus-clew-glow)' }, g);
+    // 5) teal light licking up the inner arch faces (the rim catches the glow)
+    el('path', { d: 'M ' + fx(mL + 2.5) + ' ' + fx(mFloorY - 3) +
+      ' L ' + fx(mL + 2.5) + ' ' + fx(mSpringY) +
+      ' Q ' + fx(mL + 2.5) + ' ' + fx(mApexY + 3) + ' ' + fx(mCx) + ' ' + fx(mApexY + 3),
+      fill: 'none', stroke: GLOW, 'stroke-width': '1.3', opacity: '0.40' }, g);
+    el('path', { d: 'M ' + fx(mR - 2.5) + ' ' + fx(mFloorY - 3) +
+      ' L ' + fx(mR - 2.5) + ' ' + fx(mSpringY) +
+      ' Q ' + fx(mR - 2.5) + ' ' + fx(mApexY + 3) + ' ' + fx(mCx) + ' ' + fx(mApexY + 3),
+      fill: 'none', stroke: GLOW, 'stroke-width': '1.1', opacity: '0.30' }, g);
+    // 5b) darkest crown hugging the inner arch — keeps the arch top dark so the teal
+    // reads as light welling up from DEEP + LOW in the throat (a lit passage you enter),
+    // not a flat teal fill or a mere rim outline.
+    el('path', { d: 'M ' + fx(mL + 1.5) + ' ' + fx(mSpringY) +
+      ' Q ' + fx(mL + 1.5) + ' ' + fx(mApexY + 1.5) + ' ' + fx(mCx) + ' ' + fx(mApexY + 1.5) +
+      ' Q ' + fx(mR - 1.5) + ' ' + fx(mApexY + 1.5) + ' ' + fx(mR - 1.5) + ' ' + fx(mSpringY),
+      fill: 'none', stroke: 'rgba(4,10,8,.6)', 'stroke-width': '4', 'stroke-linecap': 'round' }, g);
+    // 6) brass arch rim (the carved mouth lintel — estate brass)
+    el('path', { d: 'M ' + fx(mL) + ' ' + fx(mSpringY) +
+      ' Q ' + fx(mL) + ' ' + fx(mApexY) + ' ' + fx(mCx) + ' ' + fx(mApexY) +
+      ' Q ' + fx(mR) + ' ' + fx(mApexY) + ' ' + fx(mR) + ' ' + fx(mSpringY),
+      fill: 'none', stroke: BRASS, 'stroke-width': '1.6', opacity: '0.82',
+      filter: 'url(#glow-soft)' }, g);
+    // 6b) brass JAMBS down each side of the opening (the mouth's built vertical edge) —
+    // rim + jambs together frame it as a deliberate lit gateway in the estate brass idiom.
+    el('line', { x1: fx(mL), y1: fx(mSpringY), x2: fx(mL), y2: fx(mFloorY),
+      stroke: BRASS, 'stroke-width': '1.5', opacity: '0.78' }, g);
+    el('line', { x1: fx(mR), y1: fx(mSpringY), x2: fx(mR), y2: fx(mFloorY),
+      stroke: BRASS, 'stroke-width': '1.5', opacity: '0.78' }, g);
+    // 7) brass-bright keystone catch on the arch crown (overhead light)
+    el('path', { d: 'M ' + fx(mCx - 10) + ' ' + fx(mApexY + 2.5) +
+      ' Q ' + fx(mCx) + ' ' + fx(mApexY - 1.5) + ' ' + fx(mCx + 10) + ' ' + fx(mApexY + 2.5),
+      fill: 'none', stroke: BRI, 'stroke-width': '1.4', opacity: '0.72', 'stroke-linecap': 'round' }, g);
+    // the mouth floor (a dark threshold line so the tunnel reads grounded)
+    el('line', { x1: fx(mL), y1: fx(mFloorY), x2: fx(mR), y2: fx(mFloorY),
+      stroke: 'rgba(0,0,0,.4)', 'stroke-width': '1.2' }, g);
+
+    // ════════════ ARIADNE'S CLEW — the teal solve-thread spilling out ═════════════
+    // A single glowing thread rising from the throat, out over the plinth lip, and
+    // coiling into a luminous pool on the ground. THE one bright accent; rep.glow1
+    // so it blazes at night + recedes by day. A slow glimmer travels it (motion).
+    var clewD = 'M ' + fx(mCx + 2) + ' ' + fx(mFloorY - 16) +
+      ' C ' + fx(mCx + 2) + ' ' + fx(mFloorY - 4) + ' ' + fx(mCx - 2) + ' ' + fx(mFloorY - 1) + ' ' + fx(mCx - 5) + ' ' + fx(mFloorY + 2) +
+      ' C ' + fx(mCx - 9) + ' ' + fx(mFloorY + 6) + ' ' + fx(mCx - 14) + ' ' + fx(plinthTopY + 8) + ' ' + fx(mCx - 16) + ' ' + fx(baseY - 4);
+    // soft blurred glow underlay (the thread's halo)
+    el('path', { d: clewD, id: 'daedalus-clew-path', fill: 'none', stroke: GLOW, 'stroke-width': '4',
+      opacity: '0.45', 'stroke-linecap': 'round', filter: 'url(#daedalus-clew-glow)' }, g);
+    // the bright thread itself
+    el('path', { d: clewD, fill: 'none', stroke: GLOW, 'stroke-width': '1.8',
+      opacity: '0.95', 'stroke-linecap': 'round' }, g);
+    // a hair-white highlight core for the brightest reading of the thread
+    el('path', { d: clewD, fill: 'none', stroke: '#eafff6', 'stroke-width': '0.7',
+      opacity: '0.5', 'stroke-linecap': 'round' }, g);
+
+    // the pooled COIL on the ground (Ariadne's thread gathered at the parterre foot)
+    var coilCx = mCx - 17, coilCy = baseY - 3;
+    el('ellipse', { cx: fx(coilCx), cy: fx(coilCy), rx: 13, ry: 5,
+      fill: GLOW, opacity: '0.4', filter: 'url(#daedalus-clew-glow)' }, g);
+    el('ellipse', { cx: fx(coilCx), cy: fx(coilCy), rx: 9, ry: 3.4,
+      fill: 'none', stroke: GLOW, 'stroke-width': '1.6', opacity: '0.85' }, g);
+    el('ellipse', { cx: fx(coilCx + 1), cy: fx(coilCy - 0.4), rx: 5.5, ry: 2.2,
+      fill: 'none', stroke: GLOW, 'stroke-width': '1.4', opacity: '0.9' }, g);
+    el('ellipse', { cx: fx(coilCx + 1.5), cy: fx(coilCy - 0.6), rx: 2.6, ry: 1.2,
+      fill: GLOW, opacity: '0.95' }, g);
+    el('circle', { cx: fx(coilCx + 1.5), cy: fx(coilCy - 0.8), r: 1.1, fill: '#eafff6', opacity: '0.6' }, g);
+
+    // ════════════ MOTION — a slow glimmer travelling the clew (self-solving) ══════
+    // A faint teal spark drifts from the mouth down the thread to the pool — the
+    // labyrinth solving itself. Self-contained SMIL; reduced-motion-safe.
+    var prefersReduced = (typeof window !== 'undefined' && window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if (!prefersReduced) {
+      // TWO staggered glimmer beads (half a period apart) so the drift reads as a
+      // continuous, just-visible current down the thread — the maze solving itself —
+      // rather than one easy-to-miss spark. Base opacity 0 so before its begin (and in
+      // any static/paused frame at t=0) each bead is invisible → clean static rep.
+      var CLEW_DUR = 6;                                  // s — slow, quiet, secondary
+      for (var mbi = 0; mbi < 2; mbi++) {
+        // a white-hot teal glimmer (brighter than the thread it rides) so the drift
+        // actually READS against the already-bright clew — matches the thread's own
+        // #eafff6 highlight core, so it sits idiom-true in both day + night bands.
+        var spark = el('circle', { r: 2.4, fill: '#eafff6', opacity: '0',
+          filter: 'url(#daedalus-clew-glow)' }, g);
+        var mo = el('animateMotion', { dur: CLEW_DUR + 's', begin: fx(mbi * (CLEW_DUR / 2)) + 's',
+          repeatCount: 'indefinite', rotate: 'auto', keyPoints: '0;1', keyTimes: '0;1',
+          calcMode: 'linear' }, spark);
+        el('mpath', { 'xlink:href': '#daedalus-clew-path', href: '#daedalus-clew-path' }, mo);
+        // fades in leaving the mouth, brightest mid-thread, out as it reaches the pool
+        el('animate', { attributeName: 'opacity', values: '0;0.95;0.95;0',
+          keyTimes: '0;0.16;0.78;1', begin: fx(mbi * (CLEW_DUR / 2)) + 's',
+          dur: CLEW_DUR + 's', repeatCount: 'indefinite' }, spark);
+      }
+    }
+
+    S.refs.daedalusRep = g;
   }
 
   /* ── the GLYPH STAND — the fallback rep for every room WITHOUT a bespoke rep
