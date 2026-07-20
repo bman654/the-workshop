@@ -27,8 +27,8 @@
    wing sub-anchors, room counts) — annealing can only paper over so much.
 
    ── CALIBRATED TUNABLES ("writ in water" — re-measure if the type scale changes) ──
-   CHAR_W_NAME 8.4  px/char of the roomname  (16.5px serif .roomname — measured getBBox)
-   CHAR_W_SUB  6.8  px/char of the sub-line   (9px mono .roomsub    — measured getBBox)
+   CHAR_W_NAME 10.92 px/char of the roomname (21.5px serif .roomname — measured getBBox)
+   CHAR_W_SUB  8.84  px/char of the sub-line  (11.7px mono .roomsub  — measured getBBox)
    In 35/36 placed POIs the UPPERCASE sub-line ("PIECE · tag") is the WIDER line and
    therefore drives boxW; the roomname drives it only for the few very short subs.
    BOX_H_BASE 35 / BOX_H_COMPANION 50  the typeset block height (name+rule+sub, +the
@@ -81,11 +81,16 @@ if (typeof module !== 'undefined' && module.exports) { Layout = require('./layou
 var geom = LabelPlacer.geom;
 
 /* ── calibrated tunables (see header) ─────────────────────────────────────── */
-const CHAR_W_NAME = 8.4;   // px/char, 16.5px serif .roomname  (measured getBBox)
-const CHAR_W_SUB = 6.8;    // px/char, 9px mono .roomsub        (measured getBBox)
-const BOX_H_BASE = 35;     // name + kicker rule + sub-line block height (pre-PAD)
-const BOX_H_COMPANION = 50;// + the "↳ companion within" line
-const BOX_H_NAME = 18;     // NAME-ONLY block height (just the 16.5px serif name line, no sub)
+// #428 TYPE SCALE — re-measured for the bumped engraving, a uniform 1.30× (.roomname
+// 16.5→21.5, .roomsub 9→11.7, .within 8→10.4). Advance widths are linear in font-size and the
+// tracking is set in `em`, so the widths scale EXACTLY by 1.30; the heights scale per component
+// (the kicker rule and the inter-line gaps are constants and do NOT scale).
+// 1.30 is set by the ESTATE-plate cliff below — see the note in index.src.html's .roomname.
+const CHAR_W_NAME = 10.92; // px/char, 21.5px serif .roomname  (8.4 × 1.30)
+const CHAR_W_SUB = 8.84;   // px/char, 11.7px mono .roomsub     (6.8 × 1.30)
+const BOX_H_BASE = 43.1;   // name + kicker rule + sub-line block height (pre-PAD)
+const BOX_H_COMPANION = 60.5;// + the "↳ companion within" line
+const BOX_H_NAME = 23.4;   // NAME-ONLY block height (just the 21.5px serif name line, no sub)
 const PAD = 3;             // LABEL_PAD — the backing-stroke halo (index.src.html:2004)
 const LABEL_GAP = 14;      // LABEL_GAP (index.src.html:2000) — leader breathing room
 // §1.7 — DERIVED from the solved world (viewBox inset 46/52), read from Layout so the
