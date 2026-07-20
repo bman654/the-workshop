@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Spin They Keep — a skater and a planet keep one L-needle still</title>
+<!--
+   THE SPIN THEY KEEP — a cross of The Spinning Chair (spinning-chair/) × The Equal-Area Sweep
+   (equal-area-sweep/). Two worlds you push by hand: pull the skater's arms IN and she whirls faster;
+   drag the planet toward PERIHELION and it races. In each world the spin-rate climbs — yet the ONE brass
+   L-needle both worlds drive does NOT move, because angular momentum L is conserved in both. The logic
+   CORE (core.mjs) is inlined byte-for-byte between the sentinels below; the in-page chip calls the SAME
+   runSelfTest() / runPayoffLiveness() the Node twin (core.test.mjs) runs. Both parent cores are imported
+   byte-untouched; this cross core is the SOLE authority for the shared needle. The needle never shows a
+   magnitude — only the dimensionless held-fraction (= 1 in both worlds though L_SKATER ≈ 9.71 and L_ORBIT
+   = 0.8 keep their own scales and units). Flip a neg-control (a friction brake / an off-centre tug) and
+   push: that world's L bleeds, the min() falls, and the needle SAGS off HELD. SHIP SILENT (mechanical /
+   celestial owe no audio). Reduced-motion honored: the scenes become still diagrams with coarse sliders.
+-->
+<style>
+  :root{
+    --bg:#07080c;
+    --ink:#efe9da;
+    --ink-dim:#a59c87;
+    --gold:#c9a24a;              /* the brass frame / the law */
+    --gold-hi:#f4d27a;           /* lit gold (the HELD detent bloom) */
+    --gold-soft:rgba(201,162,74,0.14);
+    --gold-edge:rgba(201,162,74,0.40);
+    --chair:#f0b45a;             /* the skater's world (warm) */
+    --chair-soft:rgba(240,180,90,0.12);
+    --orbit:#86b8d8;             /* the planet's world (cool) */
+    --orbit-soft:rgba(134,184,216,0.13);
+    --rose:#f0846f;              /* bled / off-HELD accent */
+    --rose-soft:rgba(240,132,111,0.12);
+    --panel:rgba(11,10,7,0.88);
+    --font-ui:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif:"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono:"SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; min-height:100%;
+    background:
+      radial-gradient(1200px 720px at 50% -12%, rgba(201,162,74,0.09), transparent 56%),
+      radial-gradient(900px 640px at 12% 112%, rgba(240,180,90,0.05), transparent 60%),
+      radial-gradient(900px 640px at 88% 114%, rgba(134,184,216,0.05), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(201,162,74,0.05) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(201,162,74,0.045) 0 1px, transparent 1px 32px);
+    mask-image:radial-gradient(1100px 760px at 50% 36%, #000 30%, transparent 78%);
+  }
+
+  /* ── topbar ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:40;
+    display:flex; align-items:flex-start; justify-content:space-between;
+    padding:13px 20px; gap:14px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(7,8,12,0.95), rgba(7,8,12,0));
+  }
+  .topbar a, .topbar .pills{ pointer-events:auto; }
+  .backs{ display:flex; flex-direction:column; gap:5px; }
+  .back{ font:600 10.5px/1.3 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.22s; white-space:nowrap; }
+  .back:hover{ color:var(--gold-hi); opacity:1; }
+  .back.warm:hover{ color:var(--chair); } .back.cool:hover{ color:var(--orbit); }
+  .brand{ text-align:center; flex:1 1 auto; pointer-events:none; padding-top:1px; }
+  .brand h1{ margin:0; font:600 19px/1.15 var(--font-serif); letter-spacing:.01em; color:var(--ink); }
+  .brand .tag{ display:block; margin-top:3px; font:500 11px/1.35 var(--font-mono); color:var(--ink-dim); letter-spacing:.02em; }
+  .pills{ display:flex; flex-direction:column; gap:6px; align-items:flex-end; }
+  .selftest{
+    font:600 11px/1 var(--font-mono); letter-spacing:.04em; padding:7px 11px; border-radius:999px;
+    border:1px solid var(--gold-edge); background:var(--gold-soft); color:var(--gold-hi); cursor:pointer;
+    white-space:nowrap; transition:.2s; user-select:none;
+  }
+  .selftest:hover{ background:rgba(201,162,74,0.22); }
+  .selftest.bad{ border-color:rgba(240,132,111,0.6); background:rgba(240,132,111,0.14); color:#ffb9a8; }
+
+  /* ── self-test detail panel ── */
+  #stPanel{
+    position:fixed; top:64px; right:18px; width:min(460px, calc(100vw - 36px)); z-index:60;
+    background:var(--panel); border:1px solid var(--gold-edge); border-radius:14px; padding:18px 18px 16px;
+    box-shadow:0 24px 60px rgba(0,0,0,.6); display:none; backdrop-filter:blur(7px);
+  }
+  #stPanel.open{ display:block; }
+  #stPanel h2{ margin:0 0 4px; font:600 14px/1.2 var(--font-serif); color:var(--gold-hi); letter-spacing:.02em; }
+  #stPanel .sub{ margin:0 0 12px; font:500 11px/1.45 var(--font-mono); color:var(--ink-dim); }
+  .stRow{ display:flex; gap:9px; padding:8px 0; border-top:1px solid rgba(201,162,74,0.12); font:500 11.5px/1.4 var(--font-ui); }
+  .stRow .mk{ flex:0 0 auto; font:700 12px/1.3 var(--font-mono); }
+  .stRow.ok .mk{ color:#8fd79a; } .stRow.no .mk{ color:#ffb9a8; }
+  .stRow .tx{ color:var(--ink); } .stRow .tx .dt{ display:block; margin-top:3px; color:var(--ink-dim); font:500 10.5px/1.4 var(--font-mono); }
+  #stPanel .foot{ margin-top:12px; padding-top:11px; border-top:1px solid rgba(201,162,74,0.18);
+    font:500 10.5px/1.5 var(--font-mono); color:var(--ink-dim); }
+  #stPanel code{ color:var(--gold-hi); font-family:var(--font-mono); }
+  .closeX{ position:absolute; top:10px; right:12px; background:none; border:none; color:var(--ink-dim);
+    font-size:20px; cursor:pointer; line-height:1; } .closeX:hover{ color:var(--gold-hi); }
+
+  /* ── main ── */
+  main{ position:relative; z-index:1; max-width:1140px; margin:0 auto; padding:104px 20px 60px; }
+  .hero{ text-align:center; margin:0 auto 22px; max-width:800px; }
+  .eyebrow{ font:600 10.5px/1 var(--font-mono); letter-spacing:.22em; text-transform:uppercase; color:var(--gold); }
+  .lede{ margin:11px auto 0; font:400 15.5px/1.62 var(--font-serif); color:#d9d2c2; max-width:760px; }
+  .lede b{ color:var(--ink); font-weight:600; } .lede i{ color:var(--ink-dim); font-style:italic; }
+  .lede .wm{ color:var(--chair); font-weight:600; } .lede .cl{ color:var(--orbit); font-weight:600; }
+  .lede .law{ font-family:var(--font-mono); color:var(--gold-hi); font-size:.92em; }
+
+  /* ── the instrument ── */
+  .instrument{ margin:22px auto 0; border:1px solid var(--gold-edge); border-radius:18px; overflow:hidden;
+    background:linear-gradient(180deg, rgba(18,16,10,0.6), rgba(9,9,7,0.7)); box-shadow:0 30px 80px rgba(0,0,0,.5); }
+  .bays{ display:grid; grid-template-columns:1fr minmax(150px,190px) 1fr; }
+  .bay{ padding:16px 16px 14px; position:relative; }
+  .bay.chair{ background:linear-gradient(180deg, rgba(240,180,90,0.035), transparent 60%); }
+  .bay.orbit{ background:linear-gradient(180deg, rgba(134,184,216,0.035), transparent 60%); }
+  .bay.gauge{ border-left:1px solid var(--gold-edge); border-right:1px solid var(--gold-edge);
+    display:flex; flex-direction:column; align-items:stretch; padding:16px 12px 14px;
+    background:linear-gradient(180deg, rgba(201,162,74,0.05), transparent 70%); }
+  .bhead{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; gap:10px; }
+  .btitle{ font:600 12.5px/1.2 var(--font-serif); }
+  .bay.chair .btitle{ color:var(--chair); } .bay.orbit .btitle{ color:var(--orbit); }
+  .bay.gauge .btitle{ color:var(--gold-hi); text-align:center; width:100%; }
+  .bsub{ font:500 9.5px/1.35 var(--font-mono); color:var(--ink-dim); text-align:right; }
+  canvas{ display:block; width:100%; max-width:100%; height:auto; border-radius:10px; touch-action:none;
+    background:radial-gradient(120% 120% at 50% 42%, rgba(20,18,12,0.5), rgba(6,6,9,0.85)); cursor:grab; }
+  canvas.grabbing{ cursor:grabbing; }
+  canvas:focus-visible{ outline:2px solid var(--gold-hi); outline-offset:2px; }
+
+  .readout{ display:flex; justify-content:space-between; align-items:center; margin-top:10px; gap:8px;
+    font:600 11px/1.3 var(--font-mono); }
+  .readout .lbl{ color:var(--ink-dim); font-weight:500; letter-spacing:.03em; }
+  .bay.chair .rate{ color:var(--chair); } .bay.orbit .rate{ color:var(--orbit); }
+  .rate.bled{ color:var(--rose); }
+  .fillbar{ margin-top:6px; height:6px; border-radius:4px; background:rgba(255,255,255,0.06); overflow:hidden; }
+  .fillbar > i{ display:block; height:100%; width:0%; border-radius:4px; transition:width .08s linear; }
+  .bay.chair .fillbar > i{ background:linear-gradient(90deg, rgba(240,180,90,0.5), var(--chair)); }
+  .bay.orbit .fillbar > i{ background:linear-gradient(90deg, rgba(134,184,216,0.5), var(--orbit)); }
+
+  /* the neg-control toggle */
+  .neg{ margin-top:12px; display:flex; align-items:center; gap:10px; }
+  .negbtn{ appearance:none; cursor:pointer; flex:0 0 auto; width:46px; height:24px; border-radius:999px;
+    border:1px solid var(--gold-edge); background:rgba(255,255,255,0.05); position:relative; transition:.2s; }
+  .negbtn::after{ content:""; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #e9dcc0, #b7a06a); transition:.2s; }
+  .negbtn[aria-pressed="true"]{ background:var(--rose-soft); border-color:var(--rose); }
+  .negbtn[aria-pressed="true"]::after{ left:24px; background:radial-gradient(circle at 35% 30%, #ffd0c4, var(--rose)); }
+  .negbtn:focus-visible{ outline:2px solid var(--gold-hi); outline-offset:2px; }
+  .neglab{ font:500 10px/1.35 var(--font-mono); color:var(--ink-dim); letter-spacing:.01em; }
+  .neglab b{ color:var(--rose); font-weight:600; }
+  .bay.chair .negbtn[aria-pressed="false"]::after{ }
+
+  /* the reduced-motion / no-pointer coarse slider */
+  .rmctrl{ margin-top:11px; display:none; flex-direction:column; gap:4px; }
+  .rmctrl.show{ display:flex; }
+  .rmctrl .crow{ display:flex; justify-content:space-between; align-items:baseline; }
+  .rmctrl label{ font:600 9.5px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink-dim); }
+  .rmctrl .val{ font:600 10px/1 var(--font-mono); color:var(--gold-hi); }
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:3px;
+    background:linear-gradient(90deg, var(--gold-edge), rgba(201,162,74,0.2)); outline:none; margin:2px 0; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:17px; height:17px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, var(--gold-hi), var(--gold)); border:1px solid #3a2f12; cursor:pointer; box-shadow:0 2px 7px rgba(0,0,0,.5); }
+  input[type=range]::-moz-range-thumb{ width:17px; height:17px; border-radius:50%; background:var(--gold); border:1px solid #3a2f12; cursor:pointer; }
+  input[type=range]:focus-visible{ outline:2px solid var(--gold-hi); outline-offset:3px; }
+
+  /* ── the gauge (center) — the one L-needle ── */
+  .gaugewrap{ position:relative; width:100%; }
+  .gauge-svg{ display:block; width:100%; max-width:100%; height:auto; }
+  .needle-grp{ transition:none; }
+  .digital{ margin-top:6px; text-align:center; }
+  .digital .dL{ font:700 22px/1 var(--font-mono); color:var(--gold-hi); letter-spacing:.02em; }
+  .digital .dS{ display:block; margin-top:3px; font:600 10px/1.3 var(--font-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--gold); }
+  .digital .dS.bled{ color:var(--rose); }
+  .dcount{ margin-top:7px; text-align:center; font:500 10px/1.3 var(--font-mono); color:var(--ink-dim); }
+  .dcount b{ color:var(--gold-hi); font-weight:700; }
+  .gaugecap{ margin-top:9px; text-align:center; font:500 9.5px/1.4 var(--font-mono); color:var(--ink-dim); }
+
+  /* ── honesty copy + verdict ── */
+  .honesty{ border-top:1px solid var(--gold-edge); padding:15px 20px 17px; text-align:center;
+    background:linear-gradient(180deg, rgba(201,162,74,0.04), transparent); }
+  .verdict{ display:inline-block; padding:9px 16px; border-radius:12px; border:1px solid var(--gold-edge);
+    background:var(--gold-soft); transition:.28s; }
+  .verdict.held{ border-color:var(--gold-hi); background:linear-gradient(180deg, rgba(244,210,122,0.16), rgba(201,162,74,0.06));
+    box-shadow:0 0 26px rgba(244,210,122,0.16); }
+  .verdict.bled{ border-color:rgba(240,132,111,0.5); background:rgba(240,132,111,0.09); }
+  .verdict .vmain{ font:600 13.5px/1.3 var(--font-serif); color:var(--gold-hi); }
+  .verdict.bled .vmain{ color:#ffb9a8; }
+  .verdict .vsub{ margin-top:3px; font:500 10.5px/1.45 var(--font-mono); color:var(--ink-dim); }
+  .verdict .num{ color:var(--gold-hi); }
+  .honnote{ max-width:720px; margin:13px auto 0; font:400 12.5px/1.6 var(--font-serif); color:var(--ink-dim); }
+  .honnote b{ color:var(--ink); } .honnote code{ font-family:var(--font-mono); color:var(--gold-hi); font-size:.9em; }
+
+  .note{ max-width:780px; margin:24px auto 0; font:400 13px/1.62 var(--font-serif); color:var(--ink-dim); text-align:center; }
+  .note code{ font-family:var(--font-mono); color:var(--gold-hi); font-size:.92em; }
+  .note b.wm{ color:var(--chair); } .note b.cl{ color:var(--orbit); } .note b.rs{ color:var(--rose); }
+
+  @media (max-width: 720px){
+    .topbar{ flex-direction:column; align-items:stretch; gap:9px; }
+    .backs{ flex-direction:row; flex-wrap:wrap; gap:8px 14px; }
+    .brand{ text-align:left; } .pills{ flex-direction:row; align-items:center; }
+    main{ padding:172px 14px 50px; }
+    .bays{ grid-template-columns:1fr; }
+    .bay.gauge{ order:0; border-left:none; border-right:none; border-top:1px solid var(--gold-edge); border-bottom:1px solid var(--gold-edge); }
+    .bay.chair{ order:-1; } .bay.orbit{ order:1; }
+    .gauge-svg{ max-width:280px; margin:0 auto; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../workbench/index.html">&larr; The Workbench</a>
+      <a class="back warm" href="../spinning-chair/index.html">&#8599; the skater — The Spinning Chair</a>
+      <a class="back cool" href="../equal-area-sweep/index.html">&#8599; the planet — The Equal-Area Sweep</a>
+    </div>
+    <div class="brand">
+      <h1>The Spin They Keep</h1>
+      <span class="tag">push each world &middot; one L-needle &middot; it will not move</span>
+    </div>
+    <div class="pills">
+      <div class="selftest" id="selftest" title="The cross proves a skater's L (=I·ω) and a planet's L (=r²·θ̇) are each conserved: push either world and its rate climbs while its held-fraction stays 1, so the one shared needle holds. Flip a neg-control and it bleeds. Click for detail.">checking&hellip;</div>
+    </div>
+  </div>
+
+  <div id="stPanel">
+    <button class="closeX" id="stClose" title="close">&times;</button>
+    <h2>Self&#8209;test</h2>
+    <p class="sub" id="stSub">&hellip;</p>
+    <div id="stList"></div>
+    <div class="foot">Two worlds, one law. The <b style="color:var(--chair)">skater</b> keeps <code>inertia(r)·omegaAt(r) = L_SKATER</code>;
+      the <b style="color:var(--orbit)">planet</b> keeps <code>r²·angularSpeed = L_ORBIT</code>. Push either — arms in, or toward
+      perihelion — and its rate climbs while its held-fraction stays 1, so the one needle both worlds drive holds. The two
+      conserved numbers are ~12&times; apart and <b>keep their own scales and units</b>; only the invariance is shared. Flip a
+      neg-control (a friction brake / an off-centre tug) and that world's L bleeds — the needle sags. Both parent cores are
+      imported byte-for-byte; the in-page chip runs the SAME runSelfTest as the Node twin.</div>
+  </div>
+
+  <main>
+    <div class="hero">
+      <span class="eyebrow">a cross &middot; The Spinning Chair &times; The Equal-Area Sweep</span>
+      <p class="lede">
+        Two worlds you push by hand. Pull the <span class="wm">skater's arms in</span> and she whirls faster; drag the
+        <span class="cl">planet toward perihelion</span> and it races. In each, the spin-rate climbs <i>steeply</i>. Yet the
+        conserved angular momentum <span class="law">L</span> does <b>not budge</b> — so the one brass <span class="law">L</span>-needle
+        both worlds drive holds dead still at <span class="law">HELD</span>. <i>Closer means faster is not a coincidence twice;
+        it is L kept, twice.</i>
+      </p>
+    </div>
+
+    <div class="instrument">
+      <div class="bays">
+        <!-- LEFT — the skater: pull the arms in -->
+        <div class="bay chair">
+          <div class="bhead">
+            <span class="btitle">The Skater — pull the arms in</span>
+            <span class="bsub">I·ω is kept<br>arms in &rArr; &omega; up</span>
+          </div>
+          <canvas id="chairC" width="440" height="330" tabindex="0" role="slider"
+            aria-label="Skater arm radius — drag the hand-weights in to spin faster" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></canvas>
+          <div class="readout">
+            <span class="lbl">spin &omega;</span>
+            <span class="rate" id="chairRate">— rad/s</span>
+          </div>
+          <div class="fillbar"><i id="chairFill"></i></div>
+          <div class="neg">
+            <button class="negbtn" id="chairLeak" role="switch" aria-checked="false" aria-pressed="false" aria-label="Chair pivot: free pivot or friction brake"></button>
+            <span class="neglab">free pivot &rlarr; <b>friction brake</b> — bleeds L as you pull</span>
+          </div>
+          <div class="rmctrl" id="chairRM">
+            <div class="crow"><label for="chairSlider">arm radius</label><span class="val" id="chairRMval">arms out</span></div>
+            <input type="range" id="chairSlider" min="0" max="1000" step="1" value="0" aria-label="Skater arm radius (coarse)">
+          </div>
+        </div>
+
+        <!-- CENTER — the gauge: the one L-needle -->
+        <div class="bay gauge">
+          <div class="bhead"><span class="btitle">The L-Needle</span></div>
+          <div class="gaugewrap">
+            <svg class="gauge-svg" id="gaugeSvg" viewBox="0 0 200 190" aria-label="The shared angular-momentum needle">
+              <defs>
+                <radialGradient id="detentGlow" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stop-color="#f4d27a" stop-opacity="0.9"/>
+                  <stop offset="100%" stop-color="#f4d27a" stop-opacity="0"/>
+                </radialGradient>
+                <linearGradient id="brass" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#f4d27a"/>
+                  <stop offset="55%" stop-color="#c9a24a"/>
+                  <stop offset="100%" stop-color="#8a6f2f"/>
+                </linearGradient>
+              </defs>
+              <!-- the graduated arc (drawn by script into these groups) -->
+              <g id="arcGrp"></g>
+              <!-- the HELD detent bloom -->
+              <circle id="detent" cx="100" cy="150" r="0" fill="url(#detentGlow)" opacity="0"/>
+              <!-- the pivot hub -->
+              <circle cx="100" cy="150" r="7.5" fill="url(#brass)" stroke="#6d551f" stroke-width="1"/>
+              <circle cx="100" cy="150" r="2.4" fill="#3a2f12"/>
+              <!-- the L-needle: a right-angle brass pointer (short foot + long stem meeting at the pivot elbow) -->
+              <g class="needle-grp" id="needle" transform="rotate(0 100 150)">
+                <!-- long stem, up -->
+                <path d="M 100 150 L 100 34 L 96.5 40 L 100 30 L 103.5 40 L 100 34 Z" fill="url(#brass)" stroke="#6d551f" stroke-width="0.8"/>
+                <rect x="98.4" y="40" width="3.2" height="110" fill="url(#brass)" stroke="#6d551f" stroke-width="0.6"/>
+                <!-- short foot (the letter L) -->
+                <rect x="100" y="146.8" width="34" height="3.2" fill="url(#brass)" stroke="#6d551f" stroke-width="0.6"/>
+                <!-- elbow highlight -->
+                <circle cx="100" cy="150" r="3.4" fill="#f4d27a" opacity="0.85"/>
+              </g>
+            </svg>
+          </div>
+          <div class="digital">
+            <span class="dL" id="dL">L 1.000</span>
+            <span class="dS" id="dS">&#10227; HELD</span>
+          </div>
+          <div class="dcount">&Delta; since grab: <b id="dCount">0.000&deg;</b></div>
+          <div class="gaugecap">min(held<sub>skater</sub>, held<sub>planet</sub>) &mdash; a dimensionless ratio, never a magnitude</div>
+        </div>
+
+        <!-- RIGHT — the planet: drag toward perihelion -->
+        <div class="bay orbit">
+          <div class="bhead">
+            <span class="btitle">The Planet — drag toward perihelion</span>
+            <span class="bsub">r&sup2;&middot;&theta;&#775; is kept<br>closer &rArr; &theta;&#775; up</span>
+          </div>
+          <canvas id="orbitC" width="440" height="330" tabindex="0" role="slider"
+            aria-label="Planet position — drag the bead toward perihelion to race faster" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></canvas>
+          <div class="readout">
+            <span class="lbl">sweep &theta;&#775;</span>
+            <span class="rate" id="orbitRate">— rad/s</span>
+          </div>
+          <div class="fillbar"><i id="orbitFill"></i></div>
+          <div class="neg">
+            <button class="negbtn" id="orbitLeak" role="switch" aria-checked="false" aria-pressed="false" aria-label="Orbit centre: central pull or off-centre tug"></button>
+            <span class="neglab">central pull &rlarr; <b>off-centre tug</b> — bleeds L as you drag</span>
+          </div>
+          <div class="rmctrl" id="orbitRM">
+            <div class="crow"><label for="orbitSlider">planet angle</label><span class="val" id="orbitRMval">aphelion</span></div>
+            <input type="range" id="orbitSlider" min="0" max="1000" step="1" value="0" aria-label="Planet true anomaly (coarse)">
+          </div>
+        </div>
+      </div>
+
+      <!-- honesty + verdict -->
+      <div class="honesty">
+        <div class="verdict held" id="verdict">
+          <div class="vmain" id="vMain">HELD &middot; both worlds keep their L</div>
+          <div class="vsub" id="vSub">the needle rests at HELD while both rates are free to climb</div>
+        </div>
+        <p class="honnote">
+          Same conserved quantity, same consequence — <b>closer means faster</b>. But not one shared magnitude: the skater's
+          <code>L</code> and the planet's <code>L</code> <b>keep their own scales and units</b> (≈12&times; apart, different
+          units). What's shared is that <b>neither budges</b>. The needle reads only the dimensionless held-fraction — never a
+          number equated across worlds.
+        </p>
+      </div>
+    </div>
+
+    <p class="note">
+      Push a world and watch its rate climb while the needle sits still — a shrinking radius exactly offsets the rising
+      rate, so <code>L</code> is kept. Then flip a neg-control: a <b class="wm">friction brake</b> on the pivot, or an
+      <b class="cl">off-centre tug</b> on the orbit. Now an external torque acts, that world's <code>L</code> <b class="rs">bleeds</b>
+      away, the shared minimum falls, and the needle <b class="rs">sags</b> off HELD — the two worlds that moved as one now
+      move apart. Flip it back and the needle snaps home.
+    </p>
+  </main>
+
+<script type="module">
+import { inertia, omegaAt, L0, Lclamped, A, B } from '../spinning-chair/core.mjs';
+import { arealConstant, angularSpeed, radius, arealRate, timeAtTheta, stateAtTime, TAU } from '../equal-area-sweep/core.mjs';
+
+// === CORE BEGIN ===
+"use strict";
+
+// ══ THE SHARED APPARATUS — the two worlds' fixed constants ═════════════════════════════════════════
+const ORBIT_E = 0.6;                 // the orbit's eccentricity — the off-centre Sun IS the lesson
+const L_SKATER = L0();               // the skater's conserved L = I(A)·ω_A ≈ 9.70752 kg·m²/s
+const L_ORBIT  = arealConstant(ORBIT_E);  // the planet's conserved r²·θ̇ = √(1−e²) = 0.8 (dimensionless)
+const SAG_MAX  = 74;                 // degrees the L-needle sags from HELD (index 1) to BLED (index 0)
+
+// ── THE TWO HAND-CONTROLS — one frac∈[0,1] per world (0 = arms out / aphelion, 1 = tucked / perihelion) ──
+// The skater's hand radius runs A (arms out) → B (arms tucked) as frac 0 → 1.
+function chairRadiusAt(frac){ return A + (B - A) * frac; }
+// The planet's true anomaly runs π (aphelion) → 0 (perihelion) as frac 0 → 1.
+function orbitThetaAt(frac){ return Math.PI - Math.PI * frac; }
+// The inverse the free-running orbit animation uses: a true anomaly θ (any lap) → its frac. r is
+// symmetric about the apse line, so we FOLD θ to [0,π]; frac = (π − θ_folded)/π reconstructs the SAME r.
+function orbitFracFromTheta(theta){
+  let ph = ((theta % TAU) + TAU) % TAU;   // θ mod 2π ∈ [0,2π)
+  const tf = ph <= Math.PI ? ph : TAU - ph;  // fold to [0,π]
+  return (Math.PI - tf) / Math.PI;
+}
+
+// ── THE ONE ENTRY — the live reading for a world at a given push, with an optional external-torque leak ──
+// scene 'chair' | 'orbit'; frac∈[0,1]; leak∈[0,1] (0 = the pure free/conserving law; >0 = the neg-control).
+// Returns the ideal (conserved) L, the bled L, the live rate, and held = L / L_scene (=1 at leak=0 ∀frac).
+function needleReading(scene, frac, leak){
+  if (leak == null) leak = 0;
+  const bleed = 1 - leak * frac;                 // (1 − leak·frac): an external torque strictly removes L
+  if (scene === 'chair'){
+    const r = chairRadiusAt(frac);
+    const I = inertia(r);                         // I(r) = I₀ + 2mr²  (the skater's own law)
+    const Lideal = I * omegaAt(r);                // === L_SKATER for every r, exactly (conservation)
+    const L = bleed * Lideal;
+    const rate = L / I;                           // = ω when leak=0 (rad/s)
+    return { scene:'chair', frac, leak, r, I, theta:null, Lideal, L, rate, held: L / L_SKATER, units:'kg·m²/s' };
+  } else {
+    const theta = orbitThetaAt(frac);
+    const r = radius(theta, ORBIT_E);             // conic r(θ) = a(1−e²)/(1+e·cosθ)  (the planet's own law)
+    const Lideal = r * r * angularSpeed(theta, ORBIT_E);  // === L_ORBIT for every θ, exactly (conservation)
+    const L = bleed * Lideal;
+    const rate = L / (r * r);                     // = θ̇ when leak=0 (rad/s)
+    return { scene:'orbit', frac, leak, r, I:null, theta, Lideal, L, rate, held: L / L_ORBIT, units:'(dimensionless)' };
+  }
+}
+
+// ── THE COMPOSITION RULE — the ONE needle both worlds drive ──────────────────────────────────────────
+// index = min(held_chair, held_orbit): the needle holds at HELD only while BOTH worlds keep their L.
+function needleIndex(chairFrac, chairLeak, orbitFrac, orbitLeak){
+  const hc = needleReading('chair', chairFrac, chairLeak).held;
+  const ho = needleReading('orbit', orbitFrac, orbitLeak).held;
+  return { index: Math.min(hc, ho), heldChair: hc, heldOrbit: ho };
+}
+// The needle's sag angle (degrees from HELD): 0° at index 1 (straight up), SAG_MAX at index 0 (BLED).
+function needleAngleDeg(index){ return (1 - index) * SAG_MAX; }
+
+// ── the live rate range of a world (frac 0 → 1) — for honest fill-bar normalisation on the page ──
+function sceneRateRange(scene){
+  const lo = needleReading(scene, 0, 0).rate;
+  const hi = needleReading(scene, 1, 0).rate;
+  return { lo, hi };
+}
+
+// ══ THE PAYOFF-LIVENESS TWIN — the needle HOLDS as you push, and SAGS under the neg-control ═══════════
+// Called by the in-page pill AND core.test.mjs AND the DOM liveness driver. Fine frac sweep, both worlds:
+// at leak=0 assert held flat at 1.0 (<1e-9) AND rate strictly rises; at leak=0.5 assert held strictly sags.
+function runPayoffLiveness(){
+  const EPS = 1e-9;
+  const fracs = []; for (let i = 0; i <= 64; i++) fracs.push(i / 64);
+  const detail = [];
+  let ok = true;
+  for (const scene of ['chair', 'orbit']){
+    let worstHeld = 0, riseOK = true, prevRate = -Infinity;
+    for (const f of fracs){
+      const rd = needleReading(scene, f, 0);
+      worstHeld = Math.max(worstHeld, Math.abs(rd.held - 1));
+      if (prevRate !== -Infinity && !(rd.rate > prevRate)) riseOK = false;   // strictly rising
+      prevRate = rd.rate;
+    }
+    const heldFlat = worstHeld < EPS;
+    let sagOK = true, prevHeld = Infinity;
+    for (const f of fracs){
+      const rd = needleReading(scene, f, 0.5);
+      if (f > 0 && !(rd.held < prevHeld)) sagOK = false;                      // strictly sagging
+      prevHeld = rd.held;
+    }
+    const d = { scene, heldFlat, riseOK, sagOK, worstHeld };
+    detail.push(d);
+    ok = ok && heldFlat && riseOK && sagOK;
+  }
+  return { pass: ok, detail };
+}
+
+// ══ THE SELF-TEST (re-proven by core.test.mjs; byte-twin-inlined as the page's gold pill) ═════════════
+function runSelfTest(){
+  const checks = [];
+  const ck = (name, ok, info) => checks.push({ name, ok: !!ok, info });
+  const EPS = 1e-9;
+  const fracs = []; for (let i = 0; i <= 240; i++) fracs.push(i / 240);
+
+  // LEG 1 — CHAIR INVARIANT: the skater's L is kept for every arm-radius across the whole pull.
+  {
+    let worst = 0;
+    for (const f of fracs){
+      const r = chairRadiusAt(f);
+      worst = Math.max(worst, Math.abs(inertia(r) * omegaAt(r) - L_SKATER));
+    }
+    ck('1 · chair invariant: inertia(r)·omegaAt(r) === L_SKATER for every frac across the pull (arms out → tucked)',
+       worst < EPS, 'worst |ΔL| = ' + worst.toExponential(2) + ' over ' + fracs.length + ' radii · L_SKATER = ' + L_SKATER.toFixed(5) + ' kg·m²/s');
+  }
+
+  // LEG 2 — ORBIT INVARIANT: the planet's r²·θ̇ is kept for every true anomaly, two independent ways.
+  {
+    let worstSpeed = 0;
+    for (const f of fracs){
+      const th = orbitThetaAt(f);
+      const r = radius(th, ORBIT_E);
+      worstSpeed = Math.max(worstSpeed, Math.abs(r * r * angularSpeed(th, ORBIT_E) - L_ORBIT));
+    }
+    let worstAreal = 0;
+    for (let k = 0; k < 240; k++){
+      const E = k * TAU / 240;
+      worstAreal = Math.max(worstAreal, Math.abs(arealRate(ORBIT_E, E) - L_ORBIT));
+    }
+    ck('2 · orbit invariant: r²·angularSpeed === L_ORBIT (every θ) AND arealRate === L_ORBIT over E∈[0,2π)',
+       worstSpeed < EPS && worstAreal < EPS,
+       'r²θ̇ worst = ' + worstSpeed.toExponential(2) + ' · arealRate worst = ' + worstAreal.toExponential(2) + ' · L_ORBIT = ' + L_ORBIT);
+  }
+
+  // LEG 3 — SHARED GUARANTEE: in BOTH worlds a shrinking radius exactly offsets the rising rate, so the
+  // conserved quantity holds; and the rate strictly RISES as you push (frac up) in both.
+  {
+    let worstChair = 0, worstOrbit = 0, riseChair = true, riseOrbit = true;
+    let pc = -Infinity, po = -Infinity;
+    const r1c = chairRadiusAt(0), I1c = inertia(r1c), w1c = omegaAt(r1c);
+    const th1o = orbitThetaAt(0), r1o = radius(th1o, ORBIT_E), td1o = angularSpeed(th1o, ORBIT_E);
+    for (const f of fracs){
+      // chair: ω(r)/ω(A) === I(A)/I(r)
+      const r2 = chairRadiusAt(f), w2 = omegaAt(r2), I2 = inertia(r2);
+      worstChair = Math.max(worstChair, Math.abs((w2 / w1c) - (I1c / I2)));
+      if (pc !== -Infinity && !(w2 > pc)) riseChair = false; pc = w2;
+      // orbit: θ̇(θ)/θ̇(θ_aph) === r_aph²/r²
+      const th2 = orbitThetaAt(f), r2o = radius(th2, ORBIT_E), td2 = angularSpeed(th2, ORBIT_E);
+      worstOrbit = Math.max(worstOrbit, Math.abs((td2 / td1o) - ((r1o * r1o) / (r2o * r2o))));
+      if (po !== -Infinity && !(td2 > po)) riseOrbit = false; po = td2;
+    }
+    ck('3 · shared guarantee: chair ω₂/ω₁ === I₁/I₂, orbit θ̇₂/θ̇₁ === r₁²/r₂², AND rate strictly rises with frac in BOTH',
+       worstChair < EPS && worstOrbit < EPS && riseChair && riseOrbit,
+       'chair worst = ' + worstChair.toExponential(2) + ' · orbit worst = ' + worstOrbit.toExponential(2) + ' · rises: chair ' + riseChair + ' orbit ' + riseOrbit);
+  }
+
+  // LEG 4 — HONESTY: the two conserved magnitudes are NOT equal (≈12× apart, different units); what is
+  // shared is only the invariance — held === 1 in BOTH worlds at leak=0 for every frac.
+  {
+    const distinct = L_SKATER !== L_ORBIT;
+    const ratio = L_SKATER / L_ORBIT;
+    let worstHeld = 0;
+    for (const f of fracs){
+      worstHeld = Math.max(worstHeld, Math.abs(needleReading('chair', f, 0).held - 1));
+      worstHeld = Math.max(worstHeld, Math.abs(needleReading('orbit', f, 0).held - 1));
+    }
+    ck('4 · honesty: L_SKATER ≠ L_ORBIT (ratio ≈ ' + ratio.toFixed(1) + ', different units) yet held === 1 in BOTH at leak=0 — the invariance is shared, never the number',
+       distinct && ratio > 11 && worstHeld < EPS,
+       'L_SKATER = ' + L_SKATER.toFixed(4) + ' kg·m²/s · L_ORBIT = ' + L_ORBIT + ' (—) · held worst |Δ| = ' + worstHeld.toExponential(2));
+  }
+
+  // LEG 5 — NEG-CONTROL (the teeth): the leak bleeds L away, deeper with more leak, decoupling the worlds.
+  {
+    // (a) leak=0 ⇒ L === Lideal exactly.
+    let worstIdeal = 0;
+    for (const scene of ['chair', 'orbit']) for (const f of fracs){
+      const rd = needleReading(scene, f, 0);
+      worstIdeal = Math.max(worstIdeal, Math.abs(rd.L - rd.Lideal));
+    }
+    // (b) leak>0 ⇒ L strictly decreases across frac, and deeper for larger leak.
+    let strictDrop = true, deeper = true;
+    for (const scene of ['chair', 'orbit']){
+      let prev = Infinity;
+      for (const f of fracs){ const L = needleReading(scene, f, 0.5).L; if (f > 0 && !(L < prev)) strictDrop = false; prev = L; }
+      const shallow = needleReading(scene, 1, 0.3).L, deep = needleReading(scene, 1, 0.7).L;
+      if (!(deep < shallow)) deeper = false;
+    }
+    // (c) the leaked rate is below the ideal (spin-up falters), and leak→1 ⇒ L→0 at frac=1.
+    let rateBelow = true, toZero = true;
+    for (const scene of ['chair', 'orbit']){
+      for (const f of fracs){ if (f > 0 && !(needleReading(scene, f, 0.5).rate < needleReading(scene, f, 0).rate)) rateBelow = false; }
+      if (Math.abs(needleReading(scene, 1, 1).L) > EPS) toZero = false;
+    }
+    // (d) DECOUPLE: at leak>0 the L-range across the drag is bounded from 0, vs flat (<1e-9) at leak=0.
+    let decouple = true;
+    for (const scene of ['chair', 'orbit']){
+      let lo0 = Infinity, hi0 = -Infinity, loK = Infinity, hiK = -Infinity;
+      for (const f of fracs){
+        const L0v = needleReading(scene, f, 0).L, Lk = needleReading(scene, f, 0.5).L;
+        lo0 = Math.min(lo0, L0v); hi0 = Math.max(hi0, L0v);
+        loK = Math.min(loK, Lk); hiK = Math.max(hiK, Lk);
+      }
+      if (!((hi0 - lo0) < EPS && (hiK - loK) > 1e-3)) decouple = false;
+    }
+    ck('5 · neg-control: leak=0 ⇒ L===Lideal; leak>0 ⇒ L strictly falls across frac (deeper with more leak); leaked rate < ideal; leak→1 ⇒ L→0; and the drag DECOUPLES the worlds',
+       worstIdeal < EPS && strictDrop && deeper && rateBelow && toZero && decouple,
+       'ideal worst = ' + worstIdeal.toExponential(2) + ' · strictDrop=' + strictDrop + ' deeper=' + deeper + ' rateBelow=' + rateBelow + ' toZero=' + toZero + ' decouple=' + decouple);
+  }
+
+  // LEG 6 — PAYOFF-LIVENESS: the needle HOLDS as you push (held flat, rates rise) and SAGS under the leak.
+  {
+    const pl = runPayoffLiveness();
+    ck('6 · payoff-liveness: held flat at 1.0 & rates strictly rise at leak=0 in BOTH worlds; held strictly sags at leak=0.5 (the needle holds, then bleeds)',
+       pl.pass, pl.detail.map(d => d.scene + '{held0=1:' + d.heldFlat + ',rise:' + d.riseOK + ',sag:' + d.sagOK + '}').join(' · '));
+  }
+
+  const passed = checks.filter(c => c.ok).length;
+  return { ok: passed === checks.length, passed, total: checks.length, checks };
+}
+
+export {
+  ORBIT_E, L_SKATER, L_ORBIT, SAG_MAX,
+  chairRadiusAt, orbitThetaAt, orbitFracFromTheta, needleReading,
+  needleIndex, needleAngleDeg, sceneRateRange,
+  runPayoffLiveness, runSelfTest,
+};
+// === CORE END ===
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+//  THE PAGE — two worlds you push; one needle they both drive. Everything below the CORE slab is
+//  rendering only; ALL the physics lives in the slab above (the byte-twin of core.mjs, proven by
+//  core.test.mjs). The page calls needleReading() / needleIndex() / runSelfTest() — the SAME
+//  functions the twin consumes — so what you see is exactly what is proven. The needle's rotation
+//  is read back from the browser's own CTM (getCTM), so the Δ readout is the needle's true angle.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+const $ = (id) => document.getElementById(id);
+const DEG = 180 / Math.PI;
+
+// ── STATE ──────────────────────────────────────────────────────────────────────────────────────
+const chair = { frac: 0, leak: 0, dragging: false, spinPhase: 0 };
+const orbit = { frac: 0, leak: 0, dragging: false, animT: 0, lastNow: 0 };
+let grabAngle = null;                          // the needle's angle at the last grab (for the Δ readout)
+
+// reduced motion — read live, react to changes
+const rmQuery = matchMedia('(prefers-reduced-motion: reduce)');
+let RM = rmQuery.matches;
+rmQuery.addEventListener?.('change', e => { RM = e.matches; syncRM(); });
+
+const RATE = { chair: sceneRateRange('chair'), orbit: sceneRateRange('orbit') };
+
+// ── CANVAS FIT ───────────────────────────────────────────────────────────────────────────────
+function fit(c){
+  const r = c.getBoundingClientRect(); const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.max(240, r.width), h = w * (330/440);
+  if (c.width !== Math.round(w*dpr) || c.height !== Math.round(h*dpr)){
+    c.width = Math.round(w*dpr); c.height = Math.round(h*dpr); c.style.height = h + 'px';
+  }
+  return { w, h, dpr };
+}
+const chairC = $('chairC'), cx2 = chairC.getContext('2d');
+const orbitC = $('orbitC'), ox2 = orbitC.getContext('2d');
+
+// helpers
+const _css = {};
+function getCSS(v){ if(_css[v]==null) _css[v]=getComputedStyle(document.documentElement).getPropertyValue(v).trim(); return _css[v]; }
+function hexA(hex, a){ hex=hex.replace('#',''); if(hex.length===3) hex=hex.split('').map(c=>c+c).join('');
+  const n=parseInt(hex,16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; }
+const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+
+// ── THE SKATER CANVAS — turntable + arms + hand-weights + a motion-blur fan whose spread ∝ ω ──────
+function drawChair(t){
+  const { w, h } = fit(chairC); cx2.setTransform(1,0,0,1,0,0);
+  const dpr = Math.min(2, window.devicePixelRatio || 1); cx2.setTransform(dpr,0,0,dpr,0,0); cx2.clearRect(0,0,w,h);
+  const rd = needleReading('chair', chair.frac, chair.leak);
+  const omega = rd.rate;                       // rad/s — the honest spin (may be bled below ideal)
+  const bled = chair.leak > 0 && chair.frac > 0;
+  const cxp = w/2, cyp = h*0.52;
+  const R = Math.min(w,h)*0.30;                // turntable radius (px)
+  // hand radius maps from the core radius r∈[B,A] → screen
+  const armPx = R * (0.42 + 0.62 * ((rd.r - B) / (A - B)));   // longer arms when r near A (out)
+  const warm = getCSS('--chair'), rose = getCSS('--rose');
+  const accent = bled ? rose : warm;
+
+  // turntable base
+  cx2.beginPath(); cx2.arc(cxp, cyp, R*1.14, 0, TAU); cx2.fillStyle='rgba(10,9,6,0.7)'; cx2.fill();
+  cx2.beginPath(); cx2.arc(cxp, cyp, R, 0, TAU); cx2.strokeStyle=hexA('#c9a24a',0.34); cx2.lineWidth=1.4; cx2.stroke();
+
+  // the motion-blur fan — a swept wedge whose ANGULAR SPREAD and opacity ARE ω (never an eased fake).
+  // spread grows with ω: at ω≈1.6 a thin sliver, at ω≈6.9 a broad whirl. Drawn as stacked ghost arms.
+  const spread = clamp01((omega - 0) / (RATE.chair.hi * 1.05)) * (Math.PI * 0.92);
+  const ghosts = RM ? 1 : 11;
+  for (let g = ghosts-1; g >= 0; g--){
+    const f = ghosts === 1 ? 0 : g / (ghosts-1);
+    const ang = chair.spinPhase - f * spread;     // trailing ghosts fan BACK over the swept angle
+    const al = (1 - f) * (RM ? 0.5 : 0.34);
+    drawArms(cxp, cyp, ang, armPx, R, hexA(accent, al*0.6), hexA(accent, al), false);
+  }
+  // the live arms (bright), at the current phase
+  drawArms(cxp, cyp, chair.spinPhase, armPx, R, hexA(accent, 0.95), hexA(accent, 1), true);
+
+  // hub
+  cx2.beginPath(); cx2.arc(cxp, cyp, R*0.14, 0, TAU); cx2.fillStyle='rgba(14,12,8,0.95)'; cx2.fill();
+  cx2.beginPath(); cx2.arc(cxp, cyp, R*0.14, 0, TAU); cx2.strokeStyle=hexA(accent,0.6); cx2.lineWidth=1; cx2.stroke();
+
+  // caption
+  cx2.fillStyle=getCSS('--ink-dim'); cx2.font='11px '+getCSS('--font-mono'); cx2.textAlign='center';
+  cx2.fillText('r = ' + rd.r.toFixed(3) + ' m   I = ' + rd.I.toFixed(3) + ' kg·m²', cxp, h*0.95);
+  cx2.fillStyle = accent; cx2.font='600 11px '+getCSS('--font-mono');
+  cx2.fillText(bled ? 'braked — L bleeding away' : (chair.dragging ? 'pulling in…' : 'drag the weights in'), cxp, h*0.99);
+}
+function drawArms(cxp, cyp, ang, armPx, R, wcol, hot, solid){
+  // two weights on straight arms through the hub, at ±armPx along the arm direction
+  const dx = Math.cos(ang), dy = Math.sin(ang);
+  cx2.lineWidth = solid ? 3.4 : 2.4; cx2.strokeStyle = wcol; cx2.lineCap='round';
+  cx2.beginPath();
+  cx2.moveTo(cxp - dx*armPx, cyp - dy*armPx); cx2.lineTo(cxp + dx*armPx, cyp + dy*armPx);
+  cx2.stroke();
+  // brass hand-weights
+  for (const s of [-1, 1]){
+    const px = cxp + s*dx*armPx, py = cyp + s*dy*armPx;
+    cx2.beginPath(); cx2.arc(px, py, solid ? R*0.11 : R*0.085, 0, TAU);
+    cx2.fillStyle = hot; cx2.fill();
+    if (solid){ cx2.strokeStyle='rgba(60,48,20,0.8)'; cx2.lineWidth=1; cx2.stroke(); }
+  }
+}
+
+// ── THE PLANET CANVAS — off-centre Sun + elliptical rail + bead + comet-smear + swept wedge ───────
+let orbitScale = 1, focusX = 0, focusY = 0;
+function drawOrbit(t){
+  const { w, h } = fit(orbitC); const dpr = Math.min(2, window.devicePixelRatio || 1);
+  ox2.setTransform(dpr,0,0,dpr,0,0); ox2.clearRect(0,0,w,h);
+  const S = Math.min(w,h) * 0.24; orbitScale = S;
+  // the ellipse is centred at (−a·e, 0) from the focus; place the focus so the whole ellipse fits.
+  const cxp = w/2 + S * ORBIT_E * 0.5, cyp = h*0.50; focusX = cxp; focusY = cyp;
+  const a = S, bMin = S * arealConstant(ORBIT_E);           // semi-minor = √(1−e²)·a
+  const centreX = cxp - S*ORBIT_E, centreY = cyp;
+
+  // the elliptical rail
+  ox2.beginPath();
+  for (let i=0;i<=140;i++){ const th=i/140*TAU; const rr=radius(th,ORBIT_E)*S; const x=cxp+rr*Math.cos(th), y=cyp-rr*Math.sin(th); i?ox2.lineTo(x,y):ox2.moveTo(x,y); }
+  ox2.closePath(); ox2.strokeStyle=hexA('#86b8d8',0.3); ox2.lineWidth=1.3; ox2.stroke();
+
+  // the off-centre brass Sun at the focus (the asymmetry IS the lesson)
+  const sunR = S*0.14;
+  const sg = ox2.createRadialGradient(cxp, cyp, 1, cxp, cyp, sunR*1.6);
+  sg.addColorStop(0, hexA('#f4d27a',0.95)); sg.addColorStop(0.5, hexA('#c9a24a',0.6)); sg.addColorStop(1, hexA('#c9a24a',0));
+  ox2.beginPath(); ox2.arc(cxp, cyp, sunR*1.6, 0, TAU); ox2.fillStyle=sg; ox2.fill();
+  ox2.beginPath(); ox2.arc(cxp, cyp, sunR, 0, TAU); ox2.fillStyle='url(#brass)'; ox2.fillStyle=hexA('#f4d27a',0.9); ox2.fill();
+
+  // where is the planet? dragging → the dragged frac; free-run (not RM) → true time; RM → the slider frac
+  let theta, rCore, rateNow;
+  if (orbit.dragging || RM || orbit._manual){
+    theta = orbitThetaAt(orbit.frac); rCore = radius(theta, ORBIT_E);
+    const rd = needleReading('orbit', orbit.frac, orbit.leak); rateNow = rd.rate;
+  } else {
+    const s = stateAtTime(orbit.animT, ORBIT_E);
+    theta = s.theta; rCore = s.r;
+    orbit.frac = orbitFracFromTheta(theta);
+    rateNow = needleReading('orbit', orbit.frac, orbit.leak).rate;
+  }
+  const bled = orbit.leak > 0 && orbit.frac > 0;
+  const cool = getCSS('--orbit'), rose = getCSS('--rose'), accent = bled ? rose : cool;
+  const px = cxp + rCore*S*Math.cos(theta), py = cyp - rCore*S*Math.sin(theta);
+
+  // the swept wedge from the focus (fatter near perihelion) — a small area element at the planet
+  const dth = 0.34;
+  ox2.beginPath(); ox2.moveTo(cxp, cyp);
+  for (let i=0;i<=18;i++){ const th=theta - dth/2 + dth*i/18; const rr=radius(th,ORBIT_E)*S; ox2.lineTo(cxp+rr*Math.cos(th), cyp-rr*Math.sin(th)); }
+  ox2.closePath(); ox2.fillStyle=hexA(accent, 0.14); ox2.fill();
+
+  // the comet-smear: a trailing tail whose LENGTH ∝ θ̇ (the planet races at perihelion)
+  const smear = clamp01(rateNow / (RATE.orbit.hi*1.05));
+  const tailLen = (0.10 + 0.5*smear);
+  if (!RM){
+    ox2.beginPath();
+    for (let i=0;i<=16;i++){ const f=i/16; const th=theta - tailLen*f; const rr=radius(th,ORBIT_E)*S;
+      const x=cxp+rr*Math.cos(th), y=cyp-rr*Math.sin(th); i?ox2.lineTo(x,y):ox2.moveTo(x,y); }
+    ox2.strokeStyle=hexA(accent, 0.5); ox2.lineWidth=2.4; ox2.lineCap='round'; ox2.stroke();
+  }
+
+  // the planet bead
+  ox2.beginPath(); ox2.arc(px, py, S*0.075, 0, TAU); ox2.fillStyle=hexA(accent, 0.98); ox2.fill();
+  ox2.strokeStyle=hexA('#0a0d10',0.7); ox2.lineWidth=1; ox2.stroke();
+
+  // perihelion / aphelion ticks
+  ox2.fillStyle=getCSS('--ink-dim'); ox2.font='9px '+getCSS('--font-mono'); ox2.textAlign='left';
+  // perihelion sits close to the focus, so grow the label RIGHTWARD off its vertex to clear the Sun's glow
+  ox2.fillText('perihelion', cxp + radius(0,ORBIT_E)*S + 5, cyp+3); ox2.textAlign='right';
+  ox2.fillText('aphelion', cxp - radius(Math.PI,ORBIT_E)*S - 4, cyp+3);
+
+  // caption
+  ox2.textAlign='center'; ox2.fillStyle=getCSS('--ink-dim'); ox2.font='11px '+getCSS('--font-mono');
+  ox2.fillText('r = ' + rCore.toFixed(3) + '   θ = ' + (theta*DEG).toFixed(0) + '°', cxp, h*0.95);
+  ox2.fillStyle=accent; ox2.font='600 11px '+getCSS('--font-mono');
+  ox2.fillText(bled ? 'off-centre tug — L bleeding away' : (orbit.dragging ? 'dragging…' : (RM ? 'set the angle below' : 'drag the bead · it orbits by true time')), cxp, h*0.99);
+}
+
+// ── THE NEEDLE — read the true rendered angle from the browser's CTM (honest Δ) ───────────────────
+const needle = $('needle'), detent = $('detent');
+function currentNeedleAngle(){
+  const m = needle.getCTM(); if (!m) return 0;
+  return Math.atan2(m.b, m.a) * DEG;          // the actual rotation the browser applied
+}
+function updateNeedle(){
+  const ni = needleIndex(chair.frac, chair.leak, orbit.frac, orbit.leak);
+  const mag = needleAngleDeg(ni.index);       // 0..SAG_MAX degrees
+  // sag TOWARD the lower-held (leaking) world: chair = left (−), planet = right (+)
+  const sign = ni.heldChair <= ni.heldOrbit ? -1 : 1;
+  const angle = sign * mag;
+  needle.setAttribute('transform', 'rotate(' + angle.toFixed(3) + ' 100 150)');
+
+  const held = mag < 0.05;
+  // the HELD detent blooms brighter while a drag is active (something is holding this against your push)
+  const activeDrag = chair.dragging || orbit.dragging;
+  detent.setAttribute('cx','100'); detent.setAttribute('cy','34');
+  detent.setAttribute('r', held ? (activeDrag ? '15' : '10') : '4');
+  detent.setAttribute('opacity', held ? (activeDrag ? '0.95' : '0.6') : '0.08');
+
+  // arc tint: the sagging side goes rose
+  paintArc(sign, mag);
+
+  // the Δ readout — the needle's OWN live angle, read from the CTM
+  const now = currentNeedleAngle();
+  const d = grabAngle == null ? 0 : Math.abs(now - grabAngle);
+  $('dCount').textContent = d.toFixed(3) + '°';
+
+  // digital L (the dimensionless min-held ratio, never a magnitude)
+  $('dL').textContent = 'L ' + ni.index.toFixed(3);
+  const dS = $('dS');
+  dS.innerHTML = held ? '&#10227; HELD' : '&#10227; BLED';
+  dS.classList.toggle('bled', !held);
+
+  // verdict
+  const v = $('verdict');
+  if (held){
+    v.className = 'verdict held';
+    $('vMain').textContent = 'HELD · both worlds keep their L';
+    $('vSub').innerHTML = 'the needle rests at HELD while both rates are free to climb';
+  } else {
+    v.className = 'verdict bled';
+    const who = sign < 0 ? 'the skater\'s' : 'the planet\'s';
+    $('vMain').textContent = '✗ BLED · an external torque is eating L';
+    $('vSub').innerHTML = who + ' held-fraction fell to <span class="num" style="color:var(--rose)">' + ni.index.toFixed(3) + '</span> — the needle sags ' + mag.toFixed(0) + '°';
+  }
+
+  // rate readouts + fill bars
+  const rc = needleReading('chair', chair.frac, chair.leak);
+  const ro = needleReading('orbit', orbit.frac, orbit.leak);
+  const cEl=$('chairRate'), oEl=$('orbitRate');
+  cEl.textContent = rc.rate.toFixed(2) + ' rad/s'; cEl.classList.toggle('bled', chair.leak>0 && chair.frac>0);
+  oEl.textContent = ro.rate.toFixed(2) + ' rad/s'; oEl.classList.toggle('bled', orbit.leak>0 && orbit.frac>0);
+  $('chairFill').style.width = (clamp01((rc.rate-RATE.chair.lo)/(RATE.chair.hi-RATE.chair.lo))*100).toFixed(1)+'%';
+  $('orbitFill').style.width = (clamp01((ro.rate-RATE.orbit.lo)/(RATE.orbit.hi-RATE.orbit.lo))*100).toFixed(1)+'%';
+
+  // aria
+  chairC.setAttribute('aria-valuenow', Math.round(chair.frac*100));
+  orbitC.setAttribute('aria-valuenow', Math.round(orbit.frac*100));
+}
+
+// ── the graduated arc (HELD·L₀ at top, BLED·0 at both ends) ───────────────────────────────────────
+const arcGrp = $('arcGrp');
+const PIVX=100, PIVY=150, ARC_R=104;
+function arcPt(deg){ const a=(-90+deg)*Math.PI/180; return [PIVX+ARC_R*Math.cos(a), PIVY+ARC_R*Math.sin(a)]; }
+function buildArc(){
+  let s='';
+  const [x0,y0]=arcPt(-SAG_MAX), [x1,y1]=arcPt(SAG_MAX);
+  s += `<path d="M ${x0.toFixed(1)} ${y0.toFixed(1)} A ${ARC_R} ${ARC_R} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}" fill="none" stroke="rgba(201,162,74,0.45)" stroke-width="2"/>`;
+  // graduation ticks every ~SAG_MAX/6
+  for (let d=-SAG_MAX; d<=SAG_MAX+0.01; d+=SAG_MAX/6){
+    const [ax,ay]=arcPt(d); const [bx,by]=arcPt2(d, ARC_R-6);
+    const big = Math.abs(d)<0.5;
+    s += `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="${big?'#f4d27a':'rgba(201,162,74,0.5)'}" stroke-width="${big?2:1}"/>`;
+  }
+  const [hx,hy]=arcPt2(0, ARC_R+11);
+  const [lx,ly]=arcPt2(-SAG_MAX, ARC_R+6), [rx,ry]=arcPt2(SAG_MAX, ARC_R+6);
+  s += `<text x="${hx.toFixed(1)}" y="${(hy-2).toFixed(1)}" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#f4d27a">HELD·L₀</text>`;
+  s += `<text x="${(lx-2).toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="end" font-family="ui-monospace,monospace" font-size="8" fill="rgba(240,132,111,0.7)">BLED·0</text>`;
+  s += `<text x="${(rx+2).toFixed(1)}" y="${ry.toFixed(1)}" text-anchor="start" font-family="ui-monospace,monospace" font-size="8" fill="rgba(240,132,111,0.7)">BLED·0</text>`;
+  s += `<path id="arcHot" d="" fill="none" stroke="var(--rose)" stroke-width="2.4" opacity="0"/>`;
+  arcGrp.innerHTML = s;
+}
+function arcPt2(deg, rad){ const a=(-90+deg)*Math.PI/180; return [PIVX+rad*Math.cos(a), PIVY+rad*Math.sin(a)]; }
+function paintArc(sign, mag){
+  const hot = $('arcHot'); if (!hot) return;
+  if (mag < 0.5){ hot.setAttribute('opacity','0'); return; }
+  const from = 0, to = sign*mag;
+  const [x0,y0]=arcPt(Math.min(from,to)), [x1,y1]=arcPt(Math.max(from,to));
+  hot.setAttribute('d', `M ${x0.toFixed(1)} ${y0.toFixed(1)} A ${ARC_R} ${ARC_R} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`);
+  hot.setAttribute('opacity', (0.25 + 0.6*clamp01(mag/SAG_MAX)).toFixed(2));
+}
+
+// ── ANIMATION LOOP ───────────────────────────────────────────────────────────────────────────────
+let t0 = performance.now();
+function frame(now){
+  const t = (now - t0)/1000;
+  const dt = orbit.lastNow ? Math.min(0.05, (now - orbit.lastNow)/1000) : 0; orbit.lastNow = now;
+  // the skater keeps spinning at her honest ω (unless reduced-motion → still)
+  if (!RM){
+    const om = needleReading('chair', chair.frac, chair.leak).rate;
+    chair.spinPhase += om * dt;
+    if (!orbit.dragging && !orbit._manual) orbit.animT += dt;   // planet advances by TRUE time
+  }
+  drawChair(t); drawOrbit(t); updateNeedle();
+  requestAnimationFrame(frame);
+}
+
+// ── DRAG: the skater's arms (pointer-capture) ────────────────────────────────────────────────────
+function chairFracFromEvent(e){
+  const r = chairC.getBoundingClientRect();
+  const px = (e.clientX - r.left), py = (e.clientY - r.top);
+  const cxp = r.width/2, cyp = r.height*0.52;
+  const d = Math.hypot(px-cxp, py-cyp);
+  const R = Math.min(r.width, r.height)*0.30;
+  // map pointer distance (in units of arm-length) back to a core radius r∈[B,A]
+  const armFrac = clamp01((d/R - 0.42) / 0.62);            // inverse of drawChair's armPx map
+  const rCore = B + (A-B)*armFrac;
+  return clamp01((A - rCore)/(A - B));                     // frac: pull in (small d) → 1
+}
+bindDrag(chairC, {
+  down(e){ chair.dragging=true; grabAngle=currentNeedleAngle(); chair.frac=chairFracFromEvent(e); syncChairSlider(); },
+  move(e){ chair.frac=chairFracFromEvent(e); syncChairSlider(); },
+  up(){ chair.dragging=false; }
+});
+// keyboard: nudge arm radius
+chairC.addEventListener('keydown', e => {
+  let d = 0; if (e.key==='ArrowRight'||e.key==='ArrowUp') d=0.04; else if (e.key==='ArrowLeft'||e.key==='ArrowDown') d=-0.04; else return;
+  e.preventDefault(); grabAngle = grabAngle==null?currentNeedleAngle():grabAngle;
+  chair.frac = clamp01(chair.frac + d); syncChairSlider();
+});
+
+// ── DRAG: the planet along the orbit (pointer-capture) ───────────────────────────────────────────
+function orbitFracFromEvent(e){
+  const r = orbitC.getBoundingClientRect();
+  const px=(e.clientX-r.left), py=(e.clientY-r.top);
+  const S = Math.min(r.width, r.height)*0.24;
+  const fx = r.width/2 + S*ORBIT_E*0.5, fy = r.height*0.50;
+  let ang = Math.atan2(-(py-fy), px-fx);                   // true anomaly (undo screen y-flip)
+  return orbitFracFromTheta(ang);                          // fold to [0,π] → frac
+}
+bindDrag(orbitC, {
+  down(e){ orbit.dragging=true; orbit._manual=true; grabAngle=currentNeedleAngle(); orbit.frac=orbitFracFromEvent(e); syncOrbitSlider(); },
+  move(e){ orbit.frac=orbitFracFromEvent(e); syncOrbitSlider(); },
+  up(){ orbit.dragging=false; /* stay manual until they leave via the slider or a resume */ syncOrbitAnim(); }
+});
+orbitC.addEventListener('keydown', e => {
+  let d=0; if (e.key==='ArrowRight'||e.key==='ArrowUp') d=0.04; else if (e.key==='ArrowLeft'||e.key==='ArrowDown') d=-0.04; else return;
+  e.preventDefault(); orbit._manual=true; grabAngle=grabAngle==null?currentNeedleAngle():grabAngle;
+  orbit.frac=clamp01(orbit.frac+d); syncOrbitSlider();
+});
+// when the planet is left alone, let it resume orbiting from its current position after a beat
+function syncOrbitAnim(){ if (!RM){ orbit.animT = timeAtTheta(orbitThetaAt(orbit.frac), ORBIT_E); setTimeout(()=>{ if(!orbit.dragging) orbit._manual=false; }, 900); } }
+
+// generic pointer drag — true pointer-capture when available, but robust if it is not (capture can be
+// refused or lost on scroll/interrupt). A local `active` flag gates moves, so the drag never depends on
+// hasPointerCapture returning true; setPointerCapture is best-effort (try/catch) for tracking outside el.
+function bindDrag(el, h){
+  let active = false;
+  el.addEventListener('pointerdown', e => {
+    active = true; try { el.setPointerCapture(e.pointerId); } catch(_){}
+    el.classList.add('grabbing'); h.down(e); e.preventDefault();
+  });
+  el.addEventListener('pointermove', e => { if (active) h.move(e); });
+  const end = e => { if (!active) return; active = false; try { el.releasePointerCapture(e.pointerId); } catch(_){}
+    el.classList.remove('grabbing'); h.up(e); };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+}
+
+// ── the coarse sliders (reduced-motion / no-pointer fallback — always usable) ─────────────────────
+function syncChairSlider(){ $('chairSlider').value = Math.round(chair.frac*1000); $('chairRMval').textContent = chair.frac<0.02?'arms out':chair.frac>0.98?'tucked':'r '+needleReading('chair',chair.frac,0).r.toFixed(2)+'m'; }
+function syncOrbitSlider(){ $('orbitSlider').value = Math.round(orbit.frac*1000); $('orbitRMval').textContent = orbit.frac<0.02?'aphelion':orbit.frac>0.98?'perihelion':'θ '+(orbitThetaAt(orbit.frac)*DEG).toFixed(0)+'°'; }
+$('chairSlider').addEventListener('input', e => { grabAngle=grabAngle==null?currentNeedleAngle():grabAngle; chair.frac=clamp01(e.target.value/1000); syncChairSlider(); });
+$('orbitSlider').addEventListener('input', e => { orbit._manual=true; grabAngle=grabAngle==null?currentNeedleAngle():grabAngle; orbit.frac=clamp01(e.target.value/1000); syncOrbitSlider(); });
+
+// ── neg-control toggles ──────────────────────────────────────────────────────────────────────────
+function bindLeak(btn, world){
+  btn.addEventListener('click', () => {
+    world.leak = world.leak > 0 ? 0 : 0.85;   // "friction brake" / "off-centre tug" strength
+    const on = world.leak > 0;
+    btn.setAttribute('aria-pressed', String(on)); btn.setAttribute('aria-checked', String(on));
+  });
+}
+bindLeak($('chairLeak'), chair); bindLeak($('orbitLeak'), orbit);
+
+// ── reduced-motion sync ──────────────────────────────────────────────────────────────────────────
+function syncRM(){
+  $('chairRM').classList.toggle('show', RM);
+  $('orbitRM').classList.toggle('show', RM);
+  if (RM){ orbit._manual = true; syncChairSlider(); syncOrbitSlider(); }
+}
+
+// ── THE SELF-TEST PILL + PANEL ────────────────────────────────────────────────────────────────────
+function paintSelfTest(){
+  let r; try { r = runSelfTest(); } catch(e){
+    $('selftest').className='selftest bad'; $('selftest').textContent='✗ self-test threw'; $('selftest').title=String(e); return {passed:0,total:0}; }
+  const el = $('selftest');
+  el.textContent = (r.ok ? '✓ ' : '✗ ') + r.passed + '/' + r.total + ' · self-test';
+  el.className = 'selftest' + (r.ok ? '' : ' bad');
+  $('stSub').textContent = (r.ok ? 'all ' : r.passed + '/' + r.total + ' — ') + r.total + ' legs · two conservation laws, one shared needle (the chip runs the SAME runSelfTest as the Node twin).';
+  const list = $('stList'); list.innerHTML = '';
+  for (const c of r.checks){
+    const row = document.createElement('div'); row.className = 'stRow ' + (c.ok ? 'ok' : 'no');
+    row.innerHTML = '<span class="mk">' + (c.ok ? '✓' : '✗') + '</span><span class="tx">' + c.name + '<span class="dt">' + (c.info||'') + '</span></span>';
+    list.appendChild(row);
+  }
+  return r;
+}
+$('selftest').addEventListener('click', () => $('stPanel').classList.toggle('open'));
+$('stClose').addEventListener('click', () => $('stPanel').classList.remove('open'));
+
+// ── BOOT ─────────────────────────────────────────────────────────────────────────────────────────
+buildArc();
+syncRM();
+syncChairSlider(); syncOrbitSlider();
+const selfTestResult = paintSelfTest();
+requestAnimationFrame(frame);
+// front-door breadcrumb (this piece has been seen)
+try{ const k='ws:seen:cross-the-spin-they-keep'; if(!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); }catch(e){}
+
+// ── expose for the headless liveness twin (drives the piece's OWN real entry) ─────────────────────
+window.__SPIN_SELFTEST__ = (() => { try { const r = runSelfTest(); return { pass:r.passed, total:r.total }; } catch(e){ return {pass:0,total:0}; } })();
+window.__spin = {
+  // the REAL entry the pointer handlers also call — set a world's push and re-render honestly
+  dragChairTo(frac){ chair.frac = clamp01(frac); chair.dragging=true; grabAngle = grabAngle==null?currentNeedleAngle():grabAngle; updateNeedle(); syncChairSlider(); },
+  dragOrbitTo(frac){ orbit._manual=true; orbit.frac = clamp01(frac); orbit.dragging=true; grabAngle = grabAngle==null?currentNeedleAngle():grabAngle; updateNeedle(); syncOrbitSlider(); },
+  release(){ chair.dragging=false; orbit.dragging=false; },
+  setLeak(world, on){ (world==='chair'?chair:orbit).leak = on?0.85:0; const btn=$(world==='chair'?'chairLeak':'orbitLeak'); btn.setAttribute('aria-pressed',String(!!on)); btn.setAttribute('aria-checked',String(!!on)); updateNeedle(); },
+  grab(){ grabAngle = currentNeedleAngle(); },
+  needleAngle(){ return currentNeedleAngle(); },              // the browser's OWN rendered angle
+  rates(){ return { chair: $('chairRate').textContent, orbit: $('orbitRate').textContent }; },
+  reading(scene){ return needleReading(scene, (scene==='chair'?chair:orbit).frac, (scene==='chair'?chair:orbit).leak); },
+  index(){ return needleIndex(chair.frac, chair.leak, orbit.frac, orbit.leak); },
+  runSelfTest, runPayoffLiveness,
+};
+</script>
+</body>
+</html>
