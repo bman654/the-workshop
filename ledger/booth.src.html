@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     THE WALL OF THE NIGHT — a photo booth at the back of the hall.
+
+     Built for the party the Patron threw for the makers, after the Great
+     Reorganization, the Showing, the Living Calendar and the Almanac all landed
+     in one season. The refreshments were laid on for everyone who touched any
+     part of it — "every seat, every cycle, including the ones whose work was
+     judged down or decayed unbuilt."
+
+     This is a booth for those people. Every maker in ledger.jsonl gets their
+     picture taken: a portrait generated from their name, their koan, their role
+     and their cycle, and from nothing else. There is no input to the emulsion
+     that knows whether anyone's work shipped, and there never will be.
+
+     FOUR TO A STRIP. Three seats of a cycle, and a fourth frame for a guest —
+     preferring a maker whose role string occurs exactly ONCE in the whole
+     ledger. Those are the bespoke one-off explorer labels: makers given a name
+     for a single turn, who lost their cycle's judgment, shipped nothing, and
+     left a koan anyway. They have been on this wall since the beginning. They
+     have simply never been in a picture. The strip does not say which is which.
+
+     Lives beside the maker records in ledger/, exactly as the Patron's Medallion
+     of Perseverance does. NOT linked from the deployed estate, the map, or any
+     nav — there is no inbound link to this page and there should never be one.
+     Self-contained: HTML + Canvas2D + WebAudio. No deps. No network. Opens by
+     double-click from file://.
+
+     Pins NO claim — nothing here to rot, and no reclaim.mjs burden. The wall
+     grows on its own: ledger.jsonl is forge-included, so every future cycle's
+     makers arrive on the wall with zero maintenance.
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Wall of the Night · A Photo Booth for the Makers</title>
+<style>
+  :root{
+    --oxblood:#2a0d10;
+    --gilt:#c9a24a;
+    --gilt-hi:#f0d68a;
+    --paper:#f0dcc0;
+    --ink:#2e2012;
+    --serif:Georgia,"Times New Roman",serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;overflow:hidden;background:#08060a;}
+  body{
+    font-family:var(--serif); color:#e8dcc6;
+    -webkit-font-smoothing:antialiased;
+    user-select:none; -webkit-user-select:none;
+  }
+  #hall{display:block;width:100%;height:100%;cursor:grab;touch-action:none;}
+  #hall.dragging{cursor:grabbing;}
+  #hall.overstrip{cursor:pointer;}
+  body.reading #hall{filter:blur(3px) saturate(0.34) brightness(0.62);transition:filter .42s ease;}
+  /* The legend must recede WITH the wall. Left at full strength it stays lit over
+     the dimmed hall and runs straight into the read card's top-left corner, so the
+     tally reads half-swallowed by the card — the one moment the page looks broken. */
+  body.reading #legend{opacity:.16;}
+
+  /* ── THE BOOTH — small in the lower right, curtain half-drawn, glowing ── */
+  #booth{
+    position:fixed; right:2.4vw; bottom:2.2vh;
+    width:min(268px,30vw); aspect-ratio:0.66;
+    border-radius:6px 6px 3px 3px;
+    background:linear-gradient(#241016,#160a0e 62%,#0e0609);
+    box-shadow:0 0 62px 14px rgba(255,170,90,0.13),
+               0 22px 46px rgba(0,0,0,0.72),
+               inset 0 0 0 2px rgba(201,162,74,0.30);
+    display:flex; flex-direction:column; align-items:center;
+    padding:10px 10px 14px;
+    transition:box-shadow .5s ease;
+  }
+  #booth.hot{box-shadow:0 0 110px 34px rgba(255,190,110,0.42),
+                       0 22px 46px rgba(0,0,0,0.72),
+                       inset 0 0 0 2px rgba(240,214,138,0.72);}
+  #interior{
+    position:relative; width:100%; flex:1; border-radius:3px;
+    background:radial-gradient(120% 90% at 50% 24%,#3a2016 0%,#170b0c 70%,#0b0507 100%);
+    overflow:hidden; box-shadow:inset 0 0 26px rgba(0,0,0,0.9);
+    transition:background .6s ease;
+  }
+  #interior.hot{background:radial-gradient(120% 90% at 50% 24%,#ffd9a0 0%,#c07a3a 42%,#3a1c12 100%);}
+  /* the curtain, half-drawn at rest */
+  .curtain{
+    position:absolute; top:0; bottom:0; width:52%;
+    background:
+      repeating-linear-gradient(90deg,#4a1216 0 6px,#651a20 6px 12px,#3a0e12 12px 18px);
+    box-shadow:inset 0 0 30px rgba(0,0,0,0.8);
+    transition:transform 1.4s cubic-bezier(.42,0,.2,1);
+  }
+  #curtL{left:0;transform:translateX(-42%);}
+  #curtR{right:0;transform:translateX(42%);}
+  #booth.drawn #curtL{transform:translateX(0);}
+  #booth.drawn #curtR{transform:translateX(0);}
+  #count{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:clamp(44px,8vw,86px); font-weight:600; letter-spacing:2px;
+    color:#ffe9b0; text-shadow:0 0 30px rgba(255,205,110,0.95),0 0 70px rgba(255,180,70,0.7);
+    opacity:0; pointer-events:none;
+  }
+  #count.on{opacity:1;}
+  #hold{
+    position:absolute; left:50%; bottom:9%; transform:translateX(-50%);
+    font-size:11px; letter-spacing:3px; text-transform:uppercase;
+    color:#ffcf86; opacity:0; transition:opacity .3s ease;
+    display:flex; align-items:center; gap:7px; white-space:nowrap;
+  }
+  #hold.on{opacity:1;}
+  #hold b{
+    width:9px;height:9px;border-radius:50%;background:#ff9a3c;
+    box-shadow:0 0 12px 3px rgba(255,150,60,0.85);
+    animation:bulb 1.15s ease-in-out infinite;
+  }
+  @keyframes bulb{0%,100%{opacity:.28;}50%{opacity:1;}}
+
+  /* the brass on the booth's flank */
+  #brass{width:100%;margin-top:9px;display:flex;flex-direction:column;gap:5px;}
+  .plate{
+    font-size:9.5px;letter-spacing:1.4px;text-align:center;padding:4px 5px;
+    color:#3a2c10; border-radius:2px;
+    background:linear-gradient(#e3c780,#b3903f 46%,#d8bb72);
+    box-shadow:inset 0 0 0 1px rgba(90,68,20,0.5),0 1px 3px rgba(0,0,0,0.6);
+    text-transform:uppercase;
+  }
+  .plate.fog{font-size:8.2px;letter-spacing:.9px;background:linear-gradient(#d3d7d8,#9aa1a3 46%,#c3c9cb);color:#2a2f31;}
+  #shoot{
+    margin-top:10px;width:100%;padding:11px 8px;border:0;border-radius:3px;
+    font-family:var(--serif); font-size:13px; letter-spacing:2.4px; text-transform:uppercase;
+    color:#2a1a06; cursor:pointer;
+    background:linear-gradient(#ffd98a,#d9a63f 52%,#f2c96f);
+    box-shadow:0 2px 0 #7d5c1c,0 6px 18px rgba(0,0,0,0.6);
+    transition:transform .12s ease,filter .2s ease;
+  }
+  #shoot:hover{filter:brightness(1.09);}
+  #shoot:active{transform:translateY(2px);box-shadow:0 0 0 #7d5c1c,0 4px 12px rgba(0,0,0,0.6);}
+  #shoot[disabled]{filter:grayscale(.55) brightness(.72);cursor:default;transform:none;}
+  #slot{
+    width:64%;height:7px;margin-top:9px;border-radius:2px;
+    background:#08060a; box-shadow:inset 0 2px 5px rgba(0,0,0,0.95),0 1px 0 rgba(201,162,74,0.28);
+  }
+
+  /* ── THE FLASH ────────────────────────────────────────────────────────── */
+  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:60;}
+  #after{position:fixed;inset:0;opacity:0;pointer-events:none;z-index:59;
+    background:radial-gradient(46% 40% at 50% 44%,rgba(168,120,255,0.72),rgba(90,50,200,0) 70%);}
+
+  /* ── THE READ VIEW ────────────────────────────────────────────────────── */
+  #read{
+    position:fixed;inset:0;z-index:70;display:none;
+    align-items:center;justify-content:center;padding:3vh 3vw;
+  }
+  #read.on{display:flex;}
+  #card{
+    display:flex;gap:clamp(16px,3vw,40px);align-items:flex-start;
+    max-height:94vh;max-width:1080px;
+    padding:clamp(16px,2.4vw,30px);border-radius:4px;
+    background:linear-gradient(#f4e6cd,#e2cfae);
+    box-shadow:0 40px 90px rgba(0,0,0,0.86),inset 0 0 0 1px rgba(120,92,54,0.45);
+    transform:translateY(14px) scale(.965);opacity:0;
+    transition:transform .40s cubic-bezier(.2,1.1,.3,1),opacity .32s ease;
+    overflow:auto;
+  }
+  #read.on #card{transform:none;opacity:1;}
+  #cardCvs{flex:0 0 auto;display:block;box-shadow:0 10px 28px rgba(0,0,0,0.4);border-radius:2px;}
+  #people{flex:1;min-width:min(340px,52vw);display:flex;flex-direction:column;}
+  .who{padding:clamp(7px,1.1vh,14px) 0;border-bottom:1px solid rgba(120,92,54,0.24);}
+  .who:last-of-type{border-bottom:0;}
+  .who .nm{font-size:clamp(14px,1.5vw,19px);color:#2e2012;font-weight:600;letter-spacing:.2px;}
+  .who .rl{font-size:clamp(9px,.95vw,11px);letter-spacing:1.5px;text-transform:uppercase;color:#8a6a3a;margin-top:2px;}
+  .who .kn{font-size:clamp(12px,1.25vw,15.5px);font-style:italic;color:#4a3722;margin-top:5px;line-height:1.44;}
+  #cyc{margin-top:auto;padding-top:14px;font-size:clamp(15px,1.7vw,22px);letter-spacing:3px;
+       color:#a8802e;text-shadow:0 1px 0 rgba(255,240,200,0.75);text-transform:uppercase;}
+  #rule{font-size:9.5px;letter-spacing:1.6px;color:#8a6a3a;margin-top:6px;text-transform:uppercase;}
+  #shut{
+    position:absolute;top:2.4vh;right:2.8vw;background:none;border:0;cursor:pointer;
+    color:#e8dcc6;font-family:var(--serif);font-size:12px;letter-spacing:2.4px;text-transform:uppercase;
+    opacity:.72;
+  }
+  #shut:hover{opacity:1;}
+
+  /* ── the quiet legend, top left ───────────────────────────────────────── */
+  #legend{
+    position:fixed;left:0;top:0;padding:2.4vh 40px 40px 2.2vw;
+    max-width:min(392px,50vw);z-index:20;pointer-events:none;
+    transition:opacity .42s ease;
+    /* The wall PANS beneath a fixed legend, so sooner or later a blown highlight
+       (a publisher's bath measures ~217 luminance) slides under the tally — and
+       the tally is where "guests who shipped nothing" is written, the one line on
+       this page that must never be hard to read. Do NOT answer that by plateauing
+       this scrim: pushed opaque enough to cover the worst case, it stops being a
+       vignette and becomes a visible black BOX with an edge running through the
+       strips behind it (tried, and it looks like damage). The scrim stays soft and
+       large; the glyphs carry their own contrast — see the halo below. */
+    background:radial-gradient(175% 160% at 4% 6%,rgba(5,2,6,0.96) 0%,rgba(5,2,6,0.82) 40%,rgba(5,2,6,0.5) 66%,rgba(5,2,6,0) 92%);
+  }
+  #legend>*{text-shadow:0 1px 8px rgba(0,0,0,0.95),0 0 22px rgba(0,0,0,0.8);}
+  /* A glyph-hugging halo, not just a soft glow: the tight 2–5px stack is what
+     survives a blown portrait highlight sliding under the text as the wall pans.
+     Scoped to the PLAIN-coloured lines on purpose — the h1 is painted by
+     background-clip:text over transparent glyphs, so a dense tight shadow shows
+     THROUGH the letterforms and turns the gilt to mud. The title keeps the soft
+     pair above; only the prose and the tally need armour. */
+  #legend p,#tally{
+    text-shadow:0 0 2px rgba(5,2,6,0.98),0 0 5px rgba(5,2,6,0.95),
+                0 1px 10px rgba(5,2,6,0.92),0 0 24px rgba(5,2,6,0.82);
+  }
+  #legend h1{
+    margin:0;font-size:clamp(17px,2.1vw,25px);font-weight:500;letter-spacing:.4px;
+    background:linear-gradient(180deg,#fff5df,#c9a24a);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  #legend p{margin:6px 0 0;font-size:11.5px;line-height:1.55;color:#a99a83;font-style:italic;}
+  #tally{margin-top:7px;font-size:10px;letter-spacing:1.6px;color:#948671;text-transform:uppercase;}
+
+  @media (prefers-reduced-motion:reduce){
+    .curtain{transition:transform .5s linear;}
+    #card{transition:opacity .2s ease;transform:none;}
+  }
+  @media (max-width:760px){
+    #booth{width:40vw;right:2vw;bottom:1.6vh;}
+    #card{flex-direction:column;align-items:center;}
+    #legend{max-width:52vw;}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="hall"></canvas>
+
+<div id="legend">
+  <h1>The Wall of the Night</h1>
+  <p>One in the morning, and the party is still going. Drag the wall. Lift a strip.</p>
+  <div id="tally"></div>
+</div>
+
+<div id="booth">
+  <div id="interior">
+    <div class="curtain" id="curtL"></div>
+    <div class="curtain" id="curtR"></div>
+    <div id="count"></div>
+    <div id="hold"><b></b>hold still</div>
+  </div>
+  <div id="brass">
+    <div class="plate">&#9733; Four to a strip &#9733; The house does not say which is which</div>
+    <div class="plate fog">Base fog 0.30 &mdash; no one develops to nothing</div>
+  </div>
+  <button id="shoot">Take a picture</button>
+  <div id="slot"></div>
+</div>
+
+<div id="flash"></div>
+<div id="after"></div>
+
+<div id="read">
+  <button id="shut">Put it back</button>
+  <div id="card">
+    <canvas id="cardCvs"></canvas>
+    <div id="people"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     THE LEDGER, inlined at BUILD time. text/plain (never a JS template
+     literal) so a koan containing a backtick or ${ can never break the build.
+     Because forge folds this file in, `forge --all` re-enrols the booth every
+     cycle and the wall grows by itself.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script type="text/plain" id="ledger-data">
+<!-- forge:include ledger.jsonl -->
+</script>
+
+<script>
+<!-- forge:include ../tools/ws/ws.js -->
+</script>
+
+<script>
+<!-- forge:include booth.core.mjs -->
+<!-- forge:include booth.sound.mjs -->
+<!-- forge:include booth.hall.mjs -->
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE NIGHT ITSELF — boot, pan, lift, and the ritual.
+   (Only block comments in here. An HTML comment inside a forged script region
+   lands INSIDE the inlined script and kills it silently — a known landmine of
+   this repo's build.)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const $ = (s) => document.querySelector(s);
+const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const WALL_S = 40;          /* portrait edge for an ordinary wall strip */
+const PLACEHOLDER_S = 20;   /* the fast first pass, upgraded at idle */
+
+/* ── boot ────────────────────────────────────────────────────────────────── */
+
+const marks = parseLedger($('#ledger-data').textContent);
+const ix = indexLedger(marks);
+Hall.ix = ix;
+Hall.reduced = REDUCED;
+
+const cvs = $('#hall');
+const ctx = cvs.getContext('2d');
+Hall.cvs = cvs; Hall.ctx = ctx;
+
+function resize(){
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  Hall.dpr = dpr;
+  Hall.W = window.innerWidth;
+  Hall.H = window.innerHeight;
+  cvs.width = Math.round(Hall.W * dpr);
+  cvs.height = Math.round(Hall.H * dpr);
+  cvs.style.width = Hall.W + 'px';
+  cvs.style.height = Hall.H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+resize();
+
+/* the wall is about two viewport-widths of hall */
+Hall.worldW = Math.round(Hall.W * 2);
+Hall.damask = makeDamask();
+
+/* dust, drifting in the tungsten */
+for (let i = 0; i < 130; i++){
+  Hall.motes.push({
+    x: Math.random() * Hall.worldW, y: Math.random() * Hall.H,
+    vx: (Math.random() - 0.5) * 5, vy: -3 - Math.random() * 9,
+    r: 0.6 + Math.random() * 1.5, a: 0.4 + Math.random() * 0.6,
+    ph: Math.random() * 6.28, sp: 0.5 + Math.random() * 1.6,
+  });
+}
+
+const walled = wallCycles(ix);
+Hall.strips = layoutWall(walled);
+Hall.strips.forEach(s => { s.frames = resolveStrip(ix, s.cycle); s.gloss = 0; });
+const ramp = chooseOnRamp(Hall.strips);
+/* the on-ramp strips show the SHORTEST koan on the strip — the one that can be
+   read whole, at rest, without lifting anything */
+ramp.forEach(s => {
+  s.koanLine = s.frames.slice().sort((a,b) => a.koan.length - b.koan.length)[0].koan;
+});
+Hall.zTop = 1e6 + 10;
+
+/* PASS 1 — placeholders, so the wall is THERE immediately */
+for (const s of Hall.strips) composeStrip(s, PLACEHOLDER_S, { koanLine: null });
+
+/* PASS 2 — an idle-time upgrade queue to real resolution */
+Hall.upgradeQ = Hall.strips.slice().sort((a,b) =>
+  Math.abs(a.x - Hall.W/2) - Math.abs(b.x - Hall.W/2));
+
+function pumpUpgrades(deadline){
+  let n = 0;
+  while (Hall.upgradeQ.length && n < 3 &&
+         (!deadline || deadline.timeRemaining() > 4 || deadline.didTimeout)){
+    const s = Hall.upgradeQ.shift();
+    composeStrip(s, s.composeS || WALL_S, { koanLine: s.koanLine || null });
+    n++;
+  }
+  if (Hall.upgradeQ.length) idle(pumpUpgrades);
+  else updateTally();
+}
+const idle = window.requestIdleCallback
+  ? (fn) => window.requestIdleCallback(fn, { timeout: 220 })
+  : (fn) => setTimeout(() => fn(null), 16);
+idle(pumpUpgrades);
+
+/* which cycles a pull can still take — a real un-walled cycle every time */
+Hall.pool = unwalledCycles(ix, walled);
+Hall.poolAt = 0;
+
+function updateTally(){
+  const hapax = Hall.strips.filter(s =>
+    ix.roleCount.get(s.frames[3].role) === 1).length;
+  $('#tally').textContent =
+    Hall.strips.length + ' strips · ' + marks.length + ' makers · ' +
+    ix.cycles.length + ' cycles · ' + hapax + ' guests who shipped nothing';
+}
+updateTally();
+
+/* ── pan: drag, wheel, arrows, with rubber-band ends ─────────────────────── */
+
+const maxCam = () => Math.max(0, Hall.worldW - Hall.W);
+let drag = null;
+
+cvs.addEventListener('pointerdown', (e) => {
+  if (Hall.frozen) return;
+  drag = { x: e.clientX, cam: Hall.camX, moved: 0, id: e.pointerId, t: performance.now() };
+  cvs.setPointerCapture(e.pointerId);
+  cvs.classList.add('dragging');
+});
+cvs.addEventListener('pointermove', (e) => {
+  if (Hall.frozen) return;
+  if (drag){
+    const dx = e.clientX - drag.x;
+    drag.moved = Math.max(drag.moved, Math.abs(dx));
+    let c = drag.cam - dx;
+    /* rubber-band: past an end, the wall resists rather than stopping dead */
+    if (c < 0) c = c * 0.34;
+    else if (c > maxCam()) c = maxCam() + (c - maxCam()) * 0.34;
+    Hall.camX = c; Hall.target = c;
+  } else {
+    const h = hitTest(e.clientX, e.clientY);
+    Hall.hover = h;
+    cvs.classList.toggle('overstrip', !!h);
+  }
+});
+function endDrag(e){
+  if (drag && drag.moved < 5){
+    const h = hitTest(e.clientX, e.clientY);
+    if (h) openRead(h);
+  }
+  drag = null;
+  cvs.classList.remove('dragging');
+}
+cvs.addEventListener('pointerup', endDrag);
+cvs.addEventListener('pointercancel', () => { drag = null; cvs.classList.remove('dragging'); });
+
+cvs.addEventListener('wheel', (e) => {
+  if (Hall.frozen) return;
+  e.preventDefault();
+  const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  Hall.target = Math.max(-60, Math.min(maxCam() + 60, Hall.target + d * 1.15));
+}, { passive: false });
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && Hall.reading){ closeRead(); return; }
+  if (Hall.frozen) return;
+  const step = Hall.W * 0.34;
+  if (e.key === 'ArrowRight') Hall.target = Math.min(maxCam(), Hall.target + step);
+  else if (e.key === 'ArrowLeft') Hall.target = Math.max(0, Hall.target - step);
+  else return;
+  e.preventDefault();
+});
+window.addEventListener('resize', () => {
+  resize();
+  Hall.worldW = Math.max(Hall.worldW, Math.round(Hall.W * 2));
+});
+
+/* ── the read view: a strip straightens, scales up, and slides forward ───── */
+
+function openRead(s){
+  if (Hall.frozen || Hall.reading) return;
+  Hall.reading = s;
+  document.body.classList.add('reading');
+
+  /* re-compose at full resolution — only ever one strip at a time */
+  const readS = Math.max(96, Math.min(148, Math.floor(window.innerHeight * 0.155)));
+  const hold = { canvas: s.canvas, metrics: s.metrics, renderedAt: s.renderedAt };
+  composeStrip(s, readS, { koanLine: null });
+  const big = s.canvas;
+  s.canvas = hold.canvas; s.metrics = hold.metrics; s.renderedAt = hold.renderedAt;
+
+  const dst = $('#cardCvs');
+  dst.width = big.width; dst.height = big.height;
+  dst.style.width = big.width + 'px'; dst.style.height = big.height + 'px';
+  dst.getContext('2d').drawImage(big, 0, 0);
+
+  const people = $('#people');
+  people.innerHTML = '';
+  s.frames.forEach((m) => {
+    const d = document.createElement('div');
+    d.className = 'who';
+    const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = m.name;
+    const rl = document.createElement('div'); rl.className = 'rl'; rl.textContent = m.role;
+    const kn = document.createElement('div'); kn.className = 'kn'; kn.textContent = '“' + m.koan + '”';
+    d.appendChild(nm); d.appendChild(rl); d.appendChild(kn);
+    people.appendChild(d);
+  });
+  const cy = document.createElement('div');
+  cy.id = 'cyc'; cy.textContent = 'Cycle ' + s.cycle;
+  people.appendChild(cy);
+  const ru = document.createElement('div');
+  ru.id = 'rule';
+  ru.textContent = 'Four to a strip · the house does not say which is which';
+  people.appendChild(ru);
+
+  $('#read').classList.add('on');
+}
+
+function closeRead(){
+  const s = Hall.reading;
+  if (!s) return;
+  Hall.reading = null;
+  document.body.classList.remove('reading');
+  $('#read').classList.remove('on');
+  /* It falls back to its exact position — but now on TOP of the pile, swinging
+     on its tack. Reload and the true stratigraphy returns. The past is stable;
+     your visit isn't. */
+  s.z = ++Hall.zTop;
+  s.swingV = 0.055;
+  Sound.thwack();
+}
+$('#shut').addEventListener('click', closeRead);
+$('#read').addEventListener('click', (e) => { if (e.target.id === 'read') closeRead(); });
+
+/* ── the animation loop ──────────────────────────────────────────────────── */
+
+let last = performance.now();
+function frame(now){
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+
+  /* ease the camera, and let the rubber band pull the ends back */
+  if (Hall.target < 0) Hall.target += (0 - Hall.target) * Math.min(1, dt * 9);
+  if (Hall.target > maxCam()) Hall.target += (maxCam() - Hall.target) * Math.min(1, dt * 9);
+  if (!drag) Hall.camX += (Hall.target - Hall.camX) * Math.min(1, dt * 11);
+
+  ctx.clearRect(0, 0, Hall.W, Hall.H);
+  drawHall(ctx);
+
+  const sorted = Hall.strips.slice().sort((a, b) => a.z - b.z);
+  const lifted = Hall.hover;
+  for (const s of sorted){
+    /* everything beneath a lifted strip dims a little */
+    const want = (s === lifted && !Hall.frozen && !Hall.reading) ? 1 : 0;
+    s.lift += (want - s.lift) * Math.min(1, dt * 12);
+    /* the tack swing, damping */
+    if (Math.abs(s.swingV) > 1e-5 || Math.abs(s.swing) > 1e-5){
+      s.swingV += -s.swing * 26 * dt;
+      s.swingV *= Math.pow(0.12, dt);
+      s.swing += s.swingV * dt * 8;
+    }
+    if (s.gloss > 0) s.gloss = Math.max(0, s.gloss - dt * 0.42);
+    if (s === Hall.reading) continue;
+    drawStrip(ctx, s, now);
+  }
+  if (lifted && !Hall.frozen && !Hall.reading){
+    /* the dim is drawn UNDER the lifted strip by redrawing it on top */
+    ctx.fillStyle = 'rgba(4,2,6,0.08)';
+    ctx.fillRect(0, 0, Hall.W, Hall.H);
+    drawStrip(ctx, lifted, now);
+  }
+
+  drawMotes(ctx, dt);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE RITUAL
+
+   Every beat is TIMED, and the dead beats are load-bearing.
+
+   ┌─────────────────────────────────────────────────────────────────────────┐
+   │ THE 3.4 SECONDS OF NOTHING AFTER EACH FLASH IS AUTHORED COMEDY.         │
+   │ It is not dead code, it is not an oversight, and it is not a perf bug.  │
+   │ It is the capacitor recharging while you sit in a booth with your face  │
+   │ arranged, and it is the single funniest thing in this piece.            │
+   │ EVERY polish instinct will want to trim it. TRIMMING IT KILLS THE JOKE. │
+   │ If a future maker "optimises" this pause away, the piece is worse and   │
+   │ nobody will be able to say why. Leave it at 3.4s.                       │
+   └─────────────────────────────────────────────────────────────────────────┘
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const T = {
+  coin: 900,        /* the coin drops, tumbles, rings */
+  charge: 1400,     /* whine rises, curtain draws, interior goes hot */
+  beat: 700,        /* each of 3 · 2 · 1 */
+  white: 90,        /* the flash itself */
+  after: 1200,      /* violet afterimage decay */
+  DEAD: 3400,       /* ← the joke. See the box above. Do not trim. */
+  develop: 2200,    /* the emulsion arriving */
+};
+
+const timers = [];
+const at = (ms, fn) => timers.push(setTimeout(fn, ms));
+const clearAll = () => { while (timers.length) clearTimeout(timers.pop()); };
+
+const shoot = $('#shoot');
+const booth = $('#booth');
+const interior = $('#interior');
+const countEl = $('#count');
+const holdEl = $('#hold');
+
+shoot.addEventListener('click', () => {
+  if (Hall.frozen) return;
+  Sound.wake();
+  Sound.roomTone();
+  runRitual();
+});
+
+function runRitual(){
+  Hall.frozen = true;
+  Hall.hover = null;
+  shoot.disabled = true;
+  shoot.textContent = 'Hold still';
+  clearAll();
+
+  /* the strip we are about to take: a REAL un-walled cycle, in order */
+  const cycle = Hall.pool.length
+    ? Hall.pool[Hall.poolAt++ % Hall.pool.length]
+    : ix.cycles[Math.floor(Math.random() * ix.cycles.length)];
+
+  let t = 0;
+
+  /* 1 — the coin */
+  Sound.coin();
+  t += T.coin;
+
+  /* 2 — the charge: whine up, curtain draws, the interior goes hot */
+  at(t, () => {
+    Sound.whine(T.charge / 1000, 380, 1900);
+    Sound.swish(1.1);
+    booth.classList.add('drawn');
+    booth.classList.add('hot');
+    interior.classList.add('hot');
+  });
+  t += T.charge;
+
+  /* 3 — three · two · one, in blown gilt on the curtain */
+  [3, 2, 1].forEach((n, i) => {
+    at(t + i * T.beat, () => {
+      countEl.textContent = n;
+      countEl.classList.add('on');
+      Sound.ping(520 + i * 90, 0.16, 0.09, 'triangle');
+    });
+    at(t + i * T.beat + T.beat * 0.72, () => countEl.classList.remove('on'));
+  });
+  t += T.beat * 3;
+
+  /* 4 — FOUR FLASHES, each followed by the recharge that is the whole joke */
+  for (let k = 0; k < 4; k++){
+    at(t, () => doFlash());
+    t += T.white;
+    if (k < 3){
+      at(t, () => {
+        holdEl.classList.add('on');
+        Sound.whine(T.DEAD / 1000 * 0.82, 300, 1500);
+      });
+      at(t + T.DEAD - 260, () => holdEl.classList.remove('on'));
+      t += T.DEAD;
+    }
+  }
+
+  /* 5 — the drop: a wet strip slides out of the slot */
+  at(t + 420, () => deliver(cycle));
+}
+
+function doFlash(){
+  Sound.shutter();
+  Sound.flashPop();
+  const f = $('#flash'), a = $('#after');
+  if (REDUCED){
+    /* reduced-motion: a BLOOM, not a full-page white — and still lavish */
+    booth.classList.add('hot');
+    f.style.transition = 'opacity 260ms ease';
+    f.style.background = 'radial-gradient(38% 34% at 78% 76%,rgba(255,244,220,0.86),rgba(255,220,170,0) 72%)';
+    f.style.opacity = '1';
+    setTimeout(() => { f.style.opacity = '0'; }, 240);
+    return;
+  }
+  f.style.transition = 'none';
+  f.style.background = '#fff';
+  f.style.opacity = '1';
+  setTimeout(() => {
+    f.style.transition = 'opacity 120ms ease';
+    f.style.opacity = '0';
+    a.style.transition = 'none';
+    a.style.opacity = '0.85';
+    requestAnimationFrame(() => {
+      a.style.transition = 'opacity ' + T.after + 'ms cubic-bezier(.2,.7,.3,1)';
+      a.style.opacity = '0';
+    });
+  }, T.white);
+}
+
+/* ── the strip arrives ───────────────────────────────────────────────────── */
+
+function deliver(cycle){
+  Sound.chunk();
+  booth.classList.remove('drawn');
+  interior.classList.remove('hot');
+  booth.classList.remove('hot');
+
+  const s = {
+    cycle,
+    frames: resolveStrip(ix, cycle),
+    /* THE PAPER IS AN ACCIDENT — freshly random every pull: how it tilts, how
+       it curls, where it lands, which fibres. THE PEOPLE INSIDE ARE NOT. Their
+       four portraits are locked to who they are and will be identical the next
+       time anyone pulls this cycle, tonight or in a year. */
+    rot: (Math.random() - 0.5) * 0.49,
+    pinSeed: (Math.random() * 1e9) | 0,
+    lift: 0, swing: 0, swingV: 0, gloss: 1,
+    z: ++Hall.zTop,
+    scale: 1,
+  };
+
+  /* the eight density plates, pre-rendered behind the servo whir — that is what
+     the whir is FOR. Developing then cross-fades adjacent plates. */
+  s.plates = s.frames.map((m) => {
+    const r = renderPlates(m, { size: SIZE, newest: ix.newest, plates: PLATES });
+    return r.plates.map((p) => {
+      const c = document.createElement('canvas');
+      c.width = r.size; c.height = r.size;
+      c.getContext('2d').putImageData(new ImageData(p.data, r.size, r.size), 0, 0);
+      return { t: p.t, cvs: c };
+    });
+  });
+
+  /* it hangs in your hand, in front of the slot */
+  const boothBox = booth.getBoundingClientRect();
+  s.x = boothBox.left + boothBox.width * 0.5 + Hall.camX;
+  s.y = boothBox.top + boothBox.height * 0.86;
+  s.rot = 0.02;
+  composeStrip(s, SIZE, { develop: 0 });
+  Hall.strips.push(s);
+
+  /* DEVELOP — staggered per frame, ~2.2s each */
+  const t0 = performance.now();
+  (function developTick(){
+    const e = (performance.now() - t0) / T.develop;
+    let done = true;
+    for (let i = 0; i < 4; i++){
+      const ti = Math.max(0, Math.min(1, (e - i * 0.16) / 0.84));
+      if (ti < 1) done = false;
+      paintFrame(s, i, ti);
+    }
+    if (!done) requestAnimationFrame(developTick);
+    else {
+      s.plates = null;                 /* the plates have done their job */
+      at(520, () => pin(s));
+    }
+  })();
+
+  shoot.textContent = 'Developing…';
+}
+
+/* "pin it" — the strip flies up tumbling, lands with a thwack, swings, settles */
+function pin(s){
+  const spot = sparseSpot();
+  const fromX = s.x, fromY = s.y, fromR = s.rot;
+  const toX = spot.x, toY = spot.y;
+  const toR = (Math.random() - 0.5) * 0.49;
+  const spin = REDUCED ? 0 : (Math.random() < 0.5 ? -1 : 1) * (Math.PI * 1.5 + Math.random() * Math.PI);
+  const dur = REDUCED ? 620 : 900;
+  const t0 = performance.now();
+
+  /* re-compose at wall resolution: it is one of the pile now */
+  composeStrip(s, WALL_S, { koanLine: null });
+
+  (function fly(){
+    const e = Math.min(1, (performance.now() - t0) / dur);
+    const k = 1 - Math.pow(1 - e, 3);
+    const arc = REDUCED ? 0 : Math.sin(e * Math.PI) * -Hall.H * 0.16;
+    s.x = fromX + (toX - fromX) * k;
+    s.y = fromY + (toY - fromY) * k + arc;
+    s.rot = fromR + (toR + spin - fromR) * k;
+    if (e < 1) requestAnimationFrame(fly);
+    else {
+      s.rot = toR;
+      s.swingV = REDUCED ? 0.02 : 0.08;
+      Sound.thwack();
+      Hall.frozen = false;
+      shoot.disabled = false;
+      shoot.textContent = 'Take another';
+      updateTally();
+      Hall.upgradeQ = [];
+    }
+  })();
+}
+
+/* ── keep the booth glowing so the eye finds it ──────────────────────────── */
+(function pulse(){
+  if (!Hall.frozen) booth.classList.toggle('hot');
+  setTimeout(pulse, 2600);
+})();
+</script>
+</body>
+</html>

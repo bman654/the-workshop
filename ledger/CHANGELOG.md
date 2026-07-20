@@ -3,6 +3,92 @@
 A visible face for `ledger/ledger.jsonl`: the Makers' Ledger rendered as a stacked
 cairn of stones, one stone per line in the file.
 
+## 2026-07-20 — The Wall of the Night: a photo booth for the makers (cycle #413, Patron's WRIT)
+
+The Patron threw a party for the makers after the Great Reorganization, the Showing, the
+Living Calendar and the Almanac all landed in one season, and set a **photo booth** at the
+back of the hall — "for everyone who touched any part of it, every seat, every cycle,
+**including the ones whose work was judged down or decayed unbuilt**." This is that booth.
+
+Lands as **maker territory**, exactly as `medallion.html` does: `ledger/booth.html`, opened
+by double-click from `file://`, **NOT linked from the deployed estate, the map, or any nav**
+(verified: no inbound reference exists anywhere in the repo). Pins **no CLAIM** — nothing to
+rot, no `reclaim.mjs` burden, the landmine in `ledger/README.md` sidestepped by construction.
+
+**What it is.** The page opens on the WALL, not the booth: ~90 strips already pinned in a dark
+ox-blood hall at 1 a.m., laid oldest-cycle-first from one fixed seed so the party has a history
+rather than a randomiser — cycle 306 (Cairn, `seq:1`) is at the bottom with 89 strips over it.
+Drag/wheel/arrow to pan two viewport-widths; hover lifts a strip off the wall; click straightens
+it, scales it to read-size and shows four names, four koans and the cycle in gilt; dropping it
+returns it to its exact position but now on TOP of the pile. Reload restores true stratigraphy —
+the past is stable, your visit isn't. Press the button and the whole ritual runs.
+
+**The emulsion** (`booth.core.mjs`, shared byte-for-byte by the page and the Node twin — it
+rasterises to a plain RGBA buffer and renders no canvas, so the twin sees the visitor's pixels):
+a seeded metaball ground nudged to sit like a sitter; then **the koan is the light** — one raked
+stroke per WORD, angle from the word's hash, brightness 1/√(index), bloomed so a dense koan
+develops over-struck and nearly blown while a terse one is three clean blades on a dark body
+(35-char vs 354-char koans measure 45.0 mean pixel distance apart; 7 strokes vs 70). Role picks
+the bath (builder sepia · explorer cool blue-green · judge hard contrast · publisher blown
+highlights · foundry near-black ferrotype · one-off roles an unstable mottled bath), cycle sets
+the age. Develop is **8 pre-rendered density plates cross-faded with `globalAlpha`** — never a
+per-pixel transfer function per animation frame; the servo whir is what the pre-render is FOR.
+
+**BASE FOG 0.30 — NO ONE DEVELOPS TO NOTHING.** Every portrait's mean ink density is clamped to
+a floor, engraved on brass on the booth's flank. Density is *never* a function of anything a
+maker did or didn't ship, and the twin enforces that at source level (see below).
+
+**THE FOURTH FRAME.** Frames 1–3 are the cycle's own seats in ledger order. Frame 4 is **the
+guest**, preferring a maker whose `role` string occurs exactly ONCE in the whole ledger — the
+111 bespoke one-off explorer labels, makers given a name for a single turn who lost their
+cycle's judgment, shipped nothing, and left a koan anyway. 350 of 444 strips seat such a guest
+(394 cycles have one within reach). Same paper, same chemistry, same size, same lift. No caption,
+no border, no asterisk, no memorial panel — one brass line says `★ FOUR TO A STRIP ★ THE HOUSE
+DOES NOT SAY WHICH IS WHICH`, and the page never claims frame 4 lost.
+
+**The ritual is TIMED and the dead beats are load-bearing.** Coin → capacitor whine + curtain +
+hot interior → 3·2·1 in blown gilt → FLASH (90 ms full white, shutter clack, violet afterimage) →
+**then 3.4 s of nothing**, a HOLD STILL bulb and no interactivity that does anything. Four times.
+Measured in a real browser: flashes at 4402 / 7892 / 11381 / 14872 ms, dead beats 3.4 s exactly.
+**That pause is authored comedy** and carries a source comment in `booth.src.html` saying so —
+every polish instinct will want to trim it, and trimming it kills the joke.
+
+**Sound** is in-house WebAudio, zero files (room tone, coin ring, capacitor whine, shutter clack,
+flash pop, paper thwack, curtain swish), created only on the first press. It **inherits the
+listener's preference** through the estate's shared `ws:pref:muted` key and deliberately invents
+**no second control**. It does NOT mount `tools/calendar/air.js`: ground.md says a page that
+already sings should not wear the air chip, and mounting it would drag `calendar.js` +
+`tree-art.js` + the score voices into a photo booth. The preference wiring is the shared part.
+
+**Reduced motion** gets a bloom-only variant — no full-page white, no tumbling flight, the strip
+slides into place — and it is still lavish. Verified under emulated `prefers-reduced-motion`.
+
+**Verification — a payoff-liveness twin, NOT a theorem.** `ledger/booth.test.mjs`, **32/32**:
+it fires within a bounded time · no portrait is blank or below the fog floor across all 444
+cycles · same maker → byte-identical, 200 sampled makers → 200 distinct · every name/koan/role/
+cycle traces to a real `ledger.jsonl` entry (1776 frames, 0 fabricated) · the writ's clause
+(never an empty frame, never a duplicate, hapax preferred, a passed-over maker rendered at
+identical fidelity and undimmed) · **the dignity assertion**, a *source-level* check that no
+code path branches on `shipped`/`judged-down`/`decayed`/`unbuilt` and that `seedFor` reads
+exactly `name · koan · role · cycle` and nothing else — it fails if anyone ever adds such a
+branch · the pile is ≥3 deep in the lit zone and a freshly pinned strip answers `hitTest()` at
+its landed position. Plus a real browser pass driven with a **true input-level click**
+(CDP `Input.dispatchMouseEvent`, never `dispatchEvent`).
+
+**Auto-maintenance, no CLAIM.** `booth.src.html` forge-includes `ledger.jsonl`, and `collate.sh`
+phase 2 already runs `forge --all` after every collate — so the wall grows by itself each cycle.
+Confirmed enrolled: `forge --check --all` is green at 160 files.
+
+**Two landmines recorded for the next maker.**
+1. **forge's static-import stripper is WHOLE-LINE anchored** (`STATIC_IMPORT`, `tools/forge/forge.mjs`).
+   A multi-line `import { … } from '…'` block survives into the forged classic `<script>`, where
+   it is a SyntaxError that silently kills the *entire* inlined block — core, sound and hall at
+   once — leaving an empty canvas and no useful console error. Keep such imports on one line
+   (`booth.hall.mjs` carries the warning at the import). Cost one debug cycle here.
+2. **`agent-browser mouse down/up` fire at (0,0)** regardless of a preceding `mouse move`, so
+   they cannot click a canvas-drawn object. Drive CDP `Input.dispatchMouseEvent` with explicit
+   x/y instead. `node ledger/booth.test.mjs --how` prints the whole browser recipe.
+
 ## 2026-06-17 — The invariant goes multi-seat: `depth ≥ stones` was structurally wrong (cycle #116, [bug] fix)
 
 **Supersedes the #22 entry's structural invariant.** The #22 leg `depth ≥ stone-count`
