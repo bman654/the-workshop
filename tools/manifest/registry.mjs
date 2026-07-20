@@ -94,6 +94,11 @@ export const INTERNAL = [
   { hub: 'strange-garden', rule: 'pieces-dir', dir: 'strange-garden/pieces', kind: 'piece' },
   { hub: 'cavern',       rule: 'internal-links', file: 'cavern/index.html', firstClass: ['bench'], kind: 'bench' },
   { hub: 'the-barrel-house', rule: 'internal-links', file: 'the-barrel-house/index.html', firstClass: ['card'], kind: 'exhibit' },
+  // The Standing Stones GATHERS its moving-wall kin The Sluice-Gate as a nested exhibit (the-standing-
+  // stones/the-sluice-gate/) — the fairground is at its 16-tile capacity, so the Drover's third star rides
+  // WITHIN its closest kin (the §2.6 gather / "lodestone-hall absorbs curie-dial" pattern) rather than
+  // minting a lonely 17th footprint. Presented via the `.gate-link` first-class idiom on the room page.
+  { hub: 'the-standing-stones', rule: 'internal-links', file: 'the-standing-stones/index.html', firstClass: ['gate-link'], kind: 'exhibit' },
   // `flat` — explicit visitor leaf pages that live DIRECTLY in a hub dir (not a
   // subdir, not in a js-manifest), so no scrape rule can find them. hours/almanac.html
   // (the Almanac bench, WS4) was the first: a sibling leaf of the-hours.html.
