@@ -1,0 +1,317 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>In the Round — the gilded armillary you turn</title>
+<!--
+  IN THE ROUND — the estate's first real-time ORBITABLE 3-D. A single gilded brass
+  armillary you grab and turn, landing within the observatory (kin to the Vantages,
+  whose camera math this grows). Claim-free delight: no theorem, no pill — the payoff
+  is the FEEL (the orbit reads as true depth, the near ring eclipses the far, the
+  inward dolly engulfs you). A payoff-liveness twin (liveness.test.mjs) proves the
+  payoff FIRES on the live path.
+
+  ENGINE: tools/scene3d/core.mjs — a reusable 3-D core that GENERALISES vantage/
+  core.mjs's projectNorm UNFORKED (project(p,{...,roll:0}) === projectNorm exactly;
+  roll is a live extra DOF). Forge inlines it between the SCENE3D CORE sentinels
+  byte-for-byte; the twin byte-parity-checks the inlined copy so page + test can
+  never drift. GEOMETRY: ./scene.mjs (the brass bands / terrella / beads).
+  Edit .src.html + the two .mjs, then `node tools/forge/forge.mjs index.src.html`.
+-->
+<style>
+  :root{ --gold:#e8c873; --warm:#caa24a; --ink:#06070b; --paper:#e6e8ee; --blue:#9db4ff; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; overflow:hidden; color:var(--paper);
+    background:radial-gradient(120% 92% at 50% 30%, #14100b 0%, #0a0805 46%, #050406 100%);
+    font-family:ui-serif, Georgia, "Times New Roman", serif; }
+  #c{ position:fixed; inset:0; width:100%; height:100%; display:block; cursor:grab; touch-action:none; }
+  #c.grabbing{ cursor:grabbing; }
+  #c.spin{ cursor:ew-resize; }
+  /* the estate links — gold "out", blue "sideways to the wing" */
+  a.back,a.xlink{ position:fixed; z-index:8; top:15px; text-decoration:none;
+    font:12px ui-monospace,Menlo,monospace; letter-spacing:.10em; padding:6px 11px; border-radius:7px;
+    background:rgba(8,7,5,.5); backdrop-filter:blur(3px);
+    transition:color .2s,border-color .2s,background .2s; }
+  a.back{ left:16px; color:#f0e2bc; border:1px solid rgba(232,200,115,.30); }
+  a.back:hover{ color:var(--gold); border-color:rgba(232,200,115,.62); background:rgba(8,7,5,.72); }
+  a.xlink{ right:16px; color:var(--blue); border:1px solid rgba(157,180,255,.32); }
+  a.xlink:hover{ color:#dce6ff; border-color:rgba(157,180,255,.68); }
+  #title{ position:fixed; left:18px; top:56px; z-index:7; font:11px ui-monospace,Menlo,monospace;
+    letter-spacing:.05em; opacity:.72; max-width:330px; line-height:1.55; pointer-events:none; }
+  #title b{ color:var(--gold); font-weight:600; letter-spacing:.16em; font-size:12px; }
+  #title span{ color:#b6b0a2; }
+  #hint{ position:fixed; right:16px; bottom:14px; z-index:7; text-align:right;
+    font:11px ui-monospace,Menlo,monospace; letter-spacing:.03em; opacity:.52; color:#d8cfb8;
+    line-height:1.75; pointer-events:none; }
+  #hint b{ color:var(--gold); opacity:.92; font-weight:600; }
+  /* the sighting banner — the room's visual reaction, no numbers */
+  #sight{ position:fixed; left:50%; top:30px; transform:translateX(-50%); z-index:7;
+    font:13px ui-monospace,Menlo,monospace; letter-spacing:.28em; text-align:center;
+    color:var(--gold); text-shadow:0 0 22px rgba(232,200,115,.6);
+    opacity:0; transition:opacity .35s; pointer-events:none; white-space:nowrap; }
+  #sight small{ display:block; margin-top:5px; font-size:10px; letter-spacing:.16em; color:#cdb986; opacity:.82; }
+  /* the discreet payoff-liveness chip (claim-free ≠ verification-free) */
+  #chip{ position:fixed; right:14px; top:44px; z-index:8; cursor:pointer;
+    font:10.5px ui-monospace,Menlo,monospace; letter-spacing:.04em; padding:5px 9px; border-radius:999px;
+    background:rgba(8,7,5,.6); border:1px solid rgba(232,200,115,.24); color:#bfae82; opacity:.62;
+    transition:opacity .25s; user-select:none; }
+  #chip:hover{ opacity:.95; }
+  #chip.ok{ border-color:rgba(120,220,150,.42); color:#9fe3b0; }
+  #chip.bad{ border-color:rgba(230,120,120,.55); color:#f0a0a0; opacity:.95; }
+  #chip .led{ display:inline-block; width:7px; height:7px; border-radius:50%; vertical-align:middle;
+    margin-right:6px; background:#5fd08a; box-shadow:0 0 8px #5fd08a; }
+  #chip.bad .led{ background:#e06a6a; box-shadow:0 0 8px #e06a6a; }
+  #panel{ position:fixed; right:14px; top:76px; z-index:9; display:none; max-width:340px;
+    font:11px ui-monospace,Menlo,monospace; line-height:1.5; color:#c7bfa8;
+    background:rgba(10,8,6,.94); border:1px solid rgba(232,200,115,.22); border-radius:10px; padding:11px 13px; }
+  #panel.open{ display:block; }
+  #panel h4{ margin:0 0 8px; color:#efe4c4; font-size:11.5px; letter-spacing:.04em; }
+  #panel .row{ display:flex; gap:8px; padding:3px 0; border-top:1px solid rgba(232,200,115,.08); }
+  #panel .row:first-of-type{ border-top:0; }
+  #panel .m{ color:#7fdda0; } #panel .row.f .m{ color:#e88; }
+  #mute{ position:fixed; left:16px; bottom:14px; z-index:8; cursor:pointer;
+    font:10.5px ui-monospace,Menlo,monospace; letter-spacing:.06em; padding:5px 10px; border-radius:999px;
+    background:rgba(8,7,5,.55); border:1px solid rgba(232,200,115,.2); color:#9a8f72; opacity:.5;
+    transition:opacity .2s; user-select:none; }
+  #mute:hover{ opacity:.9; }
+</style>
+
+<script>try{ var __ck='ws:seen:in-the-round'; if(!localStorage.getItem(__ck)) localStorage.setItem(__ck, String(Date.now())); }catch(e){}</script>
+
+<canvas id="c"></canvas>
+<a class="back" href="../index.html" title="back to the estate map — the observatory district">&larr; The Observatory</a>
+<a class="xlink" href="../vantage/index.html" title="the Vantages — the camera whose math this grows (a pose you find by standing)">&harr; The Vantages</a>
+<div id="title"><b>IN THE ROUND</b><br><span>a gilded brass armillary — the estate's first orbitable 3&#8209;D.
+  Drag to swing your eye; grab a ring to spin it; wheel <i>into</i> its heart. Sight two rings edge&#8209;on and they
+  fall onto one gold line. Astronomy you can turn in your hands.</span></div>
+<div id="sight"></div>
+<div id="hint">
+  <b>drag</b> · orbit &nbsp;&nbsp; <b>shift+drag</b> · roll<br>
+  <b>grab a ring</b> · spin it (it keeps turning) &nbsp;&nbsp; <b>wheel</b> / <b>↑↓</b> · dolly in<br>
+  sight two rings edge&#8209;on &nbsp;→&nbsp; one gold line
+</div>
+<div id="chip"><span class="led"></span><span id="chipT">payoff …</span></div>
+<div id="panel"></div>
+<div id="mute" title="the shared estate mute — this room is silent, but honors it (stills the bead-sun's living drift)">◐ drift</div>
+
+<script>
+"use strict";
+/* ===== the reusable 3-D engine, inlined byte-for-byte between the sentinels ===== */
+<!-- forge:include ../tools/scene3d/core.mjs -->
+
+/* ===== the armillary geometry (imports the engine above) ===== */
+<!-- forge:include ./scene.mjs -->
+
+/* ============================ THE ROOM / DRIVER ============================ */
+const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let muted=false; try{ muted = localStorage.getItem('ws:pref:muted')==='1'; }catch(e){}
+
+const cam = { yaw:0.72, pitch:-0.34, roll:0.0, dolly:4.4 };
+const DOLLY_MIN=1.0, DOLLY_MAX=9.0;
+const state = { phase: RINGS.map(()=>0), sunPhase:0.9 };
+const omega = RINGS.map(()=>0);           // per-ring spin inertia
+let lastSorted=[];
+
+let Wd=0,Hd=0,DPR=1; const vp={cx:0,cy:0,scale:1};
+function resize(){
+  DPR=Math.min(2, window.devicePixelRatio||1);
+  Wd=cv.clientWidth; Hd=cv.clientHeight;
+  cv.width=Wd*DPR; cv.height=Hd*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  vp.cx=Wd/2; vp.cy=Hd*0.52; vp.scale=Math.min(Wd,Hd)*0.34;
+}
+addEventListener('resize',resize); resize();
+
+/* --- a faint cool star-dust behind the warm instrument --- */
+const dust=[]; for(let i=0;i<130;i++) dust.push({x:Math.random(),y:Math.random(),r:Math.random()*1.2+0.2,a:Math.random()*0.4+0.12});
+function backdrop(){
+  const g=ctx.createRadialGradient(vp.cx,vp.cy*0.9,20, vp.cx,vp.cy, Math.max(Wd,Hd)*0.8);
+  g.addColorStop(0,'#171009'); g.addColorStop(0.5,'#0c0806'); g.addColorStop(1,'#050406');
+  ctx.fillStyle=g; ctx.fillRect(0,0,Wd,Hd);
+  for(const s of dust){ ctx.globalAlpha=s.a; ctx.fillStyle='#cdd6f0';
+    ctx.fillRect(s.x*Wd, s.y*Hd, s.r, s.r); }
+  ctx.globalAlpha=1;
+}
+
+/* ---- interaction: drag=orbit, shift+drag=roll, grab-ring=spin, wheel=dolly ---- */
+let drag=null, vYaw=0, vPitch=0, vRoll=0;
+function pt(e){ return {x:e.clientX, y:e.clientY}; }
+function ringUnder(x,y){                    // hit-test the nearest band via the last sorted list
+  const hit = occludedAt(lastSorted, x, y);
+  return (hit && hit.ri!==undefined) ? hit.ri : -1;
+}
+cv.addEventListener('pointerdown', e=>{
+  cv.setPointerCapture&&cv.setPointerCapture(e.pointerId);
+  const p=pt(e);
+  const ri = e.shiftKey ? -1 : ringUnder(p.x,p.y);
+  vYaw=vPitch=vRoll=0;
+  if(ri>=0){ drag={mode:'spin', ri, x:p.x, y:p.y, vel:0, t:performance.now()}; omega[ri]=0; cv.className='spin'; }
+  else { drag={mode:e.shiftKey?'roll':'orbit', x:p.x, y:p.y, t:performance.now(), px:p.x, py:p.y}; cv.className='grabbing'; }
+});
+addEventListener('pointermove', e=>{
+  if(!drag) return; const p=pt(e); const dx=p.x-drag.x, dy=p.y-drag.y;
+  if(drag.mode==='orbit'){
+    applyDrag(cam, dx, dy);                 // the shared mutation the twin also calls
+    const now=performance.now(), dt=Math.max(8, now-drag.t);
+    vYaw=(p.x-drag.px)*0.008/dt*16; vPitch=(p.y-drag.py)*0.008/dt*16;
+    drag.px=p.x; drag.py=p.y; drag.t=now;
+  } else if(drag.mode==='roll'){
+    cam.roll += dx*0.006;
+    vRoll=(p.x-(drag.px||drag.x))*0.006/Math.max(8,performance.now()-drag.t)*16; drag.px=p.x; drag.t=performance.now();
+  } else if(drag.mode==='spin'){
+    const r=RINGS[drag.ri];
+    const g=ringGlint(r, cam, vp);          // ring's projected extreme pts → tangent
+    const cxp=vp.cx, cyp=vp.cy;
+    const tx=p.x-cxp, ty=p.y-cyp, tl=Math.hypot(tx,ty)||1;
+    const tang=(dx*(-ty)+dy*tx)/tl;         // tangential pixels about the sphere centre
+    const dphi=tang/(vp.scale*0.62);
+    state.phase[drag.ri]+=dphi;
+    if(drag.ri===ECL_I) state.sunPhase+=dphi;
+    const now=performance.now(), dt=Math.max(1, now-drag.t);
+    drag.vel=dphi/dt*16; drag.t=now;
+  }
+  drag.x=p.x; drag.y=p.y;
+});
+function endDrag(){
+  if(!drag) return;
+  if(drag.mode==='spin' && !reduced) omega[drag.ri]=Math.max(-0.4,Math.min(0.4, drag.vel||0));
+  drag=null; cv.className='';
+}
+addEventListener('pointerup', endDrag);
+addEventListener('pointercancel', endDrag);
+cv.addEventListener('wheel', e=>{ e.preventDefault();
+  cam.dolly=Math.max(DOLLY_MIN, Math.min(DOLLY_MAX, cam.dolly + e.deltaY*0.005)); }, {passive:false});
+addEventListener('keydown', e=>{
+  if(e.key==='ArrowUp'||e.key==='+'||e.key==='='){ cam.dolly=Math.max(DOLLY_MIN, cam.dolly-0.35); e.preventDefault(); }
+  else if(e.key==='ArrowDown'||e.key==='-'||e.key==='_'){ cam.dolly=Math.min(DOLLY_MAX, cam.dolly+0.35); e.preventDefault(); }
+  else if(e.key==='ArrowLeft'){ cam.yaw-=0.08; e.preventDefault(); }
+  else if(e.key==='ArrowRight'){ cam.yaw+=0.08; e.preventDefault(); }
+});
+
+/* ---- the sighting banner + face-on disc ---- */
+const sightEl=document.getElementById('sight');
+function reactAndGlint(meta){
+  // edge-on glint lines
+  const lit=[];
+  for(const r of meta.rings){
+    if(r.edge>0.986){
+      const g=(r.edge-0.986)/0.014, seg=ringGlint(RINGS[r.i], cam, vp);
+      ctx.save(); ctx.strokeStyle=`rgba(255,238,180,${0.5+0.5*g})`;
+      ctx.lineWidth=1.5+2.6*g; ctx.shadowColor='rgba(232,200,115,.9)'; ctx.shadowBlur=9+24*g;
+      ctx.beginPath(); ctx.moveTo(seg.a.x,seg.a.y); ctx.lineTo(seg.b.x,seg.b.y); ctx.stroke(); ctx.restore();
+      lit.push(r.name);
+    }
+  }
+  if(lit.length>=2){ sightEl.innerHTML='SIGHTED<small>'+lit.slice(0,3).join(' &nbsp;×&nbsp; ')+'</small>'; sightEl.style.opacity=1; }
+  else if(lit.length===1){ sightEl.innerHTML=lit[0]+' · edge-on<small>swing to bring a second ring onto the line</small>'; sightEl.style.opacity=.75; }
+  else if(meta.eclFace>0.9){ sightEl.innerHTML='ECLIPTIC · full disc<small>the zodiac band, seen flat</small>'; sightEl.style.opacity=.72; }
+  else sightEl.style.opacity=0;
+}
+function eclipticDisc(meta){
+  if(meta.eclFace<=0.86) return;
+  const a=(meta.eclFace-0.86)/0.14, out=eclDiscOutline(cam, vp);
+  ctx.save(); ctx.beginPath();
+  for(let i=0;i<out.length;i++){ i?ctx.lineTo(out[i].x,out[i].y):ctx.moveTo(out[i].x,out[i].y); }
+  ctx.closePath();
+  const g=ctx.createRadialGradient(vp.cx,vp.cy,4, vp.cx,vp.cy, vp.scale*1.2);
+  g.addColorStop(0,`rgba(232,200,115,${0.15*a})`); g.addColorStop(1,'rgba(232,200,115,0)');
+  ctx.fillStyle=g; ctx.fill(); ctx.restore();
+}
+
+/* ---- the frame loop ---- */
+let last=performance.now();
+function frame(now){
+  const dt=Math.min(50, now-(last||now)); last=now;
+  backdrop();
+  if(!drag){
+    if(!reduced){
+      cam.yaw+=vYaw; cam.pitch=Math.max(-PITCH_LIMIT,Math.min(PITCH_LIMIT,cam.pitch+vPitch)); cam.roll+=vRoll;
+      vYaw*=0.955; vPitch*=0.955; vRoll*=0.93;
+    } else { vYaw=vPitch=vRoll=0; }
+  }
+  // per-ring spin inertia
+  for(let i=0;i<RINGS.length;i++){
+    if(Math.abs(omega[i])>1e-4){ state.phase[i]+=omega[i]*dt/16;
+      if(i===ECL_I) state.sunPhase+=omega[i]*dt/16; omega[i]*=Math.pow(0.985, dt/16); }
+    else omega[i]=0;
+  }
+  // the bead-sun's living drift — gated by reduced-motion AND the shared mute
+  if(!drag) state.sunPhase += beadDrift(reduced, muted)*dt;
+
+  const {scene, meta} = buildScene(cam, state);
+  eclipticDisc(meta);
+  lastSorted = render(ctx, scene, cam, vp);
+  reactAndGlint(meta);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// a tiny debug handle (harmless, like the estate's window.__liveness) — lets a
+// verifier pose the camera to confirm the inward-dolly wonder + the edge-on glint.
+try{ window.__ITR = { cam, state, omega, RINGS, vp }; }catch(e){}
+
+/* ===================== THE PAYOFF-LIVENESS CHIP (in-page) =====================
+ * Claim-free room — no theorem. Its payoff is depth you can turn. This chip runs
+ * the SAME checks as liveness.test.mjs against the room's OWN entry functions
+ * (build the real scene, applyDrag the real camera, query the real sorted list).
+ * The Node twin proves vantage-identity against the real vantage import; here we
+ * inline the vantage chain verbatim for the in-page display. */
+function projectNormRef(p,C){                 // vantage/core.mjs projectNorm, verbatim
+  const cy=Math.cos(C.yaw),sy=Math.sin(C.yaw),cp=Math.cos(C.pitch),sp=Math.sin(C.pitch);
+  const rx=p[0]*cy-p[1]*sy, ry=p[0]*sy+p[1]*cy, ty=ry*cp-p[2]*sp, tz=ry*sp+p[2]*cp;
+  const depth=C.dolly+ty, f=FOCAL/Math.max(0.05,depth); return [rx*f,tz*f,depth];
+}
+const MOCKC={ createRadialGradient:()=>({addColorStop(){}}),save(){},restore(){},beginPath(){},moveTo(){},lineTo(){},arc(){},stroke(){},closePath(){},fill(){},fillRect(){},set fillStyle(v){},set strokeStyle(v){},set lineWidth(v){},set lineCap(v){},set globalAlpha(v){},set shadowColor(v){},set shadowBlur(v){} };
+function centro(sp){ let x=0,y=0; for(const p of sp){x+=p.x;y+=p.y;} return {x:x/sp.length,y:y/sp.length}; }
+function inPolyC(sp,x,y){ let c=false; for(let i=0,j=sp.length-1;i<sp.length;j=i++){ const xi=sp[i].x,yi=sp[i].y,xj=sp[j].x,yj=sp[j].y; if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))c=!c; } return c; }
+function runLiveness(){
+  const cks=[]; const ck=(n,ok)=>cks.push({n,ok});
+  const VPq={cx:400,cy:400,scale:240}, ST={phase:RINGS.map(()=>0),sunPhase:0.9}, POSE={yaw:0.7,pitch:-0.32,roll:0,dolly:4.4};
+  // 1 unforked
+  { let w=0; const C={yaw:0.74,pitch:0.22,dolly:5.2};
+    for(const p of [[0.3,-0.7,1.1],[-1.2,0.4,-0.6],[0.05,0.9,-1.4]]){ const a=project(p,{...C,roll:0}),b=projectNormRef(p,C);
+      w=Math.max(w,Math.abs(a.x-b[0]),Math.abs(a.y-b[1]),Math.abs(a.depth-b[2])); }
+    ck('unforked: roll=0 === vantage projectNorm (Δ '+w.toExponential(1)+')', w<1e-12); }
+  // 2 drag orbits
+  { const A=render(MOCKC,buildScene({...POSE},ST).scene,{...POSE},VPq); const nb=[...A].reverse().find(d=>d.it.ri!==undefined); const cA=centro(nb.sp);
+    const camB={...POSE}; applyDrag(camB,90,0); const B=render(MOCKC,buildScene(camB,ST).scene,camB,VPq); const anyB=[...B].reverse().find(d=>d.it.ri===nb.it.ri); const cB=centro(anyB.sp);
+    ck('a drag ORBITS the view (band moved '+Math.round(Math.hypot(cB.x-cA.x,cB.y-cA.y))+'px)', Math.hypot(cB.x-cA.x,cB.y-cA.y)>2); }
+  // 3 band eclipses band off the sorted list
+  { const cam2={...POSE}; const sorted=render(MOCKC,buildScene(cam2,ST).scene,cam2,VPq); const bands=sorted.filter(d=>d.it.ri!==undefined); let ok=false;
+    for(let i=sorted.length-1;i>=0&&!ok;i--){ const d=sorted[i]; if(d.it.ri===undefined) continue; const c=centro(d.sp);
+      const cov=bands.filter(b=>inPolyC(b.sp,c.x,c.y)); const rs=new Set(cov.map(b=>b.it.ri));
+      if(cov.length>=2&&rs.size>=2){ const hit=occludedAt(sorted,c.x,c.y); const near=cov.reduce((m,b)=>b.depth<m.depth?b:m,cov[0]); if(hit===near.it) ok=true; } }
+    ck('a NEAR band eclipses a FAR one (front wins off the sorted list)', ok); }
+  // 4 parallax
+  { const camA={...POSE},camB={...POSE}; applyDrag(camB,40,0);
+    const A=render(MOCKC,buildScene(camA,ST).scene,camA,VPq), B=render(MOCKC,buildScene(camB,ST).scene,camB,VPq);
+    const ba=A.filter(d=>d.it.ri!==undefined); const nF=ba[ba.length-1], fF=ba[0];
+    const inB=f=>B.find(d=>d.it.ri===f.it.ri&&d.it.seg===f.it.seg); const n=inB(nF),f=inB(fF);
+    const dN=n?Math.hypot(centro(n.sp).x-centro(nF.sp).x,centro(n.sp).y-centro(nF.sp).y):0;
+    const dF=f?Math.hypot(centro(f.sp).x-centro(fF.sp).x,centro(f.sp).y-centro(fF.sp).y):1;
+    ck('parallax is REAL (near ring out-moves far by '+(dF>0?(dN/dF).toFixed(2):'∞')+'×)', nF.depth<fF.depth && dN>dF*1.12); }
+  // 5 reduced-motion gates idle drift
+  ck('reduced-motion stills the idle drift', beadDrift(true,false)===0);
+  // 6 mute honored
+  ck('the shared mute stills the living drift', beadDrift(false,true)===0 && beadDrift(false,false)>0);
+  const pass=cks.filter(c=>c.ok).length;
+  return {ok:pass===cks.length, pass, total:cks.length, cks};
+}
+const lv=runLiveness();
+const chip=document.getElementById('chip'), chipT=document.getElementById('chipT'), panel=document.getElementById('panel');
+chipT.textContent = lv.ok ? `payoff ${lv.pass}/${lv.total} fires` : `payoff ${lv.pass}/${lv.total}`;
+chip.classList.add(lv.ok?'ok':'bad');
+panel.innerHTML='<h4>payoff-liveness — claim-free, but the feel must FIRE</h4>'+
+  lv.cks.map(c=>`<div class="row ${c.ok?'':'f'}"><span class="m">${c.ok?'✓':'✕'}</span><span>${c.n}</span></div>`).join('')+
+  `<div style="margin-top:8px;opacity:.6">${reduced?'reduced-motion: still':'motion on'} · ${muted?'muted':'silent room'} · one engine, byte-shared with the Vantages</div>`;
+chip.addEventListener('click', ()=>panel.classList.toggle('open'));
+console.log('[in-the-round liveness]', lv.pass+'/'+lv.total, lv.cks);
+
+/* ===== estate citizenship: the shared mute + the seen breadcrumb ===== */
+<!-- forge:include ../tools/ws/ws.js -->
+try{ WS.seen('in-the-round'); }catch(e){}
+const muteEl=document.getElementById('mute');
+function paintMute(){ muteEl.textContent = muted ? '◐ drift stilled' : '◐ drift living'; muteEl.style.opacity = muted?0.85:0.5; }
+try{ muted = (typeof WS!=='undefined'&&WS.muted)?WS.muted():muted; }catch(e){} paintMute();
+muteEl.addEventListener('click', ()=>{ muted=!muted; try{ if(typeof WS!=='undefined'&&WS.setMuted) WS.setMuted(muted); else localStorage.setItem('ws:pref:muted',muted?'1':'0'); }catch(e){} paintMute(); });
+try{ if(typeof WS!=='undefined'&&WS.onMuteChange) WS.onMuteChange(v=>{ muted=v; paintMute(); }); }catch(e){}
+</script>
