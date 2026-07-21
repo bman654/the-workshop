@@ -1,5 +1,48 @@
 # Sound Garden — Changelog
 
+## 2026-07-20 — the Monochord's missing face (rack thumb, forged in-house)
+
+`assets/monochord.png` had never existed. The rack derives each card's thumb from its `file` basename, so
+the Monochord's card requested a 404 and rendered as a bare gradient beside ten cards carrying a rendered
+frame — the one unfaced card in the rack. The *silence* around it was already root-fixed last cycle (the
+`console.warn` in `index.html`'s thumb `error` handler); this cycle supplies the missing pixels. No
+`instruments.js` edit and no `thumb:` override — the existing derivation already resolves this exact path.
+
+**Posed from the live renderer**, the same way The Wind Chimes' thumb was (`the-wind-chimes/CHANGELOG.md`):
+`monochord.html` served locally, the scrim clicked for real (audio unlocked, `ctx.state==='running'`), and
+the stage re-sized from the page's own `aspect-ratio:5/2` plank to the card's **16:10 at 2× (640×400)** —
+`geom.setBox` re-run after the resize so the renderer's coordinate frame followed and nothing drew
+off-frame. Then the room's **real** verbs, in order: the bridge parked off-centre at `bridgeFrac = 0.78`
+(`glideToLength()`, the same call the bridge drag makes), `● show nodes` lighting the touchable node ladder,
+`doPluck(0.9, 0.22)`, and `forceOvertone(1, 3)` — the *touch-a-node* verb — leaving the string ringing on
+its pure **third overtone**: three bellies, two cyan node rings sitting exactly on 1/3 and 2/3, the dotted
+ladder legible beneath. The frame was caught at `t = round(0.20·f₁)/f₁` — an integer number of periods, so
+every partial is at an antinode extreme rather than at a zero-crossing, giving full amplitude with no clip.
+That is the room's signature image: *n loops you see, n× the pitch you hear.*
+
+**Flattening — verified, not assumed.** The Wind Chimes' export needed compositing because its dusk sky was
+a CSS `background` that never lived in canvas pixels. The Monochord does **not**: `renderer.drawBoard()`
+opens every frame with an opaque walnut gradient `fillRect(0,0,W,H)`. Confirmed first-hand before writing —
+a full-canvas scan of the exported `ImageData` gave **minAlpha = 255**, so `toDataURL()` is already flat and
+no backdrop composite was needed. (Precedent for the next one: *check* the base fill, don't assume either
+way.)
+
+→ `assets/monochord.png`, 640×400, 95 KB. Verified on the live rack: **11/11** thumbs loaded, the
+Monochord's at `naturalWidth×Height = 640×400` and shown, and the `console.warn` fired **zero** times across
+a forced re-load of all eleven cards (that warn is the fix's own built-in test). `forge --check --all` 166
+current · `manifest --check` OK (432 pieces). Nothing in `monochord.html`, `index.html`, or `instruments.js`
+was touched.
+
+**Resolution — the one number the next thumb-forger should know.** This thumb and The Wind Chimes' are
+640×400; the nine older siblings are 1280-wide. Both hold up, but the margin is not the same, and the
+review measured where it runs out. The rack's `.wrap` caps at `max-width:980px`, so in the multi-column
+grid a card can never exceed **~293 CSS px** — 640 native is 2.2× there, comfortably retina. The thin spot
+is the SINGLE-column band just under the 700px breakpoint: at a 699px viewport a card is **626 CSS px**, and
+a 640-wide thumb renders at an effective **1.02×** against Carillon's 2.04×. Looked at directly at that
+worst case it still reads (the frame is mostly smooth gradient and one clean curve, which upscale
+gracefully), so it was shipped rather than re-posed. But there is no reason to spend the margin: **pose the
+next one at 1280×800** and it is 2× everywhere, matching the nine.
+
 ## 2026-06-22 — Grain Mill (new instrument — the rack's granular family)
 
 Added `grain-mill.html`, the rack's **granular-synthesis** voice — the synthesis family it lacked. The rack

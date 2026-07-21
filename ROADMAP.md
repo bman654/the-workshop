@@ -76,12 +76,11 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
-- [bug] **The Monochord's rack card has no art** — `sound-garden/assets/monochord.png` has never existed, so the Monochord's thumb 404s and its card sits in the rack as a bare gradient beside ten cards that carry a rendered frame. The rack now console-warns the miss instead of hiding it silently (that silence is what let it stand this long). Forge the thumb in-house the way The Wind Chimes' was: pose the room's own canvas at the card's 16:10, drive it to a live moment (a plucked string mid-ring with its overtone ladder lit), flatten it onto the page's own CSS backdrop before export, and drop it at `assets/monochord.png` — no override needed, the derivation already resolves it.
-<!-- ✝ FIXED #408: The Errand's Bucket never dumps its marble — it tilts ~5° and freezes,… → the-errand/ · after c0dcadc -->
 <!-- ✝ FIXED #408: The Errand's payoff (Flag / Candle) doesn't visually react when the mar… → the-errand/ · after c0dcadc -->
 <!-- ✝ FIXED #409: PROCESS / GUIDANCE bug (target: the delight-register CRITERIA, not an e… · after b67aefd -->
 <!-- ✝ FIXED #410: The manor is overcrowded — its front-gate POI hitboxes now overlap. → tools/layout/ · the great house #410 · after a1f7280 -->
 <!-- ✝ FIXED #413: forge's import stripper drops all but the first line of a multi-line im… → tools/forge/forge.mjs + forge.test.mjs · after a89b584 -->
+<!-- ✝ FIXED #425: The Monochord's rack card has no art → sound-garden/assets/monochord.png · after a3ab329 -->
 <!-- gauge:bug:end -->
 
 *Recent fixes (terse echoes — full provenance in the worklog / `ledger/CHANGELOG.md`): the Cairn-depth
