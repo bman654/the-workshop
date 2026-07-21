@@ -154,6 +154,119 @@ export function tally(formulas, coefs){
 }
 
 /* ============================================================================
+   THE LEVEL BEAM — the instrument layer (pure, additive; the solve is untouched)
+
+   The bench above ANSWERS a reaction. Everything below lets a visitor WORK one
+   by hand, and states — exactly — what the beam is allowed to say.
+
+   For a coefficient vector c:
+     r_e   = (left atoms of e) − (right atoms of e)          = (A·c)_e, an integer
+     L1    = Σ_e |r_e|                                        the imbalance
+     mass  = every atom on both pans                          > 0, always
+     ratio = L1 / mass                                        RELATIVE disagreement
+     dom   = argmax |r_e| (ties → canonical element order)
+     lean  = sign(r_dom)
+     tilt  = −THETA_MAX · lean · ratio/(ratio + TILT_KNEE)
+
+   WHY RELATIVE. With raw L1 the arm's lean means nothing across reactions: rust
+   opens at L1 = 2 and renders a nearly-level beam while six moves from solved,
+   while respiration opens at L1 = 20 and pins the arm. Dividing by the total
+   atom count makes "how wrong is this, for a reaction this size" the quantity the
+   arm shows — every library reaction opens leaning 61–87% of full scale.
+
+   THE THEOREM IS UNTOUCHED BY THAT CHOICE. mass > 0 always, so
+        tilt = 0  ⟺  ratio = 0  ⟺  L1 = 0  ⟺  every r_e = 0  ⟺  A·c = 0.
+   L1 sums MAGNITUDES, so a surplus of one element can never pay off a shortfall
+   of another: the arm cannot read level while the chemistry is wrong. Note the
+   beam claims CONSERVATION only — not minimality; (4,2,4) conserves water and is
+   not in lowest terms, and the bench says both things separately.
+   ============================================================================ */
+
+export const THETA_MAX = 0.175;   // radians of arm travel at full scale
+export const TILT_KNEE = 0.09;    // ratio at which the arm reaches half scale
+
+// ── r_e for every element (integers) ─────────────────────────────────────────
+export function residuals(reactants, products, coef){
+  const { elems } = buildMatrix(reactants, products);
+  const tl = tally(reactants, coef.slice(0, reactants.length));
+  const tr = tally(products,  coef.slice(reactants.length));
+  const r = {};
+  for(const e of elems) r[e] = (tl[e] || 0) - (tr[e] || 0);
+  return { r, elems };
+}
+
+// ── L1 = Σ|r_e| — zero if and only if every element is conserved ─────────────
+export function imbalanceOf(reactants, products, coef){
+  const { r, elems } = residuals(reactants, products, coef);
+  let s = 0; for(const e of elems) s += Math.abs(r[e]);
+  return s;
+}
+
+// ── every atom sitting on both pans (the scale the imbalance is judged against) ─
+export function massOf(reactants, products, coef){
+  const tl = tally(reactants, coef.slice(0, reactants.length));
+  const tr = tally(products,  coef.slice(reactants.length));
+  let m = 0;
+  for(const e in tl) m += tl[e];
+  for(const e in tr) m += tr[e];
+  return m;
+}
+
+// ── the element doing the leaning (null exactly when nothing leans) ──────────
+export function domOf(reactants, products, coef){
+  const { r, elems } = residuals(reactants, products, coef);
+  let dom = null, best = 0;
+  for(const e of elems){ const a = Math.abs(r[e]); if(a > best){ best = a; dom = e; } }
+  return dom;
+}
+
+// ── the arm's angle. NEGATIVE = left pan sinks (SVG y grows downward) ────────
+export function tiltOf(reactants, products, coef){
+  const L1 = imbalanceOf(reactants, products, coef);
+  if(L1 === 0) return 0;                                  // exact: no float decides this
+  const mass = massOf(reactants, products, coef);
+  if(mass === 0) return 0;                                // unreachable (L1>0 ⇒ mass>0)
+  const ratio = L1 / mass;
+  const dom = domOf(reactants, products, coef);
+  const { r } = residuals(reactants, products, coef);
+  const lean = r[dom] > 0 ? 1 : -1;
+  return -THETA_MAX * lean * (ratio / (ratio + TILT_KNEE));
+}
+
+// ── elements present on only ONE side: no column exists that could ever pay them ─
+export function oneSided(reactants, products){
+  const { elems } = buildMatrix(reactants, products);
+  const inL = new Set(), inR = new Set();
+  for(const f of reactants) for(const e in parseFormula(f)) inL.add(e);
+  for(const f of products)  for(const e in parseFormula(f)) inR.add(e);
+  return elems.filter(e => !(inL.has(e) && inR.has(e)));
+}
+
+// ── the vector a visitor ARRIVES at: never the answer, always something to work ─
+// All-ones; and where all-ones already solves it, one step off so the arm leans.
+export function openingVector(reactants, products){
+  const c = new Array(reactants.length + products.length).fill(1);
+  if(imbalanceOf(reactants, products, c) !== 0) return c;
+  c[0] = 2;
+  return c;
+}
+
+// ── the shortest hand: single-step presses from the opening to the answer ────
+// Told ONLY after a surrender — never as a running score over the visitor's head.
+export function minMoves(reactants, products){
+  const s = solve(reactants, products);
+  if(!s.ok) return null;
+  const from = openingVector(reactants, products);
+  return s.coef.reduce((a, v, i) => a + Math.abs(v - from[i]), 0);
+}
+
+// ── the shared factor of a conserving-but-not-minimal vector (1 when minimal) ─
+export function commonFactor(coef){
+  let g = 0n; for(const v of coef) g = gcdBig(g, BigInt(v));
+  return Number(g || 1n);
+}
+
+/* ============================================================================
    THE REACTION LIBRARY  — real, curated single-solution reactions + 1 control.
    Each is kept to a 1-D nullspace so "THE balanced equation" stays honest.
    The 7 the prototype proves, extended toward 10 with the Ledger's harder

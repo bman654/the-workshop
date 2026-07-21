@@ -15,7 +15,9 @@
    ============================================================================ */
 
 import {
-  solve, verify, parseFormula, buildMatrix, gcdBig, ilcm, R, rIsZero, rAdd, rMul, LIBRARY
+  solve, verify, parseFormula, buildMatrix, gcdBig, ilcm, R, rIsZero, rAdd, rMul, LIBRARY,
+  residuals, imbalanceOf, massOf, domOf, tiltOf, oneSided, openingVector, minMoves,
+  commonFactor, THETA_MAX
 } from './core.mjs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -98,6 +100,145 @@ console.log('\nambiguity honesty:');
   const res = solve(['CO','CO2'], ['C','O2']);
   ok('an under-determined system returns ok:false (not a fabricated single answer)',
      res.ok === false, res.ok ? 'got ' + JSON.stringify(res.coef) : res.reason);
+}
+
+/* ============================================================================
+   (6b) THE LEVEL BEAM — the instrument's own claim.
+   The beam is allowed to say exactly one thing: LEVEL. These prove it can only
+   say it when A·c = 0, that it never arrives already saying it, and that it
+   leans the right WAY (a direction bug the iff sweep structurally cannot catch,
+   since the sweep only ever asks whether the tilt is zero).
+   ============================================================================ */
+console.log('\nthe level beam — tilt ⟺ A·c = 0:');
+
+// exact, independent witness of A·c = 0: BigInt dot product straight off the matrix
+function acIsZero(A, coef){
+  const c = coef.map(v => BigInt(v));
+  for(let r = 0; r < A.length; r++){
+    let acc = R(0n);
+    for(let j = 0; j < A[r].length; j++) acc = rAdd(acc, rMul(A[r][j], R(c[j])));
+    if(!rIsZero(acc)) return false;
+  }
+  return true;
+}
+
+// ── the IFF, EXHAUSTIVE over a coefficient box (not sampled) ──
+{
+  let cases = 0, bad = 0, levels = 0;
+  for(const rx of LIBRARY){
+    const n = rx.reactants.length + rx.products.length, B = (n <= 4) ? 7 : 5;
+    const { A } = buildMatrix(rx.reactants, rx.products);        // c-independent: hoisted
+    const c = new Array(n).fill(1);
+    (function rec(k){
+      if(k === n){
+        cases++;
+        const truth = acIsZero(A, c);
+        if((tiltOf(rx.reactants, rx.products, c) === 0) !== truth) bad++;
+        if((imbalanceOf(rx.reactants, rx.products, c) === 0) !== truth) bad++;
+        if(truth) levels++;
+        return;
+      }
+      for(let v = 1; v <= B; v++){ c[k] = v; rec(k + 1); }
+    })(0);
+  }
+  ok('tiltOf = 0 ⟺ A·c = 0, exhaustive over ' + cases.toLocaleString() + ' coefficient vectors',
+     bad === 0, bad ? bad + ' violations' : levels + ' true levels found · 0 false levels · 0 missed levels');
+}
+
+// ── the ratio metric never divides by zero, and mass > 0 always ──
+{
+  let minMass = Infinity;
+  for(const rx of LIBRARY){
+    const n = rx.reactants.length + rx.products.length;
+    minMass = Math.min(minMass, massOf(rx.reactants, rx.products, new Array(n).fill(1)));
+  }
+  ok('massOf > 0 for every library reaction (the ratio metric can never divide by zero)',
+     minMass > 0, 'smallest mass seen = ' + minMass);
+}
+
+// ── perturbation guard, restated against the TILT (not just verify) ──
+ok('tilt is strictly nonzero at water (2,1,3)', tiltOf(['H2','O2'], ['H2O'], [2,1,3]) !== 0);
+ok('tilt is strictly nonzero at water (3,1,2)', tiltOf(['H2','O2'], ['H2O'], [3,1,2]) !== 0);
+ok('tilt is strictly nonzero at methane (1,2,1,3)', tiltOf(['CH4','O2'], ['CO2','H2O'], [1,2,1,3]) !== 0);
+ok('tilt is EXACTLY zero at the true water vector (2,1,2)', tiltOf(['H2','O2'], ['H2O'], [2,1,2]) === 0);
+ok('tilt is EXACTLY zero at (4,2,4) — conserving but NOT lowest terms',
+   tiltOf(['H2','O2'], ['H2O'], [4,2,4]) === 0 && commonFactor([4,2,4]) === 2 && verify(['H2','O2'],['H2O'],[4,2,4]) === false);
+
+// ── the cancellation witness: one settled element does NOT buy a level beam ──
+{
+  const { r } = residuals(['H2','O2'], ['H2O'], [2,2,2]);
+  ok('H₂ + 2O₂ → 2H₂O has r = {H:0, O:+2} — H settled, the beam still refuses level',
+     r.H === 0 && r.O === 2 && imbalanceOf(['H2','O2'],['H2O'],[2,2,2]) === 2
+     && tiltOf(['H2','O2'],['H2O'],[2,2,2]) !== 0);
+}
+
+// ── DIRECTION: an over-stocked LEFT pan must give a NEGATIVE angle ──
+// (SVG y grows downward; the beam is rotated about the fulcrum, so the left pan
+//  sinks — y increases — exactly when theta is negative. Shipping this inverted
+//  is invisible to the iff sweep, which only ever tests theta === 0.)
+console.log('\nbeam DIRECTION (the bug an iff sweep cannot catch):');
+{
+  let dirBad = 0, checked = 0;
+  for(const rx of LIBRARY){
+    const n = rx.reactants.length + rx.products.length, B = (n <= 4) ? 5 : 4;
+    const c = new Array(n).fill(1);
+    (function rec(k){
+      if(k === n){
+        const dom = domOf(rx.reactants, rx.products, c);
+        if(dom === null) return;
+        const { r } = residuals(rx.reactants, rx.products, c);
+        const t = tiltOf(rx.reactants, rx.products, c);
+        checked++;
+        if(r[dom] > 0 && !(t < 0)) dirBad++;   // left-heavy ⇒ negative angle
+        if(r[dom] < 0 && !(t > 0)) dirBad++;   // right-heavy ⇒ positive angle
+        if(Math.abs(t) >= THETA_MAX) dirBad++; // and never past full scale
+        return;
+      }
+      for(let v = 1; v <= B; v++){ c[k] = v; rec(k + 1); }
+    })(0);
+  }
+  ok('load on the left ⇒ tilt < 0 · load on the right ⇒ tilt > 0 · |tilt| < THETA_MAX ('
+     + checked.toLocaleString() + ' leaning vectors)', dirBad === 0, dirBad + ' violations');
+}
+ok('a single extra H₂ on the left leans left (tilt < 0)', tiltOf(['H2','O2'], ['H2O'], [3,1,2]) < 0);
+ok('a single extra H₂O on the right leans right (tilt > 0)', tiltOf(['H2','O2'], ['H2O'], [2,1,3]) > 0);
+
+// ── the OPENING state: a visitor never arrives at the answer, and the arm leans hard ──
+console.log('\nthe opening state (nobody arrives at the answer):');
+for(const rx of LIBRARY){
+  const open = openingVector(rx.reactants, rx.products);
+  const t = Math.abs(tiltOf(rx.reactants, rx.products, open));
+  ok(rx.id.padEnd(10) + ' opens UNBALANCED and leaning ≥ 55% of full scale',
+     imbalanceOf(rx.reactants, rx.products, open) !== 0 && t >= 0.55 * THETA_MAX,
+     'c=(' + open.join(',') + ') · |tilt| = ' + (t / THETA_MAX * 100).toFixed(0) + '% of scale');
+  const s = solve(rx.reactants, rx.products);
+  if(s.ok) ok(rx.id.padEnd(10) + ' opening ≠ the answer, and minMoves is the true L1 distance',
+     open.some((v, i) => v !== s.coef[i])
+     && minMoves(rx.reactants, rx.products) === s.coef.reduce((a, v, i) => a + Math.abs(v - open[i]), 0));
+}
+
+// ── the negative control TEACHES: a one-sided element can never be reconciled ──
+console.log('\nnegative control (why, not just no):');
+{
+  const neg = LIBRARY.find(r => r.negative);
+  const os = oneSided(neg.reactants, neg.products);
+  ok('oneSided names Na — it appears among no reactant, so no column could carry it',
+     os.length === 1 && os[0] === 'Na', JSON.stringify(os));
+  ok('every real library reaction has NO one-sided element',
+     LIBRARY.filter(r => !r.negative).every(r => oneSided(r.reactants, r.products).length === 0));
+  // exhaustive: no reachable coefficient setting in [1..7]^4 ever levels the control
+  let levelled = 0, tried = 0;
+  const n = neg.reactants.length + neg.products.length, c = new Array(n).fill(1);
+  (function rec(k){
+    if(k === n){ tried++; if(imbalanceOf(neg.reactants, neg.products, c) === 0) levelled++; return; }
+    for(let v = 1; v <= 7; v++){ c[k] = v; rec(k + 1); }
+  })(0);
+  ok('NO setting in [1..7]⁴ levels the control (' + tried.toLocaleString() + ' tried, ' + levelled + ' levelled)',
+     levelled === 0);
+  // …and the H/O rows CAN be settled — the refusal is Na's alone, not a blanket "no"
+  ok('the control\'s settleable rows DO settle at (2,1,2,k): only Na is left leaning',
+     (() => { const { r } = residuals(neg.reactants, neg.products, [2,1,2,3]);
+       return r.H === 0 && r.O === 0 && r.Na === -3; })());
 }
 
 // ── (7) RE-EXTRACTION PARITY (the integration crux, the engine-room/demon precedent) ──
