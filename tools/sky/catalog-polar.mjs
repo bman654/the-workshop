@@ -51,6 +51,7 @@ export const STARS = {
   "mirror-drum": { group: "carillonneur", dx: 21, dy: -13.5, mag: 2 },
   "firmament": { group: "celestial", dx: 0, dy: -75, mag: 1 },
   "orrery": { group: "celestial", dx: 0, dy: 75, mag: 2 },
+  "ten-fold": { group: "celestial", dx: 72, dy: 0, mag: 2 },
   "lodestone-hall": { group: "coilwright", dx: -60, dy: -6, mag: 1 },
   "bootstrap-bench": { group: "coilwright", dx: 60, dy: 6, mag: 1 },
   "compositor": { group: "design", dx: -50, dy: -12, mag: 1 },
