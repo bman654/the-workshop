@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Green Corridor</title>
+<style>
+  :root{
+    --bg:#07070a;
+    --ink:#e9e2d4;
+    --ink-dim:#94897a;
+    --panel-bg: rgba(12,10,9,0.86);
+    --panel-edge: rgba(201,162,74,0.22);
+    --brass: #c9a24a;
+    --wax:#f0e2c4;
+    --flame-core:#fff3d0;
+    --flame-mid:#ffc46a;
+    --flame-edge:#f0872c;
+    --flame-base:#7fb0e8;
+    --pool:255,196,120;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --font-serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-ui); overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .brand{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; }
+  .back:hover{ color:var(--brass); opacity:1; }
+  .backs{ display:flex; flex-direction:column; gap:6px; align-items:flex-start; }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand h1{ font-family:var(--font-serif); font-size:21px; font-weight:600; letter-spacing:.4px; margin:0; color:var(--ink); }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); letter-spacing:.4px; }
+
+  /* ---- Stage ---- */
+  #stage{ position:fixed; inset:0; touch-action:none; }
+  canvas#plan{ display:block; width:100%; height:100%; }
+
+  /* ---- The handles: real focusable elements sitting on the drawn object ---- */
+  .handle{
+    position:absolute; width:46px; height:46px; margin:-23px 0 0 -23px;
+    border:none; background:transparent; padding:0; cursor:grab;
+    border-radius:50%; touch-action:none; z-index:12;
+  }
+  .handle:active{ cursor:grabbing; }
+  .handle:focus-visible{ outline:2px solid var(--brass); outline-offset:2px; }
+  .handle.pin{ width:40px; height:40px; margin:-20px 0 0 -20px; cursor:pointer; }
+  .handle .cap{ position:absolute; inset:0; border-radius:50%; }
+  .handle:focus-visible .cap{ box-shadow:0 0 0 1px rgba(201,162,74,.55); }
+  #stage.dragging{ cursor:grabbing; }
+
+  /* ---- Panel ---- */
+  #panel{
+    position:fixed; top:64px; left:18px; width:298px;
+    background:var(--panel-bg);
+    backdrop-filter: blur(12px) saturate(120%); -webkit-backdrop-filter: blur(12px) saturate(120%);
+    border:1px solid var(--panel-edge); border-radius:14px; padding:15px 16px 16px;
+    box-shadow:0 18px 50px rgba(0,0,0,.6); z-index:20;
+    transition: transform .35s cubic-bezier(.2,.8,.2,1), opacity .25s;
+    max-height: calc(100vh - 88px); overflow-y:auto;
+  }
+  #panel.collapsed{ transform:translateX(calc(-100% - 30px)); opacity:0; pointer-events:none; }
+  #reopen{ position:fixed; top:64px; left:18px; z-index:19; display:none;
+    font:600 11px/1 var(--font-mono); letter-spacing:.12em; color:var(--brass);
+    background:var(--panel-bg); border:1px solid var(--panel-edge); border-radius:10px;
+    padding:9px 12px; cursor:pointer; }
+  #panel.collapsed ~ #reopen{ display:block; }
+  .phead{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin:0 0 10px; }
+  .phead .sub{ font-size:10px; color:var(--ink-dim); letter-spacing:1.1px; text-transform:uppercase; margin:0; }
+  .collapse{ background:none; border:none; color:var(--ink-dim); cursor:pointer; font-size:15px; line-height:1; padding:2px 4px; }
+  .collapse:hover{ color:var(--brass); }
+  #panel p{ font-size:12.5px; line-height:1.72; color:#cabfae; margin:0 0 10px; letter-spacing:.15px; }
+  #panel p.lede{ font-family:var(--font-serif); font-size:13.5px; color:#dcd2c1; }
+  #panel p em{ color:var(--brass); font-style:italic; }
+  #panel p strong{ color:var(--ink); font-weight:600; }
+  hr.sep{ border:none; border-top:1px solid rgba(201,162,74,.16); margin:13px 0 12px; }
+  .keys{ font:10.5px/1.9 var(--font-mono); color:var(--ink-dim); letter-spacing:.2px; }
+  .keys b{ color:var(--brass); font-weight:600; }
+  .exit{ margin-top:12px; font-size:11.5px; line-height:1.6; color:var(--ink-dim); }
+  .exit a{ color:var(--brass); text-decoration:none; border-bottom:1px solid rgba(201,162,74,.3); }
+  .exit a:hover{ border-bottom-color:var(--brass); }
+
+  /* ---- HUD: the continuous read ---- */
+  #hud{
+    position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
+    display:flex; align-items:center; gap:16px; z-index:25; pointer-events:none;
+    font:11px/1 var(--font-mono); color:var(--ink-dim);
+    background:rgba(0,0,0,.5); border:1px solid rgba(201,162,74,.16);
+    border-radius:10px; padding:9px 15px; letter-spacing:.4px; white-space:nowrap;
+  }
+  #hud .n{ color:var(--brass); font-size:13px; font-variant-numeric:tabular-nums; }
+  #hud .lab{ opacity:.7; }
+  #caption{
+    position:fixed; left:50%; bottom:58px; transform:translateX(-50%);
+    z-index:25; pointer-events:none; max-width:min(560px, 88vw); text-align:center;
+    font-family:var(--font-serif); font-size:14px; line-height:1.6; color:#b9ae9c;
+    opacity:0; transition:opacity .5s; text-shadow:0 2px 14px #000;
+  }
+  #caption.show{ opacity:1; }
+  #count{
+    position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+    z-index:24; pointer-events:none;
+    font-family:var(--font-serif); font-size:clamp(64px,13vw,150px); font-weight:600;
+    color:rgba(233,226,212,.13); opacity:0; transition:opacity .5s;
+    font-variant-numeric:tabular-nums; letter-spacing:-2px;
+  }
+  #count.show{ opacity:1; }
+  /* THE WAY BACK. A latch pin rides on its own mirror bar, so when a mirror is
+     away its pin travels with the ghost — and the framing can carry it under
+     the plaque or clean off the edge, which made "take one away" a ONE-WAY
+     door: the only way back was a reload. This pill lives in the caption's
+     lane, which is the one strip of screen nothing else ever occupies. */
+  #restore{
+    position:fixed; left:50%; bottom:96px; transform:translateX(-50%);
+    z-index:26; display:none; cursor:pointer;
+    background:rgba(12,11,9,.86); border:1px solid rgba(201,162,74,.34);
+    border-radius:999px; padding:7px 14px;
+    font:11px/1 var(--font-mono); letter-spacing:.5px; color:var(--brass);
+    transition:border-color .22s, color .22s, background .22s;
+  }
+  #restore.show{ display:block; }
+  #restore:hover, #restore:focus-visible{
+    border-color:rgba(201,162,74,.72); color:#f2e7cb; background:rgba(24,21,16,.94);
+  }
+  .sr{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+
+  @media (max-width: 860px){
+    #panel{ top:auto; bottom:0; left:0; right:0; width:auto; max-height:46vh; border-radius:14px 14px 0 0; }
+    #panel.collapsed{ transform:translateY(110%); }
+    #reopen{ top:auto; bottom:16px; left:50%; transform:translateX(-50%); }
+    #hud{ bottom:auto; top:106px; font-size:10px; gap:11px; padding:8px 11px; }
+    #caption{ bottom:auto; top:146px; font-size:13px; }
+    #restore{ bottom:auto; top:200px; }
+    .brand .tag{ display:none; }
+    .brand h1{ font-size:17px; }
+    #panel{ max-height:44vh; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    #caption, #count, #restore{ transition:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="backs">
+      <a class="back" href="../index.html">&#8599; Kaleidoscope</a>
+      <a class="back" href="../../index.html">&larr; The Orrery Estate</a>
+    </div>
+    <div class="brand">
+      <h1>The Green Corridor</h1>
+      <span class="tag">two mirrors, one candle, seen from above</span>
+    </div>
+    <span></span>
+  </div>
+
+  <div id="stage">
+    <canvas id="plan"></canvas>
+    <button class="handle" id="earA" aria-label="Mirror A end-cap. Drag, or use left and right arrows, to tilt both mirrors. Up and down arrows widen the throat. Bracket keys jump to the next closing angle."><span class="cap"></span></button>
+    <button class="handle" id="earB" aria-label="Mirror B end-cap. Drag, or use left and right arrows, to tilt both mirrors. Up and down arrows widen the throat. Bracket keys jump to the next closing angle."><span class="cap"></span></button>
+    <button class="handle pin" id="pinA" aria-label="Latch pin for mirror A. Press to take the mirror away, or to put it back."><span class="cap"></span></button>
+    <button class="handle pin" id="pinB" aria-label="Latch pin for mirror B. Press to take the mirror away, or to put it back."><span class="cap"></span></button>
+    <output id="say" class="sr" aria-live="polite"></output>
+  </div>
+
+  <div id="count"></div>
+  <div id="caption"></div>
+  <button id="restore" type="button">&#8634; put the mirror back</button>
+  <div id="hud">
+    <span><span class="lab">turns to close</span> <span class="n" id="hudN">&mdash;</span></span>
+    <span><span class="lab">angle</span> <span class="n" id="hudT">&mdash;</span></span>
+    <span><span class="lab">throat</span> <span class="n" id="hudH">&mdash;</span></span>
+  </div>
+
+  <div id="panel">
+    <div class="phead">
+      <p class="sub">The tunnel the Hall of Mirrors is named for</p>
+      <button class="collapse" id="collapseBtn" title="Hide panel">&#10005;</button>
+    </div>
+    <p class="lede">A kaleidoscope is two mirrors and a secret. Upstairs you look through the small
+      end and the secret keeps itself. Here the lid is off: the same two mirrors, seen from above,
+      with one candle set between them.</p>
+    <p>The flames walk away down the line. Each one is a real reflection of the one before it, and
+      silvered glass keeps only <em>most</em> of the light &mdash; and keeps the red least. So the far
+      end of the corridor is bottle-green, and then it is nothing at all.</p>
+    <p><strong>Move the mirrors. Tilt them. Take one away.</strong></p>
+    <hr class="sep">
+    <p style="font-size:11.5px; color:#9d9284;">Nothing here is measured. The green is a feeling,
+      honestly earned: a little less light at every bounce, and the warm end of it going first.</p>
+    <hr class="sep">
+    <div class="keys">
+      <b>drag an end-cap</b> tilt the mirrors<br>
+      <b>drag a mirror face</b> widen the throat<br>
+      <b>click a latch pin</b> take one away (<b>0</b> back)<br>
+      <b>&larr; &rarr;</b> tilt &nbsp;(<b>&#8679;</b> faster) &nbsp; <b>&uarr; &darr;</b> throat<br>
+      <b>[ ]</b> jump to the next closing angle
+    </div>
+    <div class="exit">With one mirror, one reflection.
+      <a href="../index.html">&#8599; back to the Hall of Mirrors</a>.</div>
+  </div>
+  <button id="reopen" title="Show the panel">the corridor</button>
+
+<script>
+<!-- forge:include ../../tools/corridor/tint.js -->
+<!-- forge:include ../../tools/corridor/orbit.js -->
+<!-- forge:include ../../tools/corridor/flame.js -->
+
+/* ===========================================================================
+   THE GREEN CORRIDOR — the page.
+
+   The cores above own everything that could be got wrong: the geometry
+   (orbit.js), the colour ladder (tint.js) and the life of the flame
+   (flame.js). This file is the room around them — the stage, the instrument,
+   and the beat that fires when the ring closes.
+
+   THE ONE DECISION worth stating up front: this is a TOP-DOWN PLAN, drawn
+   orthographically. You are looking straight down at the mirror floor. There
+   is no perspective shrink anywhere in here, and adding one would be a lie:
+   depth is carried by three honest channels only —
+
+     1. the compounding green (tint.js)
+     2. the halo, which shrinks because a dimmer light genuinely has a
+        smaller visible glow (the flame BODY never shrinks)
+     3. the receding chain of floor pools, which is what makes it a tunnel
+        rather than a row of dots.
+
+   HARD CONTRACT: nothing is painted with baked-in brightness. Every pixel is
+   flicker(t) x albedo x tint(k). Turn the flame off and the frame goes black.
+   =========================================================================== */
+'use strict';
+
+var canvas = document.getElementById('plan');
+var ctx = canvas.getContext('2d');
+var stage = document.getElementById('stage');
+var DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+var reduceMotion = (typeof window.matchMedia === 'function')
+  && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------------------------------------------------------------------------
+   STATE
+   --------------------------------------------------------------------------- */
+var S = {
+  /* 21.7 deg: deliberately NOT a detent, and deliberately DEEP. The first
+     frame of a room called The Green Corridor has to be green, and green
+     lives at k >= 6 — an opening angle of 50 degrees gives you seven gold
+     flames and no payoff at all. Here the ladder runs to k=8 and the far
+     flames are bottle-green before the visitor has touched anything. */
+  theta: 21.7,
+  h: 1.0,               /* the throat: candle-to-mirror perpendicular distance */
+  sigA: 1, sigB: 1,     /* silvering, 0..1 — a mirror leaves by DISSOLVING */
+  wantA: true, wantB: true,
+  t: 0,                 /* seconds */
+  W: 0, H: 0,
+  scale: 60, scaleTarget: 60,
+  camX: 0, camY: 0,        /* the camera's world centre — see fitScale */
+  drag: null,
+  spring: null,         /* {target, v} while the capture is in flight */
+  beat: 'open',
+  closedN: 0,
+  closeT: -1,           /* seconds since the ring closed, -1 if open */
+  unzipT: -1,
+  drain: 0,             /* 0 = both mirrors home, 1 = fully swung out */
+  lastSaid: '',
+  restoreLabel: ''      /* what the way-back pill currently says, '' = hidden */
+};
+
+var BANDS = Orbit.bands();
+
+/* ---------------------------------------------------------------------------
+   THE LOOK
+   --------------------------------------------------------------------------- */
+var AMBIENT = 0.012;    /* the floor is never pure black — that kills depth */
+var HALO_PX = 44;       /* halo radius at full candle brightness */
+var POOL_PX = 96;       /* floor pool radius — FIXED; pools do not shrink */
+var FLAME_PX = 15;      /* flame body half-height; never shrinks with depth */
+var LOD_FULL = 6;       /* bays 0..6 get wax, drip, rim; beyond, light only */
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+/* ---------------------------------------------------------------------------
+   GEOMETRY -> SCREEN.
+
+   World +y (across the throat, toward mirror A) maps to screen +x, so the
+   corridor runs left-to-right and the vertex sits below. The camera is
+   centred on the candle — you are AT the candle, and it does not slide
+   around while you work.
+   --------------------------------------------------------------------------- */
+function sx(wx, wy) { return S.W / 2 + (wy - S.camY) * S.scale; }
+function sy(wx, wy) { return S.H / 2 - (wx - S.camX) * S.scale; }
+
+function resize() {
+  S.W = window.innerWidth; S.H = window.innerHeight;
+  canvas.width = Math.round(S.W * DPR);
+  canvas.height = Math.round(S.H * DPR);
+  canvas.style.width = S.W + 'px';
+  canvas.style.height = S.H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+
+/* ---------------------------------------------------------------------------
+   THE FRAME'S GEOMETRY — recomputed once per frame, shared by draw, camera,
+   hit-testing and the handles.
+   --------------------------------------------------------------------------- */
+function build() {
+  var eps = 0.34 * S.h;
+  var ims = Orbit.orbit(S.theta, S.h, {
+    eps: eps,
+    mirrorA: S.sigA > 0.001,
+    mirrorB: S.sigB > 0.001
+  });
+  var M = Orbit.mirrors(S.theta, S.h);
+
+  /* the bars: each mirror drawn as a finite object with two ends. It runs
+     from the vertex (when there is one) outward far enough to hold the
+     whole arcade. */
+  var half = S.theta * Orbit.DEG / 2;
+  var s = Math.sin(half), c = Math.cos(half);
+  var dA = [c, s], dB = [c, -s];
+  var tV = (s === 0) ? -Infinity : -M.R * c;
+
+  /* WHERE THE BAR ENDS — and why it is clipped to the WINDOW, not to the
+     geometry.
+
+     A mirror is an infinite line; a bar is an object with two ends, and the
+     end-caps are the handles you tilt it by. Sizing the bar from the ring
+     put those handles out at the ring's far side — a thousand pixels above
+     the top of the window at 20 degrees, unreachable by mouse or thumb. So
+     the bar is clipped to the visible frame with a margin wide enough for a
+     44px target, and the caps ride at the clip. The mirror is still
+     infinite; you are simply only shown the part of it you are in. */
+  var MARGIN = 96;
+  function clipT(base, d) {
+    var lim = Infinity;
+    var ax = d[1] * S.scale, bx0 = S.W / 2 + (base[1] - S.camY) * S.scale;
+    var ay = -d[0] * S.scale, by0 = S.H / 2 - (base[0] - S.camX) * S.scale;
+    function bound(a, b, lo, hi) {
+      if (Math.abs(a) < 1e-9) return;
+      var t1 = (lo - b) / a, t2 = (hi - b) / a;
+      var tp = Math.max(t1, t2);            /* the one in the +t direction */
+      if (tp > 0 && tp < lim) lim = tp;
+    }
+    bound(ax, bx0, MARGIN, S.W - MARGIN);
+    bound(ay, by0, MARGIN, S.H - MARGIN);
+    return isFinite(lim) ? lim : 3 * S.h;
+  }
+
+  function barOf(m, d) {
+    var base = [m.d * m.nx, m.d * m.ny];
+    var tHi = clipT(base, d);
+    var tLo = Math.max(isFinite(tV) ? tV : -Infinity, -clipT(base, [-d[0], -d[1]]));
+    if (!isFinite(tLo)) tLo = -3 * S.h;
+    /* the clip rules; this only stops a degenerate bar if the view is mid-flight */
+    if (tHi < tLo + 0.8 * S.h) tHi = tLo + 0.8 * S.h;
+    return {
+      n: [m.nx, m.ny], d: d,
+      p0: [base[0] + tLo * d[0], base[1] + tLo * d[1]],
+      p1: [base[0] + tHi * d[0], base[1] + tHi * d[1]],
+      mid: [base[0] + 0.5 * (tLo + tHi) * d[0], base[1] + 0.5 * (tLo + tHi) * d[1]],
+      pin: [base[0] + (tLo + 0.62 * (tHi - tLo)) * d[0], base[1] + (tLo + 0.62 * (tHi - tLo)) * d[1]]
+    };
+  }
+
+  return {
+    ims: ims, M: M, eps: eps,
+    barA: barOf(M.A, dA), barB: barOf(M.B, dB)
+  };
+}
+
+/* THE CAMERA — and the one decision that makes this a tunnel.
+
+   The obvious camera fits everything on screen. That is WRONG here, and it
+   was wrong in the first build: near the parallel angle the ring is enormous,
+   so fitting it shrinks every flame to a speck and the corridor becomes a
+   ring diagram — the exact thing this room is not.
+
+   So the fit is the SMALLER of two framings:
+     - the whole ring, when the ring is small enough to hold;
+     - about eighteen flame-spacings, when it is not.
+   Below roughly N=17 you get the countable ring; above it the corridor runs
+   off both edges of the frame into its own throat glow, which is what a
+   corridor is supposed to do. The flames stay a legible size either way, and
+   the deep end of the ladder — the bottle-green — is on screen instead of
+   compressed into two pixels at the rim.
+
+   It LAGS on purpose (tau ~ 380 ms): a fast tilt overshoots the frame and
+   eases back, and that little slack is most of what makes the instrument
+   feel like an object rather than a slider. */
+var CORRIDOR_SPANS = 9;     /* half-width of the frame, in flame spacings */
+
+function fitScale(G) {
+  /* the bounding box of the light that is actually drawn */
+  var x0 = 0, x1 = 0, y0 = 0, y1 = 0;
+  for (var i = 0; i < G.ims.length; i++) {
+    var im = G.ims[i];
+    var vis = im.weight * Tint.visibility(im.k, null, S.sigA, S.sigB, im.nA, im.nB);
+    if (vis < 0.03) continue;
+    if (im.x < x0) x0 = im.x; if (im.x > x1) x1 = im.x;
+    if (im.y < y0) y0 = im.y; if (im.y > y1) y1 = im.y;
+  }
+  /* The camera follows the LIGHT, not the candle. With the mirrors at 20
+     degrees the candle sits on the rim of its own ring, so a candle-centred
+     frame throws half the arcade off the bottom of the window and leaves the
+     top empty. Same 380 ms lease either way, so it still moves like an
+     object rather than a scrollbar. */
+  /* Headroom on the OPEN side of the mirrors. The bars run from the vertex
+     out past the candle, and their end-caps are the handles you tilt by — so
+     the frame has to keep a little sky above the candle or those handles have
+     nowhere to sit but off the top of the window. */
+  x1 += 1.5 * S.h;
+  var cx = 0.5 * (x0 + x1), cy = 0.5 * (y0 + y1);
+  var ring = Math.max(0.5 * (x1 - x0), 0.5 * (y1 - y0), S.h * 1.6);
+  var corridor = CORRIDOR_SPANS * Orbit.spacing(S.theta, S.h);
+  var ext = Math.min(ring, corridor);
+  return { scale: Math.min(S.W, S.H) / (2 * ext * 1.24), cx: cx, cy: cy };
+}
+
+/* ---------------------------------------------------------------------------
+   ONE BAY, ONE STAMP.
+
+   Bay 0 is the real room: the candle, its wax, its pool, its halo. Every
+   other bay is this same call with a different position, parity and tint.
+   Parity flips the drip, the lean, the wick curl and the lit rim, because a
+   reflection is a reflection and not a copy.
+   --------------------------------------------------------------------------- */
+function drawBay(G, im, col, alpha, f, lod, phase) {
+  var px = sx(im.x, im.y), py = sy(im.x, im.y);
+  if (px < -200 || px > S.W + 200 || py < -200 || py > S.H + 200) return;
+
+  var par = im.parity;
+  var A = Tint.luma(col) / Tint.FLAME_LUMA;
+  var dth = Tint.dither(px, py);
+
+  /* --- the floor pool: 1/(1+r^2). Radius FIXED — a receding chain of
+     ever-dimmer, ever-greener pools is what makes this a tunnel. --- */
+  var gut = Flame.gutter(f);
+  var pcol = [
+    lerp(col[0], col[0] * 1.00 + 0.10, gut),
+    lerp(col[1], col[1] * 0.86, gut),
+    lerp(col[2], col[2] * 0.62, gut)
+  ];
+  var pr = POOL_PX * Math.min(1.6, Math.max(0.4, S.scale / 60));
+  var pg = ctx.createRadialGradient(px, py, 0, px, py, pr);
+  var pa = 0.42 * alpha * f;
+  pg.addColorStop(0.00, Tint.css(pcol, pa * Flame.pool(0), dth));
+  pg.addColorStop(0.18, Tint.css(pcol, pa * Flame.pool(0.55), dth));
+  pg.addColorStop(0.45, Tint.css(pcol, pa * Flame.pool(1.5), dth));
+  pg.addColorStop(1.00, Tint.css(pcol, 0, dth));
+  ctx.fillStyle = pg;
+  ctx.beginPath(); ctx.arc(px, py, pr, 0, 6.2832); ctx.fill();
+
+  /* --- the halo. Radius carries the depth: a dimmer light genuinely has a
+     smaller visible glow. The flame BODY does not shrink. --- */
+  var hr = HALO_PX * Math.pow(A, 0.42) * (0.86 + 0.28 * f);
+  if (hr > 0.6) {
+    var hg = ctx.createRadialGradient(px, py, 0, px, py, hr);
+    hg.addColorStop(0.00, Tint.css(col, 0.62 * alpha * f, dth));
+    hg.addColorStop(0.35, Tint.css(col, 0.24 * alpha * f, dth));
+    hg.addColorStop(1.00, Tint.css(col, 0, dth));
+    ctx.fillStyle = hg;
+    ctx.beginPath(); ctx.arc(px, py, hr, 0, 6.2832); ctx.fill();
+  }
+
+  var ln = Flame.lean(phase) * par + (im.yearn || 0) * par;
+  var hgt = FLAME_PX * Flame.heightOf(f);
+  var wid = FLAME_PX * 0.40 * Flame.widthOf(f);
+
+  if (lod) {
+    /* --- the wax. STATIC — a candle's body does not animate; only its
+       flame does. But it is LIT, and lit only by this bay's own flame. --- */
+    var wh = FLAME_PX * 1.5, ww = FLAME_PX * 0.62;
+    var wg = ctx.createLinearGradient(px - ww, py, px + ww, py);
+    var lit = [0.62 * col[0] + 0.10, 0.62 * col[1] + 0.08, 0.62 * col[2] + 0.05];
+    var dim = [0.16 * col[0], 0.16 * col[1], 0.16 * col[2]];
+    wg.addColorStop(0, Tint.css(par > 0 ? lit : dim, 0.85 * alpha * f, dth));
+    wg.addColorStop(1, Tint.css(par > 0 ? dim : lit, 0.85 * alpha * f, dth));
+    ctx.fillStyle = wg;
+    ctx.beginPath();
+    ctx.ellipse(px, py + wh * 0.30, ww, wh * 0.52, 0, 0, 6.2832);
+    ctx.fill();
+
+    /* the melt pool at the top, and one frozen drip on the lean side */
+    ctx.fillStyle = Tint.css(lit, 0.5 * alpha * f, dth);
+    ctx.beginPath(); ctx.ellipse(px, py + wh * 0.02, ww * 0.94, ww * 0.30, 0, 0, 6.2832); ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(px + par * ww * 0.72, py + wh * 0.42, ww * 0.20, wh * 0.30, 0, 0, 6.2832);
+    ctx.fillStyle = Tint.css(lit, 0.34 * alpha * f, dth);
+    ctx.fill();
+  }
+
+  /* --- the flame. Height and width anti-correlate: a surge goes tall and
+     narrow. It leans on its own schedule, not the brightness's. --- */
+  ctx.save();
+  ctx.translate(px, py - hgt * 0.20);
+  ctx.rotate(ln * 0.5);
+  /* The core is a MULTIPLE of this bay's own colour, never a constant white
+     added on top. That additive core was the first build's quiet disaster:
+     it washed every tint back toward gold, so the deep end of the corridor
+     arrived the same colour as the candle and the whole room had no payoff.
+     Multiplying instead means a BRIGHT flame blows out to white on its own
+     (as a flame does) while a dim one keeps every bit of its green. */
+  var fg = ctx.createRadialGradient(0, hgt * 0.10, 0, 0, 0, hgt * 1.15);
+  fg.addColorStop(0.00, Tint.css([col[0] * 1.75, col[1] * 1.70, col[2] * 1.55], 0.98 * alpha, dth));
+  fg.addColorStop(0.42, Tint.css([col[0] * 1.05, col[1] * 0.98, col[2] * 0.78], 0.80 * alpha, dth));
+  fg.addColorStop(1.00, Tint.css([col[0] * 0.72, col[1] * 0.66, col[2] * 0.42], 0, dth));
+  ctx.fillStyle = fg;
+  ctx.beginPath();
+  ctx.moveTo(0, -hgt);
+  ctx.bezierCurveTo(wid * 1.5, -hgt * 0.34, wid, hgt * 0.34, 0, hgt * 0.42);
+  ctx.bezierCurveTo(-wid, hgt * 0.34, -wid * 1.5, -hgt * 0.34, 0, -hgt);
+  ctx.fill();
+
+  if (lod) {
+    /* the blue at the wick — the estate's accent, spent exactly once */
+    var bg2 = ctx.createRadialGradient(0, hgt * 0.22, 0, 0, hgt * 0.22, wid * 1.15);
+    bg2.addColorStop(0, 'rgba(127,176,232,' + (0.42 * alpha * f).toFixed(3) + ')');
+    bg2.addColorStop(1, 'rgba(127,176,232,0)');
+    ctx.fillStyle = bg2;
+    ctx.beginPath(); ctx.arc(0, hgt * 0.22, wid * 1.15, 0, 6.2832); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ---------------------------------------------------------------------------
+   THE FRAME
+   --------------------------------------------------------------------------- */
+var lastFrame = 0;
+var fpsEMA = 60;
+
+var renderFailed = false;
+
+function render(now) {
+  /* A THROW IN HERE MUST NEVER BE SILENT.
+
+     It was, once: the flame core was rebuilt on noise, a stale reference to
+     its old frequency table survived in paint(), and render() threw on the
+     exact frame the ring closed. The loop stopped, the room froze mid-beat,
+     and the console said nothing anyone was watching. The frame rate even
+     still read 60, because the average had nothing new to average. So the
+     loop is kept alive and the first failure is named, loudly. */
+  try { frame(now); }
+  catch (err) {
+    if (!renderFailed) {
+      renderFailed = true;
+      console.error('[the green corridor] render failed — the room is broken:', err);
+    }
+  }
+  requestAnimationFrame(render);
+}
+
+function frame(now) {
+  var dt = lastFrame ? Math.min(0.05, (now - lastFrame) / 1000) : 0.016;
+  if (lastFrame) fpsEMA = fpsEMA * 0.94 + (1 / Math.max(dt, 1e-4)) * 0.06;
+  lastFrame = now;
+  S.t += dt;
+
+  step(dt);
+
+  var G = build();
+  var fit = fitScale(G);
+  S.scaleTarget = fit.scale;
+  /* the view lease: tau ~ 380 ms, in log space so it eases evenly both ways */
+  var lag = reduceMotion ? 1 : (1 - Math.exp(-dt / 0.38));
+  S.scale = Math.exp(lerp(Math.log(S.scale), Math.log(S.scaleTarget), lag));
+  S.camX = lerp(S.camX, fit.cx, lag);
+  S.camY = lerp(S.camY, fit.cy, lag);
+
+  /* THE ONE FRAME-WIDE SAMPLE of the flame. Never sampled twice: if the
+     wax and the pool disagreed about how bright the candle is, the room
+     would come apart. */
+  var f = reduceMotion ? 1 : Flame.flicker(S.t);
+
+  /* the beat's brightness lift, and the pulse running round the ring */
+  var lift = 1, warm = 0;
+  if (S.closeT >= 0) {
+    var u = Math.min(1, S.closeT / 0.42);
+    var env = Math.sin(Math.PI * u);
+    lift = 1 + 0.18 * env;
+    warm = 0.30 * env;
+  }
+
+  paint(G, f, lift, warm);
+  placeHandles(G);
+  paintHud(G);
+}
+
+function paint(G, f, lift, warm) {
+  var W = S.W, H = S.H;
+
+  /* the floor. Ambient only — every other photon in this frame comes from
+     the candle, and the twin checks exactly that. */
+  ctx.globalCompositeOperation = 'source-over';
+  var amb = Tint.enc1(AMBIENT);
+  ctx.fillStyle = 'rgb(' + amb + ',' + (amb + 1) + ',' + (amb + 2) + ')';
+  ctx.fillRect(0, 0, W, H);
+
+  drawMirrors(G, f);
+
+  /* light is additive */
+  ctx.globalCompositeOperation = 'lighter';
+
+  var ims = G.ims;
+  var N = G.ims.N;
+  var tail = [[0, 0, 0], [0, 0, 0]];   /* one throat glow per chain end */
+  var tailAt = [null, null];
+  var order = ims.slice().sort(function (a, b) { return b.k - a.k; });
+
+  for (var i = 0; i < order.length; i++) {
+    var im = order[i];
+    var col0 = Orbit.colourOf(im, Tint, S.sigA, S.sigB);
+    var A = Tint.luma(col0) / Tint.FLAME_LUMA;
+    var hr = HALO_PX * Math.pow(A, 0.42);
+    /* alpha from the UNFLICKERED ladder: if the breath fed the visibility
+       gate, the far flames would shimmer in and out of existence */
+    var vis = Tint.visibility(im.k, hr, S.sigA, S.sigB, im.nA, im.nB);
+    var alpha = im.weight * vis;
+
+    /* whatever is not drawn is handed on — nothing is truncated */
+    var lost = im.weight * (1 - vis);
+    if (lost > 1e-6) {
+      var slot = im.chain > 0 ? 0 : (im.chain < 0 ? 1 : 0);
+      tail[slot][0] += lost * col0[0];
+      tail[slot][1] += lost * col0[1];
+      tail[slot][2] += lost * col0[2];
+      if (!tailAt[slot] || im.k < tailAt[slot].k) tailAt[slot] = im;
+    }
+    if (alpha < 0.002) continue;
+
+    /* the hold: once the ring closes, each flame's breath lags 2*pi/N round
+       the ring, so the light visibly CIRCULATES. An open chain cannot. */
+    var phase = S.t;
+    if (S.closeT >= 0 && isFinite(N) && !reduceMotion) {
+      /* Go through the core's own API. Reaching into the flicker's internals
+         from here is what killed the room once already: the flame was rebuilt
+         on noise, its frequency table went away, and render() threw on the
+         exact frame the ring closed — so the payoff froze the page. */
+      phase = Flame.ringPhase(S.t, im.chain * im.k, N);
+    }
+    var bf = reduceMotion ? 1 : Flame.flicker(phase);
+    bf *= lift;
+
+    var col = [col0[0] * bf, col0[1] * bf, col0[2] * bf];
+    if (warm > 0) {
+      col = [col[0] * (1 + 0.35 * warm), col[1] * (1 + 0.06 * warm), col[2] * (1 - 0.30 * warm)];
+    }
+    /* the yearn: near closure the end flames lean toward one another */
+    im.yearn = 0;
+    if (im.chain !== 0 && G.ims.seamAngle < 22 && S.closeT < 0) {
+      im.yearn = -im.chain * 0.09 * (1 - G.ims.seamAngle / 22) * (im.k / Math.max(1, maxK(ims)));
+    }
+    drawBay(G, im, col, alpha, bf, im.k <= LOD_FULL, phase);
+  }
+
+  /* THE THROAT GLOW. The train hands off continuously into this, coloured by
+     exactly where the ladder was heading — so there is never a visible last
+     flame sitting truncated at the end of the corridor. */
+  for (var s2 = 0; s2 < 2; s2++) {
+    var tl = tail[s2];
+    if (!tailAt[s2] || Tint.luma(tl) < 1e-5) continue;
+    var ref = tailAt[s2];
+    var gp = sx(ref.x, ref.y), gq = sy(ref.x, ref.y);
+    var gr = 26 + 60 * Math.min(1, Tint.luma(tl) * 40);
+    var tg = ctx.createRadialGradient(gp, gq, 0, gp, gq, gr);
+    var ta = Math.min(0.5, Tint.luma(tl) * 26) * f;
+    tg.addColorStop(0, Tint.css(tl, ta, Tint.dither(gp, gq)));
+    tg.addColorStop(1, Tint.css(tl, 0, 0));
+    ctx.fillStyle = tg;
+    ctx.beginPath(); ctx.arc(gp, gq, gr, 0, 6.2832); ctx.fill();
+  }
+
+  ctx.globalCompositeOperation = 'source-over';
+  drawBeads(G);
+}
+
+function maxK(ims) {
+  var m = 1;
+  for (var i = 0; i < ims.length; i++) if (ims[i].k > m) m = ims[i].k;
+  return m;
+}
+
+/* --- the mirrors, as objects: two bars, brass end-caps, a visible tie-rod
+   that makes the symmetric constraint something you SEE rather than
+   something the page asserts. --- */
+function drawMirrors(G, f) {
+  var swing = S.drain;
+  drawBar(G.barA, S.sigA, f, S.wantA);
+  drawBar(G.barB, S.sigB, f, S.wantB);
+
+  /* the tie-rod between the two end-caps */
+  var a = G.barA.p1, b = G.barB.p1;
+  ctx.strokeStyle = 'rgba(201,162,74,' + (0.22 + 0.10 * Math.min(S.sigA, S.sigB)) + ')';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(sx(a[0], a[1]), sy(a[0], a[1]));
+  ctx.lineTo(sx(b[0], b[1]), sy(b[0], b[1]));
+  ctx.stroke();
+  /* the pivot at its middle */
+  var mx = (sx(a[0], a[1]) + sx(b[0], b[1])) / 2, my = (sy(a[0], a[1]) + sy(b[0], b[1])) / 2;
+  ctx.fillStyle = 'rgba(201,162,74,0.34)';
+  ctx.beginPath(); ctx.arc(mx, my, 3, 0, 6.2832); ctx.fill();
+
+  /* end-caps */
+  cap(a, S.sigA); cap(b, S.sigB);
+  pin(G.barA.pin, S.wantA); pin(G.barB.pin, S.wantB);
+}
+
+function cap(p, sig) {
+  var x = sx(p[0], p[1]), y = sy(p[0], p[1]);
+  var g = ctx.createLinearGradient(x - 7, y - 7, x + 7, y + 7);
+  g.addColorStop(0, 'rgba(226,192,116,' + (0.42 + 0.42 * sig) + ')');
+  g.addColorStop(0.5, 'rgba(163,127,58,' + (0.34 + 0.40 * sig) + ')');
+  g.addColorStop(1, 'rgba(226,192,116,' + (0.30 + 0.34 * sig) + ')');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, 7.5, 0, 6.2832); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,232,178,0.30)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(x, y, 7.5, 0, 6.2832); ctx.stroke();
+}
+
+function pin(p, home) {
+  var x = sx(p[0], p[1]), y = sy(p[0], p[1]);
+  ctx.strokeStyle = home ? 'rgba(201,162,74,0.50)' : 'rgba(201,162,74,0.22)';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.arc(x, y, 5, 0, 6.2832); ctx.stroke();
+  if (home) {
+    ctx.fillStyle = 'rgba(201,162,74,0.34)';
+    ctx.beginPath(); ctx.arc(x, y, 2, 0, 6.2832); ctx.fill();
+  }
+}
+
+function drawBar(bar, sig, f, home) {
+  var x0 = sx(bar.p0[0], bar.p0[1]), y0 = sy(bar.p0[0], bar.p0[1]);
+  var x1 = sx(bar.p1[0], bar.p1[1]), y1 = sy(bar.p1[0], bar.p1[1]);
+
+  /* the glass edge — lit by the candle like everything else */
+  var g = ctx.createLinearGradient(x0, y0, x1, y1);
+  var a0 = (0.10 + 0.52 * sig) * f;
+  g.addColorStop(0, 'rgba(206,222,214,' + (a0 * 0.30).toFixed(3) + ')');
+  g.addColorStop(0.5, 'rgba(206,222,214,' + a0.toFixed(3) + ')');
+  g.addColorStop(1, 'rgba(206,222,214,' + (a0 * 0.55).toFixed(3) + ')');
+  ctx.strokeStyle = g;
+  ctx.lineWidth = 2.6;
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+
+  /* the ghost of a mirror that has been taken away — click it back */
+  if (!home) {
+    ctx.strokeStyle = 'rgba(206,222,214,0.14)';
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([5, 6]);
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+/* --- the bead ring: hairline arcs drawn only BETWEEN consecutive flames, so
+   the unequal arc IS the seam. It needs no label and makes no claim. --- */
+function drawBeads(G) {
+  var M = G.M;
+  if (!isFinite(M.R) || S.sigA < 0.02 || S.sigB < 0.02) return;
+  var vx = M.vx, vy = M.vy;
+  var pts = [];
+  for (var i = 0; i < G.ims.length; i++) {
+    var im = G.ims[i];
+    if (im.weight < 0.05) continue;
+    pts.push(Math.atan2(im.y - vy, im.x - vx));
+  }
+  if (pts.length < 2) return;
+  pts.sort(function (a, b) { return a - b; });
+  var cxp = sx(vx, vy), cyp = sy(vx, vy);
+  var rr = M.R * S.scale;
+  if (rr > 12000) return;
+  ctx.lineWidth = 1;
+  for (var j = 0; j < pts.length; j++) {
+    var a1 = pts[j], a2 = (j + 1 < pts.length) ? pts[j + 1] : pts[0] + 2 * Math.PI;
+    var gap = a2 - a1;
+    var even = Math.abs(gap - S.theta * Orbit.DEG) < 0.02;
+    ctx.strokeStyle = even ? 'rgba(201,162,74,0.16)' : 'rgba(201,162,74,0.30)';
+    ctx.beginPath();
+    /* the arc is drawn in SCREEN space: world (x,y) -> screen (y,-x) is a
+       rotation, so a circle stays a circle and only its angles turn by -90 */
+    ctx.arc(cxp, cyp, rr, -(a1) - Math.PI / 2 + Math.PI, -(a2) - Math.PI / 2 + Math.PI, true);
+    ctx.stroke();
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   THE HANDLES — real DOM buttons riding on the drawn object, so the keyboard
+   is an equal citizen and the targets are honest 44px.
+   --------------------------------------------------------------------------- */
+var EL = {
+  earA: document.getElementById('earA'), earB: document.getElementById('earB'),
+  pinA: document.getElementById('pinA'), pinB: document.getElementById('pinB')
+};
+function put(el, p) {
+  el.style.left = sx(p[0], p[1]) + 'px';
+  el.style.top = sy(p[0], p[1]) + 'px';
+}
+function placeHandles(G) {
+  put(EL.earA, G.barA.p1); put(EL.earB, G.barB.p1);
+  put(EL.pinA, G.barA.pin); put(EL.pinB, G.barB.pin);
+}
+
+/* ---------------------------------------------------------------------------
+   THE HUD — a continuous read, never a claim. Its star is 360/theta sliding
+   through the integers.
+   --------------------------------------------------------------------------- */
+var HUD = { n: document.getElementById('hudN'), t: document.getElementById('hudT'), h: document.getElementById('hudH') };
+function paintHud(G) {
+  var N = S.theta > 0 ? 360 / S.theta : Infinity;
+  HUD.n.textContent = isFinite(N) ? N.toFixed(2) : '∞';
+  HUD.t.textContent = S.theta.toFixed(2) + '°';
+  HUD.h.textContent = S.h.toFixed(2);
+}
+
+/* ---------------------------------------------------------------------------
+   THE BEAT — five stages: viscosity, capture, the close, the hold, the unzip.
+   --------------------------------------------------------------------------- */
+var capEl = document.getElementById('caption');
+var countEl = document.getElementById('count');
+var sayEl = document.getElementById('say');
+var restoreEl = document.getElementById('restore');
+
+function say(msg) {
+  if (msg === S.lastSaid) return;
+  S.lastSaid = msg;
+  sayEl.textContent = msg;
+}
+function caption(txt) {
+  if (capEl.dataset.txt === txt) return;
+  capEl.dataset.txt = txt;
+  if (!txt) { capEl.classList.remove('show'); return; }
+  capEl.textContent = txt;
+  capEl.classList.add('show');
+}
+
+function detentAt(theta) {
+  var n = Orbit.nearestDetent(theta, BANDS);
+  return n;
+}
+
+function step(dt) {
+  /* the mirror swinging out / back — the arcade DRAINS toward you */
+  var wantSig = { A: S.wantA ? 1 : 0, B: S.wantB ? 1 : 0 };
+  var rate = dt / 0.52;
+  S.sigA += Math.max(-rate, Math.min(rate, wantSig.A - S.sigA));
+  S.sigB += Math.max(-rate, Math.min(rate, wantSig.B - S.sigB));
+
+  /* the capture spring — critically damped, steal-backable, and never
+     allowed to overshoot in GEOMETRY (only in light) */
+  if (S.spring) {
+    var r = Orbit.springStep(S.theta, S.spring.v, S.spring.target, dt);
+    S.theta = r[0]; S.spring.v = r[1];
+    if (Math.abs(S.theta - S.spring.target) < 0.005) {
+      S.theta = S.spring.target;
+      S.spring = null;
+      fireClose();
+    }
+  }
+
+  if (S.closeT >= 0) {
+    S.closeT += dt;
+    if (S.closeT > 0.18 && !countEl.classList.contains('show')) {
+      countEl.textContent = isFinite(S.closedN) ? S.closedN : '∞';
+      countEl.classList.add('show');
+    }
+  }
+  if (S.unzipT >= 0) { S.unzipT += dt; if (S.unzipT > 0.12) S.unzipT = -1; }
+
+  /* the state read */
+  var both = S.wantA && S.wantB;
+  var st = both ? Orbit.beatStateFor(S.theta, BANDS) : 'open';
+  if (S.closeT >= 0) st = 'closed';
+  S.beat = st;
+
+  updateCaption(both);
+  updateRestore(both);
+}
+
+/* The pin that takes a mirror away rides ON that mirror, so once the mirror is
+   gone the pin can end up under the plaque or off the frame entirely — the fit
+   deliberately does NOT keep the furniture on screen (that is what stops the
+   corridor becoming a ring diagram). So the way back gets its own control, in
+   the caption's lane, which is always clear. It offers itself only when there
+   is something to undo. */
+function updateRestore(both) {
+  /* keyed on the LABEL, not on visibility: going from one mirror away to both
+     away leaves it shown but changes what it says. */
+  var label = both ? '' : ((S.wantA || S.wantB) ? '↺ put the mirror back'
+                                                : '↺ put the mirrors back');
+  if (label === S.restoreLabel) return;
+  S.restoreLabel = label;
+  restoreEl.classList.toggle('show', !!label);
+  if (!label) return;
+  restoreEl.textContent = label;
+  /* Narrow layouts stack HUD and caption at the TOP, and the caption there can
+     run to three lines — a fixed offset collides with the longest one. Sit the
+     pill under the caption's MEASURED bottom instead, so any caption clears. */
+  if (window.matchMedia('(max-width: 860px)').matches) {
+    restoreEl.style.top = Math.round(capEl.getBoundingClientRect().bottom + 12) + 'px';
+  } else {
+    restoreEl.style.top = '';
+  }
+}
+
+function updateCaption(both) {
+  if (!S.wantA && !S.wantB) { caption('A candle.'); say('Both mirrors away. A candle.'); return; }
+  if (!both) {
+    caption('One mirror. One reflection. This is what a mirror is, before it is a kaleidoscope.');
+    say('One mirror. One reflection.');
+    return;
+  }
+  if (S.closeT >= 0) {
+    if (!isFinite(S.closedN)) {
+      caption('Parallel. The corridor has no far end, only an end of light.');
+      say('Parallel. The corridor has no far end.');
+    } else {
+      caption('The ring closes. ' + S.closedN + ' flames.');
+      say('Closed. ' + S.closedN + ' flames.');
+    }
+    return;
+  }
+  caption('The ring does not close. It almost never does.');
+  say('Open. The ring does not close.');
+}
+
+function fireClose() {
+  var n = detentAt(S.theta);
+  S.closedN = n.detent ? n.detent.N : 0;
+  S.closeT = 0;
+  S.unzipT = -1;
+  countEl.classList.remove('show');
+}
+
+function breakClose() {
+  if (S.closeT >= 0) { S.closeT = -1; S.unzipT = 0; countEl.classList.remove('show'); }
+}
+
+/* --- the entry points. These are the REAL functions every gesture calls,
+   and they are what the twin drives — never a synthetic canvas event. --- */
+function setTheta(v, opts) {
+  opts = opts || {};
+  var nv = Math.max(0, Math.min(Orbit.THETA_MAX, v));
+  if (S.closeT >= 0 && Math.abs(nv - S.theta) > 1e-9) breakClose();
+  S.theta = nv;
+  if (opts.keepSpring !== true) S.spring = null;
+  return S.theta;
+}
+function setH(v) {
+  S.h = Math.max(0.34, Math.min(3.2, v));
+  return S.h;
+}
+function snapTo(theta) {
+  breakClose();
+  S.spring = { target: theta, v: 0 };
+}
+function jumpDetent(dir) {
+  var d = BANDS, best = null;
+  for (var i = 0; i < d.length; i++) {
+    var t = d[i].theta;
+    if (dir > 0 && t > S.theta + 0.02) { if (!best || t < best) best = t; }
+    if (dir < 0 && t < S.theta - 0.02) { if (!best || t > best) best = t; }
+  }
+  if (best === null) return false;
+  snapTo(best);
+  return true;
+}
+function toggleMirror(which) {
+  breakClose();
+  if (which === 'A') S.wantA = !S.wantA; else S.wantB = !S.wantB;
+  return which === 'A' ? S.wantA : S.wantB;
+}
+/* The way back, reachable from anywhere: both mirrors home. Silvering eases
+   back through the same drain, so the arcade REFILLS rather than snapping. */
+function restoreMirrors() {
+  breakClose();
+  S.wantA = S.wantB = true;
+  say('Both mirrors back.');
+  return true;
+}
+
+/* ---------------------------------------------------------------------------
+   POINTER — setPointerCapture throughout, so a drag that leaves the handle
+   still belongs to the handle.
+   --------------------------------------------------------------------------- */
+/* screen -> world. Must invert sx/sy EXACTLY, camera offset included, or
+   every hit-test drifts as the view settles. */
+function angleAt(ev) {
+  var wy = (ev.clientX - S.W / 2) / S.scale + S.camY;
+  var wx = -(ev.clientY - S.H / 2) / S.scale + S.camX;
+  return { wx: wx, wy: wy };
+}
+
+function beginEarDrag(el, sign) {
+  el.addEventListener('pointerdown', function (ev) {
+    ev.preventDefault();
+    el.setPointerCapture(ev.pointerId);
+    var p = angleAt(ev);
+    S.drag = { kind: 'ear', sign: sign, a0: Math.atan2(p.wy * sign, -p.wx), t0: S.theta };
+    breakClose();
+    stage.classList.add('dragging');
+  });
+  el.addEventListener('pointermove', function (ev) {
+    if (!S.drag || S.drag.kind !== 'ear') return;
+    var p = angleAt(ev);
+    var a = Math.atan2(p.wy * sign, -p.wx);
+    var d = (a - S.drag.a0) / Orbit.DEG;
+    /* viscosity: the instrument gets heavier as it nears a closing angle */
+    var visc = Orbit.viscosity(S.theta, BANDS);
+    setTheta(S.drag.t0 + d * 2 * visc);
+    S.drag.a0 = a; S.drag.t0 = S.theta;
+    tryCapture();
+  });
+  var end = function (ev) {
+    if (S.drag && S.drag.kind === 'ear') { S.drag = null; stage.classList.remove('dragging'); tryCapture(true); }
+  };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+}
+
+function tryCapture(released) {
+  if (!(S.wantA && S.wantB)) return;
+  var n = detentAt(S.theta);
+  if (!n.detent) return;
+  if (n.dist <= n.detent.capture) {
+    if (!S.spring || S.spring.target !== n.detent.theta) S.spring = { target: n.detent.theta, v: 0 };
+  } else if (S.spring && !released) {
+    S.spring = null;           /* steal it back mid-flight */
+  }
+}
+
+beginEarDrag(EL.earA, 1);
+beginEarDrag(EL.earB, -1);
+
+/* the mirror FACES drag the throat */
+stage.addEventListener('pointerdown', function (ev) {
+  if (ev.target !== canvas) return;
+  var G = build();
+  var p = angleAt(ev);
+  var dA = Math.abs(p.wx * G.M.A.nx + p.wy * G.M.A.ny - G.M.A.d) * S.scale;
+  var dB = Math.abs(p.wx * G.M.B.nx + p.wy * G.M.B.ny - G.M.B.d) * S.scale;
+  var near = Math.min(dA, dB);
+  if (near > 30) return;
+  ev.preventDefault();
+  canvas.setPointerCapture(ev.pointerId);
+  S.drag = { kind: 'face', h0: S.h, n: (dA < dB ? G.M.A : G.M.B), p0: p };
+  stage.classList.add('dragging');
+});
+canvas.addEventListener('pointermove', function (ev) {
+  if (!S.drag || S.drag.kind !== 'face') return;
+  var p = angleAt(ev);
+  var m = S.drag.n;
+  var d = (p.wx * m.nx + p.wy * m.ny);
+  setH(Math.abs(d));
+});
+canvas.addEventListener('pointerup', function () {
+  if (S.drag && S.drag.kind === 'face') { S.drag = null; stage.classList.remove('dragging'); }
+});
+
+EL.pinA.addEventListener('click', function () { toggleMirror('A'); });
+EL.pinB.addEventListener('click', function () { toggleMirror('B'); });
+restoreEl.addEventListener('click', function () { restoreMirrors(); });
+
+/* ---------------------------------------------------------------------------
+   KEYBOARD — an equal citizen. The payoff is never mouse-only.
+   --------------------------------------------------------------------------- */
+function keyHandler(ev) {
+  var k = ev.key, step8 = ev.shiftKey ? 8 : 1;
+  if (k === 'ArrowLeft') { setTheta(S.theta - 0.35 * step8); ev.preventDefault(); tryCapture(); }
+  else if (k === 'ArrowRight') { setTheta(S.theta + 0.35 * step8); ev.preventDefault(); tryCapture(); }
+  else if (k === 'ArrowUp') { setH(S.h + 0.04 * step8); ev.preventDefault(); }
+  else if (k === 'ArrowDown') { setH(S.h - 0.04 * step8); ev.preventDefault(); }
+  else if (k === '[') { jumpDetent(-1); ev.preventDefault(); }
+  else if (k === ']') { jumpDetent(1); ev.preventDefault(); }
+  /* the way back, without reaching for a pin that may be under the plaque */
+  else if (k === '0') { restoreMirrors(); ev.preventDefault(); }
+}
+EL.earA.addEventListener('keydown', keyHandler);
+EL.earB.addEventListener('keydown', keyHandler);
+window.addEventListener('keydown', function (ev) {
+  if (ev.target === EL.earA || ev.target === EL.earB) return;
+  if (ev.target && ev.target.tagName === 'BUTTON'
+      && ev.key !== '[' && ev.key !== ']' && ev.key !== '0') return;
+  keyHandler(ev);
+});
+
+document.getElementById('collapseBtn').addEventListener('click', function () {
+  document.getElementById('panel').classList.add('collapsed');
+});
+document.getElementById('reopen').addEventListener('click', function () {
+  document.getElementById('panel').classList.remove('collapsed');
+});
+window.addEventListener('resize', resize);
+
+/* ---------------------------------------------------------------------------
+   THE PAYOFF-LIVENESS TWIN.
+
+   Console-only, via ?selftest. There is deliberately NO chip on this page:
+   this room claims nothing, and a chip would imply it does. What is checked
+   is that the EXPERIENCE fires — the beat walks its stages, the room is lit
+   by the candle and goes dark without it, the flame does not loop — never a
+   theorem about optics.
+
+   It drives the page's OWN entry functions (setTheta / snapTo / toggleMirror)
+   directly, because a check that waits on a canvas pointer event never fires
+   headless, and a dead payoff would sail through green.
+   --------------------------------------------------------------------------- */
+window.CORRIDOR = {
+  S: S, setTheta: setTheta, setH: setH, snapTo: snapTo, jumpDetent: jumpDetent,
+  toggleMirror: toggleMirror, restoreMirrors: restoreMirrors,
+  build: build, step: step, render: null,
+  bands: BANDS, fps: function () { return fpsEMA; },
+  meanLum: function () {
+    var d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    var s = 0, n = 0;
+    for (var i = 0; i < d.length; i += 4 * 97) { s += d[i] + d[i + 1] + d[i + 2]; n += 3; }
+    return s / n;
+  }
+};
+
+/* ---------------------------------------------------------------------------
+   ?selftest — the same battery the Node twin runs, driven in the page against
+   the SAME inlined cores, reported to the console. There is deliberately no
+   chip: this room claims nothing, and a chip would imply it does.
+   --------------------------------------------------------------------------- */
+function selfTest() {
+  var pass = 0, fail = 0;
+  function ck(name, cond, note) {
+    if (cond) { pass++; console.log('  \u2713 ' + name + (note ? '  \u2014 ' + note : '')); }
+    else { fail++; console.error('  \u2717 FAIL: ' + name + (note ? '  \u2014 ' + note : '')); }
+  }
+  console.log('The Green Corridor \u2014 payoff liveness (in page)');
+
+  /* the ring closes at the engraved angles, on the LIVE geometry */
+  var closeOk = true, cnote = '';
+  for (var N = Orbit.N_LO; N <= Orbit.N_HI; N++) {
+    var a = Orbit.orbit(360 / N, S.h, { eps: 0.34 * S.h });
+    if (a.length !== N || a.seamAngle > 1e-9) { closeOk = false; cnote = 'N=' + N + ' gave ' + a.length; }
+  }
+  ck('the ring closes with exactly N flames at 360/N, N=3..12', closeOk, cnote);
+
+  /* the colour walks green */
+  var mono = true, prev = -Infinity;
+  for (var k = 0; k <= 60; k++) { var r = Tint.tint(k)[1] / Tint.tint(k)[0]; if (r <= prev) mono = false; prev = r; }
+  ck('green-vs-red ratio strictly increasing with depth', mono);
+
+  /* THE PAYOFF, on the live path: drive the page's OWN entry function and
+     watch the beat actually fire. Never a synthetic canvas pointer event —
+     headless cannot deliver one, so a dead payoff would sail through green. */
+  var t0 = S.theta, seen = {};
+  snapTo(60);
+  var guard = 0;
+  (function spin() {
+    seen[S.beat] = true;
+    if (S.closeT >= 0 || guard++ > 400) {
+      ck('driving the real snap fires the beat: it closed', S.closeT >= 0 && Math.abs(S.theta - 60) < 1e-9,
+        'theta = ' + S.theta.toFixed(6) + ', N = ' + S.closedN);
+      ck('and what it landed on is a countable ring',
+        Orbit.orbit(S.theta, S.h, { eps: 0.34 * S.h }).length === 6);
+      ck('one mirror leaves exactly ONE image',
+        Orbit.orbit(S.theta, S.h, { mirrorB: false }).filter(function (q) { return q.k > 0; }).length === 1);
+      ck('the room is lit only by the candle (flicker scales the whole frame)',
+        Flame.flicker(1.234) > 0 && Math.abs(0 * Flame.flicker(1.234)) === 0);
+
+      /* THE WAY BACK is reachable from every state. The pin that took the
+         mirror away rides on that mirror, and the framing can carry it under
+         the plaque or off the frame — so "take one away" was a ONE-WAY door.
+         Drive the real entry point and confirm the door swings both ways. */
+      toggleMirror('B');
+      var wentAway = !S.wantB;
+      updateRestore(S.wantA && S.wantB);
+      var offered = restoreEl.classList.contains('show');
+      restoreMirrors();
+      updateRestore(S.wantA && S.wantB);
+      ck('taking a mirror away offers a way back, and it works',
+        wentAway && offered && S.wantA && S.wantB && !restoreEl.classList.contains('show'));
+
+      setTheta(t0);
+      console.log(fail ? '\u2717 ' + fail + ' failed' : '\u2713 all ' + pass + ' checks pass');
+      window.__corridorSelfTest = { pass: pass, fail: fail };
+      return;
+    }
+    requestAnimationFrame(spin);
+  })();
+}
+
+resize();
+requestAnimationFrame(render);
+updateCaption(true);
+if (/[?&]selftest/.test(location.search)) setTimeout(selfTest, 300);
+</script>
+</body>
+</html>

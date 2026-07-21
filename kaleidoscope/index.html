@@ -131,6 +131,48 @@
     #reopen{ top:auto; bottom:16px; left:50%; transform:translateX(-50%); }
     .brand .tag{ display:none; }
   }
+
+  /* ---- The lit peephole: a door to The Green Corridor ----
+     A LINK would be a label. This is a live sample of the destination: two
+     mirror edges and seven flames receding warm into green, breathing. The
+     one warm object on a cool page, so the eye finds it.
+
+     LANDMINE: this MUST be a SIBLING of #panel, never a child. #panel carries
+     backdrop-filter, and any filter/backdrop-filter creates a containing
+     block for position:fixed descendants — a fixed plaque nested inside it
+     would silently resolve against the panel instead of the viewport, and
+     nothing would warn you. */
+  #peep{
+    position:fixed; right:18px; bottom:18px; z-index:26;
+    display:block; text-decoration:none; cursor:pointer;
+    background:rgba(10,8,7,0.80); border:1px solid rgba(201,162,74,0.30);
+    border-radius:11px; padding:9px 11px 8px;
+    box-shadow:0 12px 34px rgba(0,0,0,0.55);
+    transition:border-color .25s, transform .25s, box-shadow .25s;
+  }
+  #peep:hover, #peep:focus-visible{
+    border-color:rgba(201,162,74,0.66); transform:translateY(-2px);
+    box-shadow:0 16px 40px rgba(0,0,0,0.62);
+  }
+  #peep:focus-visible{ outline:2px solid rgba(201,162,74,0.7); outline-offset:3px; }
+  #peep canvas{ display:block; width:132px; height:52px; border-radius:5px; }
+  #peep .plabel{
+    display:block; margin-top:7px;
+    font:600 9.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
+    color:#c9a24a;
+  }
+  #peep .psub{
+    display:block; margin-top:4px; font-size:10px; line-height:1.4;
+    color:#8d8272; letter-spacing:.2px; max-width:132px;
+  }
+  @media (max-width: 720px){
+    #peep{ right:12px; bottom:auto; top:58px; padding:7px 8px 6px; }
+    #peep canvas{ width:104px; height:41px; }
+    #peep .psub{ display:none; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    #peep{ transition:none; }
+  }
 </style>
 </head>
 <body>
@@ -188,6 +230,10 @@
     <hr class="sep">
     <div class="caption" id="caption"></div>
     <div style="margin-top:11px;">
+      <p style="font-size:11px; line-height:1.65; color:#8f9bb0; margin:0 0 9px; font-style:italic;">
+        Take the lid off and the same two mirrors make a corridor instead of a rosette &mdash;
+        <a href="the-green-corridor/index.html" style="color:#c9a24a; text-decoration:none; border-bottom:1px solid rgba(201,162,74,.35);">the green corridor</a>,
+        with one candle in it.</p>
       <a class="back" style="text-transform:none; letter-spacing:.2px; font-size:11px; opacity:.85;"
          href="../kirigami/index.html"
          title="Fold a paper disc to one wedge, snip a freehand cut, and unfold — the same Dₙ symmetry, made of paper you cut by hand.">↗ Kirigami — symmetry you cut</a>
@@ -196,6 +242,13 @@
   <button id="reopen" title="Show controls">controls</button>
 
   <div id="hud"></div>
+
+  <a id="peep" href="the-green-corridor/index.html"
+     aria-label="The Green Corridor — the same two mirrors seen from above, with a candle between them">
+    <canvas id="peepc" width="264" height="104" aria-hidden="true"></canvas>
+    <span class="plabel">The Green Corridor</span>
+    <span class="psub">the same two mirrors, seen from above</span>
+  </a>
 
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -699,6 +752,148 @@
 
   // dual-use module guard (forge strips exactly this braced single line)
 })(typeof globalThis !== 'undefined' ? globalThis : this);
+/* ═══════════════════════════════════════════════════════════════════════════
+   tint.js — The Green Corridor's colour ladder. DOM-free, dual-use.
+
+   Two mirrors facing each other make a corridor of images: image k is a
+   reflection of image k-1, so the light that reaches your eye from the k-th
+   flame has crossed the silvering k times. Each crossing keeps only MOST of
+   the light — and it keeps the RED least. Multiply that k times and the
+   corridor walks gold → sage → bottle-green → nothing.
+
+   NOTHING HERE IS MEASURED. RHO is a feeling, honestly chosen: a little less
+   light at every bounce, and the warm end of it going first. The gold→sage→
+   green walk is then FORCED by multiplication — it is not authored, not a
+   gradient someone picked. That is the whole trick, and it is the only claim
+   this file makes.
+
+   Two rules that are load-bearing and easy to get wrong:
+
+   1. POWERS IN LINEAR LIGHT, encode ONCE at draw. Compounding in sRGB turns
+      the middle distance muddy grey instead of sage and quietly destroys the
+      entire payoff.
+   2. DITHER ON ENCODE. The far throat is all sub-8-bit values; without a
+      half-LSB ordered dither it bands into visible rings.
+
+   Vanilla, ES5-ish, zero-dependency. Attaches a `Tint` global in the browser;
+   exports the same object under Node for the twin.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function (root) {
+  'use strict';
+
+  var Tint = {};
+
+  /* Per-bounce survival of the silvering, R G B. Red goes first — that is the
+     green. Chosen because the corridor looks right, not because it was read
+     off an instrument. */
+  var RHO   = [0.72, 0.90, 0.82];
+  /* The candle itself, in linear light. */
+  var FLAME = [1.00, 0.62, 0.26];
+
+  Tint.RHO = RHO;
+  Tint.FLAME = FLAME;
+
+  /* Rec.709 luminance — used only to decide when a flame has become too faint
+     to be a flame. */
+  function luma(c) { return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
+  Tint.luma = luma;
+  Tint.FLAME_LUMA = luma(FLAME);
+
+  function clamp01(x) { return x < 0 ? 0 : (x > 1 ? 1 : x); }
+  Tint.clamp01 = clamp01;
+
+  /* ───────────────────────────────────────────────────────────────────────
+     THE LADDER.
+
+     tint(k) is the linear-light colour of the k-th flame: the candle's own
+     spectrum, attenuated once per bounce. k = 0 is the candle itself and is
+     returned unchanged.
+
+     sigA / sigB in [0,1] are the two mirrors' silvering. They are separate so
+     that TAKING A MIRROR AWAY can be a dissolve rather than a switch: drive
+     sigB from 1 to 0 and the whole arcade drains instead of vanishing.
+
+     nA / nB are how many times the ray met mirror A and mirror B. The default
+     is the alternating word (floor/ceil), which is what a chain starting at A
+     actually accumulates; the orbit generator passes the true counts.
+     ─────────────────────────────────────────────────────────────────────── */
+  Tint.tint = function (k, sigA, sigB, nA, nB) {
+    if (sigA === undefined || sigA === null) sigA = 1;
+    if (sigB === undefined || sigB === null) sigB = 1;
+    if (nA === undefined) nA = Math.floor(k / 2);
+    if (nB === undefined) nB = Math.ceil(k / 2);
+    var g = Math.pow(sigA, nA) * Math.pow(sigB, nB);
+    return [
+      FLAME[0] * Math.pow(RHO[0], k) * g,
+      FLAME[1] * Math.pow(RHO[1], k) * g,
+      FLAME[2] * Math.pow(RHO[2], k) * g
+    ];
+  };
+
+  /* Attenuation of the k-th flame relative to the candle, by luminance.
+     This is the number the visibility floor is measured against. */
+  Tint.atten = function (k, sigA, sigB, nA, nB) {
+    return luma(Tint.tint(k, sigA, sigB, nA, nB)) / Tint.FLAME_LUMA;
+  };
+
+  /* ───────────────────────────────────────────────────────────────────────
+     ENCODE — linear light → an 8-bit sRGB triple, with a half-LSB ordered
+     dither. `d` is a dither offset in [-0.5, 0.5] LSB; pass a screen-position
+     hash for a stable pattern, or omit for none.
+     ─────────────────────────────────────────────────────────────────────── */
+  Tint.enc1 = function (v, d) {
+    var s = 255 * Math.pow(clamp01(v), 1 / 2.2) + (d || 0);
+    s = Math.round(s);
+    return s < 0 ? 0 : (s > 255 ? 255 : s);
+  };
+
+  Tint.css = function (c, alpha, d) {
+    var r = Tint.enc1(c[0], d), g = Tint.enc1(c[1], d), b = Tint.enc1(c[2], d);
+    if (alpha === undefined || alpha === null) alpha = 1;
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + (Math.round(alpha * 1000) / 1000) + ')';
+  };
+
+  /* A 4x4 Bayer matrix scaled to ±0.5 LSB. Deterministic, screen-stable. */
+  var BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+  Tint.dither = function (x, y) {
+    var i = ((y | 0) & 3) * 4 + ((x | 0) & 3);
+    return BAYER[i] / 16 - 0.46875;   /* [-0.469, +0.469] LSB */
+  };
+
+  /* ───────────────────────────────────────────────────────────────────────
+     THE VISIBILITY FLOOR.
+
+     There is NO image cap. The train simply recedes until a flame is no
+     longer light, and what is left of it is handed to a single throat glow —
+     so nothing is ever seen to be cut off. alpha depends ONLY on the bounce
+     count k, never on how far apart the mirrors are: pulling the mirrors
+     apart buys you no more infinity, only more silence between the lights.
+     ─────────────────────────────────────────────────────────────────────── */
+  Tint.A_FLOOR = 0.0035;
+  Tint.S_MIN = 0.6;
+
+  Tint.smoother = function (a, b, x) {
+    if (a === b) return x < a ? 0 : 1;
+    var t = clamp01((x - a) / (b - a));
+    return t * t * t * (t * (6 * t - 15) + 10);
+  };
+
+  /* Visibility of a flame: how much of its light is DRAWN (the rest goes to
+     the throat glow). Both gates are C^2, so nothing ever pops. */
+  Tint.visibility = function (k, haloRadius, sigA, sigB, nA, nB) {
+    var A = Tint.atten(k, sigA, sigB, nA, nB);
+    var fA = Tint.smoother(Tint.A_FLOOR, 4 * Tint.A_FLOOR, A);
+    var fS = (haloRadius === undefined || haloRadius === null)
+      ? 1 : Tint.smoother(Tint.S_MIN, 3 * Tint.S_MIN, haloRadius);
+    return fA * fS;
+  };
+
+  /* browser global */
+  if (root && root.document) root.Tint = Tint;
+  root.Tint = Tint;
+
+  /* dual-use module guard (forge strips exactly this braced single line) */
+})(typeof globalThis !== 'undefined' ? globalThis : this);
 
 /* ===========================================================================
    THE PAGE — drives the CORE (tools/kaleido/kaleido.js). The CORE is the proof;
@@ -989,6 +1184,77 @@ startLoop();
 if (reduceMotion){
   flashHud('Reduced motion: the tumble is paused — press <b>▶ Play</b> to watch it turn.', 5200);
 }
+
+/* ===========================================================================
+   THE LIT PEEPHOLE — the door to The Green Corridor.
+
+   This shares exactly ONE thing with the room downstairs: tools/corridor/
+   tint.js, the colour ladder (about 1 KB here). The corridor's geometry,
+   flame and instrument engines stay downstairs where they belong — a door
+   should be a sample of the destination, not a copy of it.
+   =========================================================================== */
+(function () {
+  var pc = document.getElementById('peepc');
+  if (!pc || typeof Tint === 'undefined') return;
+  var p = pc.getContext('2d');
+  var W = pc.width, H = pc.height;
+  var still = (typeof window.matchMedia === 'function')
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* sized in BACKING pixels (the canvas is 2x its CSS box), so the flames
+     read as flames at thumbnail size rather than as a row of dots */
+  var NF = 7, y = H * 0.58, x0 = W * 0.15, dx = (W * 0.72) / (NF - 1);
+
+  function peepFrame(t) {
+    p.globalCompositeOperation = 'source-over';
+    p.fillStyle = '#08070a';
+    p.fillRect(0, 0, W, H);
+
+    /* the two mirror edges, seen edge-on */
+    p.strokeStyle = 'rgba(206,222,214,0.16)';
+    p.lineWidth = 1.5;
+    p.lineWidth = 2;
+    p.beginPath(); p.moveTo(5, H * 0.16); p.lineTo(W - 5, H * 0.11); p.stroke();
+    p.beginPath(); p.moveTo(5, H * 0.95); p.lineTo(W - 5, H * 1.00); p.stroke();
+
+    p.globalCompositeOperation = 'lighter';
+    for (var k = 0; k < NF; k++) {
+      /* the SAME ladder the room uses — warm gold into bottle-green */
+      var col = Tint.tint(k);
+      var A = Tint.luma(col) / Tint.FLAME_LUMA;
+      var f = still ? 1 : 1 + 0.11 * Math.sin(t * 1.7 + k * 1.1) * Math.sin(t * 0.63 + k * 0.4);
+      var x = x0 + k * dx;
+      var hr = 30 * Math.pow(A, 0.42) * f;
+
+      var g = p.createRadialGradient(x, y, 0, x, y, Math.max(hr, 1.2));
+      g.addColorStop(0, Tint.css(col, 0.62 * f));
+      g.addColorStop(0.4, Tint.css(col, 0.20 * f));
+      g.addColorStop(1, Tint.css(col, 0));
+      p.fillStyle = g;
+      p.beginPath(); p.arc(x, y, Math.max(hr, 1.2), 0, 6.2832); p.fill();
+
+      var fh = 15 * f, fw = 5.4 / f;
+      var fg = p.createRadialGradient(x, y - fh * 0.2, 0, x, y - fh * 0.2, fh);
+      fg.addColorStop(0, Tint.css([col[0] * 1.75, col[1] * 1.7, col[2] * 1.55], 0.96));
+      fg.addColorStop(1, Tint.css(col, 0));
+      p.fillStyle = fg;
+      p.beginPath();
+      p.moveTo(x, y - fh);
+      p.bezierCurveTo(x + fw, y - fh * 0.3, x + fw * 0.7, y + fh * 0.35, x, y + fh * 0.4);
+      p.bezierCurveTo(x - fw * 0.7, y + fh * 0.35, x - fw, y - fh * 0.3, x, y - fh);
+      p.fill();
+    }
+    p.globalCompositeOperation = 'source-over';
+  }
+
+  if (still) { peepFrame(0); return; }
+  var t0 = 0;
+  (function loop(now) {
+    if (!t0) t0 = now;
+    peepFrame((now - t0) / 1000);
+    requestAnimationFrame(loop);
+  })(0);
+})();
 
 /* ws: unlock breadcrumb — the shared module (one source of truth), inlined via
    forge. See /UNLOCK.md and tools/ws/README.md. Defines WS, records this piece's

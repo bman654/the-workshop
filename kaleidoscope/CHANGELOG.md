@@ -1,5 +1,63 @@
 # Kaleidoscope — changelog
 
+## 2026-07-21 — The Green Corridor (the room's second body)
+
+Added `kaleidoscope/the-green-corridor/` — a **companion**, gathered under this room's
+roof rather than detached: no PLACES entry, no map slot, no `ws:seen:` breadcrumb.
+Upstairs you look through the small end and the secret keeps itself; here the lid is
+off — the **same two mirrors, seen from above**, with one candle between them and the
+corridor of images compounding away into bottle-green.
+
+**A delight piece, and it claims nothing.** The parent proves an exact theorem; this
+does not, on purpose. `RHO` was chosen because the corridor looks right, and the page
+says so out loud. No self-test chip; the shipped page is grepped for claim creep.
+
+### What I built
+- `tools/corridor/orbit.js` — ONE generator (reflect in A, then B, alternating, one
+  chain each way) so θ = 0, the parallel D∞ ladder, needs no special case. Soft merge
+  + soft birth, both C² and energy-carrying, so nothing pops. `K_MAX = 160`, a fixed
+  constant.
+- `tools/corridor/tint.js` — the colour ladder, powers in LINEAR light with a
+  half-LSB ordered dither, **shared with the parent page's door**.
+- `tools/corridor/flame.js` — the living candle, on smooth value noise.
+- `tools/corridor/corridor.test.cjs` — the payoff-liveness twin, 48/48.
+- The page: top-down orthographic plan, a real instrument (ears tilt, bar faces widen
+  the throat, latch pins take a mirror away), the five-stage snap beat, and a keyboard
+  that is an equal citizen (`[` `]` play the full close).
+- A **lit peephole** on the parent page — a live miniature of the destination.
+
+### Two things the build got wrong first, kept in the notes
+- The flicker began as five incommensurable sines. A finite sum of sines is *almost
+  periodic*: the twin caught the candle recurring at 21.9 s with autocorrelation 0.99.
+  Rebuilt on value noise, whose autocorrelation decays and never revives.
+- `render()` threw on the exact frame the ring closed — a stale reference into the
+  rebuilt flame core. The room froze mid-beat and the frame rate still read 60, because
+  the average had nothing new to average. Only the first-hand walk found it; the loop
+  now names its first failure loudly.
+
+### Honesty correction
+One mirror removed leaves the candle **plus one image = two lights, one reflection**.
+"Exactly one flame" is true only with both mirrors gone, and the copy says *one
+reflection*.
+
+### What the fresh-eyes review changed (same day)
+- **The honesty correction had missed one line.** The plaque's exit line still read
+  *"With one mirror, one flame."* while the caption six inches away said *one
+  reflection* — so the page contradicted itself, and contradicted the two flames on
+  screen. Corrected, and the twin now **greps the shipped page** for the phrase: the
+  maths tests assert geometry, not prose, which is exactly how it survived.
+- **"Take one away" was a one-way door.** A latch pin rides on its own mirror bar, so
+  once the mirror is gone the pin travels with the ghost — under the plaque at wide
+  angles, off the frame below ~10°. The toggle was correct in code; it was simply
+  **unreachable**, so a console-clean, 60 fps, all-green room still stranded you at a
+  reload. Added the way back: a brass **↺ pill** in the caption's lane (the one strip
+  nothing else occupies) and the **`0`** key, offered only when there is something to
+  undo, and covered by the in-page twin. See SPEC §5.4b.
+- **Verified rather than reasoned:** reduced motion (the frame goes still — flicker
+  spread falls to 0.2% of its live value) and the flicker's *character* over a
+  sustained watch (lag-1 autocorrelation 0.989, median frame step 0.28%, total swing
+  14.6% — a breath, not a twitch), both of which the build had left to judgement.
+
 ## 2026-06-13 — Initial build (tumbling Dₙ mirror toy)
 
 Built `kaleidoscope/` — a live, tumbling N-fold kaleidoscope with **provable
