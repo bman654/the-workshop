@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Taking-Apart Table</title>
+<style>
+  :root{
+    --panel-bg: rgba(20,15,9,0.88);
+    --panel-edge: rgba(214,176,108,0.38);
+    --ink: #f0e2c4;
+    --ink-dim: #b8a172;
+    --accent: #e6bd6f;
+    --refuse: #dd9059;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    --bg: #0a0704;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg);
+    background:
+      radial-gradient(1000px 600px at 30% 26%, rgba(126,88,38,0.15), transparent 62%),
+      radial-gradient(760px 520px at 84% 82%, rgba(66,48,28,0.13), transparent 60%),
+      var(--bg);
+    color:var(--ink); font-family:var(--font-ui); overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30;
+    display:flex; align-items:center; justify-content:space-between; gap:14px;
+    padding:12px 20px 0; pointer-events:none;
+  }
+  .topbar a, .topbar .chip, .topbar button{ pointer-events:auto; }
+  .back{ font:600 11px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); text-decoration:none; opacity:.82; transition:.25s; white-space:nowrap; }
+  .back:hover{ color:var(--accent); opacity:1; }
+  .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+  .brand h1{ font-family:var(--font-serif); font-size:20px; font-weight:600; margin:0; letter-spacing:.4px; white-space:nowrap; }
+  .brand .tag{ font:11px/1 var(--font-mono); color:var(--ink-dim); white-space:nowrap; }
+  .right{ display:flex; align-items:center; gap:9px; }
+  .chip{ font:600 10.5px/1 var(--font-mono); padding:6px 10px; border-radius:20px;
+    border:1px solid var(--panel-edge); background:rgba(0,0,0,0.38); color:var(--ink-dim); white-space:nowrap; }
+  .chip.ok{ color:#8fd79a; border-color:rgba(120,200,130,0.5); background:rgba(38,68,42,0.4); }
+  .chip.bad{ color:#e59a86; border-color:rgba(210,120,90,0.5); background:rgba(70,40,34,0.4); }
+  button.chip{ cursor:pointer; }
+  button.chip:hover{ color:var(--accent); border-color:rgba(230,189,111,0.6); }
+
+  /* the instrument rail */
+  .rail{
+    position:fixed; left:0; right:0; bottom:0; z-index:26; display:flex; justify-content:center;
+    gap:8px; padding:0 18px 12px; pointer-events:none; flex-wrap:wrap;
+  }
+  .rail .card{
+    pointer-events:auto; cursor:pointer; text-align:left; min-width:132px;
+    background:rgba(15,11,6,0.86); border:1px solid rgba(214,176,108,0.22); border-radius:8px;
+    padding:7px 12px 8px; color:var(--ink-dim); transition:.22s; font-family:var(--font-ui);
+  }
+  .rail .card:hover{ border-color:rgba(230,189,111,0.55); color:var(--ink); transform:translateY(-2px); }
+  .rail .card.on{ border-color:rgba(230,189,111,0.75); background:rgba(48,34,16,0.9); color:var(--ink); }
+  .rail .card .n{ display:block; font-family:var(--font-serif); font-size:14px; font-style:italic; }
+  .rail .card .s{ display:block; font:9.5px/1.35 var(--font-mono); opacity:.75; margin-top:3px; letter-spacing:.03em; }
+
+  #scene{ position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  text{ user-select:none; }
+  @media (max-width:840px){
+    .topbar{ flex-wrap:wrap; row-gap:5px; padding:8px 12px 0; align-items:flex-start;
+      background:linear-gradient(to bottom, rgba(10,7,4,0.96) 60%, rgba(10,7,4,0)); }
+    .brand{ order:3; width:100%; justify-content:center; padding-bottom:6px; }
+    .brand h1{ font-size:16px; }
+    .brand .tag{ display:none; }
+    .back{ font-size:10px; letter-spacing:.12em; }
+    .chip{ font-size:9.5px; padding:5px 8px; }
+    .right{ gap:6px; }
+    .rail{ padding:0 10px 10px; gap:6px; }
+    .rail .card{ min-width:0; padding:6px 9px; }
+    .rail .card .n{ font-size:12.5px; }
+    .rail .card .s{ display:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back" href="../reckoning/index.html">&larr; the Reckoning Cabinet</a>
+  <div class="brand">
+    <h1>The Taking-Apart Table</h1>
+    <span class="tag" id="tagline">brass, nine parts</span>
+  </div>
+  <div class="right">
+    <button class="chip" id="muteBtn" title="the estate's shared mute">sound on</button>
+    <div class="chip" id="liveness">liveness: idle</div>
+  </div>
+</div>
+
+<svg id="scene" viewBox="0 0 1240 760" preserveAspectRatio="xMidYMid meet"></svg>
+
+<div class="rail" id="rail"></div>
+
+<script>
+"use strict";
+<!-- forge:include ../tools/ws/ws.js -->
+<!-- forge:include instruments.js -->
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE TAKING-APART TABLE — engine
+
+   A delight piece. It proves no theorem and claims no physics: the almucantar
+   arcs, the sway and the stiction are ORNAMENT, tuned by ear and eye. What it
+   DOES owe — and pays, in `runTwin()` at the foot of this file — is proof that
+   its payoffs FIRE: a part comes free, docks and writes its name; a pinned part
+   refuses and names what holds it; and the lever puts every instrument back,
+   BIT-EQUAL to where it began, from a finished bloom and from an interrupted one.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const SVGNS = "http://www.w3.org/2000/svg";
+const scene = document.getElementById("scene");
+const livenessChip = document.getElementById("liveness");
+const el = (n, a) => { const e = document.createElementNS(SVGNS, n); if (a) for (const k in a) e.setAttribute(k, a[k]); return e; };
+const txt = (s, x, y, a) => { const t = el("text", Object.assign({ x, y }, a || {})); t.textContent = s; return t; };
+
+/* the drawing kit handed to every part's draw() */
+const D = {
+  el, txt,
+  BR: "#e6bd6f", BR_D: "#a5854a", BR_L: "#f6dfae",
+  MONO: 'var(--font-mono)', SERIF: 'var(--font-serif)',
+};
+
+/* ───────────────────────── the clock ─────────────────────────
+   ONE loop, one clock. In the browser it follows performance.now(); the twin
+   drives it by hand with advance(ms), so ten bloom→settle rounds run instantly
+   and headlessly instead of taking a minute of real animation. */
+const CLOCK = { now: 0, virtual: false };
+function advance(ms) { CLOCK.now += ms; frame(); }
+
+/* ───────────────────────── sound ─────────────────────────
+   In-house WebAudio, five cues, tuned per material. Unlocked on the first real
+   gesture (browsers start every context suspended); honours the estate mute. */
+let AC = null, MASTER = null, MUTED = false;
+try { MUTED = !!(window.WS && WS.muted()); } catch (_) {}
+function unlockAudio() {
+  if (AC) { if (AC.state !== "running") AC.resume(); return; }
+  try {
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    MASTER = AC.createGain(); MASTER.gain.value = MUTED ? 0 : 0.9; MASTER.connect(AC.destination);
+    if (AC.state !== "running") AC.resume();
+  } catch (_) { AC = null; }
+}
+function noiseBuf(sec) {
+  const n = Math.max(1, Math.floor(AC.sampleRate * sec)), b = AC.createBuffer(1, n, AC.sampleRate), d = b.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < n; i++) { const w = Math.random() * 2 - 1; last = last * 0.55 + w * 0.45; d[i] = last; }
+  return b;
+}
+function tone(f, dur, type, gain, slideTo, delay) {
+  if (!AC || MUTED) return;
+  const t = AC.currentTime + (delay || 0);
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), t + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(MASTER); o.start(t); o.stop(t + dur + 0.03);
+}
+function hiss(dur, gain, f0, f1, q) {
+  if (!AC || MUTED) return;
+  const t = AC.currentTime, src = AC.createBufferSource(), bp = AC.createBiquadFilter(), g = AC.createGain();
+  src.buffer = noiseBuf(dur + 0.05);
+  bp.type = "bandpass"; bp.frequency.setValueAtTime(f0, t); bp.Q.value = q || 1.1;
+  bp.frequency.exponentialRampToValueAtTime(Math.max(60, f1), t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(bp); bp.connect(g); g.connect(MASTER); src.start(t); src.stop(t + dur + 0.05);
+}
+/* one voice per material — brass rings, paper breathes, steel bites */
+const VOICE = {
+  brass: {
+    strain: () => hiss(0.09, 0.170, 820, 1420, 3.4),
+    unseat: () => { tone(300, 0.15, "sine", 0.055, 520); hiss(0.10, 0.022, 1400, 700, 2.0); },
+    dock:   () => { tone(1760, 0.055, "square", 0.050); tone(624, 0.09, "triangle", 0.048, 384); },
+    thud:   () => { tone(96, 0.14, "sine", 0.105, 62); tone(182, 0.05, "triangle", 0.030); },
+    seat:   () => { tone(1180, 0.05, "square", 0.042); tone(300, 0.14, "sine", 0.058, 200); },
+    lever:  () => { tone(212, 0.22, "sawtooth", 0.030, 132); hiss(0.13, 0.016, 520, 240, 1.4); },
+  },
+  paper: {
+    strain: () => hiss(0.12, 0.150, 780, 1180, 2.8),
+    unseat: () => hiss(0.22, 0.150, 1300, 480, 1.8),
+    dock:   () => { hiss(0.10, 0.150, 860, 360, 2.0); tone(238, 0.07, "triangle", 0.026, 168); },
+    thud:   () => { tone(74, 0.11, "sine", 0.070, 54); hiss(0.09, 0.024, 400, 185, 1.2); },
+    seat:   () => hiss(0.14, 0.130, 1040, 400, 1.8),
+    lever:  () => { tone(196, 0.20, "sawtooth", 0.026, 124); hiss(0.16, 0.090, 1180, 400, 1.5); },
+  },
+  steel: {
+    strain: () => hiss(0.08, 0.190, 1700, 2600, 4.5),
+    unseat: () => { tone(520, 0.12, "triangle", 0.042, 880); hiss(0.08, 0.018, 2400, 1300, 3.0); },
+    dock:   () => { tone(2480, 0.055, "square", 0.052); tone(1420, 0.07, "triangle", 0.040, 880); },
+    thud:   () => { tone(118, 0.11, "sine", 0.095, 78); tone(300, 0.045, "square", 0.026); },
+    seat:   () => { tone(1560, 0.045, "square", 0.038); tone(430, 0.12, "sine", 0.048, 280); },
+    lever:  () => { tone(240, 0.20, "sawtooth", 0.028, 150); hiss(0.11, 0.014, 800, 320, 2.2); },
+  },
+};
+let voice = VOICE.brass;
+const S = {
+  strain: () => voice.strain(), unseat: () => voice.unseat(), dock: () => voice.dock(),
+  thud: () => voice.thud(), seat: () => voice.seat(), lever: () => voice.lever(),
+};
+
+const muteBtn = document.getElementById("muteBtn");
+function syncMute() {
+  muteBtn.textContent = MUTED ? "sound off" : "sound on";
+  muteBtn.setAttribute("aria-pressed", String(MUTED));
+  if (MASTER) MASTER.gain.value = MUTED ? 0 : 0.9;
+}
+muteBtn.addEventListener("click", () => {
+  MUTED = !MUTED;
+  try { if (window.WS) WS.setMuted(MUTED); } catch (_) {}
+  unlockAudio(); syncMute();
+});
+try { if (window.WS && WS.onMuteChange) WS.onMuteChange(function (m) { MUTED = !!m; syncMute(); }); } catch (_) {}
+syncMute();
+
+/* ───────────────────────── the felt & the shelf ───────────────────────── */
+/* ── two layouts, one scene ──
+   Wide: the cloth on the left, the shelf standing beside it. Narrow (a phone held
+   upright): the cloth on top, the shelf below it. Everything positional is derived
+   from these, so switching is: set them, rebuild. */
+const WIDE = { vb: "0 0 1240 760", felt: { x0: 44, y0: 60, x1: 720, y1: 638 },
+  sx: 800, sw: 372, stop: 104, lx: 382, ly: 684, caption: true, slotCap: 58 };
+/* TALL is width-bound at every phone width (760/1420 is taller than any portrait
+   viewport's aspect), so the extra 80 units below the shelf cost no scale — they
+   buy back the caption, which is the page's ONLY statement of what to do. The
+   lever sits in the 46-unit lane between the cloth's bottom edge and the shelf
+   card's top (which is drawn at `stop - 56`), clearing both. */
+const TALL = { vb: "0 0 760 1420", felt: { x0: 30, y0: 56, x1: 730, y1: 654 },
+  sx: 96, sw: 560, stop: 800, lx: 380, ly: 700, caption: true, slotCap: 55 };
+let LAY = WIDE;
+let FELT = LAY.felt;
+let SHELF_X = LAY.sx, SHELF_W = LAY.sw, SHELF_TOP = LAY.stop;
+const TILT_MAX = 0.52;              /* radians — the felt's roll at full bloom */
+
+/* stiction, in felt units */
+const BREAK = 17;                   /* accumulated strain at which the metal lets go */
+const CREEP = 4.5;                  /* how far the part is allowed to creep before it does */
+
+const defs = el("defs");
+defs.innerHTML = [
+  '<radialGradient id="lamp" gradientUnits="userSpaceOnUse" cx="380" cy="330" r="400">',
+  '<stop offset="0%" stop-color="#ffd489" stop-opacity="0.30"/>',
+  '<stop offset="30%" stop-color="#e8b463" stop-opacity="0.15"/>',
+  '<stop offset="66%" stop-color="#8a6a30" stop-opacity="0.05"/>',
+  '<stop offset="100%" stop-color="#000000" stop-opacity="0"/></radialGradient>',
+  '<radialGradient id="vignette" gradientUnits="userSpaceOnUse" cx="380" cy="330" r="470">',
+  '<stop offset="0%" stop-color="#000" stop-opacity="0"/>',
+  '<stop offset="58%" stop-color="#000" stop-opacity="0.14"/>',
+  '<stop offset="100%" stop-color="#000" stop-opacity="0.68"/></radialGradient>',
+  '<linearGradient id="brassface" x1="0" y1="0" x2="0.7" y2="1">',
+  '<stop offset="0%" stop-color="#5a4520"/><stop offset="45%" stop-color="#8a6c33"/>',
+  '<stop offset="70%" stop-color="#6b5426"/><stop offset="100%" stop-color="#41341a"/></linearGradient>',
+  '<linearGradient id="brassbar" x1="0" y1="0" x2="0" y2="1">',
+  '<stop offset="0%" stop-color="#c9a662"/><stop offset="42%" stop-color="#8b6f37"/>',
+  '<stop offset="100%" stop-color="#5b4722"/></linearGradient>',
+  '<radialGradient id="sunball" cx="34%" cy="30%" r="72%">',
+  '<stop offset="0%" stop-color="#ffe6a8"/><stop offset="60%" stop-color="#d8a944"/>',
+  '<stop offset="100%" stop-color="#8a6320"/></radialGradient>',
+  '<linearGradient id="vellum" x1="0" y1="0" x2="0.4" y2="1">',
+  '<stop offset="0%" stop-color="#e7d7ae"/><stop offset="55%" stop-color="#d9c69a"/>',
+  '<stop offset="100%" stop-color="#c3ad7f"/></linearGradient>',
+  '<radialGradient id="paperwheel" cx="38%" cy="32%" r="70%">',
+  '<stop offset="0%" stop-color="#f2e6c6"/><stop offset="70%" stop-color="#e0cea2"/>',
+  '<stop offset="100%" stop-color="#c9b489"/></radialGradient>',
+  '<radialGradient id="paperwheel2" cx="42%" cy="36%" r="70%">',
+  '<stop offset="0%" stop-color="#efe1bd"/><stop offset="72%" stop-color="#d9c79c"/>',
+  '<stop offset="100%" stop-color="#bfa87e"/></radialGradient>',
+  '<linearGradient id="steelface" x1="0" y1="0" x2="0.6" y2="1">',
+  '<stop offset="0%" stop-color="#8e9aa3"/><stop offset="40%" stop-color="#5f6a74"/>',
+  '<stop offset="72%" stop-color="#7b868f"/><stop offset="100%" stop-color="#3b444c"/></linearGradient>',
+  '<linearGradient id="steelbar" x1="0" y1="0" x2="0" y2="1">',
+  '<stop offset="0%" stop-color="#aeb9c1"/><stop offset="44%" stop-color="#6d7881"/>',
+  '<stop offset="100%" stop-color="#414a52"/></linearGradient>',
+  '<linearGradient id="ivory" x1="0" y1="0" x2="0.5" y2="1">',
+  '<stop offset="0%" stop-color="#f4eeda"/><stop offset="60%" stop-color="#ddd4bb"/>',
+  '<stop offset="100%" stop-color="#b9ae92"/></linearGradient>',
+  '<pattern id="baize" width="6" height="6" patternUnits="userSpaceOnUse">',
+  '<rect width="6" height="6" fill="#0d160a"/>',
+  '<path d="M -1 5 L 5 -1 M 1 7 L 7 1" stroke="#122010" stroke-width="1.5"/>',
+  '<path d="M -1 1 L 1 -1 M 3 7 L 7 3" stroke="#091108" stroke-width="1.4"/>',
+  '</pattern>',
+  '<clipPath id="feltclip"><path id="feltclippath" d=""/></clipPath>',
+].join("");
+scene.appendChild(defs);
+
+/* layers, back to front */
+const gFelt    = el("g");
+const gShadow  = el("g", { "clip-path": "url(#feltclip)", "pointer-events": "none" });
+const gGhost   = el("g", { "pointer-events": "none" });
+const gPin     = el("g", { "pointer-events": "none" });
+const gParts   = el("g");
+const gShelf   = el("g");
+const gLabels  = el("g");
+const gHover   = el("g", { opacity: "0", "pointer-events": "none" });
+const gLever   = el("g", { style: "cursor:pointer" });
+const gCaption = el("g", { "pointer-events": "none" });
+const gHitProbe = el("g", { opacity: "0", "pointer-events": "none" });  /* hit shapes live here for isPointInFill */
+for (const g of [gFelt, gShadow, gPin, gParts, gGhost, gShelf, gLabels, gHover, gLever, gCaption, gHitProbe]) scene.appendChild(g);
+
+const feltPath = el("path", { fill: "url(#baize)", stroke: "rgba(150,120,72,0.34)", "stroke-width": 1.4 });
+const feltLamp = el("path", { fill: "url(#lamp)", "pointer-events": "none" });
+const feltVig  = el("path", { fill: "url(#vignette)", "pointer-events": "none" });
+const feltInner = el("path", { fill: "none", stroke: "rgba(214,176,108,0.10)", "stroke-width": 0.8, "pointer-events": "none" });
+const feltEdge = el("path", { fill: "none", stroke: "rgba(255,214,150,0.20)", "stroke-width": 1.6, "pointer-events": "none" });
+gFelt.appendChild(feltPath); gFelt.appendChild(feltLamp); gFelt.appendChild(feltVig);
+gFelt.appendChild(feltInner); gFelt.appendChild(feltEdge);
+const lampGrad = defs.querySelector("#lamp"), vigGrad = defs.querySelector("#vignette");
+const feltClipPath = defs.querySelector("#feltclippath");
+
+/* the shelf frame is rebuilt per instrument (its slot count changes) */
+let SLOT_H = 62;
+const shelfBack = el("rect", { rx: 8, fill: "rgba(15,11,6,0.74)", stroke: "rgba(214,176,108,0.28)", "stroke-width": 1.3 });
+const shelfTitleA = el("a");
+const shelfTitle = txt("", SHELF_X - 4, SHELF_TOP - 18, { fill: "#f0e2c4", "font-size": "15", "font-family": D.SERIF, "font-style": "italic" });
+shelfTitleA.appendChild(shelfTitle);
+const shelfSub = txt("", SHELF_X - 4, SHELF_TOP - 2, { fill: "#b8a172", "font-size": "10.5", "font-family": D.MONO, "letter-spacing": "0.07em" });
+const depthText = txt("", SHELF_X + SHELF_W, SHELF_TOP - 18, { fill: "#b8a172", "font-size": "11.5", "font-family": D.MONO, "text-anchor": "end" });
+const gSlots = el("g");
+gShelf.appendChild(shelfBack); gShelf.appendChild(gSlots);
+gShelf.appendChild(shelfTitleA); gShelf.appendChild(shelfSub); gShelf.appendChild(depthText);
+
+/* the hover plate on the felt */
+const hoverName = txt("", 0, 0, { "text-anchor": "middle", fill: "#f0e2c4", "font-size": "19", "font-family": D.SERIF, "font-style": "italic" });
+const hoverSub  = txt("", 0, 0, { "text-anchor": "middle", fill: "#b8a172", "font-size": "11.5", "font-family": D.MONO });
+gHover.appendChild(hoverName); gHover.appendChild(hoverSub);
+
+/* the caption plate — it sits under the shelf, in the estate's serif */
+const capLines = [];
+for (let i = 0; i < 4; i++) {
+  const t = txt("", 0, 0, { fill: "#a89263", "font-size": "12.4", "font-family": D.SERIF });
+  capLines.push(t); gCaption.appendChild(t);
+}
+function setCaption(lines) {
+  const n = INST.parts.length, top = SHELF_TOP + n * SLOT_H + 42;
+  capLines.forEach((t, i) => {
+    t.setAttribute("x", SHELF_X - 24);
+    t.textContent = LAY.caption ? (lines[i] || "") : "";
+    t.setAttribute("y", top + i * 18);
+    t.setAttribute("font-style", i < 2 ? "italic" : "normal");
+    t.setAttribute("fill", i < 2 ? "#d6c493" : "#a89263");
+  });
+}
+
+/* the brass throw-lever */
+let LX = LAY.lx, LY = LAY.ly;
+const leverPill = el("rect", { height: 44, rx: 22, fill: "rgba(15,11,6,0.88)", stroke: "rgba(214,176,108,0.34)", "stroke-width": 1.2 });
+const leverSlot = el("rect", { height: 14, rx: 7, width: 116, fill: "rgba(0,0,0,0.55)", stroke: "rgba(214,176,108,0.20)", "stroke-width": 0.9 });
+const leverKnob = el("g");
+leverKnob.appendChild(el("rect", { x: -22, y: -17, width: 44, height: 34, rx: 9, fill: "url(#brassbar)", stroke: D.BR_L, "stroke-width": 1.2 }));
+leverKnob.appendChild(el("path", { d: "M -10 -8 L 10 -8 M -10 0 L 10 0 M -10 8 L 10 8", stroke: "#5b4722", "stroke-width": 1.2, opacity: "0.7" }));
+const leverText = txt("SETTLE", 0, 0, { fill: "#e6bd6f", "font-size": "12", "font-family": D.MONO, "font-weight": "700", "letter-spacing": "0.16em" });
+const leverHint = txt("put it all back", 0, 0, { fill: "#b8a172", "font-size": "11", "font-family": D.MONO });
+for (const n of [leverPill, leverSlot, leverKnob, leverText, leverHint]) gLever.appendChild(n);
+function layoutLever() {
+  leverPill.setAttribute("x", LX - 150); leverPill.setAttribute("y", LY - 23); leverPill.setAttribute("width", 362);
+  leverSlot.setAttribute("x", LX - 132); leverSlot.setAttribute("y", LY - 8);
+  leverKnob.setAttribute("transform", `translate(${LX - 110},${LY - 1})`);
+  leverText.setAttribute("x", LX + 14); leverText.setAttribute("y", LY + 5);
+  leverHint.setAttribute("x", LX + 86); leverHint.setAttribute("y", LY + 5);
+}
+
+/* ───────────────────────── the live table ───────────────────────── */
+let INST = null;                 /* the instrument on the felt */
+let BY = {};                     /* id -> part spec */
+let ORIGIN = {};                 /* id -> the exact origin pose literals */
+let state = {};                  /* id -> live state */
+let order = [];                  /* ids, in the order they came off */
+let tilt = 0, tiltVel = 0;
+let settling = false, settleQueue = 0;
+let hoverId = null, hoverHold = 0;
+const fired = { lift: false, dock: false, refuse: false, settle: false };
+const easeOutCubic = (k) => 1 - Math.pow(1 - k, 3);
+const easeIn = (k) => k * k;
+
+function tiltFor(n) { return INST ? TILT_MAX * easeOutCubic(n / INST.parts.length) : 0; }
+
+function makeParts() {
+  gParts.replaceChildren(); gShadow.replaceChildren(); gGhost.replaceChildren();
+  gHitProbe.replaceChildren(); gLabels.replaceChildren(); gPin.replaceChildren();
+  state = {}; order = []; BY = {}; ORIGIN = {};
+  let seed = 1;
+  for (const p of INST.parts) BY[p.id] = p;
+  for (const id of INST.z) {
+    const p = BY[id];
+    const node = el("g", { "data-id": id });
+    node.appendChild(p.draw(D));
+    gParts.appendChild(node);
+
+    const shadow = el("g", { style: "filter:brightness(0) blur(3px)" });
+    shadow.appendChild(p.draw(D));
+    gShadow.appendChild(shadow);
+
+    const probe = el("g");
+    const hits = p.hit.map(d => { const h = el("path", { d, "fill-rule": "evenodd" }); probe.appendChild(h); return h; });
+    gHitProbe.appendChild(probe);
+
+    /* every part gets its own pendulum — nothing sways in unison */
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    const w0 = 4.15 + (seed / 0x7fffffff) * 2.90;
+
+    ORIGIN[id] = { x: INST.cx + p.home.x, y: INST.cy + p.home.y, r: p.home.r, s: 1 };
+    state[id] = {
+      node, shadow, hits, w0, sep: 0,
+      pose: { x: ORIGIN[id].x, y: ORIGIN[id].y, r: ORIGIN[id].r, s: ORIGIN[id].s },
+      lift0: 2.2 + p.lay * 3.4,
+      off: false, slot: -1, strain: 0, creep: 0, th: 0, om: 0, h: 0,
+      fly: null, slide: null, vx: 0, px: ORIGIN[id].x,
+    };
+  }
+  computeSep();
+  tilt = 0; tiltVel = 0;
+}
+
+/* ── how far the roll fans the stack ──
+   The brief's gap is sin(tilt)·R·1.92 across the whole stack. That is the
+   ambition; the CEILING is the cloth — no part may be fanned off the top of
+   the felt. So take the exact rotated bbox of every part, work out how much
+   headroom it actually has, and take the smallest gap the whole stack allows. */
+function computeSep() {
+  const maxLay = Math.max(1, ...INST.parts.map(p => p.lay));
+  let sep = INST.R * 1.92 / maxLay;
+  const s0 = Math.sin(TILT_MAX);
+  for (const p of INST.parts) {
+    if (!p.lay) continue;
+    const b = state[p.id].node.getBBox();
+    const rad = p.home.r * Math.PI / 180, c = Math.cos(rad), sn = Math.sin(rad);
+    let minY = Infinity;
+    for (const [cx, cy] of [[b.x, b.y], [b.x + b.width, b.y], [b.x, b.y + b.height], [b.x + b.width, b.y + b.height]]) {
+      minY = Math.min(minY, cx * sn + cy * c);
+    }
+    const headroom = (ORIGIN[p.id].y + minY) - (FELT.y0 + 22 + Math.sin(TILT_MAX) * 22);
+    sep = Math.min(sep, Math.max(0, headroom) / (p.lay * s0));
+  }
+  sep = Math.max(9, sep);
+  for (const p of INST.parts) state[p.id].sep = sep * p.lay;
+}
+
+/* the pose actually painted — the felt's roll foreshortens what still sits on it */
+function renderPose(id) {
+  const s = state[id], ct = Math.cos(tilt);
+  if (s.off) return { x: s.pose.x, y: s.pose.y, r: s.pose.r + s.th * 26, sx: s.pose.s, sy: s.pose.s };
+  return { x: s.pose.x, y: s.pose.y - s.creep - Math.sin(tilt) * s.sep, r: s.pose.r, sx: s.pose.s, sy: s.pose.s * ct };
+}
+function paint(id) {
+  const s = state[id], q = renderPose(id);
+  s.node.setAttribute("transform", `translate(${q.x},${q.y}) rotate(${q.r}) scale(${q.sx},${q.sy})`);
+  /* the cast shadow: it drifts, it grows, it fades — the whole reason a part reads as OFF the felt */
+  const h = s.off ? s.h : s.h + s.lift0 + Math.sin(tilt) * s.sep * 0.72;
+  const op = 0.52 * Math.exp(-h / 300) * (s.off && h > 240 ? Math.max(0, 1 - (h - 240) / 120) : 1);
+  if (op < 0.006) { s.shadow.setAttribute("opacity", "0"); return; }
+  const k = 1 + h * 0.0013;
+  s.shadow.setAttribute("opacity", op.toFixed(4));
+  s.shadow.setAttribute("transform",
+    `translate(${q.x + h * 0.10},${q.y + h * 0.20}) rotate(${q.r}) scale(${q.sx * k},${q.sy * k})`);
+}
+function blockers(id) { return BY[id].held.filter(b => !state[b].off); }
+function isFree(id) { return !state[id].off && blockers(id).length === 0; }
+
+/* ───────────────────────── hit testing (front to back) ─────────────────────────
+   The click resolves through the SEATED parts from the top of the stack down, so
+   a hit shape is the part's whole silhouette and the part above simply takes the
+   overlap. `hitAudit()` below asserts that leaves nothing unreachable. */
+function localPoint(id, wx, wy) {
+  const q = renderPose(id), rad = -q.r * Math.PI / 180, c = Math.cos(rad), sn = Math.sin(rad);
+  const dx = wx - q.x, dy = wy - q.y;
+  return { x: (dx * c - dy * sn) / (q.sx || 1e-6), y: (dx * sn + dy * c) / (q.sy || 1e-6) };
+}
+const probePt = scene.createSVGPoint ? scene.createSVGPoint() : null;
+function inHit(id, wx, wy) {
+  const p = localPoint(id, wx, wy);
+  probePt.x = p.x; probePt.y = p.y;
+  for (const h of state[id].hits) { if (h.isPointInFill(probePt)) return true; }
+  return false;
+}
+function hitAt(wx, wy) {
+  for (let i = INST.z.length - 1; i >= 0; i--) {
+    const id = INST.z[i];
+    if (state[id].off) continue;
+    if (inHit(id, wx, wy)) return id;
+  }
+  return null;
+}
+
+/* ── the load-time reachability audit ──
+   The silent failure mode here is a part that is DRAWN but not GRABBABLE. So:
+   grid the felt and require that every seated part wins at least MIN cells. */
+function hitAudit() {
+  const missing = [], counts = {};
+  for (const id of INST.z) counts[id] = 0;
+  const STEP = 4;   /* cells of 16 scene units²; the floor below is ~160, a real tap target */
+  for (let y = FELT.y0; y <= FELT.y1; y += STEP) {
+    for (let x = FELT.x0; x <= FELT.x1; x += STEP) {
+      const id = hitAt(x, y);
+      if (id) counts[id]++;
+    }
+  }
+  for (const id of INST.z) if (counts[id] < 10) missing.push(id + "(" + counts[id] + ")");
+  return { ok: missing.length === 0, missing, counts };
+}
+
+/* ───────────────────────── the felt's roll ───────────────────────── */
+function paintFelt() {
+  const st = Math.sin(tilt), inset = st * 52, rise = st * 22;
+  const { x0, y0, x1, y1 } = FELT;
+  const d = `M ${x0 + inset} ${y0 + rise} L ${x1 - inset} ${y0 + rise} L ${x1} ${y1} L ${x0} ${y1} Z`;
+  feltPath.setAttribute("d", d);
+  feltLamp.setAttribute("d", d);
+  feltVig.setAttribute("d", d);
+  feltClipPath.setAttribute("d", d);
+  const i2 = inset + 11;
+  feltInner.setAttribute("d", `M ${x0 + i2} ${y0 + rise + 11} L ${x1 - i2} ${y0 + rise + 11} L ${x1 - 11} ${y1 - 11} L ${x0 + 11} ${y1 - 11} Z`);
+  /* the lamp catches the far edge of the cloth as the table rolls up toward you */
+  feltEdge.setAttribute("d", `M ${x0 + inset + 3} ${y0 + rise + 2} L ${x1 - inset - 3} ${y0 + rise + 2}`);
+  feltEdge.setAttribute("stroke", `rgba(255,214,150,${(0.10 + st * 0.26).toFixed(3)})`);
+}
+
+/* ───────────────────────── the shelf ───────────────────────── */
+function buildShelf() {
+  const n = INST.parts.length;
+  SLOT_H = Math.min(LAY.slotCap, Math.floor(500 / n));
+  gSlots.replaceChildren();
+  shelfBack.setAttribute("x", SHELF_X - 24); shelfBack.setAttribute("y", SHELF_TOP - 56);
+  shelfBack.setAttribute("width", SHELF_W + 48); shelfBack.setAttribute("height", n * SLOT_H + 84);
+  shelfTitle.textContent = INST.title + "  ↗";
+  shelfTitleA.setAttribute("href", INST.room.href);
+  shelfTitleA.setAttribute("style", "cursor:pointer");
+  shelfSub.textContent = "parts taken off, in the order you took them";
+  for (let i = 0; i < n; i++) {
+    const y = SHELF_TOP + i * SLOT_H;
+    gSlots.appendChild(el("rect", { x: SHELF_X - 8, y: y + 3, width: SHELF_W + 16, height: SLOT_H - 6, rx: 4,
+      fill: "rgba(0,0,0,0.20)", stroke: "rgba(214,176,108,0.12)", "stroke-width": 0.8, "stroke-dasharray": "3 4" }));
+    gSlots.appendChild(txt(String(i + 1).padStart(2, "0"), SHELF_X + 2, y + SLOT_H / 2 + 5,
+      { fill: "rgba(184,161,114,0.42)", "font-size": "12", "font-family": D.MONO }));
+    gSlots.appendChild(el("circle", { cx: SHELF_X + 54, cy: y + SLOT_H / 2, r: Math.min(24, SLOT_H / 2 - 5),
+      fill: "rgba(0,0,0,0.16)", stroke: "rgba(214,176,108,0.13)", "stroke-width": 0.9, "stroke-dasharray": "2 3" }));
+  }
+}
+const FIT = {};
+function computeFit() {
+  const cap = Math.min(44, SLOT_H - 16);
+  for (const p of INST.parts) {
+    const b = state[p.id].node.getBBox();
+    FIT[p.id] = Math.min(0.36, cap / Math.max(b.width, b.height, 1));
+  }
+}
+function slotPose(i, id) {
+  return { x: SHELF_X + 54, y: SHELF_TOP + i * SLOT_H + SLOT_H / 2, r: 0, s: FIT[id] || 0.15 };
+}
+function dockLabel(id, i) {
+  const y = SHELF_TOP + i * SLOT_H + SLOT_H / 2;
+  const g = el("g", { "data-label": id, opacity: "0" });
+  g.appendChild(txt(BY[id].name, SHELF_X + 96, y - 3, { fill: "#f0e2c4", "font-size": "16", "font-family": D.SERIF, "font-style": "italic" }));
+  g.appendChild(txt(BY[id].sub, SHELF_X + 96, y + 14, { fill: "#b8a172", "font-size": "10", "font-family": D.MONO, "letter-spacing": "0.05em" }));
+  const rule = el("line", { x1: SHELF_X + 96, y1: y + 21, x2: SHELF_X + 96, y2: y + 21, stroke: "rgba(230,189,111,0.5)", "stroke-width": "1" });
+  g.appendChild(rule);
+  gLabels.appendChild(g);
+  /* the rule draws itself out as the name lands — a nib finishing a stroke */
+  tween(420, (k) => {
+    rule.setAttribute("x2", SHELF_X + 96 + (SHELF_W - 108) * easeOutCubic(k));
+    g.setAttribute("opacity", String(Math.min(1, k * 2.4)));
+  });
+}
+const dropLabel = (id) => { const n = gLabels.querySelector(`[data-label="${id}"]`); if (n) n.remove(); };
+
+/* ───────────────────────── ghosts: the felt remembers ───────────────────────── */
+function addGhost(id) {
+  const p = BY[id], gg = el("g", { "data-ghost": id, opacity: "0" });
+  const inner = p.draw(D);
+  inner.querySelectorAll("text").forEach(n => n.remove());
+  inner.querySelectorAll("*").forEach(n => {
+    n.setAttribute("fill", "none");
+    n.setAttribute("stroke", INST.ink || "rgba(232,196,124,0.34)");
+    n.setAttribute("stroke-width", "0.7");
+    n.setAttribute("stroke-dasharray", "4 5");
+    n.removeAttribute("opacity");
+  });
+  gg.appendChild(inner);
+  gg.setAttribute("data-sep", String(state[id].sep));
+  gg.setAttribute("data-x", String(ORIGIN[id].x)); gg.setAttribute("data-y", String(ORIGIN[id].y));
+  gg.setAttribute("data-r", String(ORIGIN[id].r));
+  gGhost.appendChild(gg);
+  tween(520, (k) => gg.setAttribute("opacity", String(k * 0.92)));
+}
+const dropGhost = (id) => { const n = gGhost.querySelector(`[data-ghost="${id}"]`); if (n) n.remove(); };
+function paintGhosts() {
+  const ct = Math.cos(tilt), st = Math.sin(tilt);
+  for (const gg of gGhost.children) {
+    const x = +gg.dataset.x, y = +gg.dataset.y, r = +gg.dataset.r, sep = +gg.dataset.sep;
+    gg.setAttribute("transform", `translate(${x},${y - st * sep}) rotate(${r}) scale(1,${ct})`);
+  }
+}
+
+/* ───────────────────────── the tween list (one loop) ───────────────────────── */
+const tweens = [];
+function tween(T, step, done) { tweens.push({ t0: CLOCK.now, T, step, done }); }
+function runTweens() {
+  for (let i = tweens.length - 1; i >= 0; i--) {
+    const tw = tweens[i], k = Math.min(1, (CLOCK.now - tw.t0) / tw.T);
+    tw.step(k);
+    if (k >= 1) { tweens.splice(i, 1); if (tw.done) tw.done(); }
+  }
+}
+const busy = () => Object.keys(state).some(id => state[id].fly || state[id].slide) || settling || settleQueue > 0;
+
+/* ───────────────────────── the refusal ─────────────────────────
+   Not a grey-out: the part strains, the metal holds, and brass pin-lines run
+   from it to each thing that is still on top of it. */
+function refuse(id) {
+  const bl = blockers(id);
+  S.thud(); fired.refuse = true; mark();
+  const s = state[id];
+  s.slide = { from: s.creep };
+  tween(340, (k) => { s.creep = s.slide.from * (1 - easeOutCubic(k)) + Math.sin(k * Math.PI) * 2.4; },
+        () => { s.creep = 0; s.slide = null; s.strain = 0; });
+  gPin.replaceChildren();
+  const a = renderPose(id);
+  for (const b of bl) {
+    const c = renderPose(b);
+    const ln = el("line", { x1: a.x, y1: a.y, x2: c.x, y2: c.y, stroke: "var(--refuse)", "stroke-width": "2", "stroke-linecap": "round", opacity: "0" });
+    const dot = el("circle", { cx: c.x, cy: c.y, r: "16", fill: "none", stroke: "var(--refuse)", "stroke-width": "2", opacity: "0" });
+    gPin.appendChild(ln); gPin.appendChild(dot);
+    tween(980, (k) => {
+      const o = Math.sin(Math.min(1, k * 1.55) * Math.PI) * 0.9;
+      ln.setAttribute("opacity", String(o)); dot.setAttribute("opacity", String(o));
+      dot.setAttribute("r", String(16 + k * 16));
+    }, () => { ln.remove(); dot.remove(); });
+  }
+  showHover(id, "still held by " + andList(bl.map(b => BY[b].name)), true);
+  hoverHold = CLOCK.now + 1600;
+}
+/* "A, B and C" — a comma list with a final and */
+function andList(a) {
+  if (a.length <= 1) return a[0] || "";
+  if (a.length === 2) return a[0] + " and " + a[1];
+  return a.slice(0, -1).join(", ") + " and " + a[a.length - 1];
+}
+
+/* ───────────────────────── the lift ───────────────────────── */
+function lift(id) {
+  if (!isFree(id)) return false;
+  const s = state[id], i = order.length;
+  order.push(id); s.off = true; s.slot = i; s.strain = 0; s.creep = 0;
+  S.unseat(); fired.lift = true; mark();
+  const from = { x: s.pose.x, y: s.pose.y - Math.sin(tilt) * s.sep, r: s.pose.r, s: s.pose.s };
+  const to = slotPose(i, id);
+  gParts.appendChild(s.node);                       /* the piece in hand rides on top */
+  const cx = (from.x + to.x) / 2, cy = Math.min(from.y, to.y) - 210;
+  let docked = false;
+  s.fly = true;
+  tween(780, (k) => {
+    if (k < 0.20) {                                  /* UNSEAT — straight up the pin axis */
+      const u = k / 0.20, e = easeOutCubic(u);
+      s.pose.x = from.x; s.pose.y = from.y - 34 * e; s.pose.s = from.s + 0.07 * e; s.pose.r = from.r;
+      s.h = 34 * e;
+    } else if (k < 0.90) {                           /* FLIGHT — a bezier, and the weight swings under it */
+      const u = (k - 0.20) / 0.70, e = easeOutCubic(u), m = 1 - e;
+      const x = m * m * from.x + 2 * m * e * cx + e * e * to.x;
+      const y = m * m * (from.y - 34) + 2 * m * e * cy + e * e * to.y;
+      s.pose.x = x; s.pose.y = y;
+      s.pose.s = (from.s + 0.07) + (to.s - from.s - 0.07) * e;
+      s.pose.r = from.r * (1 - e) + to.r * e;
+      s.h = 34 + 226 * Math.sin(u * Math.PI) * (1 - u * 0.3);
+    } else {                                         /* DOCK — an overshoot, then it seats */
+      const u = (k - 0.90) / 0.10;
+      if (!docked) { docked = true; S.dock(); fired.dock = true; mark(); dockLabel(id, i); }
+      s.pose.x = to.x; s.pose.y = to.y; s.pose.r = to.r;
+      s.pose.s = to.s * (1 + 0.16 * Math.sin(u * Math.PI) * (1 - u));
+      s.h = 34 * (1 - u);
+    }
+  }, () => {
+    s.pose.x = to.x; s.pose.y = to.y; s.pose.r = to.r; s.pose.s = to.s;
+    s.h = 0; s.th = 0; s.om = 0; s.fly = null;
+    addGhost(id); refresh();
+  });
+  refresh();
+  return true;
+}
+
+/* ───────────────────────── the settle ─────────────────────────
+   Strict reverse order, and every seated part is SNAPPED to its exact origin
+   literals — never allowed to arrive there by exponential decay, which leaves
+   a residue at the sixteenth decimal and makes "back where it began" a lie. */
+function settleOne() {
+  const id = order.pop();
+  if (id === undefined) {
+    settling = false; settleQueue = 0;
+    tilt = 0; tiltVel = 0;                                     /* the felt lies flat again — exactly */
+    gPin.replaceChildren(); refresh();
+    return;
+  }
+  const s = state[id];
+  dropLabel(id);
+  const O = ORIGIN[id];
+  const from = { x: s.pose.x, y: s.pose.y, r: s.pose.r, s: s.pose.s };
+  const cx = (from.x + O.x) / 2, cy = Math.min(from.y, O.y) - 170;
+  s.fly = true;
+  tween(470, (k) => {
+    if (k < 0.80) {
+      const u = k / 0.80, e = easeIn(u) * 0.34 + easeOutCubic(u) * 0.66, m = 1 - e;
+      const px = s.pose.x;
+      s.pose.x = m * m * from.x + 2 * m * e * cx + e * e * O.x;
+      s.pose.y = m * m * from.y + 2 * m * e * cy + e * e * (O.y - 28);
+      s.pose.s = from.s + (O.s - from.s) * e;
+      s.pose.r = O.r + Math.sin(u * 9) * 6 * (1 - u);
+      s.vx = s.pose.x - px;
+      s.h = 200 * Math.sin(u * Math.PI) + 28;
+    } else {
+      const u = (k - 0.80) / 0.20;
+      s.pose.x = O.x; s.pose.y = O.y - 28 * (1 - easeIn(u)); s.pose.s = O.s; s.pose.r = O.r;
+      s.h = 28 * (1 - easeIn(u));
+    }
+  }, () => {
+    /* SEAT — bit-equal, by assignment from the origin literals */
+    s.pose.x = O.x; s.pose.y = O.y; s.pose.r = O.r; s.pose.s = O.s;
+    s.th = 0; s.om = 0; s.vx = 0; s.h = 0; s.strain = 0; s.creep = 0;
+    s.off = false; s.slot = -1; s.fly = null;
+    /* re-insert into the felt's TRUE z-order, not on top of it */
+    const idx = INST.z.indexOf(id);
+    let after = null;
+    for (let j = idx + 1; j < INST.z.length; j++) {
+      const n = state[INST.z[j]].node;
+      if (n.parentNode === gParts && !state[INST.z[j]].off) { after = n; break; }
+    }
+    if (after) gParts.insertBefore(s.node, after); else gParts.appendChild(s.node);
+    dropGhost(id); S.seat(); fired.settle = true; mark(); refresh();
+    if (settling) { settleQueue = CLOCK.now + 80; } else { settleQueue = 0; }
+  });
+  refresh();
+}
+function settleAll() {
+  if (settling || !order.length) return false;
+  /* an interrupted bloom is fair game: anything mid-flight is snapped to its
+     slot pose first, then flown home like the rest */
+  for (const id of order) {
+    const s = state[id];
+    if (s.fly) { s.fly = null; }
+  }
+  for (let i = tweens.length - 1; i >= 0; i--) tweens.splice(i, 1);
+  settling = true; S.lever();
+  tween(240, (k) => { const u = Math.sin(k * Math.PI); leverKnob.setAttribute("transform", `translate(${LX - 110 + 92 * u},${LY - 1})`); },
+        () => leverKnob.setAttribute("transform", `translate(${LX - 110},${LY - 1})`));
+  settleOne();
+  return true;
+}
+gLever.addEventListener("click", () => { unlockAudio(); settleAll(); });
+
+/* ───────────────────────── refresh (affordances) ───────────────────────── */
+function refresh() {
+  for (const p of INST.parts) {
+    const s = state[p.id], free = isFree(p.id);
+    s.node.style.cursor = s.off ? "default" : (free ? "grab" : "not-allowed");
+    s.node.style.opacity = (!s.off && !free) ? "0.74" : "1";
+  }
+  const n = INST.parts.length;
+  depthText.textContent = order.length + " of " + n + " off";
+  gLever.style.opacity = order.length ? "1" : "0.34";
+  gLever.style.pointerEvents = order.length ? "auto" : "none";
+  leverHint.textContent = order.length === n ? "put it all back" : (order.length ? "put it back" : "nothing is off yet");
+}
+
+/* ───────────────────────── the hover plate ───────────────────────── */
+function showHover(id, sub, warn) {
+  const y = INST.cy + INST.R + 56;
+  hoverName.setAttribute("x", INST.cx); hoverName.setAttribute("y", y);
+  hoverSub.setAttribute("x", INST.cx); hoverSub.setAttribute("y", y + 20);
+  hoverName.textContent = BY[id].name;
+  hoverSub.textContent = sub;
+  hoverSub.setAttribute("fill", warn ? "#dd9059" : "#b8a172");
+  gHover.setAttribute("opacity", "1");
+}
+
+/* ───────────────────────── THE GESTURE — stiction ─────────────────────────
+   These three are the piece's real entry points. The pointer handlers below are
+   thin adapters onto them, and the twin drives THESE, not synthetic events. */
+let pull = null;
+function grab(id, x, y) {
+  if (!INST || settling || busy()) return false;
+  const s = state[id];
+  if (!s || s.off) return false;
+  unlockAudio();
+  pull = { id, x, y, moved: false, sounded: 0 };
+  s.strain = 0; s.creep = 0;
+  return true;
+}
+function strain(x, y) {
+  if (!pull) return null;
+  const s = state[pull.id];
+  const dUp = pull.y - y;                       /* the drag, dotted with the pin axis (straight up) */
+  if (Math.abs(dUp) > 0.4 || Math.abs(x - pull.x) > 0.4) pull.moved = true;
+  pull.x = x; pull.y = y;
+  s.strain = Math.max(0, s.strain + dUp);
+  s.creep = Math.min(CREEP, CREEP * s.strain / BREAK);
+  if (s.strain > pull.sounded + 5.5) { pull.sounded = s.strain; S.strain(); }
+  if (s.strain >= BREAK) {                      /* the metal lets go */
+    const id = pull.id; pull = null;
+    return decide(id);
+  }
+  showHover(pull.id, isFree(pull.id) ? BY[pull.id].sub : "held by " + andList(blockers(pull.id).map(b => BY[b].name)), !isFree(pull.id));
+  return null;
+}
+function release() {
+  if (!pull) return null;
+  const { id, moved } = pull; pull = null;
+  const s = state[id];
+  if (!moved) return decide(id);                /* a tap is a decisive pull */
+  /* let go before the break and it slides back into its seat */
+  const from = s.creep;
+  s.slide = true;
+  tween(260, (k) => { s.creep = from * (1 - easeOutCubic(k)); },
+        () => { s.creep = 0; s.strain = 0; s.slide = null; });
+  return "slid-back";
+}
+function decide(id) {
+  if (isFree(id)) { lift(id); return "lifted"; }
+  refuse(id); return "refused";
+}
+
+/* ── pointer adapters ── */
+function toSvg(ev) {
+  const p = scene.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY;
+  return p.matrixTransform(scene.getScreenCTM().inverse());
+}
+scene.addEventListener("pointerdown", (ev) => {
+  if (gLever.contains(ev.target)) { unlockAudio(); return; }
+  const p = toSvg(ev), id = hitAt(p.x, p.y);
+  if (!id) return;
+  if (grab(id, p.x, p.y)) { scene.setPointerCapture(ev.pointerId); ev.preventDefault(); }
+});
+scene.addEventListener("pointermove", (ev) => {
+  const p = toSvg(ev);
+  if (pull) { strain(p.x, p.y); return; }
+  const id = hitAt(p.x, p.y);
+  if (id !== hoverId) {
+    hoverId = id;
+    if (id) showHover(id, isFree(id) ? BY[id].sub : "held by " + andList(blockers(id).map(b => BY[b].name)), !isFree(id));
+    else if (CLOCK.now > hoverHold) gHover.setAttribute("opacity", "0");
+  }
+});
+function endPointer(ev) {
+  if (pull) { release(); try { scene.releasePointerCapture(ev.pointerId); } catch (_) {} }
+}
+scene.addEventListener("pointerup", endPointer);
+scene.addEventListener("pointercancel", endPointer);
+/* setPointerCapture retargets the following `click` to the capturing element, so
+   a plain tap on the lever would otherwise land here and do nothing. */
+scene.addEventListener("click", (ev) => {
+  if (gLever.contains(ev.target)) { unlockAudio(); settleAll(); }
+});
+/* keyboard: the table is playable without a pointer */
+window.addEventListener("keydown", (ev) => {
+  if (!INST) return;
+  if (ev.key === "Enter" || ev.key === " ") {
+    const free = INST.z.filter(id => isFree(id));
+    if (free.length) { unlockAudio(); decide(free[free.length - 1]); ev.preventDefault(); }
+  } else if (ev.key === "Backspace" || ev.key === "Escape") {
+    unlockAudio(); settleAll(); ev.preventDefault();
+  }
+});
+
+/* ───────────────────────── the frame ───────────────────────── */
+function frame() {
+  runTweens();
+  if (settleQueue && CLOCK.now >= settleQueue && settling) { settleQueue = 0; settleOne(); }
+  /* the felt rolls toward you as the instrument comes apart */
+  const target = tiltFor(order.length);
+  if (!settling || order.length) {
+    const dt = 1 / 60;
+    tiltVel += (target - tilt) * 46 * dt - tiltVel * 9 * dt;
+    tilt += tiltVel * dt;
+  }
+  /* per-part pendulums — each with its own ω₀, so nothing swings in unison */
+  for (const id of INST.z) {
+    const s = state[id];
+    if (s.off && s.fly) {
+      const dt = 1 / 60, drive = -(s.pose.x - s.px) * 0.055;
+      s.om += (-s.w0 * s.w0 * s.th - 2 * 0.62 * s.w0 * s.om + drive * s.w0 * s.w0) * dt;
+      s.th += s.om * dt;
+      s.px = s.pose.x;
+    } else if (s.th !== 0 || s.om !== 0) {
+      const dt = 1 / 60;
+      s.om += (-s.w0 * s.w0 * s.th - 2 * 0.9 * s.w0 * s.om) * dt;
+      s.th += s.om * dt;
+      if (Math.abs(s.th) < 1e-4 && Math.abs(s.om) < 1e-4) { s.th = 0; s.om = 0; }
+    }
+    paint(id);
+  }
+  paintFelt(); paintGhosts();
+  if (!pull && CLOCK.now > hoverHold && hoverId === null) gHover.setAttribute("opacity", "0");
+}
+function loop(t) { if (!CLOCK.virtual) { CLOCK.now = t; frame(); } requestAnimationFrame(loop); }
+
+/* ───────────────────────── loading an instrument ───────────────────────── */
+const rail = document.getElementById("rail");
+function pickLayout() {
+  const w = window.innerWidth || 1240, h = window.innerHeight || 760;
+  return (w < 840 || w / h < 1.12) ? TALL : WIDE;
+}
+function applyLayout(L) {
+  LAY = L; FELT = L.felt;
+  SHELF_X = L.sx; SHELF_W = L.sw; SHELF_TOP = L.stop; LX = L.lx; LY = L.ly;
+  scene.setAttribute("viewBox", L.vb);
+  layoutLever();
+}
+function load(instId) {
+  const inst = INSTRUMENTS.find(i => i.id === instId) || INSTRUMENTS[0];
+  INST = inst;
+  voice = VOICE[inst.material] || VOICE.brass;
+  makeParts(); buildShelf(); computeFit();
+  for (const g of [lampGrad, vigGrad]) { g.setAttribute("cx", inst.cx); g.setAttribute("cy", inst.cy - 18); }
+  lampGrad.setAttribute("r", Math.round(inst.R * 2.15));
+  vigGrad.setAttribute("r", Math.round(inst.R * 2.55));
+  document.getElementById("tagline").textContent = inst.tag;
+  setCaption(inst.cap.concat([
+    "Take hold and pull it up off its seat — it creeps, then lets go.",
+    "Only what is free will come; the rest shows what still holds it.",
+  ]));
+  for (const b of rail.children) b.classList.toggle("on", b.dataset.id === inst.id);
+  gHover.setAttribute("opacity", "0"); hoverId = null; hoverHold = 0;
+  settling = false; settleQueue = 0; pull = null;
+  tweens.length = 0;
+  refresh(); paintFelt(); frame();
+  try { history.replaceState(null, "", "?i=" + inst.id); } catch (_) {}
+  return inst;
+}
+for (const inst of INSTRUMENTS) {
+  const b = document.createElement("button");
+  b.className = "card"; b.dataset.id = inst.id;
+  b.innerHTML = '<span class="n">' + inst.title + '</span><span class="s">' + inst.tag + '</span>';
+  b.addEventListener("click", () => { unlockAudio(); load(inst.id); });
+  rail.appendChild(b);
+}
+
+/* ───────────────────────── the liveness chip ───────────────────────── */
+function mark() {
+  const need = ["lift", "dock", "refuse", "settle"], got = need.filter(k => fired[k]);
+  const tight = (window.innerWidth || 1240) < 840;
+  if (got.length === need.length) {
+    livenessChip.className = "chip ok";
+    livenessChip.textContent = tight ? "liveness ✓ 4/4" : "liveness ✓ lift · dock · refusal · settle all fired";
+  } else {
+    livenessChip.className = "chip";
+    livenessChip.textContent = tight ? "liveness " + got.length + "/4"
+      : "liveness: " + got.length + "/4 — " + need.filter(k => !fired[k]).join(" ");
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE PAYOFF-LIVENESS TWIN
+   No theorem is claimed here, so none is proved. What is proved is that the
+   payoffs FIRE, by driving grab/strain/release and the lever — the SAME
+   functions the pointer handlers call — with the clock in hand.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function snapshot() {
+  const o = { tilt, n: order.length, p: {} };
+  for (const id of INST.z) {
+    const s = state[id];
+    o.p[id] = [s.pose.x, s.pose.y, s.pose.r, s.pose.s, s.th, s.om, s.strain, s.creep, s.h, s.off ? 1 : 0];
+  }
+  return JSON.stringify(o);
+}
+function settleUntilIdle(cap) {
+  let guard = 0;
+  while ((settling || settleQueue || tweens.length) && guard++ < (cap || 4000)) advance(16);
+  return guard < (cap || 4000);
+}
+/* drive the real gesture: grab at the part's home, drag up past the break */
+function pullPart(id) {
+  const q = renderPose(id);
+  if (!grab(id, q.x, q.y)) return "no-grab";
+  let out = null;
+  for (let i = 1; i <= 6 && out === null; i++) out = strain(q.x, q.y - i * 4);
+  if (out === null) out = release();
+  return out;
+}
+function bloom(cap) {
+  let guard = 0;
+  while (order.length < INST.parts.length && guard++ < 200) {
+    const free = INST.z.filter(id => isFree(id));
+    if (!free.length) break;
+    if (pullPart(free[free.length - 1]) !== "lifted") break;
+    settleUntilIdle(cap);
+  }
+  return order.length;
+}
+
+function runTwin() {
+  const R = { pass: 0, total: 0, fails: [] };
+  const ck = (name, cond) => { R.total++; if (cond) R.pass++; else R.fails.push(name); return cond; };
+  const wasVirtual = CLOCK.virtual, wasMuted = MUTED, keep = INST ? INST.id : INSTRUMENTS[0].id;
+  CLOCK.virtual = true; MUTED = true;
+  try {
+    for (const inst of INSTRUMENTS) {
+      const P = inst.id + ": ";
+      load(inst.id);
+      const origin = snapshot();
+
+      /* 0 — every part drawn is a part you can actually grab */
+      const audit = hitAudit();
+      ck(P + "every part reachable" + (audit.ok ? "" : " [" + audit.missing.join(" ") + "]"), audit.ok);
+
+      /* 1 — the order is a real partial order: something is free, something is not */
+      const free0 = inst.z.filter(id => isFree(id));
+      const pinned0 = inst.z.filter(id => !isFree(id));
+      ck(P + "starts with ≥2 free parts", free0.length >= 2);
+      ck(P + "starts with pinned parts", pinned0.length >= 1);
+
+      /* 2 — a pinned part REFUSES the same gesture a free part accepts */
+      ck(P + "pinned part refuses", pullPart(pinned0[pinned0.length - 1]) === "refused");
+      settleUntilIdle();
+      ck(P + "refusal left it seated", order.length === 0);
+      ck(P + "free part accepts", pullPart(free0[free0.length - 1]) === "lifted");
+      settleUntilIdle();
+      ck(P + "…and it is on the shelf", order.length === 1);
+
+      /* 3 — a short pull that is abandoned slides back and takes nothing */
+      const before = order.length, cand = inst.z.filter(id => isFree(id))[0];
+      const q = renderPose(cand);
+      grab(cand, q.x, q.y); strain(q.x, q.y - 3); strain(q.x, q.y - 6);
+      const slid = release(); settleUntilIdle();
+      ck(P + "an abandoned pull slides back", slid === "slid-back" && order.length === before);
+
+      settleAll(); settleUntilIdle();
+      ck(P + "settle from one part is bit-equal", snapshot() === origin);
+
+      /* 4 — the full bloom: every part off, every part labelled */
+      const n = bloom();
+      ck(P + "fully exploded (" + n + "/" + inst.parts.length + ")", n === inst.parts.length);
+      const labels = Array.from(gLabels.querySelectorAll("[data-label]")).map(g => g.dataset.label);
+      ck(P + "every part labelled on the shelf", labels.length === inst.parts.length &&
+        inst.parts.every(p => labels.indexOf(p.id) >= 0));
+      const names = Array.from(gLabels.querySelectorAll("[data-label] text")).map(t => t.textContent);
+      ck(P + "every label carries its name", inst.parts.every(p => names.indexOf(p.name) >= 0));
+      ck(P + "the felt remembers every seat", gGhost.children.length === inst.parts.length);
+      ck(P + "the felt rolled toward you", tilt > 0.3);
+
+      /* 5 — ten consecutive bloom→settle rounds, each bit-equal to the origin */
+      let rounds = 0;
+      for (let i = 0; i < 10; i++) {
+        settleAll(); settleUntilIdle();
+        if (snapshot() !== origin) break;
+        if (gGhost.children.length !== 0 || gLabels.children.length !== 0) break;
+        rounds++;
+        if (i < 9 && bloom() !== inst.parts.length) break;
+      }
+      ck(P + "ten bloom→settle rounds land bit-equal (" + rounds + "/10)", rounds === 10);
+
+      /* 6 — an INTERRUPTED bloom settles bit-equal too: three parts pulled, the
+             lever thrown while the third is still in the air */
+      const freeNow = inst.z.filter(id => isFree(id));
+      pullPart(freeNow[freeNow.length - 1]); settleUntilIdle();
+      const freeNow2 = inst.z.filter(id => isFree(id));
+      pullPart(freeNow2[freeNow2.length - 1]); settleUntilIdle();
+      const freeNow3 = inst.z.filter(id => isFree(id));
+      pullPart(freeNow3[freeNow3.length - 1]);
+      advance(120);                                  /* mid-flight, on purpose */
+      const midAir = order.length;
+      settleAll(); settleUntilIdle();
+      ck(P + "interrupted bloom (" + midAir + " off, one mid-flight) settles bit-equal", snapshot() === origin);
+
+      /* 7 — a tap on the lever works even though pointer capture retargets the click */
+      pullPart(inst.z.filter(id => isFree(id))[0]); settleUntilIdle();
+      const tapped = settleAll(); settleUntilIdle();
+      ck(P + "a tap on the lever settles", tapped === true && order.length === 0 && snapshot() === origin);
+    }
+  } finally {
+    CLOCK.virtual = wasVirtual; MUTED = wasMuted;
+    load(keep);
+  }
+  return R;
+}
+
+/* ───────────────────────── boot ───────────────────────── */
+const params = new URLSearchParams(location.search);
+const wanted = params.get("i");
+const pick = INSTRUMENTS.find(i => i.id === wanted)
+  || INSTRUMENTS[Math.floor(Math.random() * INSTRUMENTS.length)];   /* a different bench each visit */
+applyLayout(pickLayout());
+load(pick.id);
+mark();
+let reflow = 0;
+window.addEventListener("resize", () => {
+  clearTimeout(reflow);
+  reflow = setTimeout(() => {
+    const L = pickLayout();
+    if (L === LAY) return;
+    applyLayout(L); load(INST.id); mark();  /* the cloth is cleared — a reflow is a fresh table */
+  }, 180);
+});
+requestAnimationFrame(loop);
+
+/* the two free parts breathe once, so the first visitor knows where to start */
+setTimeout(() => {
+  if (order.length) return;
+  const free = INST.z.filter(id => isFree(id));
+  for (const id of free) {
+    const n = state[id].node;
+    tween(1500, (k) => { n.style.opacity = String(0.5 + 0.5 * (0.5 + 0.5 * Math.cos(k * Math.PI * 4))); },
+          () => { n.style.opacity = "1"; });
+  }
+}, 900);
+
+try { if (window.WS) WS.seen("taking-apart-table"); } catch (_) {}
+
+/* ── a bench for the sound ──
+   The five cues are rendered offline into a real buffer so they can be MEASURED
+   (level, brightness, length) rather than trusted. Nothing here plays. */
+async function renderCue(material, kind, secs) {
+  const off = new OfflineAudioContext(1, Math.round(44100 * secs), 44100);
+  const sAC = AC, sM = MASTER, sMute = MUTED, sVoice = voice;
+  AC = off; MASTER = off.createGain(); MASTER.gain.value = 0.9; MASTER.connect(off.destination);
+  MUTED = false; voice = VOICE[material] || VOICE.brass;
+  try { S[kind](); } finally { /* restore below regardless */ }
+  const buf = await off.startRendering();
+  AC = sAC; MASTER = sM; MUTED = sMute; voice = sVoice;
+  return buf.getChannelData(0);
+}
+async function renderCueWav(material, kind, secs) {
+  const d = await renderCue(material, kind, secs || 0.55), n = d.length;
+  const ab = new ArrayBuffer(44 + n * 2), v = new DataView(ab);
+  const str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  str(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); str(8, "WAVEfmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 44100, true); v.setUint32(28, 88200, true); v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true); str(36, "data"); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, d[i])) * 32767, true);
+  let bin = ""; const u = new Uint8Array(ab);
+  for (let i = 0; i < u.length; i++) bin += String.fromCharCode(u[i]);
+  return btoa(bin);
+}
+
+window.__table = {
+  runTwin, snapshot, load, advance, hitAudit, renderCueWav,
+  audioState: () => ({ ctx: AC ? AC.state : null, muted: MUTED, master: MASTER ? MASTER.gain.value : null }),
+  grab, strain, release, settleAll, pullPart, bloom, settleUntilIdle,
+  get order() { return order.slice(); },
+  get instrument() { return INST; },
+  get fired() { return Object.assign({}, fired); },
+  INSTRUMENTS,
+};
+</script>
+</body>
+</html>
