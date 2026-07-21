@@ -76,6 +76,7 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
+- [bug] **The foundry's SOUND bench cannot render the synth take** — `art-foundry/render-wav.sh` does an unconditional `cp "$CANDIDATE"`, but `engine.workflow.js:165` deliberately passes `-` ("synth renders from the LIVE tree after install"), so under `set -euo pipefail` every sound SYNTH render dies. The visual analog already guards it (`render-take.sh:24`) — but that only works because it rsyncs the live tree into scratch first, and the sound bench takes no MODULE arg, so it cannot resolve which live file to serve. Three sound smiths hit this independently and each worked around it. Needs an interface decision (a module arg, or the synth passing the installed path), not a one-line guard.
 <!-- ✝ FIXED #408: The Errand's payoff (Flag / Candle) doesn't visually react when the mar… → the-errand/ · after c0dcadc -->
 <!-- ✝ FIXED #409: PROCESS / GUIDANCE bug (target: the delight-register CRITERIA, not an e… · after b67aefd -->
 <!-- ✝ FIXED #410: The manor is overcrowded — its front-gate POI hitboxes now overlap. → tools/layout/ · the great house #410 · after a1f7280 -->
@@ -161,7 +162,6 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 ### exhibit
 - [exhibit] **The Marbling Tray** — suminagashi on still water: touch a stylus to float concentric ink rings, breathe and rake them into feathered combed swirls, then lay a sheet to LIFT the marble and KEEP it on a rack of broadsides (the Snow Globe's keepable-curio grammar). PURE DELIGHT, proves nothing — the swirl is FEEL, never bolt a fluids claim onto it. Foundry: the water-shimmer (visual) + a soft ink-drop tick (sound, muted by default). grep-confirmed no marbling room (kaleidoscope/harmonograph are curve-art, not lifted fluid). (sown #422)
 - [exhibit] **The Analemma Stone** — over a year the noon sun traces a lopsided figure-eight in the sky; step the date on a courtyard stone and watch the sun-mark climb the analemma, the gnomon's shadow stretching and leaning as the seasons turn. FORM (touchable sky-instrument, delight-leaning): a drag-the-date dial, the figure-eight inked live from solar declination + the equation of time. Deepens the sundial/sky family. HONEST light rigor: the shape IS the equation of time (obliquity + eccentricity), offered as the model's own curve, not a named observatory reading. grep-confirmed no analemma room (sundial/epicycles/orrery are other sky kin). (sown #422)
-- [exhibit] **The Cento Press** — a letterpress oracle that stitches a CENTO (a collage-poem built only from lines the house has already spoken — room captions, ledger koans) and sets it as a broadside you can pull and keep. FORM (press/poem, delight-first): pull the lever, brass sorts click into the composing stick, the ink roller passes, a fresh cento broadside lifts. The house speaking itself; deepens the letterer/scriptorium/verse family. Claim-free; foundry sets the broadside typography. grep-confirmed no cento room. (sown #422)
 - [exhibit] **The Snow Globe** — FORM (touchable keepable curio): a glass dome on a brass base you GRAB and SHAKE — hand-drawn snow lifts, swirls, and drifts down settling over a tiny estate diorama sealed inside (manor / lighthouse / garden-under-glass, re-seeded per globe); KEEP names it onto a shelf of curios you shake again. PURE DELIGHT, proves nothing — the settle is FEEL, never bolt a physics claim onto it. PAYOFF-LIVENESS twin (headless): the real shake() lifts particles then settles them to rest; a Keep files a seed-identical globe that re-shakes the same. Foundry: the in-globe dioramas (visual) + a soft muted-by-default snow-hiss (sound). grep-confirmed absent (kaleidoscope/harmonograph are curve-art, not a shaken curio). (sown #414)
 
 
@@ -186,11 +186,11 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-<!-- ✝ DECAYED #422: The Same Decision · after c8ad1ef -->
 <!-- ✝ DECAYED #422: The Meaning Is the Direction · after c8ad1ef -->
 <!-- ✝ BLOOMED #424: The Wind Chimes → sound-garden/the-wind-chimes/ · after 311e1d1 -->
 <!-- ✝ BLOOMED #426: Sprouts → sprouts/ · after e504e7b -->
 <!-- ✝ BLOOMED #427: The Settling Melt — Bowen's ladder in the rock → the-deep-hearth/settling-melt/ · after 634d8af -->
+<!-- ✝ BLOOMED #428: The Cento Press → compositor/the-cento-press/ · after cca224e -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
