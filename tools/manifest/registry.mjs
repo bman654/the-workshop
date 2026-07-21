@@ -104,6 +104,11 @@ export const INTERNAL = [
   // WITHIN its closest kin (the §2.6 gather / "lodestone-hall absorbs curie-dial" pattern) rather than
   // minting a lonely 17th footprint. Presented via the `.gate-link` first-class idiom on the room page.
   { hub: 'the-standing-stones', rule: 'internal-links', file: 'the-standing-stones/index.html', firstClass: ['gate-link'], kind: 'exhibit' },
+  // In the Round holds its solids as HALLS: hall one (the armillary) is the room
+  // page itself, hall two (in-the-round/trefoil/) a nested exhibit presented off
+  // the landing in the `hall-link` idiom. A DEEPEN — same engine, same room shell,
+  // same roof — so it mints no second front-door footprint.
+  { hub: 'in-the-round', rule: 'internal-links', file: 'in-the-round/index.html', firstClass: ['hall-link'], kind: 'exhibit' },
   // `flat` — explicit visitor leaf pages that live DIRECTLY in a hub dir (not a
   // subdir, not in a js-manifest), so no scrape rule can find them. hours/almanac.html
   // (the Almanac bench, WS4) was the first: a sibling leaf of the-hours.html.
