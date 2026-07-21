@@ -57,3 +57,15 @@ forgotten. Same brass instruments, opposite felt story.
 
 Kin ride (added cycle 174): **The Teacups** — here *one* spin pins you to a wall; there a
 *second* spin blooms a flower and trades the lurch for a float.
+
+## cycle #435 — the direct-run guard stops using `import.meta`
+
+`core.mjs`'s main guard used `import.meta.url === file://…`, which is a **parse**
+error in a non-module `<script>` — so the core could not be inlined into a classic
+page. It now uses the estate's standard `process.argv` form (see `the-top/core.mjs`),
+which is inert in a browser and identical when run as `node rotor/core.mjs`. Nothing
+inside the sentinels moved; `core.test.mjs` stays 31/31 and `node core.mjs` 9/9.
+
+Why: the Spin Cabinet (`spin-cabinet/`) inlines all six spin cores side by side in one
+classic script, each sealed in its own IIFE, and drives the rotor niche from
+`riderState()` / `omegaC()` — this room's own physics decides whether the wall holds.

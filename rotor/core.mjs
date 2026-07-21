@@ -208,8 +208,13 @@ export function runSelfTest(){
 }
 
 // ── direct-run main guard: `node core.mjs` prints the self-test and exits non-zero on
-//    any failure (so the DoD's "node core.mjs green" is literal). Inert when imported. ─
-if (typeof process !== 'undefined' && process.argv && import.meta.url === `file://${process.argv[1]}`) {
+//    any failure (so the DoD's "node core.mjs green" is literal). Inert when imported,
+//    and — since cycle 435, when the Spin Cabinet began inlining this file into a
+//    plain (non-module) <script> — it avoids `import.meta`, which is a PARSE error
+//    outside a module. The process.argv form is the estate standard (see
+//    the-top/core.mjs); in a browser `process` is undefined and the guard is dead. ──
+if (typeof process !== 'undefined' && process.argv &&
+    /(^|\/)core\.mjs$/.test(process.argv[1] || '') && !process.argv[1].includes('core.test')) {
   const r = runSelfTest();
   for (const c of r.checks) console.log((c.ok ? '  ✓ ' : '  ✗ ') + c.name);
   console.log(`\n${r.pass}/${r.total} ${r.pass === r.total ? '✓ ALL GREEN' : '✗ FAILURES'}`);

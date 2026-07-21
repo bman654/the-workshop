@@ -76,6 +76,7 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
+- [bug] **The Card Catalog's fore-edge furniture runs off the page** — at a 1280-wide viewport the `.search` drawer and the four fore-edge tabs sit at `right:-60px` outside the volume, clipping their own labels (GAZETTEE·, ADMISSIO·) and pushing the body to 1363px of horizontal scroll. Clamp the card's width (or park the furniture inside the right margin) so the tabs stay legible and the page never scrolls sideways.
 <!-- ✝ FIXED #409: PROCESS / GUIDANCE bug (target: the delight-register CRITERIA, not an e… · after b67aefd -->
 <!-- ✝ FIXED #410: The manor is overcrowded — its front-gate POI hitboxes now overlap. → tools/layout/ · the great house #410 · after a1f7280 -->
 <!-- ✝ FIXED #413: forge's import stripper drops all but the first line of a multi-line im… → tools/forge/forge.mjs + forge.test.mjs · after a89b584 -->
@@ -172,8 +173,8 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 
 
 ### curation
+- [curate] **A cabinet for the caustics** — the Spin Cabinet proved the FORM: one case, N sunk niches, each a live little object driven by its own room's shipped core, each brass plate a door. Point it at the estate's scattered LIGHT kin next (caustics, the rainbow, refraction, the prism) — the gather is the exhibit; no new physics forged. (sown #435)
 - [curate] **The Coilwright's Dark Stars** — three Lodestone benches (the LC tank · the transformer · the eddy brake) already ship and already set their `ws:seen` crumbs, but they have no coords in Sky.CATALOG and no seat in `coilwright.members` (tools/sky/sky.js:259), so a constellation the estate PROMISED stands at two stars of five. `the-sluice-gate` proves a sub-bench can be a full star. FORM: the sky itself — walk out under it and find the Coilwright has quietly grown. CRUX (mechanical, and it guards the future): a Node twin over sky.js asserts membership ⊆ CATALOG ⊆ pages that set the crumb, BOTH directions, so the next engraved invitation cannot go stale unnoticed. (sown #430)
-- [curate] **Things That Won't Fall Over** — a delight-leaning cabinet gathering the estate's scattered SPIN kin under one roof (the-top · tippe-top · rattleback · spinning-chair · rotor · tusi, dirs verified): six rooms whose whole trick is that spinning keeps them upright, flips them, or refuses to reverse. FORM: a one-page cabinet, each panel a live little spinner and a door to its room, one thread — angular momentum wants to be left alone. Claim-free-first gather (optional spine: conservation of L); deepens by gathering scattered kin, no new physics forged. (sown #422)
 
 
 ### rework
@@ -186,11 +187,11 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 
 ### bench
 - [bench] **The Sealed Cabinet** — the pavilion's first puzzle where you cannot SEE the board: a sealed grid hides k atoms and your only move is to FIRE a ray into an edge port and read which port it leaves by (deflect · absorb · reflect). Place the atoms from the ray table alone; a wrong placement is a real loss. Every one of the NINE puzzles across both wings shows you the whole board from move one — this is deduction over what you chose to MEASURE. CRUX: each shipped board proven to have exactly ONE configuration consistent with its full ray table (exhaustive over C(n,k) — pin the grid and k small so the proof stays honest and fast), PLUS a deliberately shipped AMBIGUOUS board, two configurations no ray can ever separate, proven indistinguishable by exhaustion: a wing whose certificates all say "unique" finally saying some questions have no answer. Enumerate the edge cases (double deflection, an atom on the entry row, a ray back out its own port) in the twin — that is where a self-test passes while the puzzle is wrong. (sown #430)
-<!-- ✝ BLOOMED #428: The Cento Press → compositor/the-cento-press/ · after cca224e -->
 <!-- ✝ DECAYED #430: The Snow Globe · after 0ef9f52 -->
 <!-- ✝ DECAYED #430: Where the Light Piles Up (a caustic cabinet) · after 0ef9f52 -->
 <!-- ✝ BLOOMED #433: The Taking-Apart Table → taking-apart-table/ · after 4ec9fed -->
 <!-- ✝ BLOOMED #434: The Reaction Balancer → alchemy/reaction-balancer/ · after 4c92636 -->
+<!-- ✝ BLOOMED #435: Things That Won't Fall Over → spin-cabinet/ · after 5263b4c -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);

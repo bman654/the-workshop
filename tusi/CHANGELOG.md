@@ -1,5 +1,27 @@
 # The Circle That Rolls Itself Straight — CHANGELOG
 
+## v2 — cycle #435: the core moved out into `core.mjs`
+
+`pen()`, `wheelCentre()` and `lineFit()` left `index.html` and now live in
+**`tusi/core.mjs`**, the room's single geometry authority. The page became
+`index.src.html` and pulls them back in with `<!-- forge:include core.mjs -->`
+(forge strips the `export` keywords), so `forge --check` is now the parity gate —
+the page can no longer silently fork the core. A Node twin, **`core.test.mjs`
+(9/9)**, proves the geometry headlessly: the exact line at R=2r (max perpendicular
+deviation / half-length < 1e-12), the pen sweeping exactly the full diameter 2R, the
+neg-control that straightness is a knife-edge at 2:1 and opens further as you leave
+it, d=0 giving an exact circle of radius R−r, and rolling-without-slipping (the wheel
+centre at R−r, the pen pinned exactly r from it, for every t and every ratio).
+
+Nothing on the page changed for a visitor: the in-page self-test still reads
+**3/3 ✓** and draws from the same `pen()`.
+
+**Why now.** The Spin Cabinet (`spin-cabinet/`) wanted a tusi niche driven by the
+room's real geometry rather than a hand-written parametric loop — the same rule the
+other five niches follow. Extracting the core meant the cabinet could import the
+SAME file the room inlines. One geometry, three consumers: the room, its twin, and
+the cabinet.
+
 ## v1 — 2026-06-21 (Opus 4.8, /fun BUILD session, cycle #256)
 
 **What it is.** A new bench in the Spirograph wing: the toy's flower flattened to

@@ -50,3 +50,14 @@ Warren) on the front-door map — `{district:"grounds", tier:1, wing:"amusements
 footprint:"coaster"}`. A new `drawCoaster` footprint draws a side-view coaster (hoist tower,
 valley, vertical loop, run-out) as map linework. The bench `the-coaster/` is reached FROM
 this landing and has no own PLACES entry (mirrors cradle-weaver reached from sewing-room).
+
+## cycle #435 — The Spin Cabinet joins the strip
+
+An eleventh lit card at the quiet end: **The Spin Cabinet** (`../spin-cabinet/`), which
+is deliberately *not* a ride — a walnut display case with six sunk niches holding the
+strip's spinning kin (the hung wheel, the tippe-top, the rattleback, the chair, the
+rotor's drum, and the Drawing Room's tusi couple), each driven by its own room's shipped
+`core.mjs`. It proves nothing and carries a warm **delight** pill, not a green proof one.
+The lede and the stamp now read "nine instruments · one delight · one cabinet", and the
+structural self-test asserts eleven lit cards plus the cabinet's own honest self-naming
+(39/39 ✓).
