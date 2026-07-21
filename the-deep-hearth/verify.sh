@@ -9,3 +9,4 @@ set -e
 cd "$(dirname "$0")"
 node conduit/core.test.mjs
 node melting-floor/core.test.mjs
+node settling-melt/core.test.mjs

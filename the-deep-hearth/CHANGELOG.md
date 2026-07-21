@@ -4,6 +4,64 @@ A grounds wing: ONE side-on geological survey plate, read sky → core. Its live
 volcanic conduit until the gas volume fraction reaches ¾ and the coherent lava ooze UNZIPS into
 an explosive jet (the Sparks-1978 fragmentation criterion).
 
+## #427 — The Settling Melt, the wing's 3rd live hall (BUILD/garden, planter)
+
+A DEEPEN of the wing — the third hall, inside the chamber bulb the Melting Floor opens onto (no new
+front-door slug, no map change). Upstairs you MAKE the melt; here you watch it come apart, and carry the
+record out in your hand. Set a cooling history and POUR: six phases crystallize in strict liquidus order,
+every crystal SETTLES and packs into strata, and when the body stills you drive a brass drill down and lift
+a slender banded core onto a rack. Throw the floor lever to STILL — crystals stay entrained, nothing is ever
+separated — and the same history comes up **blank**. The pair standing side by side is the whole argument.
+
+- **`settling-melt/core.mjs`** — the SOLE crystal-settling authority (DOM-free ESM, ~250 lines, sentinel-fenced
+  `// === SETTLING-MELT CORE BEGIN/END ===`). Bowen-order crystallization over a cooling window; a lever-rule
+  solid fraction cross-checked against an INDEPENDENT step-marched melt ledger; the D=0 stranger enriched by
+  exactly 1/F; per-band mean enrichment in closed form `log1p(d/(1−Sb))/d` (written with `log1p`, not
+  `log((1−Sa)/(1−Sb))` — the ratio form throws away eleven digits on a hair-thin band); and trapped
+  interstitial melt `fmin(rate, depth)` so the headline ×1/F is genuinely the visitor's (×8 quenched-shallow →
+  ×71 patient-deep) rather than pinned. `runCoreTests()` → **40/40**.
+- **MUTATION HARNESS (shipped)** — `simulate`/`pullCore`/`runCoreTests` take a mutation name that plants ONE
+  bug (`order` · `mass` · `enrich` · `still` · `bandE`), and the Node twin asserts each planted bug actually
+  TRIPS the check it targets. A test that cannot fail is not a test; now that is proved in the tree, not
+  claimed in a comment.
+- **`settling-melt/core.test.mjs`** — the headless twin. Shared `runCoreTests()` + the mutation harness + a
+  24×24 history grid (order over all 15 pairs, mass closure <1e-9, enrichment ≡ 1/F) + an ANALYTIC IDENTITY
+  giving a THIRD independent route to the enrichment (the mass-weighted mean band enrichment telescopes to
+  `ln(1/fmin)/(1−fmin)`, from fmin alone) + closed-form vs Simpson quadrature over 2455 bands + a 441-history
+  STILL neg-control + the payoff shape + byte-twin parity + the single-source grep. **63/63 green** via
+  `./verify.sh`.
+- **`settling-melt/index.src.html` → `index.html`** — the bench (~900 src lines). The chamber cutaway sits on
+  the wing's shared `section.mjs` backdrop (`'melt'` camera, imported UNFORKED — section.mjs is byte-unchanged)
+  with the shared depth ribbon. Crystals nucleate and fall with convective drift in six per-species HABITS
+  (olivine equant · pyroxene stubby prism · amphibole needle · biotite platy · feldspar lath · quartz blocky);
+  the pile packs as interlocking lumpy rubble slabs painted top-down; the residual melt walks ember → straw →
+  a strange violet-white as the stranger concentrates. TWO readouts up the core: the mineral ladder (hue) and
+  a violet ENRICHMENT STRIPE (slate at ×1 → violet-white at the core's max) — a STILL core kills **both**.
+  An engraved LIQUIDUS RAIL on the chamber wall is an ambient readout, not a control: the falling temperature
+  mark descends on its own and each of the six notches IGNITES with a ring pulse and a shake as it is crossed.
+  The drill has THREE real paths — a pointer-capture DRAG, a PRESS, and keyboard ↓/Enter. Two-shelf rack of 10
+  with a visible retirement rule; a tap-to-read core inspector; a dormant ember glow and a live invitation in
+  the banked chamber. Honesty framing is a prominent panel on the page, not a footnote.
+- **PAYOFF-LIVENESS TWIN** — `window.__settlingMelt.liveness()` drives the piece's OWN entries (`pourNow`,
+  the same `step()` rAF drives, `driveDrill`) and asserts the payoff FIRES: a core created, tagged and RACKED,
+  the swept one banded with a real gradient, the still one blank — never a synthetic canvas pointer event, so
+  it runs identically headless. It sandboxes itself (the rack is snapshotted and restored). Second chip,
+  green on load: **10/10 payoff fires**.
+- **`the-deep-hearth/index.html`** — the landing now reads "three live benches": a new `a.bench` dock, a LIVE
+  `engraveNiche` + `descend('melt', …)` inside the chamber bulb, and the structural pill at **10/10**.
+  `verify.sh` gained the new twin.
+- Browser-verified on a served origin at 1400×1000 and 430×900: both chips green, console clean, **60.1 fps**
+  while cooling, and the payoff observed firing on all three drill paths (a TRUE input-level CDP drag, the
+  press button, and ↓ keys) — swept banded core and still blank core standing side by side on the rack.
+- **Publisher (fresh-eyes) fix — the ghosted stratum label.** `section.mjs` bakes its engraved stratum names
+  into the plate's right margin flush to `W−12`. In this hall the rack panel stands exactly there, and it was
+  filled at `rgba(14,10,7,0.90)` — so "CHAMBER WALL" bled through the 10% at the bottom of the rack and, where
+  the panel's right edge fell 4 px short of the label's end, read as clipped type ("CHAMBER WAL"). The sibling
+  Melting Floor renders that same label cleanly in open plate, which is what made it legible as a defect rather
+  than as texture. Fixed **locally**, without touching the shared byte-locked `section.mjs`: the rack fill is now
+  opaque (`#0e0a07` — the panel is meant to stand *forward* of the plate, not veil it) and its right margin is
+  12, not 16, so the panel reaches the label instead of stopping just inside it. Both layouts (wide + narrow).
+
 ## #401 — The Melting Floor, the wing's 2nd live bench (BUILD/garden, planter)
 
 A DEEPEN of the wing (no new front-door slug — the wing already registers in `tools/layout/layout.js`).

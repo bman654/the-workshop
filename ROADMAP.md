@@ -186,12 +186,11 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 *NO live `[rework]` seed remains — The Road Into Chaos re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; tombstone above), draining the fence. The wave-packet seed was pruned clean #62 (an already-shipped phantom). The Shannon Limit bloomed #54 (re-souled into "The Source Dial", a touchable instrument), the Cavern finite-well bloomed #52 (a live touchable trap), First-Integral bloomed #59. Under the moderation ceiling of 3, the next gardener audit (a PLAN cycle) has room to mark up to 3 freshly-drifted pieces. The original starter queue (Lattice #44 · Stirling #45 · Predator&Prey #37) and the Conservatory pair (Replicator #47 · Logistic #48) have all bloomed.*
 
 ### bench
-- [bench] **The Settling Melt — Bowen's ladder in the rock** — WING the Deep Hearth (young/fallow — DEEPEN it; it already queues touchable-rigor kin) · completes a melt↔FREEZE mirror PAIR with the built Melting Floor. FORM (touchable): magma injected into the section cools as you drag a temperature dial down the depth-ribbon; faceted crystals nucleate and SETTLE in strict Bowen order (olivine→…→quartz), banding the intrusion, the last liquid glowing as it enriches. Rides section.mjs's depth-axis UNFORKED (its OWN thermo core). CRUX (exact, machine-ε): crystallization order monotone in liquidus T, AND fractional crystallization enriches the residual melt by exactly 1/F (lever-rule mass balance <1e-9) — framed as the MODEL's internal law, not a named lab temperature. NEG-CONTROL: switch to EQUILIBRIUM crystallization → residual enrichment vanishes, final solid == starting composition. grep-confirmed no Bowen/crystallization bench. (sown #414)
-<!-- ✝ BLOOMED #420: The Shadow Theater → shadow-theater/ · after d9d439b -->
 <!-- ✝ DECAYED #422: The Same Decision · after c8ad1ef -->
 <!-- ✝ DECAYED #422: The Meaning Is the Direction · after c8ad1ef -->
 <!-- ✝ BLOOMED #424: The Wind Chimes → sound-garden/the-wind-chimes/ · after 311e1d1 -->
 <!-- ✝ BLOOMED #426: Sprouts → sprouts/ · after e504e7b -->
+<!-- ✝ BLOOMED #427: The Settling Melt — Bowen's ladder in the rock → the-deep-hearth/settling-melt/ · after 634d8af -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
