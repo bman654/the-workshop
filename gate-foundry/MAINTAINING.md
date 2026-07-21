@@ -202,7 +202,13 @@ higher quality than a solo smith. The engine is the in-loop form; the rest are b
   `candidate.js` that registers a `Gate.sfx` builder and renders it offline to a 16-bit mono WAV at 22050 Hz;
   `art-foundry/render-wav.sh` (the audio analog of render-take.sh) serves it, drives the render via
   agent-browser, decodes the base64 to `asset.wav`, and runs the vendored `tools/audio-lens` CLI to write
-  `analysis.txt` (the deaf judge's "ears"). The audio-lens CLI is vendored into `tools/audio-lens/`
+  `analysis.txt` (the deaf judge's "ears"). Signature:
+  `render-wav.sh <scratch> <candidate|-> <port> <outdir> [dur] [module_relpath]`. Like render-take.sh, a
+  candidate of `-` renders the **live installed module** (the synth's path, after it writes the winner into
+  the tree) — but this bench copies in ONE file rather than rsyncing the tree, so `-` **requires** the
+  module relpath (resolved under `GATE_SRC`); it is the LAST positional so the older 5-arg invocations
+  still work verbatim, which means emitting a module means emitting `dur` explicitly too.
+  The audio-lens CLI is vendored into `tools/audio-lens/`
   (zero-dependency; `node tools/audio-lens/bin/audio-lens.js self-test` → 12/12) so the estate is self-contained.
 - **`gate-foundry/foundry.workflow.js`** — the LEGACY harness that forged the original 8 gate buildings +
   the first 3 reps; its `LIB` holds those hardcoded asset rows. Kept as a manual power tool to re-forge an
@@ -213,7 +219,8 @@ higher quality than a solo smith. The engine is the in-loop form; the rest are b
   (For the routine surveyor backlog, `gate-foundry/backlog.mjs` is the deterministic live source, not the
   frozen pool.)
 - **`gate-foundry/render-take.sh`** — renders a candidate (or the live files with `-`) in full scene
-  context; `GATE_SRC` is the gate root (default the worktree). (`art-foundry/render-wav.sh` is its sound twin.)
+  context; `GATE_SRC` is the gate root (default the worktree). (`art-foundry/render-wav.sh` is its sound
+  twin, and now honors `-` the same way — see the sound-bench entry above for the module-arg wrinkle.)
 
 ## Passing the baton (any big swing, not just the gate)
 

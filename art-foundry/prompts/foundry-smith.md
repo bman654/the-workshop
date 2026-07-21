@@ -193,7 +193,10 @@ judge by READING the audio-lens analysis. That is not a limitation to apologize 
 - `context.renderCommand` (render-wav.sh, the audio analog of render-take.sh) renders your builder through
   the browser SFX bench to a WAV and runs the in-house audio-lens CLI, writing `asset.wav` + `analysis.txt`
   into `context.paths.outdir`; both are your `context.judgeArtifacts`. (`context.asset.durSec` sets the
-  render length; the bench renders at 22050 Hz mono.)
+  render length; the bench renders at 22050 Hz mono.) Run it VERBATIM — the engine already emits the right
+  positionals: `<scratch> <candidate|-> <port> <outdir> [dur] [module_relpath]`. A take renders its own
+  candidate file; the SYNTH's command instead carries `-` plus the module relpath, which renders the live
+  module it just installed under `GATE_SRC`. You do not need to hand-assemble either form.
 - **READ `analysis.txt`** and critique against `context.asset.judgeFocus`: does it read as the intended
   effect? Right pitch / note (cents off)? Right tempo/BPM if rhythmic? Clean (not clipping/distorted,
   not silent/empty)? Right character (spectral centroid bright vs dull)? Does it loop or decay cleanly?

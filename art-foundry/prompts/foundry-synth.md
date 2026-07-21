@@ -107,8 +107,10 @@ gate-forge step; report `forgeClean:true` if the install verified clean.
 Install the winner's WebAudio module into its live location (per the brief / `context.asset.module` / wire
 note). **At install, register the builder under the asset's REAL final key** (e.g. `Gate.sfx['<key>']`), not
 the bench's `__candidate` — the exhibit/room loads it by that key; the candidate's `__candidate` registration
-was only so the bench could find it. Render via `context.finalRenderCommand` (render-wav.sh: WAV + audio-lens
-`analysis.txt`). You cannot hear — **READ the `analysis.txt`** to confirm the final reads as the intended
+was only so the bench could find it. THEN render via `context.finalRenderCommand` (render-wav.sh: WAV +
+audio-lens `analysis.txt`) — it carries the `-` sentinel plus the module relpath, i.e. it renders the LIVE
+file you just installed, so it must run AFTER the install (and it fails loudly if the module isn't there).
+You cannot hear — **READ the `analysis.txt`** to confirm the final reads as the intended
 effect, is clean (no clip / not silent), right pitch/tempo/character, and loops/decays cleanly, against
 `context.asset.judgeFocus`. Graft only the judges' called-out sound-design fixes (envelope, tuning, harmonic
 content, headroom, loop seam). Keep the builder dual-use + deterministic (seeded PRNG). `animated`/forge are

@@ -72,6 +72,26 @@ const scDur = resolveMedium('sound').renderCommand({ contextRoot: '/tmp/g', cand
 ok(scDur.trimEnd().endsWith('4.5'), 'sound appends durSec when given')
 const scNoDur = resolveMedium('sound').renderCommand({ contextRoot: '/tmp/g', candidate: '/c.js', port: 8831, outdir: '/o', scratch: '/s' })
 ok(scNoDur.trimEnd().endsWith('/o'), 'sound omits the duration arg when absent (render-wav.sh defaults it)')
+// The SYNTH form: candidate '-' renders the LIVE INSTALLED module, so the module relpath must ride in the
+// SIXTH slot — and because dur is the fifth-and-optional positional, an explicit dur must precede it or the
+// module slides into the dur slot. (This is the whole bug the sound bench died on.)
+const scSynth = resolveMedium('sound').renderCommand({ contextRoot: '/tmp/g', candidate: '-', port: 8832, outdir: '/o', scratch: '/s', module: 'tools/sky/reveal/sfx-survey-pip.js' })
+ok(scSynth.trimEnd().endsWith('/o 3 tools/sky/reveal/sfx-survey-pip.js'), 'sound synth ("-") emits an explicit dur then the module in the sixth slot')
+const scSynthArgv = scSynth.split('render-wav.sh ')[1].trim().split(/\s+/)
+ok(scSynthArgv.length === 6, 'sound synth emits exactly 6 positionals (no hole for the module to slide into)')
+ok(scSynthArgv[1] === '-' && scSynthArgv[4] === '3' && scSynthArgv[5] === 'tools/sky/reveal/sfx-survey-pip.js', 'sound synth positionals: candidate "-", dur 3, module last')
+const scSynthDur = resolveMedium('sound').renderCommand({ contextRoot: '/tmp/g', candidate: '-', port: 8832, outdir: '/o', scratch: '/s', module: 'a/b.js', durSec: 4.5 })
+ok(scSynthDur.trimEnd().endsWith('/o 4.5 a/b.js'), 'sound synth keeps an explicit durSec ahead of the module')
+// A sound asset with no module (normalizeAsset defaults it to null) must NOT interpolate a literal "null"
+// path — omit it, and let the bench's own guard name what is actually missing.
+const scSynthNoMod = resolveMedium('sound').renderCommand({ contextRoot: '/tmp/g', candidate: '-', port: 8832, outdir: '/o', scratch: '/s', module: null })
+ok(!/null|undefined/.test(scSynthNoMod), 'sound synth omits a null/undefined module rather than interpolating it as a path')
+ok(scSynthNoMod.trimEnd().endsWith('/o'), 'sound synth with no module falls back to the plain 4-positional form')
+// The TAKE form is UNCHANGED — a real candidate path never emits a module, even when one is in ctx.
+const scTakeWithModule = resolveMedium('sound').renderCommand({ contextRoot: '/tmp/g', candidate: '/tmp/s/take.js', port: 8830, outdir: '/tmp/s/out', scratch: '/tmp/s/scr', module: 'a/b.js' })
+ok(scTakeWithModule === sc, 'sound take form is byte-identical to today (a real candidate ignores ctx.module)')
+ok(scTakeWithModule.trimEnd().endsWith('/tmp/s/out'), 'sound take form still ends at outdir — no dur, no module')
+
 const sArt = resolveMedium('sound').judgeArtifacts('/o')
 ok(sArt.length === 2 && sArt[0].endsWith('/asset.wav') && sArt[1].endsWith('/analysis.txt'), 'sound judge gets the WAV + the analysis')
 

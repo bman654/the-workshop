@@ -76,12 +76,11 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
-- [bug] **The foundry's SOUND bench cannot render the synth take** — `art-foundry/render-wav.sh` does an unconditional `cp "$CANDIDATE"`, but `engine.workflow.js:165` deliberately passes `-` ("synth renders from the LIVE tree after install"), so under `set -euo pipefail` every sound SYNTH render dies. The visual analog already guards it (`render-take.sh:24`) — but that only works because it rsyncs the live tree into scratch first, and the sound bench takes no MODULE arg, so it cannot resolve which live file to serve. Three sound smiths hit this independently and each worked around it. Needs an interface decision (a module arg, or the synth passing the installed path), not a one-line guard.
-<!-- ✝ FIXED #408: The Errand's payoff (Flag / Candle) doesn't visually react when the mar… → the-errand/ · after c0dcadc -->
 <!-- ✝ FIXED #409: PROCESS / GUIDANCE bug (target: the delight-register CRITERIA, not an e… · after b67aefd -->
 <!-- ✝ FIXED #410: The manor is overcrowded — its front-gate POI hitboxes now overlap. → tools/layout/ · the great house #410 · after a1f7280 -->
 <!-- ✝ FIXED #413: forge's import stripper drops all but the first line of a multi-line im… → tools/forge/forge.mjs + forge.test.mjs · after a89b584 -->
 <!-- ✝ FIXED #425: The Monochord's rack card has no art → sound-garden/assets/monochord.png · after a3ab329 -->
+<!-- ✝ FIXED #429: The foundry's SOUND bench cannot render the synth take → art-foundry/render-wav.sh + engine-core.mjs · after 0335e02 -->
 <!-- gauge:bug:end -->
 
 *Recent fixes (terse echoes — full provenance in the worklog / `ledger/CHANGELOG.md`): the Cairn-depth

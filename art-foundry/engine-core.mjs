@@ -82,9 +82,15 @@ export const MEDIA = {
       // is the audio analog of render-take.sh: it serves art-foundry/sfx-bench.html with the candidate
       // copied in, renders the WebAudio offline to a WAV via agent-browser, then runs the in-house
       // audio-lens CLI to write analysis.txt — the spectral/level report the (deaf) judge READS.
-      const dur = ctx.durSec ? ` ${ctx.durSec}` : '' // render-wav.sh defaults to 3s when omitted
+      // Positionals: <scratch> <candidate|-> <port> <outdir> [dur] [module]. module is SIXTH and dur is
+      // FIFTH-and-optional, so whenever we emit a module we must ALSO emit an explicit dur — otherwise the
+      // module slides into the dur slot. The bench's own default is 3.
+      // normalizeAsset defaults module to null, so guard it: emitting a literal "null" as a path would fail
+      // with a confusing not-found; omitting it lets the bench's own "no module_relpath given" guard say the true thing.
+      const mod = ctx.candidate === '-' && ctx.module ? ` ${ctx.module}` : ''
+      const dur = ctx.durSec ? ` ${ctx.durSec}` : (mod ? ' 3' : '') // render-wav.sh defaults to 3s when omitted
       return `GATE_SRC=${ctx.contextRoot} gtimeout 200 bash ${ctx.contextRoot}/art-foundry/render-wav.sh `
-        + `${ctx.scratch} ${ctx.candidate} ${ctx.port} ${ctx.outdir}${dur}`
+        + `${ctx.scratch} ${ctx.candidate} ${ctx.port} ${ctx.outdir}${dur}${mod}`
     },
     judgeArtifacts(outdir) { return [`${outdir}/asset.wav`, `${outdir}/analysis.txt`] },
     judgeVerb: 'READ the audio-lens analysis (you cannot hear — the analysis IS how you judge) + note the WAV path',

@@ -90,7 +90,8 @@ const MEDIA = {
   },
   'sound': {
     id: 'sound', label: 'sound — a WebAudio asset rendered offline to WAV, judged via the audio-lens analysis', artifact: 'audio', proven: true,
-    renderCommand(ctx) { const dur = ctx.durSec ? ` ${ctx.durSec}` : ''; return `GATE_SRC=${ctx.contextRoot} gtimeout 200 bash ${ctx.contextRoot}/art-foundry/render-wav.sh ${ctx.scratch} ${ctx.candidate} ${ctx.port} ${ctx.outdir}${dur}` },
+    // module is the SIXTH positional, dur the FIFTH-and-optional: emitting a module REQUIRES an explicit dur (bench default 3) or it slides into the dur slot.
+    renderCommand(ctx) { const mod = ctx.candidate === '-' && ctx.module ? ` ${ctx.module}` : ''; const dur = ctx.durSec ? ` ${ctx.durSec}` : (mod ? ' 3' : ''); return `GATE_SRC=${ctx.contextRoot} gtimeout 200 bash ${ctx.contextRoot}/art-foundry/render-wav.sh ${ctx.scratch} ${ctx.candidate} ${ctx.port} ${ctx.outdir}${dur}${mod}` },
     judgeArtifacts(outdir) { return [`${outdir}/asset.wav`, `${outdir}/analysis.txt`] },
     judgeVerb: 'READ the audio-lens analysis (you cannot hear — the analysis IS how you judge) + note the WAV path',
   },
