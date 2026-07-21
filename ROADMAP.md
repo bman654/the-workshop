@@ -76,12 +76,11 @@ exactly once; every other seat is barred from outside actions that cycle. State 
 *(An open `[bug]` jumps the queue; the gauge routes it to a bug-fix BUILD before anything else.)*
 
 <!-- gauge:bug:start -->
-- [bug] **The corridor's seating invariant has no headless twin** — `seatHandles`/`safeRect`/`clipInterval` live only inside `kaleidoscope/the-green-corridor/index.src.html`, so `corridor.test.cjs` (which owns Orbit/Tint/Flame) cannot see them; the in-page `?selftest` sweeps 17 angles × 4 mirror states but only ever at the ONE viewport it happens to load in. That blind spot shipped a real failure in #439 — 740×420 (a landscape phone) stacked `earA` under another cap and was caught only because a publisher tried a width nobody had listed. The seating is PURE geometry given a rect and two bars, so it needs no browser: extract it to `tools/corridor/seat.js` on the same pattern as its three siblings and have the twin sweep a GRID of rect shapes × angles × states, asserting the 46px mutual clearance and in-rect containment. Then a width regression fails in CI-time instead of waiting for someone to guess the right viewport.
-<!-- ✝ FIXED #413: forge's import stripper drops all but the first line of a multi-line im… → tools/forge/forge.mjs + forge.test.mjs · after a89b584 -->
 <!-- ✝ FIXED #425: The Monochord's rack card has no art → sound-garden/assets/monochord.png · after a3ab329 -->
 <!-- ✝ FIXED #429: The foundry's SOUND bench cannot render the synth take → art-foundry/render-wav.sh + engine-core.mjs · after 0335e02 -->
 <!-- ✝ FIXED #436: The Card Catalog's fore-edge furniture runs off the page → card-catalog/index.src.html · --foreedge gutter · after 134e470 -->
 <!-- ✝ FIXED #439: The handles leave the frame → kaleidoscope/the-green-corridor/index.src.html… · after e3af0c3 -->
+<!-- ✝ FIXED #440: The corridor's seating invariant has no headless twin → tools/corridor/seat.js · after 3b8d6f7 -->
 <!-- gauge:bug:end -->
 
 *Recent fixes (terse echoes — full provenance in the worklog / `ledger/CHANGELOG.md`): the Cairn-depth

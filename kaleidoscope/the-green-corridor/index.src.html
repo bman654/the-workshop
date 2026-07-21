@@ -233,6 +233,7 @@
 <!-- forge:include ../../tools/corridor/tint.js -->
 <!-- forge:include ../../tools/corridor/orbit.js -->
 <!-- forge:include ../../tools/corridor/flame.js -->
+<!-- forge:include ../../tools/corridor/seat.js -->
 
 /* ===========================================================================
    THE GREEN CORRIDOR — the page.
@@ -345,89 +346,36 @@ var CHROME = {
   hud: document.getElementById('hud'),
   cap: document.getElementById('caption')
 };
-var HANDLE_R = 23;          /* half a 46px target */
-var FRAME_AIR = 14;         /* and a little air beyond it */
-var CHROME_GAP = 12;
-var MIN_ROOM = 3 * HANDLE_R;
+/* The HARVEST SHIM — the only DOM in the furniture path. Each chrome element
+   becomes a plain measured box; every scrap of geometry then happens in seat.js
+   on numbers alone, which is what lets the twin sweep it across a grid of
+   viewport shapes instead of the one the browser happened to open.
 
-/* Take one bite out of the rect for one piece of chrome: the bite that leaves
-   the most room. (The plaque is a tall left column on desktop, so the cheapest
-   cut is its right edge; the same plaque is a bottom sheet at ≤860px, so there
-   the cheapest cut is its top edge. One rule, both layouts, no media query.) */
-function subtractChrome(r, el, soft) {
-  if (!el) return r;
-  var b = el.getBoundingClientRect();
-  if (b.width < 1 || b.height < 1) return r;
-  if (b.right <= r.x0 || b.left >= r.x1 || b.bottom <= r.y0 || b.top >= r.y1) return r;
-  var cands = [
-    { x0: Math.max(r.x0, b.right + CHROME_GAP), y0: r.y0, x1: r.x1, y1: r.y1 },
-    { x0: r.x0, y0: r.y0, x1: Math.min(r.x1, b.left - CHROME_GAP), y1: r.y1 },
-    { x0: r.x0, y0: Math.max(r.y0, b.bottom + CHROME_GAP), x1: r.x1, y1: r.y1 },
-    { x0: r.x0, y0: r.y0, x1: r.x1, y1: Math.min(r.y1, b.top - CHROME_GAP) }
-  ];
-  var best = null;
-  for (var i = 0; i < cands.length; i++) {
-    var c = cands[i];
-    var a = Math.max(0, c.x1 - c.x0) * Math.max(0, c.y1 - c.y0);
-    if (!best || a > best.a) best = { a: a, c: c };
+   The ORDER is part of the answer (each bite is taken from what the last bite
+   left) and so is the hard/soft split, so both are stated here and nowhere else.
+   No class checks: a measured rect is already honest about a panel mid-collapse
+   (the transform carries its box off-screen and the room opens up smoothly) and
+   about a pill that is display:none (zero box). The caption is the one
+   exception, because `.show` is what decides whether it is on screen at all. */
+function chromeBoxes() {
+  var out = [];
+  function take(el, soft) {
+    if (!el) return;
+    var b = el.getBoundingClientRect();
+    out.push({ left: b.left, top: b.top, right: b.right, bottom: b.bottom,
+               width: b.width, height: b.height, soft: soft });
   }
-  /* SOFT chrome is the read-outs — the HUD and the caption, both
-     pointer-events:none, so they never actually block a grab. They get their
-     way only while there is room to spare; the plaque and the pill always do. */
-  if (soft && (best.c.x1 - best.c.x0 < MIN_ROOM || best.c.y1 - best.c.y0 < MIN_ROOM)) return r;
-  return best.c;
+  take(CHROME.bar, false);
+  take(CHROME.panel, false);
+  take(CHROME.reopen, false);
+  take(CHROME.restore, false);
+  take(CHROME.hud, true);
+  if (CHROME.cap && CHROME.cap.classList.contains('show')) take(CHROME.cap, true);
+  return out;
 }
 
-function safeRect() {
-  var pad = HANDLE_R + FRAME_AIR;
-  var full = { x0: pad, y0: pad, x1: S.W - pad, y1: S.H - pad };
-  var r = full;
-  /* No class checks anywhere below: a measured rect is already honest about a
-     panel mid-collapse (the transform carries its box off-screen and the room
-     opens up smoothly) and about a pill that is display:none (zero box). */
-  r = subtractChrome(r, CHROME.bar, false);
-  r = subtractChrome(r, CHROME.panel, false);
-  r = subtractChrome(r, CHROME.reopen, false);
-  r = subtractChrome(r, CHROME.restore, false);
-  r = subtractChrome(r, CHROME.hud, true);
-  if (CHROME.cap && CHROME.cap.classList.contains('show')) r = subtractChrome(r, CHROME.cap, true);
-  /* Never hand back a rect with nowhere to stand. If the chrome has eaten the
-     window (a very short phone with the sheet open), take the plain inset
-     window back: a handle over the plaque is still grabbable — the handles
-     outrank it in z — whereas a handle off the edge is gone. */
-  if (r.x1 - r.x0 < MIN_ROOM || r.y1 - r.y0 < MIN_ROOM) r = full;
-  return r;
-}
+function safeRect() { return Seat.safeRect(S.W, S.H, chromeBoxes()); }
 
-/* A real parametric clip of the line p(t) = (bx0 + t·ax, by0 + t·ay) against
-   the rect — Liang–Barsky. Returns [tEnter, tExit], or null when the line
-   genuinely misses. The thing it replaces took max(t1,t2) per axis, which is
-   the crossing in the +t direction only: correct ONLY when the base point is
-   already inside. Below ten degrees the camera centres on a long corridor and
-   the mirror feet sit far outside it, so the old code returned the far crossing
-   of an interval that never met the window at all — and then a min-length clamp
-   dressed the nonsense up as a bar. That is the whole bug. */
-function clipInterval(bx0, by0, ax, ay, r) {
-  var lo = -Infinity, hi = Infinity;
-  function slab(p, q) {            /* p·t ≤ q */
-    if (Math.abs(p) < 1e-12) return q >= 0;
-    var t = q / p;
-    if (p < 0) { if (t > lo) lo = t; } else { if (t < hi) hi = t; }
-    return true;
-  }
-  if (!slab(-ax, bx0 - r.x0)) return null;
-  if (!slab(ax, r.x1 - bx0)) return null;
-  if (!slab(-ay, by0 - r.y0)) return null;
-  if (!slab(ay, r.y1 - by0)) return null;
-  if (lo > hi) return null;
-  return [lo, hi];
-}
-
-function clampInto(p, r) {
-  return [Math.min(Math.max(p[0], r.x0), Math.max(r.x0, r.x1)),
-          Math.min(Math.max(p[1], r.y0), Math.max(r.y0, r.y1))];
-}
-function dist2d(a, b) { return Math.sqrt((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1])); }
 
 /* ---------------------------------------------------------------------------
    THE FRAME'S GEOMETRY — recomputed once per frame, shared by draw, camera,
@@ -467,7 +415,7 @@ function build() {
     var base = [m.d * m.nx, m.d * m.ny];
     var bx0 = sx(base[0], base[1]), by0 = sy(base[0], base[1]);
     var ax = d[1] * S.scale, ay = -d[0] * S.scale;
-    var iv = clipInterval(bx0, by0, ax, ay, SR);
+    var iv = Seat.clipInterval(bx0, by0, ax, ay, SR);
     var tLo, tHi;
 
     /* the vertex is a hard bound: there is no mirror behind it */
@@ -515,91 +463,15 @@ function build() {
     ims: ims, M: M, eps: eps, rect: SR,
     barA: barOf(M.A, dA), barB: barOf(M.B, dB)
   };
-  seatHandles(G);
+  Seat.seatHandles(G);
   return G;
 }
 
-/* ---------------------------------------------------------------------------
-   SEATING THE FOUR HANDLES.
-
-   Two rules, and neither is decoration. (1) Every handle is inside the
-   reachable rect — clamped there if the glass has slid out of the frame.
-   (2) No handle sits on top of another: a 46px target needs 46px of clearance,
-   and at very narrow angles the two mirrors are only a dozen pixels apart on
-   screen, which used to stack all four caps into one unusable pile. A handle
-   may only travel ALONG its own bar (so an end-cap stays an end-cap and a drag
-   still means what it meant), never further than TETHER px from where the glass
-   put it, and never outside the rect.
-   --------------------------------------------------------------------------- */
-var SEP = 46, TETHER = 1.3 * 46;
-
-function seatHandles(G) {
-  var R = G.rect;
-  var slots = [
-    { b: G.barA, k: 'cap', pref: 1 },
-    { b: G.barB, k: 'cap', pref: -1 },
-    { b: G.barA, k: 'pin', pref: -1 },
-    { b: G.barB, k: 'pin', pref: 1 }
-  ];
-  var i, j, s;
-  for (i = 0; i < slots.length; i++) {
-    s = slots[i];
-    s.seat = clampInto(s.b[s.k + 'Home'], R);
-    s.p = s.seat;
-  }
-  function travel(sl, amt, perp) {
-    var u = perp ? [-sl.b.u[1], sl.b.u[0]] : sl.b.u;
-    var x = sl.p[0] + amt * u[0], y = sl.p[1] + amt * u[1];
-    var dx = x - sl.seat[0], dy = y - sl.seat[1], m = Math.sqrt(dx * dx + dy * dy);
-    if (m > TETHER) { x = sl.seat[0] + dx / m * TETHER; y = sl.seat[1] + dy / m * TETHER; }
-    return clampInto([x, y], R);
-  }
-  for (var it = 0; it < 12; it++) {
-    var quiet = true;
-    for (i = 0; i < slots.length; i++) for (j = i + 1; j < slots.length; j++) {
-      var a = slots[i], b = slots[j];
-      var d0 = dist2d(a.p, b.p);
-      if (d0 >= SEP - 0.01) continue;
-      quiet = false;
-      /* Try all four sign pairs and keep the one that opens the most gap. The
-         pair matters: when both bars are near-parallel, moving BOTH the same
-         way along them separates nothing — only opposite moves do, which is
-         why the two ears prefer opposite directions on a tie. */
-      var push = (SEP - d0) * 0.6 + 0.5, best = null;
-      for (var sa = -1; sa <= 1; sa += 2) for (var sb = -1; sb <= 1; sb += 2) {
-        var pa = travel(a, sa * push, false), pb = travel(b, sb * push, false);
-        var sc = dist2d(pa, pb)
-          + 0.001 * ((sa === a.pref ? 1 : 0) + (sb === b.pref ? 1 : 0));
-        if (!best || sc > best.sc) best = { sc: sc, pa: pa, pb: pb };
-      }
-      /* CRAMPED FRAMES — the along-bar rule is a PREFERENCE, not the invariant.
-         In a short viewport (a landscape phone: 740x420 failed here) the safe
-         rect is a thin band, so travelling along a steep bar runs out of rect in
-         a few px and clampInto puts both handles back on the same edge — four
-         46px targets restacked into the pile this whole pass exists to prevent.
-         When along-bar CANNOT open the gap, a handle may step perpendicular off
-         its bar instead. That is honest here and needs no new furniture: every
-         handle already draws a dashed tether back to the glass whenever its seat
-         differs from home, and the drag reads the POINTER's angle, never the
-         handle's seat — so an off-bar cap still means exactly what it meant.
-         Scored strictly against the along-bar best, so this engages ONLY where
-         the preference has already failed, and the wide frames are untouched. */
-      if (best.sc < SEP) {
-        for (var qa = 0; qa < 2; qa++) for (var qb = 0; qb < 2; qb++) {
-          if (!qa && !qb) continue;
-          for (var ta = -1; ta <= 1; ta += 2) for (var tb = -1; tb <= 1; tb += 2) {
-            var pa2 = travel(a, ta * push, !!qa), pb2 = travel(b, tb * push, !!qb);
-            var sc2 = dist2d(pa2, pb2) - 0.002;  /* along-bar wins any tie */
-            if (sc2 > best.sc) best = { sc: sc2, pa: pa2, pb: pb2 };
-          }
-        }
-      }
-      a.p = best.pa; b.p = best.pb;
-    }
-    if (quiet) break;
-  }
-  for (i = 0; i < slots.length; i++) slots[i].b[slots[i].k + 'S'] = slots[i].p;
-}
+/* SEATING THE FOUR HANDLES lives in seat.js, beside the rect it seats them in
+   — every handle inside the reachable rect, no handle stacked on another, each
+   travelling only along its own bar unless a cramped frame leaves it no other
+   way out. The rules and the reasoning are written there; the twin sweeps them
+   across a grid of viewport shapes, which is the axis they actually fail on. */
 
 /* THE CAMERA — and the one decision that makes this a tunnel.
 

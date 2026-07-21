@@ -449,6 +449,192 @@ console.log('\n  [the candle]');
     'phase lag ' + (p0 - p3).toFixed(4) + ' s between neighbours at N=8');
 }
 
+
+/* ─────────────────────────────────────────────────────────────────────────
+   (e) THE FURNITURE, ACROSS VIEWPORT SHAPES.
+
+   The in-page ?selftest already sweeps angles x mirror states — but at ONE
+   viewport, the one the browser happened to open, because no script can
+   resize its own window. VIEWPORT SHAPE is precisely the axis the handles
+   fail on: at 740x420 (a landscape phone) the reachable rect is a thin band,
+   travelling along a steep bar runs out of rect in a few pixels, and the
+   clamp restacks all four caps into the pile the seating pass exists to
+   prevent. Nobody had listed that width, so nobody had tried it.
+
+   So the grid: viewport shapes x angles x mirror states x chrome present or
+   collapsed. 740x420 is in the list BY NAME, as the regression anchor.
+
+   WHAT IS ASSERTED, and what honestly cannot be:
+
+     (i)  CONTAINMENT, unconditionally, in every cell. A handle outside the
+          reachable rect is a handle you cannot press, full stop.
+     (ii) CLEARANCE >= SEP for all six pairs, wherever the rect has the
+          CAPACITY to hold four SEP-separated points at all. In a genuinely
+          tiny rect it does not — four 46px targets need room that a 200x120
+          band simply has not got — and asserting it there would be asserting
+          a falsehood. Where capacity fails, the honest invariant is that the
+          seating is NEVER WORSE than leaving the handles where the glass put
+          them: it may not make the pile deeper than it found it.
+
+   The bars are not the page's barOf() re-implemented — they are ADVERSARIAL
+   INPUTS to the seater: the two mirror directions as the page maps them to
+   screen (world +y -> screen +x, so a world direction [dx,dy] arrives as
+   [dy,-dx]), with the handle homes marched out along them from the frame
+   centre — where the page's camera keeps the candle — at distances that put
+   them well inside, just outside, and far outside the frame. That last case
+   is not hypothetical: it is exactly what barOf's nearest-approach branch
+   hands over when the mirror line misses the frame entirely.
+   ───────────────────────────────────────────────────────────────────────── */
+console.log('\n  [e] the furniture, across viewport shapes');
+{
+  const S = require('./seat.js');
+
+  /* The chrome, modelled from the page's CSS at each layout. Boxes, not
+     elements — the same plain shape the page's harvest shim hands over. */
+  function chrome(W, H, opts) {
+    const o = opts || {};
+    const box = (l, t, r, b, soft) => ({
+      left: l, top: t, right: r, bottom: b, width: r - l, height: b - t, soft: !!soft
+    });
+    const out = [];
+    out.push(box(0, 0, W, 46));                                   /* the topbar */
+    if (o.panel) {
+      if (W > 860) out.push(box(20, 66, 20 + 298, H - 20));       /* tall left plaque */
+      else out.push(box(0, H - Math.round(0.44 * H), W, H));      /* bottom sheet */
+    } else {
+      out.push(box(W - 132, H - 46, W - 16, H - 12));             /* the reopen pill */
+    }
+    if (o.restore) out.push(box(W - 190, 56, W - 16, 90));        /* the way-back pill */
+    out.push(box(W - 210, H - 96, W - 16, H - 60, true));         /* the HUD (soft) */
+    if (o.caption) out.push(box(W / 2 - 210, H - 150, W / 2 + 210, H - 110, true));
+    return out;
+  }
+
+  /* the page's screen mapping of a world direction, and its unit form */
+  function screenDir(dx, dy) {
+    const ux = dy, uy = -dx, m = Math.hypot(ux, uy) || 1;
+    return [ux / m, uy / m];
+  }
+
+  function frame(W, H, theta, opts, reach) {
+    const half = theta * Math.PI / 360, s = Math.sin(half), c = Math.cos(half);
+    const rect = S.safeRect(W, H, chrome(W, H, opts));
+    const cx = W / 2, cy = H / 2;
+    const diag = Math.hypot(W, H);
+    const bar = (u) => ({
+      u: u,
+      capHome: [cx + reach * diag * u[0], cy + reach * diag * u[1]],
+      pinHome: [cx + 0.62 * reach * diag * u[0], cy + 0.62 * reach * diag * u[1]],
+      capS: null, pinS: null
+    });
+    return { rect: rect, barA: bar(screenDir(c, s)), barB: bar(screenDir(c, -s)) };
+  }
+
+  const SHAPES = [
+    ['740x420  (the #439 landscape phone)', 740, 420],
+    ['360x780  (tall narrow phone)', 360, 780],
+    ['390x670  (phone)', 390, 670],
+    ['844x390  (landscape phone, wider)', 844, 390],
+    ['600x600  (square)', 600, 600],
+    ['1024x768 (tablet)', 1024, 768],
+    ['1440x900 (desktop)', 1440, 900],
+    ['1920x1080 (wide desktop)', 1920, 1080],
+    ['320x480  (the smallest thing anyone browses on)', 320, 480],
+    /* Not viewports anyone browses in — degenerate slots, the kind an embed or
+       a picture-in-picture frame hands you. They are here because they are the
+       only cells where the rect genuinely CANNOT hold four 46px targets, and a
+       degraded clause nobody ever enters is a clause nobody has checked. */
+    ['194x114  (a degenerate slot)', 194, 114],
+    ['150x300  (a degenerate column)', 150, 300],
+    ['520x128  (a degenerate letterbox)', 520, 128]
+  ];
+  const THETAS = [0, 0.6, 2, 4, 7, 9.5, 12, 20, 33, 45, 60, 89, 90.5, 110, 140, 168, 179.5];
+  const REACH = [0.08, 0.3, 0.75, 2.5];      /* well inside / at the edge / far outside */
+  const CHROMES = [
+    { panel: true, caption: true, restore: false },
+    { panel: true, caption: false, restore: true },
+    { panel: false, caption: false, restore: false },
+    { panel: false, caption: true, restore: true }
+  ];
+
+  /* the six pairwise clearances of a seating */
+  function minPair(pts) {
+    let m = Infinity;
+    for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
+      m = Math.min(m, S.dist2d(pts[i], pts[j]));
+    }
+    return m;
+  }
+
+  let cells = 0, roomy = 0, cramped = 0;
+  let outside = null, stacked = null, worse = null;
+  let worstRoomy = Infinity, anchorMin = Infinity, anchorCells = 0;
+
+  for (const [label, W, H] of SHAPES) {
+    for (const opts of CHROMES) {
+      for (const theta of THETAS) {
+        for (const reach of REACH) {
+          const G = frame(W, H, theta, opts, reach);
+          const R = G.rect;
+
+          /* where the glass alone would have put them — the do-nothing baseline */
+          const homes = [G.barA.capHome, G.barB.capHome, G.barA.pinHome, G.barB.pinHome]
+            .map((p) => S.clampInto(p, R));
+          const homeMin = minPair(homes);
+
+          S.seatHandles(G);
+          const seats = [G.barA.capS, G.barB.capS, G.barA.pinS, G.barB.pinS];
+          cells++;
+          const where = label + ' theta=' + theta + ' reach=' + reach
+            + ' chrome=' + JSON.stringify(opts);
+
+          /* (i) CONTAINMENT — unconditional, every cell */
+          for (const p of seats) {
+            const inside = p[0] >= R.x0 - 1e-6 && p[0] <= R.x1 + 1e-6
+                        && p[1] >= R.y0 - 1e-6 && p[1] <= R.y1 + 1e-6;
+            if (!inside && !outside) {
+              outside = where + ' -> (' + p[0].toFixed(1) + ',' + p[1].toFixed(1)
+                + ') outside [' + R.x0.toFixed(0) + ',' + R.y0.toFixed(0)
+                + '..' + R.x1.toFixed(0) + ',' + R.y1.toFixed(0) + ']';
+            }
+          }
+
+          const sep = minPair(seats);
+          if (W === 740 && H === 420) { anchorCells++; anchorMin = Math.min(anchorMin, sep); }
+
+          if (S.capacity(R)) {
+            /* (ii) CLEARANCE — the rect can hold four, so it must */
+            roomy++;
+            worstRoomy = Math.min(worstRoomy, sep);
+            if (sep < S.SEP - 0.01 && !stacked) {
+              stacked = where + ' -> closest pair ' + sep.toFixed(1)
+                + 'px in a ' + (R.x1 - R.x0).toFixed(0) + 'x' + (R.y1 - R.y0).toFixed(0) + ' rect';
+            }
+          } else {
+            /* the honest degraded invariant: never worse than doing nothing */
+            cramped++;
+            if (sep < homeMin - 0.01 && !worse) {
+              worse = where + ' -> ' + sep.toFixed(1) + 'px, worse than the unseated '
+                + homeMin.toFixed(1) + 'px';
+            }
+          }
+        }
+      }
+    }
+  }
+
+  check('740x420 — the width nobody had listed — is in the grid',
+    anchorCells > 0, anchorCells + ' cells at the #439 anchor, closest pair '
+      + anchorMin.toFixed(1) + 'px');
+  check('every handle lands inside the reachable rect, in every cell',
+    !outside, outside || cells + ' cells x 4 handles across '
+      + SHAPES.length + ' viewport shapes');
+  check('wherever the rect can hold four 46px targets, all six pairs clear SEP',
+    !stacked, stacked || roomy + ' roomy cells, closest any pair ever came: '
+      + worstRoomy.toFixed(1) + 'px');
+  check('and where it genuinely cannot, the seating is never worse than the glass',
+    !worse, worse || cramped + ' cramped cells held to the degraded invariant');
+}
 /* ─────────────────────────────────────────────────────────────────────────
    NO CLAIM CREEP.
    ───────────────────────────────────────────────────────────────────────── */
