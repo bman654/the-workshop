@@ -87,6 +87,7 @@ export const STARS = {
   "ball-and-disk": { group: "reckoner", dx: 0, dy: 34, mag: 2 },
   "tone-mill": { group: "sirenist", dx: 0, dy: 25.5, mag: 1 },
   "singing-plate": { group: "sirenist", dx: 0, dy: -25.5, mag: 2 },
+  "strobe-mill": { group: "sirenist", dx: 0, dy: 76.5, mag: 3 },  // Sirenist's 3rd star: the promised free stroboscope — the same strobe rate, SEEN as a freeze
   "hexapawn": { group: "strategist", dx: 10, dy: -32.5, mag: 2 },
   "the-long-chain": { group: "strategist", dx: -10, dy: 32.5, mag: 1 },
   "holonomy": { group: "surveyor", dx: 45, dy: -15, mag: 1 },
