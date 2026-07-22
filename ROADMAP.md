@@ -144,14 +144,13 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 (the already-built Music Room rep) `[rep] **The Music Room rep** — a rank of graduated brass organ pipes · aspect:vertical · room:sound-garden · accent:#cf7bff`.
 
 <!-- gauge:foundry-seeds:start -->
-- [rep] **The Keystone Arch rep** — a dry-stacked semicircular ring of nine cut voussoir wedges standing free on two springer feet, the brass KEYSTONE dropped at the crown catching the light, a faint emissive line-of-thrust threading the joints · aspect:vertical · room:the-keystone-arch · accent:#c9974c. Fills the ENTIRELY-BLANK lowerworks district (0 of 12 reps). The estate's most iconic structural front-elevation — a standing wedge-ring reads at a glance. (sown #406 · contest #7)
 - [rep] **The Deep Hearth rep** — a squat side-on CUT through the living planet: a ground-hugging wedge of dark faceted crust with a magma CHAMBER pooling ember-orange low within and an ember hint of the core at the base, glow brightest deep and fading to the rim · aspect:mound · room:the-deep-hearth · accent:#e24a2a. Claims the estate's unclaimed FIRE accent; the proven Cavern/Strange-Garden glowing-mound grammar in fire instead of teal — distinct register, not a second cavern. (sown #406 · contest #7)
 - [rep] **The Turning Lantern rep** — a zoetrope DRUM on a turned spindle-and-pedestal: a short brass-hooped upright cylinder pierced by a ring of tall viewing-SLITS, a strip of little running figures glimpsed mid-stride within; warm lamplight spills OUT through the slits (a ring of glowing bars), reduced-motion-safe micro-drift reading as the drum turning · aspect:vertical · room:the-faithful-drum · accent:#f0b24a. Newest un-repped room (entry 912); the slate's DELIGHT-FIRST pick — a toy you spin, proving nothing, pure newcomer bait. (sown #406 · contest #7)
-<!-- ✝ DECAYED #397: The Engine Room rep · after 8e0cbb6 -->
 <!-- ✝ DECAYED #397: The Deep Hearth rep · after 8e0cbb6 -->
 <!-- ✝ BLOOMED #415: The Hedge Maze rep → the-gate/scene.js drawRepDaedalus · after ff7c5ab -->
 <!-- ✝ BLOOMED #423: The Print Room rep → the-gate/scene.js drawRepCompositor · after 0647a7c -->
 <!-- ✝ BLOOMED #432: The Stellar Forge rep → the-gate/scene.js drawRepStellarForge · after 9008913 -->
+<!-- ✝ BLOOMED #443: The Keystone Arch rep → the-gate/scene.js · after af2e7f9 -->
 <!-- gauge:foundry-seeds:end -->
 
 ---
