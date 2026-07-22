@@ -170,7 +170,6 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 
 
 ### curation
-- [curate] **A cabinet for the caustics** — the Spin Cabinet proved the FORM: one case, N sunk niches, each a live little object driven by its own room's shipped core, each brass plate a door. Point it at the estate's scattered LIGHT kin next (caustics, the rainbow, refraction, the prism) — the gather is the exhibit; no new physics forged. (sown #435)
 - [curate] **The Coilwright's Dark Stars** — three Lodestone benches (the LC tank · the transformer · the eddy brake) already ship and already set their `ws:seen` crumbs, but they have no coords in Sky.CATALOG and no seat in `coilwright.members` (tools/sky/sky.js:259), so a constellation the estate PROMISED stands at two stars of five. `the-sluice-gate` proves a sub-bench can be a full star. FORM: the sky itself — walk out under it and find the Coilwright has quietly grown. CRUX (mechanical, and it guards the future): a Node twin over sky.js asserts membership ⊆ CATALOG ⊆ pages that set the crumb, BOTH directions, so the next engraved invitation cannot go stale unnoticed. (sown #430)
 
 
@@ -184,11 +183,11 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 
 ### bench
 - [bench] **The Sealed Cabinet** — the pavilion's first puzzle where you cannot SEE the board: a sealed grid hides k atoms and your only move is to FIRE a ray into an edge port and read which port it leaves by (deflect · absorb · reflect). Place the atoms from the ray table alone; a wrong placement is a real loss. Every one of the NINE puzzles across both wings shows you the whole board from move one — this is deduction over what you chose to MEASURE. CRUX: each shipped board proven to have exactly ONE configuration consistent with its full ray table (exhaustive over C(n,k) — pin the grid and k small so the proof stays honest and fast), PLUS a deliberately shipped AMBIGUOUS board, two configurations no ray can ever separate, proven indistinguishable by exhaustion: a wing whose certificates all say "unique" finally saying some questions have no answer. Enumerate the edge cases (double deflection, an atom on the entry row, a ray back out its own port) in the twin — that is where a self-test passes while the puzzle is wrong. (sown #430)
-<!-- ✝ BLOOMED #445: The Cartesian Diver → the-cartesian-diver/ · after 90def49 -->
 <!-- ✝ BLOOMED #446: The Crystal Garden → alchemy/the-crystal-garden/ · after 0d0f49a -->
 <!-- ✝ BLOOMED #447: The Coastline Rule → fractal-dimension/ · after 5d32733 -->
 <!-- ✝ BLOOMED #448: The Spiral Meadow → conservatory/the-spiral-meadow/ · after 9b5b48a -->
 <!-- ✝ BLOOMED #449: The Sealing-Wax Bench → compositor/the-sealing-wax-bench/ · after ecf8c3d -->
+<!-- ✝ BLOOMED #450: A cabinet for the caustics → the-umbral-vault/ · after c80b578 -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
