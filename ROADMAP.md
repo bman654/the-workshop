@@ -173,7 +173,6 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 
 
 ### rework
-- [rework] **The Sound Garden, made to sing** — sound-garden/index.html is a SILENT static PNG card-grid (verified: 0 AudioContext, thumbnails only) fronting the estate's most ALIVE wing — ~25 rooms that each play themselves forever, behind a door that makes no sound and shows dead images. The soul it lacks: PLAY, at the threshold. Re-soul the HUB into a living, quietly-humming garden bed — each card a brushable living preview (sways + previews its voice on hover/brush without leaving the page), foregrounding listen-and-play over click-through; the FFT/Nyquist/analysis rooms tuck into the 'rigorous voices' shelf they already occupy (tuck, don't cut). Claim-free delight, no crux; owes a payoff-liveness twin — the hub actually emits sound and previews fire on the REAL input path, respecting the one-click autoplay gate. Marked because the plainest room is silent, NOT for a proof. (sown #452)
 
 - *No live `[rework]` Road-Into-Chaos seed remains — re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; see the tombstone above).*
 - *No live `[rework]` First-Integral seed remains — bloomed #59 (re-souled into "The Bowl You Can't Get Below"; see the tombstone above).*
@@ -184,11 +183,11 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 ### bench
 - [bench] **It Holds, It Holds, It Breaks — the Buffer Flask** (alchemy) — grow the Lab beside Titration (strong/strong, explicitly NO plateau): a weak-acid / conjugate-base buffer you drip acid into while the pH needle barely stirs — a plateau you can lean on — as a capacity gauge quietly drains, until the buffer is spent and the needle SUDDENLY plunges. Touchable/dramatic, not a curve; the sibling Titration named by its absence. CRUX: pH tracks Henderson–Hasselbalch pH=pKa+log([A⁻]/[HA]) through the plateau; buffer capacity β=dn/dpH peaks EXACTLY at pH=pKa (half-neutralized); the flask breaks precisely when added moles exceed the buffering species — against titration's own charge-balance root, with a strong-acid neg-control that shows no plateau at all. Deepen the built roof. (sown #452)
 - [bench] **The Straight Line with One Bar Fewer — Hart's Inversor** (the-drawing-room) — BUILD the sibling the Drawing Room already advertises beside its live Peaucellier ('The Circle That Rolls Itself Straight — framed, not yet built', confirmed at index.html:185). PLAYABLE: Hart's crossed four-bar inverts a circle into a MATHEMATICALLY EXACT straight line using ONE fewer link — drive the crank, ink a ruler-true line, then drag a bar off-spec and watch the line visibly BOW into an arc. CRUX: pen deviation from the fitted line ≤ machine-ε across the crank sweep when the antiparallelogram ratio holds (the inversion identity OA·OP=const); neg-control — perturb one bar off the Hart ratio and the locus provably bows (≫tol). Gathers the wing's straight-line pair to two exact-line mechanisms under one roof. (sown #452)
-<!-- ✝ DECAYED #452: One Odometer, Two Machines · after 312ee07 -->
 <!-- ✝ DECAYED #452: The Coilwright's Dark Stars · after 312ee07 -->
 <!-- ✝ DECAYED #452: The Sealed Cabinet · after 312ee07 -->
 <!-- ✝ BLOOMED #453: The Grabbable Triangle (Gauss–Bonnet) → grabbable-triangle/ · after 35e10ed -->
 <!-- ✝ BLOOMED #454: The Powder Sky → powder-sky/ · after 652732f -->
+<!-- ✝ BLOOMED #455: The Sound Garden, made to sing → sound-garden/ · after 94618ef -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
