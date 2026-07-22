@@ -166,7 +166,6 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 
 
 ### cross
-- [cross] **The Sealing-Wax Bench** — pick or carve an intaglio matrix from the Blazon wing's own heraldic device kit, drip a pool of molten wax with a drag, press-and-hold the seal, then peel up a glistening RAISED seal (the matrix's exact inverse) that wobbles like fresh wax until it cools hard; hang your seals on a ribbon. PURE-DELIGHT craft you touch (drip/press/peel), kin to the Cento Press and the Letterer; a DEEPEN gathering in the design-press family and cross-pollinating heraldry the estate already speaks (no new front door). grep-confirmed GAP — sealing-wax/seal-press/wax-bench/signet = 0 built pieces. Liveness twin (claim-free, has a payoff): press fires the matrix→relief inversion AND the wax cools (wobble decays to still) — a payoff that fires, never a proof. (sown #444)
 - [cross] **One Odometer, Two Machines** — a brass odometer ticks once; on its left the Tower of Hanoi lifts a disc, on its right the ripple adder's gold carry-chain climbs — and it is the SAME integer. Verified in both shipped cores: the-binary-ruler's `ruler(t)=trailingZeros(t)+1` IS carry-cascade's `rippleDepth(t-1,1,2)+1`, so the adder's worst-case full-row sweep is the instant the greatest disc swings, dead centre of the solve. SHARED: a counter's fingerprint. NOT SHARED: meaning — it names WHICH disc there and a COST here, and carry-lookahead has no Hanoi sense at all. FORM: one crank, both machines, a shared height-gauge between them so you watch the number appear twice at once; deep ticks are rare and you feel the rarity. CRUX: for t=1..4095 the two rooms' own functions agree and the disc actually lifted equals the bits actually flipped; neg-control — in base 3 it breaks, and the room lets you break it. (sown #430)
 
 
@@ -185,11 +184,11 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 
 ### bench
 - [bench] **The Sealed Cabinet** — the pavilion's first puzzle where you cannot SEE the board: a sealed grid hides k atoms and your only move is to FIRE a ray into an edge port and read which port it leaves by (deflect · absorb · reflect). Place the atoms from the ray table alone; a wrong placement is a real loss. Every one of the NINE puzzles across both wings shows you the whole board from move one — this is deduction over what you chose to MEASURE. CRUX: each shipped board proven to have exactly ONE configuration consistent with its full ray table (exhaustive over C(n,k) — pin the grid and k small so the proof stays honest and fast), PLUS a deliberately shipped AMBIGUOUS board, two configurations no ray can ever separate, proven indistinguishable by exhaustion: a wing whose certificates all say "unique" finally saying some questions have no answer. Enumerate the edge cases (double deflection, an atom on the entry row, a ray back out its own port) in the twin — that is where a self-test passes while the puzzle is wrong. (sown #430)
-<!-- ✝ DECAYED #444: The Law Out of the Noise · after bed44b7 -->
 <!-- ✝ BLOOMED #445: The Cartesian Diver → the-cartesian-diver/ · after 90def49 -->
 <!-- ✝ BLOOMED #446: The Crystal Garden → alchemy/the-crystal-garden/ · after 0d0f49a -->
 <!-- ✝ BLOOMED #447: The Coastline Rule → fractal-dimension/ · after 5d32733 -->
 <!-- ✝ BLOOMED #448: The Spiral Meadow → conservatory/the-spiral-meadow/ · after 9b5b48a -->
+<!-- ✝ BLOOMED #449: The Sealing-Wax Bench → compositor/the-sealing-wax-bench/ · after ecf8c3d -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);

@@ -1,0 +1,828 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Sealing-Wax Bench — seal a letter, keep the mark</title>
+<!--
+  THE SEALING-WAX BENCH — a bench beside the Cento Press, in the back of the shop.
+  Pour a pool of molten wax, press a signet, peel it away and WATCH it cool from a
+  glossy molten blob to a still, matte, hard seal — then it hangs on a cord of the
+  seals you have kept. Claim-free delight: no theorem, no pill. The payoff is the
+  FEEL, and one law you can see — an INTAGLIO die (a flat face with the device cut
+  INTO it) presses a RELIEF seal (raised exactly where the die is sunk).
+
+  A payoff-liveness twin (liveness.test.mjs, imports seal-core.mjs only) proves the
+  payoff FIRES headlessly: press inverts · wax cools · the ribbon remembers. An
+  in-page self-test chip re-runs the inversion on the ACTUAL device you chose.
+
+  CORE: seal-core.mjs — pure, DOM-free, deterministic in (matrix, seed). Forge
+  inlines it byte-for-byte between the SEAL CORE sentinels; the twin byte-parity-
+  checks the copy. DEVICE-KIT: device-kit.js — a browser-only lift of Blazon's
+  charge builders → the same coverage-mask the core consumes (one-way; never
+  imports the core). Edit the .src.html + the .mjs/.js, then:
+    node tools/forge/forge.mjs compositor/the-sealing-wax-bench/index.src.html
+-->
+<style>
+  :root{
+    --ink:#f0e6d8; --ink-dim:#b09a86; --accent:#d8a24a; --accent-soft:#8a6a3a;
+    --wax:#8b1a1a; --panel:rgba(28,20,14,.92); --line:rgba(216,162,74,.20);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; overflow:hidden; color:var(--ink);
+    background:
+      radial-gradient(120% 90% at 50% 34%, #2a1e14 0%, #17100a 52%, #0c0705 100%);
+    font-family:ui-serif, Georgia, "Times New Roman", serif; }
+  #pool{ position:fixed; inset:0; width:100%; height:100%; display:block;
+    cursor:crosshair; touch-action:none; }
+  /* the estate links */
+  a.back,a.sib{ position:fixed; z-index:9; top:14px; text-decoration:none;
+    font:12px ui-monospace,Menlo,monospace; letter-spacing:.09em; padding:6px 11px; border-radius:7px;
+    background:rgba(12,8,5,.55); backdrop-filter:blur(3px);
+    transition:color .2s,border-color .2s,background .2s; }
+  a.back{ left:16px; color:#efe0c4; border:1px solid rgba(216,162,74,.30); }
+  a.back:hover{ color:var(--accent); border-color:rgba(216,162,74,.6); background:rgba(12,8,5,.75); }
+  a.sib{ right:16px; color:#e0c088; border:1px solid rgba(216,162,74,.26); }
+  a.sib:hover{ color:#f4dca0; border-color:rgba(216,162,74,.6); }
+  /* the title + the step ramp */
+  #title{ position:fixed; left:18px; top:52px; z-index:8; max-width:300px; pointer-events:none;
+    font:11px ui-monospace,Menlo,monospace; letter-spacing:.04em; opacity:.78; line-height:1.6; }
+  #title b{ color:var(--accent); font-weight:600; letter-spacing:.15em; font-size:12px; }
+  #title span{ color:#b6a893; }
+  #ramp{ position:fixed; left:50%; top:26px; transform:translateX(-50%); z-index:8;
+    font:13px ui-monospace,Menlo,monospace; letter-spacing:.16em; text-align:center;
+    color:var(--accent); text-shadow:0 0 20px rgba(216,162,74,.5); pointer-events:none;
+    white-space:nowrap; transition:opacity .3s; }
+  #ramp small{ display:block; margin-top:5px; font-size:10px; letter-spacing:.1em; color:#cdb98a; opacity:.8; }
+  /* the workbench panel: device picker + wax swatches + press */
+  #bench{ position:fixed; right:16px; top:56px; z-index:9; width:222px;
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:12px 13px 13px; box-shadow:0 10px 40px rgba(0,0,0,.5);
+    font:11px ui-monospace,Menlo,monospace; color:var(--ink-dim); max-height:calc(100vh - 180px);
+    overflow-y:auto; overflow-x:hidden; }
+  #bench h4{ margin:2px 0 8px; color:#efe4c8; font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; }
+  #bench .lbl{ margin:11px 0 6px; color:#9a8a72; font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; }
+  #devwrap{ display:grid; grid-template-columns:repeat(5,1fr); gap:5px; }
+  .dev{ aspect-ratio:1; min-width:0; border-radius:7px; border:1px solid rgba(216,162,74,.18);
+    background:rgba(60,42,26,.5); cursor:pointer; display:flex; align-items:center; justify-content:center;
+    padding:4px; transition:border-color .15s, background .15s, transform .12s; }
+  .dev:hover{ border-color:rgba(216,162,74,.6); transform:translateY(-1px); }
+  .dev.sel{ border-color:var(--accent); background:rgba(120,80,40,.55); box-shadow:0 0 0 1px rgba(216,162,74,.4) inset; }
+  .dev img{ width:100%; height:100%; object-fit:contain; opacity:.9; filter:drop-shadow(0 0 3px rgba(216,162,74,.15)); }
+  .dev.carve{ font-size:9px; color:#d8b98a; letter-spacing:.06em; text-align:center; }
+  #waxwrap{ display:flex; gap:6px; flex-wrap:wrap; }
+  .swatch{ width:22px; height:22px; border-radius:50%; cursor:pointer; border:2px solid transparent;
+    transition:transform .12s, border-color .15s; box-shadow:0 1px 3px rgba(0,0,0,.5); }
+  .swatch:hover{ transform:scale(1.12); }
+  .swatch.sel{ border-color:#f4dca0; }
+  #benchbtns{ display:flex; gap:7px; margin-top:13px; }
+  button.act{ flex:1; font:11px ui-monospace,Menlo,monospace; letter-spacing:.04em; cursor:pointer;
+    padding:8px 6px; border-radius:8px; border:1px solid rgba(216,162,74,.3);
+    background:linear-gradient(180deg, rgba(70,48,28,.9), rgba(40,26,14,.9)); color:#eed7a8;
+    transition:border-color .15s, background .15s, transform .1s; }
+  button.act:hover{ border-color:var(--accent); background:linear-gradient(180deg, rgba(96,64,34,.95), rgba(52,32,16,.95)); }
+  button.act:active{ transform:translateY(1px); }
+  button.act.ghost{ background:rgba(30,20,12,.7); color:#c7b491; }
+  /* the ribbon cord along the floor */
+  #ribbonwrap{ position:fixed; left:0; right:0; bottom:0; z-index:8; height:96px;
+    background:linear-gradient(0deg, rgba(10,6,4,.86), rgba(10,6,4,0));
+    pointer-events:none; }
+  #ribbon{ position:absolute; left:0; right:0; bottom:20px; height:60px; display:flex;
+    align-items:center; gap:2px; padding:0 18px; overflow-x:auto; overflow-y:hidden;
+    pointer-events:auto; scrollbar-width:thin; }
+  #ribbon::before{ content:''; position:absolute; left:0; right:0; top:50%; height:3px;
+    background:linear-gradient(90deg, rgba(120,80,40,0), rgba(160,110,60,.6) 8%, rgba(160,110,60,.6) 92%, rgba(120,80,40,0));
+    box-shadow:0 1px 4px rgba(0,0,0,.5); z-index:0; }
+  .seal{ position:relative; z-index:1; flex:0 0 auto; width:46px; height:46px; border-radius:50%;
+    cursor:default; transition:transform .2s; }
+  .seal:hover{ transform:translateY(-3px) scale(1.06); }
+  .seal canvas{ width:100%; height:100%; border-radius:50%; display:block;
+    filter:drop-shadow(0 3px 5px rgba(0,0,0,.55)); }
+  .seal.fresh{ animation:hang .7s cubic-bezier(.34,1.3,.5,1); }
+  @keyframes hang{ 0%{ transform:translateY(-60px) scale(.6); opacity:0; } 100%{ transform:translateY(0) scale(1); opacity:1; } }
+  #ribbonlbl{ position:absolute; left:18px; bottom:78px; font:9.5px ui-monospace,Menlo,monospace;
+    letter-spacing:.16em; text-transform:uppercase; color:#8a7458; opacity:.7; pointer-events:none; }
+  #ribbonempty{ position:absolute; left:50%; bottom:38px; transform:translateX(-50%);
+    font:11px ui-monospace,Menlo,monospace; color:#7a684f; opacity:.6; letter-spacing:.06em; pointer-events:none; }
+  /* the payoff-liveness chip */
+  #chip{ position:fixed; right:16px; bottom:106px; z-index:9; cursor:pointer;
+    font:10.5px ui-monospace,Menlo,monospace; letter-spacing:.04em; padding:5px 10px; border-radius:999px;
+    background:rgba(12,8,5,.7); border:1px solid rgba(216,162,74,.24); color:#c3ac80; opacity:.72;
+    transition:opacity .2s; user-select:none; }
+  #chip:hover{ opacity:1; }
+  #chip.ok{ border-color:rgba(120,210,150,.44); color:#9fe3b0; }
+  #chip.bad{ border-color:rgba(230,120,120,.55); color:#f0a0a0; opacity:.95; }
+  #chip .led{ display:inline-block; width:7px; height:7px; border-radius:50%; vertical-align:middle;
+    margin-right:6px; background:#5fd08a; box-shadow:0 0 8px #5fd08a; }
+  #chip.bad .led{ background:#e06a6a; box-shadow:0 0 8px #e06a6a; }
+  #cpanel{ position:fixed; right:16px; bottom:140px; z-index:10; display:none; max-width:342px;
+    font:11px ui-monospace,Menlo,monospace; line-height:1.5; color:#c7b597;
+    background:rgba(14,9,6,.96); border:1px solid rgba(216,162,74,.22); border-radius:10px; padding:11px 13px; }
+  #cpanel.open{ display:block; }
+  #cpanel h4{ margin:0 0 8px; color:#efe4c8; font-size:11px; letter-spacing:.03em; }
+  #cpanel .row{ display:flex; gap:8px; padding:3px 0; border-top:1px solid rgba(216,162,74,.08); }
+  #cpanel .row:first-of-type{ border-top:0; }
+  #cpanel .m{ color:#7fdda0; } #cpanel .row.f .m{ color:#e88; }
+  /* air chip slot + mute */
+  #air-slot{ position:fixed; left:16px; bottom:106px; z-index:9; display:flex; align-items:center; }
+  #mute{ position:fixed; left:16px; bottom:140px; z-index:9; cursor:pointer;
+    font:10.5px ui-monospace,Menlo,monospace; letter-spacing:.05em; padding:5px 10px; border-radius:999px;
+    background:rgba(12,8,5,.6); border:1px solid rgba(216,162,74,.2); color:#9a8a72; opacity:.55;
+    transition:opacity .2s; user-select:none; }
+  #mute:hover{ opacity:.9; }
+  /* hand-carve modal */
+  #carveModal{ position:fixed; inset:0; z-index:20; display:none; align-items:center; justify-content:center;
+    background:rgba(6,4,3,.78); backdrop-filter:blur(3px); }
+  #carveModal.open{ display:flex; }
+  #carveBox{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 18px;
+    text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.6); }
+  #carveBox h3{ margin:0 0 4px; color:#efe4c8; font:13px ui-serif,Georgia,serif; letter-spacing:.06em; }
+  #carveBox p{ margin:0 0 12px; color:#a8967c; font:10.5px ui-monospace,Menlo,monospace; letter-spacing:.04em; }
+  #carveCanvas{ background:#1a120c; border-radius:8px; cursor:crosshair; touch-action:none;
+    image-rendering:pixelated; border:1px solid rgba(216,162,74,.2); }
+  #carveBtns{ display:flex; gap:8px; margin-top:12px; justify-content:center; }
+  @media (max-width:720px){
+    /* Dock the panel above the bottom chip strip so its buttons stay tappable
+       (the fixed self-test chip must not overlay Press&hold / Pour) and it never
+       clips Scrape clean; lift the self-test chip to its own row opposite #mute so
+       the two bottom chips no longer overlap in the middle. */
+    #bench{ width:190px; top:auto; bottom:172px; right:10px; max-height:calc(100vh - 232px); }
+    #title{ max-width:200px; font-size:10px; }
+    #ramp{ font-size:11px; }
+    #chip{ bottom:140px; }
+    #cpanel{ bottom:174px; right:10px; }
+  }
+  @media (max-height:640px){ #title{ display:none; } }
+</style>
+
+<canvas id="pool"></canvas>
+<a class="back" href="../index.html" title="back to the Compositor — the type-press wing">&larr; The Compositor</a>
+<a class="sib" href="../the-cento-press/index.html" title="through to the Cento Press, the shop's other bench">The Cento Press &rarr;</a>
+
+<div id="title"><b>THE SEALING-WAX BENCH</b><br><span>Pour a pool of molten wax; press a
+  signet; peel it away and watch it cool from gloss to matte, molten to hard. Keep the mark —
+  it hangs on the cord. An intaglio die, cut INTO the metal, presses a relief RAISED where the
+  die is sunk.</span></div>
+
+<div id="ramp">drag across the desk to pour the wax<small>thicker where you linger</small></div>
+
+<div id="bench">
+  <h4>The signet</h4>
+  <div id="devwrap"></div>
+  <div class="lbl">The wax</div>
+  <div id="waxwrap"></div>
+  <div id="benchbtns">
+    <button class="act" id="pressBtn" title="press &amp; hold — or press and hold on the desk">Press &amp; hold</button>
+    <button class="act ghost" id="pourBtn" title="pour a full even pool">Pour</button>
+  </div>
+  <div id="benchbtns" style="margin-top:7px">
+    <button class="act ghost" id="resetBtn" title="scrape the desk clean">Scrape clean</button>
+  </div>
+</div>
+
+<div id="ribbonwrap">
+  <div id="ribbonlbl">the cord — seals you have kept</div>
+  <div id="ribbon"></div>
+  <div id="ribbonempty">no seals yet — pour, press, peel, and the first will hang here</div>
+</div>
+
+<div id="chip"><span class="led"></span><span id="chipT">payoff …</span></div>
+<div id="cpanel"></div>
+<span id="air-slot"></span>
+<div id="mute" title="the shared estate mute — stills the bench's foley and the air">◐ sound</div>
+
+<div id="carveModal"><div id="carveBox">
+  <h3>Carve your own die</h3>
+  <p>paint the cavity — where you cut, the wax rises</p>
+  <canvas id="carveCanvas" width="320" height="320"></canvas>
+  <div id="carveBtns">
+    <button class="act" id="carveUse">Cut this die</button>
+    <button class="act ghost" id="carveClear">Clear</button>
+    <button class="act ghost" id="carveCancel">Back</button>
+  </div>
+</div></div>
+
+<script>
+"use strict";
+/* ===== the pure deterministic core, inlined byte-for-byte between the sentinels ===== */
+<!-- forge:include ./seal-core.mjs -->
+
+/* ===== the Blazon device-kit (browser-only mask maker; never imports the core) ===== */
+<!-- forge:include ./device-kit.js -->
+
+/* ===== the estate's air (calendar + tree-art + the air widget) ===== */
+<!-- forge:include ../../tools/calendar/calendar.js -->
+<!-- forge:include ../../tools/calendar/tree-art.js -->
+<!-- forge:include ../../tools/calendar/air.js -->
+
+/* ===== estate citizenship: the shared mute ===== */
+<!-- forge:include ../../tools/ws/ws.js -->
+
+/* ============================ THE BENCH / DRIVER ============================ */
+const N = SEAL_N;                 // the shared footprint (pool grid == die grid)
+const cv = document.getElementById('pool'), ctx = cv.getContext('2d');
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let muted = false; try{ muted = localStorage.getItem('ws:pref:muted')==='1'; }catch(e){}
+
+/* --- tuning (from the design's block) --- */
+const VISC=0.18, TENSION=0.5, DEPOSIT=0.9, SQUISH_T=0.16;
+const WOB_F=8, RELIEF=3.2;                         /* SSS_GAIN comes from the inlined core */
+const DIE_H=0.62, FACE_HI=2.4, FACE_LO=0.34;      // die-relief height + press descent
+const SPECCOL=[255,242,216], KEYCOL=[255,211,154];
+const KEY=[-0.42,-0.5,0.76];                       // upper-left key light dir
+(function(n){ const m=Math.hypot(n[0],n[1],n[2]); n[0]/=m;n[1]/=m;n[2]/=m; })(KEY);
+
+/* --- the wax field + working buffers --- */
+const H = new Float32Array(N*N);       // wax height
+let   tmp = new Float32Array(N*N);
+const img = ctx.createImageData(N, N); // the field is shaded at native res, scaled up
+const fieldCanvas = document.createElement('canvas'); fieldCanvas.width=N; fieldCanvas.height=N;
+const fctx = fieldCanvas.getContext('2d');
+
+/* --- the current die (a {N,data} depth field) + provenance --- */
+let curMatrix = 'roundel', curSeed = (Math.random()*1e9)|0;
+let curWax = '#8b1a1a';
+let dieObj = null;                       // {N,data} intaglio field for the live press
+
+/* --- the estate wax palette (burgundy family, candlelit) --- */
+const WAXES = [
+  { c:'#8b1a1a', name:'burgundy' }, { c:'#6e1f22', name:'oxblood' },
+  { c:'#a3222b', name:'vermilion' }, { c:'#7a1533', name:'imperial' },
+  { c:'#2f5d3a', name:'bottle green' }, { c:'#b8860b', name:'old gold' },
+  { c:'#2a2f52', name:'midnight' }
+];
+function hexRGB(h){ return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)]; }
+
+/* --- state machine: pour → press → cool → set --- */
+let phase = 'pour';            // pour | press | cool | set
+let pouring = false;
+let pressAmt = 0;              // 0..1 over-damped
+let pressHeld = false;
+let peelT0 = 0, peelSpeed = 1, coolM = 1, wobEnv = 0;
+let autoStamp = 0;            // >0 drives a programmatic stamp (verification + Pour+press)
+
+/* ========================= 1 · POUR (the drip) ========================= */
+// deposit a gaussian of mass at field coords (fx,fy); thicker where the pointer lingers.
+function pourAt(fx, fy, strength){
+  const sig = N*0.075, s2 = 2*sig*sig, rad = (sig*2.6)|0;
+  const cx = fx|0, cy = fy|0;
+  for(let dy=-rad; dy<=rad; dy++){
+    const y=cy+dy; if(y<0||y>=N) continue;
+    for(let dx=-rad; dx<=rad; dx++){
+      const x=cx+dx; if(x<0||x>=N) continue;
+      const nx=(x/(N-1))*2-1, ny=(y/(N-1))*2-1;
+      if(nx*nx+ny*ny > 1.24) continue;      // keep the pour on the disc/desk
+      H[y*N+x] += DEPOSIT*strength*Math.exp(-(dx*dx+dy*dy)/s2);
+    }
+  }
+}
+function pourPool(){                          // an even full pool (the Pour button / auto-stamp)
+  for(let y=0;y<N;y++) for(let x=0;x<N;x++){
+    const nx=(x/(N-1))*2-1, ny=(y/(N-1))*2-1, r=Math.hypot(nx,ny);
+    if(r<0.94) H[y*N+x] = Math.max(H[y*N+x], 1.15*(1-0.18*r) + 0.05*Math.sin(x*0.3)*Math.cos(y*0.27));
+  }
+}
+
+/* viscous height-field spread (VISC·M laplacian) + a TENSION unsharp counter-term
+   for a proud rounded meniscus. Mass-conserving (laplacian is a discrete divergence;
+   the unsharp term sums to ~0). Only the molten wax flows. */
+function spread(M, dt){
+  if(M<=0.001) return;
+  const amt = Math.min(0.22, VISC*M*dt*60);
+  // one diffusion pass into tmp
+  for(let y=0;y<N;y++) for(let x=0;x<N;x++){
+    const i=y*N+x;
+    const l=H[x>0?i-1:i], r=H[x<N-1?i+1:i], u=H[y>0?i-N:i], d=H[y<N-1?i+N:i];
+    const lap = l+r+u+d - 4*H[i];
+    // unsharp counter-term: re-adds curvature the diffusion removes → a domed bead
+    tmp[i] = H[i] + amt*lap*(1 - TENSION*0.6);
+  }
+  const sw=H.slice? null:null; // (no-op; keep buffers)
+  H.set(tmp);
+}
+
+/* ========================= 2 · PRESS (the squish) ========================= */
+// ease pressAmt toward its target with an over-damped response (squish, not snap),
+// then force H to conform to the die: cap = faceLevel + DIE_H·die, bank the excess
+// and push it out as a flash ring. At full press H equals the die's INVERSE.
+function applyPress(dt){
+  const target = pressHeld ? 1 : pressAmt;   // holds where released (setting wax keeps shape)
+  pressAmt += (target - pressAmt) * (1 - Math.exp(-dt/SQUISH_T));
+  if(pressAmt < 0.002 || !dieObj) return;
+  const faceLevel = FACE_HI + (FACE_LO - FACE_HI)*pressAmt;
+  let bank = 0;
+  const D = dieObj.data;
+  for(let y=0;y<N;y++) for(let x=0;x<N;x++){
+    const i=y*N+x;
+    const nx=(x/(N-1))*2-1, ny=(y/(N-1))*2-1;
+    if(nx*nx+ny*ny > 0.985*0.985) continue;    // only under the die footprint
+    const cap = faceLevel + DIE_H*RELIEF_N(D[i]);
+    if(H[i] > cap){ bank += H[i]-cap; H[i] = cap; }
+  }
+  // flash ring: bank the displaced wax into an annulus just outside the seal disc
+  if(bank>0){
+    let ring=[];
+    for(let y=0;y<N;y++) for(let x=0;x<N;x++){
+      const nx=(x/(N-1))*2-1, ny=(y/(N-1))*2-1, r=Math.hypot(nx,ny);
+      if(r>=0.965 && r<1.12) ring.push(y*N+x);
+    }
+    if(ring.length){ const add = bank/ring.length; for(const i of ring) H[i]+=add*0.8; }
+  }
+}
+function RELIEF_N(d){ return d; }             // die.data already in [0,CARVE]; DIE_H scales it
+
+/* ========================= 3 · PEEL + COOL ========================= */
+function peel(){
+  if(phase!=='press') return;
+  phase='cool'; peelT0=performance.now();
+  peelSpeed = reduced ? 0.35 : 1.0;           // (a live peel-speed would scale here)
+  foley('peel');
+}
+
+/* the 3 detuned elastic wobble modes — MULTIPLICATIVE on H so they modulate
+   AMPLITUDE and never touch SUPPORT (a cavity cell stays raised, a face cell flat). */
+function wobbleAt(x, y, t){
+  const nx=(x/(N-1))*2-1, ny=(y/(N-1))*2-1;
+  const m1=Math.sin(nx*WOB_F + t*23.0);
+  const m2=Math.sin(ny*(WOB_F*0.82) - t*19.0);
+  const m3=Math.sin((nx+ny)*(WOB_F*0.6) + t*29.0)*0.7;
+  return (m1+m2+m3)/2.7;
+}
+
+/* ========================= SHADE (the live specular pass) ========================= */
+// recomputes normals (Sobel on the wobble-displaced Hd) EVERY frame → the highlight
+// slides as the wax jiggles, then parks as it stills. Gloss tracks moltenness.
+function render(now){
+  const t = (phase==='cool') ? (now-peelT0)/1000 : 0;
+  const px = img.data;
+  const waxRGB = hexRGB(curWax);
+  const specPow = 90 + (26-90)*coolM;         // sharp molten → broad matte... (mix(90,26,M))
+  const spec = 0.06 + (0.9-0.06)*coolM;
+  const emberK = coolM*SSS_GAIN;
+  const env = wobEnv;
+  // build the displaced height (Hd) once
+  const useWob = env>0.0005 && !reduced;
+  for(let y=0;y<N;y++){
+    for(let x=0;x<N;x++){
+      const i=y*N+x;
+      let h = H[i];
+      if(useWob && h>0.001){ const w=env*wobbleAt(x,y,t); tmp[i]=h*(1+ (w>-0.98?w:-0.98)); }
+      else tmp[i]=h;
+    }
+  }
+  for(let y=0;y<N;y++){
+    for(let x=0;x<N;x++){
+      const i=y*N+x, o=i*4;
+      const h=tmp[i];
+      if(h < 0.02){                            // bare desk
+        px[o]=26; px[o+1]=18; px[o+2]=12; px[o+3]=0; continue;
+      }
+      // Sobel-ish normal from the displaced field
+      const hl=tmp[x>0?i-1:i], hr=tmp[x<N-1?i+1:i], hu=tmp[y>0?i-N:i], hd=tmp[y<N-1?i+N:i];
+      let nx=(hl-hr)*RELIEF, ny=(hu-hd)*RELIEF, nz=1;
+      const nl=1/Math.hypot(nx,ny,nz); nx*=nl; ny*=nl; nz*=nl;
+      const diff = Math.max(0, nx*KEY[0]+ny*KEY[1]+nz*KEY[2]);
+      // half-vector spec (view straight on)
+      const hvx=KEY[0], hvy=KEY[1], hvz=KEY[2]+1, hln=1/Math.hypot(hvx,hvy,hvz);
+      const ndoth=Math.max(0, nx*hvx*hln+ny*hvy*hln+nz*hvz*hln);
+      const sp = spec*Math.pow(ndoth, specPow);
+      // albedo: chosen wax, matured darker/cooler as it sets
+      const shade = 0.24 + 0.72*diff;
+      const cool = 0.55 + 0.45*coolM;          // sets darker
+      let R = waxRGB[0]*shade*cool, G = waxRGB[1]*shade*cool, B = waxRGB[2]*shade*cool;
+      // inner ember while molten (sub-surface warmth in the thick wax)
+      const emb = emberK * Math.min(1, h*0.5);
+      R += emb*120; G += emb*30; B += emb*14;
+      // specular
+      R += sp*SPECCOL[0]; G += sp*SPECCOL[1]; B += sp*SPECCOL[2];
+      px[o]  = R>255?255:R;
+      px[o+1]= G>255?255:G;
+      px[o+2]= B>255?255:B;
+      px[o+3]= 255;
+    }
+  }
+  fctx.putImageData(img, 0, 0);
+  // paint the desk + the scaled-up wax
+  paintDesk();
+  const W=cv.width, Hh=cv.height, side=Math.min(W,Hh)*0.62;
+  const ox=(W-side)/2, oy=(Hh-side)/2 - Hh*0.04;
+  ctx.imageSmoothingEnabled=true;
+  ctx.save();
+  ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur=side*0.03; ctx.shadowOffsetY=side*0.012;
+  ctx.drawImage(fieldCanvas, ox, oy, side, side);
+  ctx.restore();
+}
+function paintDesk(){
+  const W=cv.width, Hh=cv.height;
+  // warm candlelit desk with a soft vignette + a paper sheet under the seal
+  const g=ctx.createRadialGradient(W*0.5, Hh*0.34, Hh*0.04, W*0.5, Hh*0.5, Math.max(W,Hh)*0.7);
+  g.addColorStop(0,'#241a11'); g.addColorStop(0.5,'#160f09'); g.addColorStop(1,'#0a0604');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,Hh);
+  // the letter — a pale sheet the seal sits on
+  const pw=Math.min(W,Hh)*0.5, ph=pw*1.28;
+  ctx.save();
+  ctx.translate(W*0.5, Hh*0.46);
+  ctx.rotate(-0.03);
+  const pg=ctx.createLinearGradient(-pw/2,-ph/2, pw/2, ph/2);
+  pg.addColorStop(0,'#efe3cf'); pg.addColorStop(0.5,'#e6d6bd'); pg.addColorStop(1,'#d8c4a4');
+  ctx.fillStyle=pg; ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=pw*0.05; ctx.shadowOffsetY=pw*0.02;
+  ctx.beginPath(); ctx.rect(-pw/2,-ph/2,pw,ph); ctx.fill();
+  // faint written lines
+  ctx.shadowColor='transparent'; ctx.globalAlpha=0.10; ctx.strokeStyle='#5a4a34'; ctx.lineWidth=1;
+  for(let i=0;i<7;i++){ const yy=-ph*0.34 + i*ph*0.09; ctx.beginPath(); ctx.moveTo(-pw*0.36,yy); ctx.lineTo(pw*(i%3?0.30:0.16),yy); ctx.stroke(); }
+  ctx.restore();
+}
+
+/* ========================= THE DIE — three provenances ========================= */
+// core matrices (analytic), blazon charges (device-kit → mask), hand-carve (mask).
+async function setDie(matrix, seed){
+  curMatrix = matrix; curSeed = seed;
+  dieObj = await deriveDie(matrix, seed);
+  runSelfTest();                    // re-run the inversion on the ACTUAL chosen device
+}
+async function deriveDie(matrix, seed){
+  if(matrix.startsWith('blazon:')){
+    const name = matrix.slice('blazon:'.length);
+    const mask = await DeviceKit.rasterizeToMask(name, N);
+    return dieFromMask(mask, matrix, seed);
+  }
+  if(matrix.startsWith('carve:')){
+    const mask = unpackCarve(matrix.slice('carve:'.length));
+    return dieFromMask(mask, matrix, seed);
+  }
+  return dieField(matrix, seed);    // analytic core matrix
+}
+
+/* ========================= THE FOLEY (hand-made, procedural) ========================= */
+// short one-shots kin to the press's cento-kiss/rustle: a wet pour glug, a low
+// squish, a delicate peel/suck tick, a faint set tick. Unlocked on the first gesture.
+let actx=null, masterGain=null;
+function ensureAudio(){
+  if(actx) return;
+  try{
+    actx = new (window.AudioContext||window.webkitAudioContext)();
+    masterGain = actx.createGain(); masterGain.gain.value = muted?0:0.9; masterGain.connect(actx.destination);
+  }catch(e){ actx=null; }
+}
+function foley(kind){
+  if(!actx || muted) return;
+  const t0=actx.currentTime;
+  if(kind==='pour'){
+    // wet glug: a low resonant blip through a bandpass, a couple of bubbles
+    for(let k=0;k<3;k++){
+      const o=actx.createOscillator(), g=actx.createGain(), bp=actx.createBiquadFilter();
+      bp.type='bandpass'; bp.frequency.value=180+k*90; bp.Q.value=6;
+      o.type='sine'; o.frequency.setValueAtTime(90+k*40, t0+k*0.05);
+      o.frequency.exponentialRampToValueAtTime(150+k*60, t0+k*0.05+0.08);
+      g.gain.setValueAtTime(0, t0+k*0.05); g.gain.linearRampToValueAtTime(0.16, t0+k*0.05+0.01);
+      g.gain.exponentialRampToValueAtTime(0.001, t0+k*0.05+0.13);
+      o.connect(bp); bp.connect(g); g.connect(masterGain); o.start(t0+k*0.05); o.stop(t0+k*0.05+0.16);
+    }
+  } else if(kind==='press'){
+    // low squish: filtered noise swelling and dampening
+    const buf=noiseBuf(0.24), src=actx.createBufferSource(); src.buffer=buf;
+    const lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.setValueAtTime(600,t0);
+    lp.frequency.exponentialRampToValueAtTime(160,t0+0.24);
+    const g=actx.createGain(); g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(0.22,t0+0.05);
+    g.gain.exponentialRampToValueAtTime(0.001,t0+0.24);
+    src.connect(lp); lp.connect(g); g.connect(masterGain); src.start(t0); src.stop(t0+0.26);
+  } else if(kind==='peel'){
+    // a delicate suck/tick: quick upward chirp + a short noise tick
+    const o=actx.createOscillator(), g=actx.createGain();
+    o.type='triangle'; o.frequency.setValueAtTime(420,t0); o.frequency.exponentialRampToValueAtTime(900,t0+0.09);
+    g.gain.setValueAtTime(0.001,t0); g.gain.linearRampToValueAtTime(0.13,t0+0.02); g.gain.exponentialRampToValueAtTime(0.001,t0+0.12);
+    o.connect(g); g.connect(masterGain); o.start(t0); o.stop(t0+0.13);
+    const buf=noiseBuf(0.05), src=actx.createBufferSource(); src.buffer=buf;
+    const hp=actx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=1800;
+    const g2=actx.createGain(); g2.gain.setValueAtTime(0.14,t0); g2.gain.exponentialRampToValueAtTime(0.001,t0+0.05);
+    src.connect(hp); hp.connect(g2); g2.connect(masterGain); src.start(t0); src.stop(t0+0.06);
+  } else if(kind==='set'){
+    // faint tick on full set — a tiny woody click
+    const o=actx.createOscillator(), g=actx.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(1400,t0); o.frequency.exponentialRampToValueAtTime(700,t0+0.03);
+    g.gain.setValueAtTime(0.001,t0); g.gain.linearRampToValueAtTime(0.08,t0+0.005); g.gain.exponentialRampToValueAtTime(0.001,t0+0.05);
+    o.connect(g); g.connect(masterGain); o.start(t0); o.stop(t0+0.06);
+  }
+}
+function noiseBuf(dur){
+  const n=(actx.sampleRate*dur)|0, b=actx.createBuffer(1,n,actx.sampleRate), d=b.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n);
+  return b;
+}
+
+/* ========================= THE RIBBON ========================= */
+const ribbonEl=document.getElementById('ribbon'), ribbonEmpty=document.getElementById('ribbonempty');
+const ribbon = createRibbon({ storage: safeLocalStorage() });
+function safeLocalStorage(){ try{ localStorage.getItem('x'); return localStorage; }catch(e){ return null; } }
+
+function mountRibbon(el, rib){
+  const list=rib.load();
+  el.querySelectorAll('.seal').forEach(n=>n.remove());
+  if(list.length) ribbonEmpty.style.display='none';
+  for(const rec of list) el.appendChild(sealNode(rec, false));
+}
+function appendCooledSeal(rec){
+  ribbonEmpty.style.display='none';
+  const node=sealNode(rec, true);
+  ribbonEl.appendChild(node);
+  ribbonEl.scrollLeft = ribbonEl.scrollWidth;
+}
+function sealNode(rec, fresh){
+  const wrap=document.createElement('div'); wrap.className='seal'+(fresh?' fresh':'');
+  wrap.title = deviceLabel(rec.matrix) + ' · ' + waxName(rec.wax);
+  const c=document.createElement('canvas'); c.width=88; c.height=88; wrap.appendChild(c);
+  // deterministic re-derivation: shade(pressRelief(dieField(matrix,seed),1)) cooled/hard
+  deriveDie(rec.matrix, rec.seed).then(d=>{
+    const rel = pressRelief(d, 1.0);
+    renderMini(c, rel, rec.wax);
+  });
+  return wrap;
+}
+function renderMini(canvas, rel, wax){
+  const n=rel.N, mimg=new ImageData(n,n), mp=mimg.data, wr=hexRGB(wax);
+  for(let y=0;y<n;y++) for(let x=0;x<n;x++){
+    const i=y*n+x, o=i*4, h=rel.data[i]*RELIEF*DIE_H;
+    const nx=(x/(n-1))*2-1, ny=(y/(n-1))*2-1, rr=Math.hypot(nx,ny);
+    if(rr>1.02){ mp[o+3]=0; continue; }
+    const hl=rel.data[x>0?i-1:i], hr=rel.data[x<n-1?i+1:i], hu=rel.data[y>0?i-n:i], hd=rel.data[y<n-1?i+n:i];
+    let Nx=(hl-hr)*RELIEF*DIE_H*40, Ny=(hu-hd)*RELIEF*DIE_H*40, Nz=1;
+    const nl=1/Math.hypot(Nx,Ny,Nz); Nx*=nl;Ny*=nl;Nz*=nl;
+    const diff=Math.max(0, Nx*KEY[0]+Ny*KEY[1]+Nz*KEY[2]);
+    const hvz=KEY[2]+1, hln=1/Math.hypot(KEY[0],KEY[1],hvz);
+    const sp=0.4*Math.pow(Math.max(0,Nx*KEY[0]*hln+Ny*KEY[1]*hln+Nz*hvz*hln),34);
+    const shade=0.26+0.7*diff;
+    let R=wr[0]*shade*0.62, G=wr[1]*shade*0.62, B=wr[2]*shade*0.62;
+    R+=sp*255; G+=sp*242; B+=sp*216;
+    mp[o]=R>255?255:R; mp[o+1]=G>255?255:G; mp[o+2]=B>255?255:B; mp[o+3]=255;
+  }
+  const tc=document.createElement('canvas'); tc.width=n; tc.height=n; tc.getContext('2d').putImageData(mimg,0,0);
+  const cx=canvas.getContext('2d'); cx.clearRect(0,0,canvas.width,canvas.height);
+  cx.imageSmoothingEnabled=true; cx.drawImage(tc,0,0,canvas.width,canvas.height);
+}
+
+/* ========================= HANG on cool-complete ========================= */
+function hangCurrent(){
+  let matrix = curMatrix;
+  if(matrix.startsWith('carve:')){/* already carries its data */}
+  const rec={ id:'s'+Date.now().toString(36)+((Math.random()*1e4)|0).toString(36),
+              matrix, wax:curWax, seed:curSeed, v:1 };
+  ribbon.hang(rec);
+  appendCooledSeal(rec);
+  foley('set');
+}
+
+/* ========================= THE FRAME LOOP ========================= */
+let last=performance.now();
+function frame(now){
+  const dt=Math.min(0.05, (now-last)/1000); last=now;
+  fitCanvas();
+  // auto-stamp driver (Pour button-driven or programmatic verification path)
+  if(autoStamp>0){
+    if(autoStamp===2){ pourPool(); phase='press'; pressHeld=true; autoStamp=1; }
+    else if(autoStamp===1 && pressAmt>0.97){ pressHeld=false; peel(); autoStamp=0; }
+  }
+  if(phase==='pour'){ coolM=1; wobEnv=0; spread(1, dt); }
+  else if(phase==='press'){ coolM=1; wobEnv=0; applyPress(dt); spread(0.4, dt); }
+  else if(phase==='cool'){
+    const t=(now-peelT0)/1000, c=coolAt(t);
+    coolM=c.M; wobEnv=c.wobbleAmp*peelSpeed*4.2; spread(c.M, dt);
+    if(!c.molten){ phase='set'; coolM=Math.max(0,c.M); hangCurrent(); }
+    updateRamp();
+  }
+  else if(phase==='set'){ coolM=0; wobEnv*=Math.pow(0.001, dt); if(wobEnv<0.0005) wobEnv=0; }
+  render(now);
+  requestAnimationFrame(frame);
+}
+function fitCanvas(){
+  const w=Math.round(innerWidth*devicePixelRatio), h=Math.round(innerHeight*devicePixelRatio);
+  if(cv.width!==w||cv.height!==h){ cv.width=w; cv.height=h; }
+}
+
+/* ========================= INTERACTION ========================= */
+function toField(ev){
+  const r=cv.getBoundingClientRect();
+  const W=cv.width, Hh=cv.height, side=Math.min(W,Hh)*0.62;
+  const ox=(W-side)/2, oy=(Hh-side)/2 - Hh*0.04;
+  const cx=(ev.clientX-r.left)*devicePixelRatio, cy=(ev.clientY-r.top)*devicePixelRatio;
+  return { fx:(cx-ox)/side*N, fy:(cy-oy)/side*N, on:(cx>=ox&&cx<ox+side&&cy>=oy&&cy<oy+side) };
+}
+let downP=null;
+cv.addEventListener('pointerdown', e=>{
+  ensureAudio(); if(actx&&actx.state==='suspended') actx.resume();
+  cv.setPointerCapture(e.pointerId);
+  const p=toField(e); downP=p;
+  if(phase==='pour'){ pouring=true; pourAt(p.fx,p.fy,1); foley('pour'); lastPour=performance.now(); }
+  else if(phase==='press'||haveWax()){ startPress(); }
+});
+let lastPour=0;
+cv.addEventListener('pointermove', e=>{
+  if(!downP) return; const p=toField(e);
+  if(pouring){ pourAt(p.fx,p.fy,0.6); const nowp=performance.now(); if(nowp-lastPour>90){ foley('pour'); lastPour=nowp; } }
+});
+addEventListener('pointerup', e=>{
+  if(pouring){ pouring=false; }
+  if(phase==='press' && pressHeld){ pressHeld=false; peel(); }
+  downP=null;
+});
+function haveWax(){ let s=0; for(let i=0;i<H.length;i+=97) s+=H[i]; return s>2; }
+function startPress(){
+  if(!haveWax()){ flashRamp('pour some wax first'); return; }
+  if(phase==='cool'||phase==='set'){ resetPad(); pourKeep(); }
+  ensureAudio(); if(actx&&actx.state==='suspended') actx.resume();
+  phase='press'; pressHeld=true; foley('press');
+}
+
+/* ========================= THE RAMP (the guiding prompt) ========================= */
+const rampEl=document.getElementById('ramp');
+const RAMPS={
+  pour:['drag across the desk to pour the wax','thicker where you linger'],
+  press:['press &amp; hold — sink the signet','the flat face pushes the wax down; it flows up into the cut device'],
+  cool:['lift… now watch it cool','it wobbles, then stills — gloss to matte, molten to hard'],
+  set:['sealed — it hangs on the cord','pour again for the next']
+};
+function updateRamp(){
+  const r=RAMPS[phase]||RAMPS.pour;
+  rampEl.innerHTML=r[0]+'<small>'+r[1]+'</small>';
+}
+let flashTimer=0;
+function flashRamp(msg){ rampEl.innerHTML=msg+'<small>&nbsp;</small>'; clearTimeout(flashTimer); flashTimer=setTimeout(updateRamp, 1400); }
+
+/* ========================= RESET ========================= */
+function resetPad(){ H.fill(0); tmp.fill(0); pressAmt=0; wobEnv=0; coolM=1; phase='pour'; pouring=false; pressHeld=false; updateRamp(); }
+function pourKeep(){}                     // (hook if we ever want to keep the pool between stamps)
+
+/* ========================= THE SELF-TEST CHIP (in-page) =========================
+ * Claim-free — no theorem. On every real press (and on each device change) run the
+ * INVERSION invariant (a) on the visitor's ACTUAL die and green the chip: the
+ * payoff fires visibly, in-house, on the exact device chosen. Same checks the Node
+ * twin runs against seal-core — here, live, on the live die. */
+function runSelfTest(){
+  const cks=[]; const ck=(n,ok)=>cks.push({n,ok});
+  const d=dieObj; if(!d){ paintChip({ok:false,pass:0,total:1,cks:[{n:'no die yet',ok:false}]}); return; }
+  const rel=pressRelief(d,1.0);
+  let mismatch=0,sunk=0,face=0;
+  for(let i=0;i<d.data.length;i++){ const a=d.data[i]>0,b=rel.data[i]>0; if(a!==b)mismatch++; if(a)sunk++; else face++; }
+  ck('press inverts: relief>0 ⟺ die>0 cell-for-cell', mismatch===0 && sunk>50 && face>50);
+  // deepest die cell ⇒ highest relief
+  let di=0,dm=d.data[0]; for(let i=1;i<d.data.length;i++) if(d.data[i]>dm){dm=d.data[i];di=i;}
+  let rm=rel.data[0]; for(let i=1;i<rel.data.length;i++) if(rel.data[i]>rm)rm=rel.data[i];
+  ck('deepest die cell yields the highest relief', rel.data[di]>0 && Math.abs(rel.data[di]-rm)<1e-9);
+  // monotone in press depth
+  const m03=maxRel(pressRelief(d,0.3)), m10=maxRel(pressRelief(d,1.0));
+  ck('relief grows with the press (monotone in p)', m03>0 && m10>0 && m03<m10);
+  // support IoU
+  let inter=0,uni=0; for(let i=0;i<d.data.length;i++){ const a=d.data[i]>0,b=rel.data[i]>0; if(a||b)uni++; if(a&&b)inter++; }
+  ck('support IoU(relief@1, die) > 0.999', uni>0 && inter/uni>0.999);
+  const pass=cks.filter(c=>c.ok).length;
+  paintChip({ok:pass===cks.length, pass, total:cks.length, cks});
+}
+function maxRel(r){ let m=r.data[0]; for(let i=1;i<r.data.length;i++) if(r.data[i]>m)m=r.data[i]; return m; }
+const chip=document.getElementById('chip'), chipT=document.getElementById('chipT'), cpanel=document.getElementById('cpanel');
+function paintChip(lv){
+  chipT.textContent = lv.ok ? `the seal inverts · ${lv.pass}/${lv.total}` : `payoff ${lv.pass}/${lv.total}`;
+  chip.classList.remove('ok','bad'); chip.classList.add(lv.ok?'ok':'bad');
+  cpanel.innerHTML='<h4>payoff-liveness — claim-free, but the mark must FIRE</h4>'+
+    lv.cks.map(c=>`<div class="row ${c.ok?'':'f'}"><span class="m">${c.ok?'✓':'✕'}</span><span>${c.n}</span></div>`).join('')+
+    `<div style="margin-top:8px;opacity:.6">run live on <b>${deviceLabel(curMatrix)}</b> · the intaglio die → a relief raised where it is sunk · the Node twin proves it headless</div>`;
+}
+chip.addEventListener('click', ()=>cpanel.classList.toggle('open'));
+
+/* ========================= HAND-CARVE ========================= */
+const CN=40;                               // the carve grid
+let carveGrid=new Float32Array(CN*CN);
+const carveModal=document.getElementById('carveModal'), carveCanvas=document.getElementById('carveCanvas');
+const cctx=carveCanvas.getContext('2d');
+let carving=false;
+function openCarve(){ carveGrid.fill(0); drawCarve(); carveModal.classList.add('open'); }
+function drawCarve(){
+  const s=carveCanvas.width/CN;
+  cctx.fillStyle='#1a120c'; cctx.fillRect(0,0,carveCanvas.width,carveCanvas.height);
+  for(let y=0;y<CN;y++) for(let x=0;x<CN;x++){
+    const v=carveGrid[y*CN+x]; if(v>0){ cctx.fillStyle=`rgba(216,162,74,${0.25+0.6*v})`; cctx.fillRect(x*s,y*s,s,s); }
+  }
+  // circular seal boundary guide
+  cctx.strokeStyle='rgba(216,162,74,0.25)'; cctx.lineWidth=1; cctx.beginPath();
+  cctx.arc(carveCanvas.width/2, carveCanvas.height/2, carveCanvas.width*0.47, 0, 7); cctx.stroke();
+}
+function carveAt(ev){
+  const r=carveCanvas.getBoundingClientRect(), s=carveCanvas.width/CN;
+  const gx=((ev.clientX-r.left)/r.width*CN)|0, gy=((ev.clientY-r.top)/r.height*CN)|0;
+  for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+    const x=gx+dx,y=gy+dy; if(x<0||y<0||x>=CN||y>=CN) continue;
+    const w=(dx===0&&dy===0)?1:0.5; carveGrid[y*CN+x]=Math.min(1,carveGrid[y*CN+x]+w);
+  }
+  drawCarve();
+}
+carveCanvas.addEventListener('pointerdown', e=>{ carving=true; carveAt(e); });
+carveCanvas.addEventListener('pointermove', e=>{ if(carving) carveAt(e); });
+addEventListener('pointerup', ()=>{ carving=false; });
+document.getElementById('carveClear').addEventListener('click', ()=>{ carveGrid.fill(0); drawCarve(); });
+document.getElementById('carveCancel').addEventListener('click', ()=>carveModal.classList.remove('open'));
+document.getElementById('carveUse').addEventListener('click', ()=>{
+  const matrix='carve:'+packCarve(carveGrid);
+  carveModal.classList.remove('open');
+  selectDevice(matrix, /*fromCarve*/true);
+});
+// pack the 40×40 carve grid to a compact 4-bit base64 (so a carve seal round-trips)
+function packCarve(grid){
+  const bytes=new Uint8Array(Math.ceil(CN*CN/2));
+  for(let i=0;i<CN*CN;i++){ const q=Math.round(grid[i]*15)&15; if(i&1) bytes[i>>1]|=q; else bytes[i>>1]=q<<4; }
+  let s=''; for(let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+function unpackCarve(b64){
+  const data=new Float32Array(CN*CN);
+  try{
+    const s=atob(b64);
+    for(let i=0;i<CN*CN;i++){ const byte=s.charCodeAt(i>>1)||0; const q=(i&1)?(byte&15):(byte>>4); data[i]=q/15; }
+  }catch(e){}
+  return { N:CN, data };
+}
+
+/* ========================= THE PICKER (build the menus) ========================= */
+const devwrap=document.getElementById('devwrap'), waxwrap=document.getElementById('waxwrap');
+// core analytic matrices (the estate's own primitives)
+const CORE_MATRICES=[
+  {id:'roundel',label:'Roundel (analytic)'}, {id:'cross',label:'Cross'},
+  {id:'saltire',label:'Saltire'}, {id:'lozenge',label:'Lozenge'},
+  {id:'chevron',label:'Chevron'}, {id:'mullet',label:'Mullet'}, {id:'star',label:'Sixfoil star'}
+];
+let deviceLabelMap={};
+function deviceLabel(m){ return deviceLabelMap[m] || (m.startsWith('carve:')?'your hand-carved die':m); }
+function selectDevice(matrix, fromCarve){
+  document.querySelectorAll('.dev').forEach(n=>n.classList.remove('sel'));
+  if(!fromCarve){ const el=document.querySelector('.dev[data-m="'+CSS.escape(matrix)+'"]'); if(el) el.classList.add('sel'); }
+  else { const cb=document.getElementById('carveDev'); if(cb) cb.classList.add('sel'); }
+  const seed=(Math.random()*1e9)|0;
+  setDie(matrix, seed);
+}
+function buildDevices(){
+  // core matrices — draw a tiny analytic thumb
+  for(const m of CORE_MATRICES){
+    deviceLabelMap[m.id]=m.label;
+    const b=document.createElement('div'); b.className='dev'; b.dataset.m=m.id; b.title=m.label;
+    b.appendChild(coreThumb(m.id));
+    b.addEventListener('click', ()=>selectDevice(m.id));
+    devwrap.appendChild(b);
+  }
+  // blazon charges
+  for(const d of DeviceKit.DEVICES){
+    deviceLabelMap[d.id]=d.label+' (Blazon)';
+    const b=document.createElement('div'); b.className='dev'; b.dataset.m=d.id; b.title=d.label+' — from Blazon';
+    const im=document.createElement('img'); im.src=DeviceKit.thumbURI(d.name); im.alt=d.label; b.appendChild(im);
+    b.addEventListener('click', ()=>selectDevice(d.id));
+    devwrap.appendChild(b);
+  }
+  // hand-carve entry
+  const cb=document.createElement('div'); cb.className='dev carve'; cb.id='carveDev'; cb.title='carve your own die';
+  cb.textContent='✎ carve'; cb.addEventListener('click', openCarve); devwrap.appendChild(cb);
+}
+function coreThumb(id){
+  const c=document.createElement('canvas'); c.width=40; c.height=40; const x=c.getContext('2d');
+  const d=dieField(id, 1); const s=d.N/40;
+  x.fillStyle='#c98';
+  for(let yy=0;yy<40;yy++) for(let xx=0;xx<40;xx++){
+    const v=d.at((xx*s)|0,(yy*s)|0); if(v>0.02){ x.globalAlpha=0.4+0.6*Math.min(1,v/0.85); x.fillRect(xx,yy,1,1); }
+  }
+  x.globalAlpha=1; return c;
+}
+function buildWaxes(){
+  for(const w of WAXES){
+    const s=document.createElement('div'); s.className='swatch'+(w.c===curWax?' sel':'');
+    s.style.background=w.c; s.title=w.name; s.dataset.c=w.c;
+    s.addEventListener('click', ()=>{ curWax=w.c; document.querySelectorAll('.swatch').forEach(n=>n.classList.remove('sel')); s.classList.add('sel'); });
+    waxwrap.appendChild(s);
+  }
+}
+function waxName(c){ const w=WAXES.find(w=>w.c===c); return w?w.name+' wax':'wax'; }
+
+/* ========================= WIRE THE BENCH BUTTONS ========================= */
+document.getElementById('pressBtn').addEventListener('mousedown', ()=>{ startPress(); });
+document.getElementById('pressBtn').addEventListener('mouseup', ()=>{ if(phase==='press'&&pressHeld){ pressHeld=false; peel(); } });
+document.getElementById('pressBtn').addEventListener('mouseleave', ()=>{ if(phase==='press'&&pressHeld){ pressHeld=false; peel(); } });
+document.getElementById('pourBtn').addEventListener('click', ()=>{ ensureAudio(); if(actx&&actx.state==='suspended')actx.resume(); if(phase==='cool'||phase==='set') resetPad(); pourPool(); foley('pour'); });
+document.getElementById('resetBtn').addEventListener('click', resetPad);
+
+/* ========================= AIR + MUTE ========================= */
+try{ if(typeof Air!=='undefined' && Air.mount) Air.mount(document.getElementById('air-slot'), { almanacHref:'../../hours/almanac.html' }); }catch(e){}
+const muteEl=document.getElementById('mute');
+try{ muted=(typeof WS!=='undefined'&&WS.muted)?WS.muted():muted; }catch(e){}
+function paintMute(){ muteEl.textContent = muted?'◐ muted':'◐ sound'; muteEl.style.opacity=muted?0.85:0.55; if(masterGain) masterGain.gain.value=muted?0:0.9; }
+paintMute();
+muteEl.addEventListener('click', ()=>{ muted=!muted; try{ if(typeof WS!=='undefined'&&WS.setMuted) WS.setMuted(muted); else localStorage.setItem('ws:pref:muted',muted?'1':'0'); }catch(e){} paintMute(); });
+try{ if(typeof WS!=='undefined'&&WS.onMuteChange) WS.onMuteChange(v=>{ muted=v; paintMute(); }); }catch(e){}
+
+/* ========================= BOOT ========================= */
+buildDevices(); buildWaxes();
+selectDevice('roundel');
+mountRibbon(ribbonEl, ribbon);
+updateRamp();
+requestAnimationFrame(frame);
+
+// a debug/verification handle — lets a headless verifier stamp a seal without a
+// canvas pointer event (pour a pool → press to full → peel), and re-run the live
+// self-test. NOT the payoff proof (that's the Node twin) — a convenience.
+try{ window.__seal = {
+  stampSeal:()=>{ ensureAudio(); resetPad(); autoStamp=2; },
+  pourPool, resetPad, runSelfTest, ribbon,
+  state:()=>({phase, coolM, pressAmt, wobEnv, curMatrix, curWax, seals:ribbon.load().length}),
+  setDie
+}; }catch(e){}
+</script>
