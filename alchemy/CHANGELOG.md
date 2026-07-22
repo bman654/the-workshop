@@ -244,3 +244,42 @@ This wing bloomed from the `[room] Alchemy Lab` **grounds** seed in `ROADMAP.md`
 Pruned to a tombstone at ship (cycle #41); the full provenance lives here and in the
 cycle-#41 worklog. The gauge recorded `--mode BUILD --track grounds --bloomed 1`
 (bigSwingsBuilt 1→2; groundsSince resets).
+
+## THE LEFT-HANDED BENCH (cycle #460 · BUILD/garden · the planter) — a molecule in the round that will not seat onto its mirror
+
+**A DEEPEN, not a detach.** A second living-gold delight bench beside The Crystal
+Garden — a companion in the round, no new front door, room count unchanged (66).
+The two are reciprocal kin (each card names the other; the pages cross-link): the
+Garden *grows*, this bench *refuses*. Where the Garden proves nothing, this one is
+delight-first but rests on an **exact geometric fact**, so the wing pill picks up
+its core as the tenth (`10 benches · 127/127 ✓`).
+
+**The payoff, felt not stated.** You are handed CHFClBr — four different atoms on
+one carbon — to *turn in your hands* (a camera-relative trackball tumble), with its
+mirror image fixed in the air like a socket cut for it. Press **SEAT** and it eases
+(cubic slerp, ~620 ms) to its best possible fit — and stays SPLAYED: a permanent
+glowing rose-amber halo of strain tethers, a ~2° recoil past the seat and back so
+you feel the refusal. *IT WILL NOT BE WORN.* Flip to the achiral control CH₂Cl₂ and
+the same gesture ends in a clean white click: *SEATED*, flush. **The neg-control
+made bodily** — same hands, opposite outcome.
+
+**The rigor core (`core.mjs`).** Chirality = min best-fit RMSD over (PROPER rotation
+× element-preserving atom relabelling). **Horn's quaternion Kabsch**, NOT naive
+3×3-SVD — SVD's det-correction fails on CH₂Cl₂'s degenerate covariance (a false
+~0.407 for a molecule that genuinely seats); Horn's top-eigenvector quaternion is
+proper by construction. `core.test.mjs` proves it exact: enantiomer 1.249 Å ≫ ε=0.5,
+control 2.2e-16 Å, identity 0, a **20k-turn uniform-random Monte-Carlo backstop**
+(no sampled turn beats the analytic min), proper rotations only (det=+1).
+
+**Riding the estate infrastructure UNFORKED.** The page forge-inlines
+`tools/scene3d/core.mjs` + `in-the-round/shell.mjs` byte-for-byte (grab-vs-orbit off
+`occludedAt` on the real depth-sorted list; the pitch clamp lives in `shell.orbit`),
+plus a local `molecule.mjs` (ball-and-stick + the pale living-gold ghost socket).
+`probe.mjs` is the payoff-liveness body the in-page chip AND `liveness.test.mjs`
+both run (15/15, every inlined block byte-identical). Grab-to-tumble verified with
+a **trusted CDP mouse drag** (not dispatchEvent — the real-click landmine).
+
+Non-collision noted: this is GEOMETRIC/molecular chirality (non-superimposable point
+sets by proper rotation — Kabsch/RMSD), distinct from the Knot Tabulator's
+TOPOLOGICAL chirality (a determinant blind to mirror). It is not "the estate's
+chirality piece." Zero horizontal overflow at 320/390/500/768/1280.

@@ -1,0 +1,421 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Left-Handed Bench · The Alchemy Lab</title>
+<!--
+  THE LEFT-HANDED BENCH — a companion in the round beside The Crystal Garden.
+  You are handed a molecule to turn in your hands, and its mirror image sitting
+  fixed in the air like a socket cut for it. Turn the chiral one however you like;
+  press SEAT and it rotates to its best fit — and the substituents stay splayed,
+  a permanent glowing halo, because a reflection is the one move your hand cannot
+  make. It WILL NOT BE WORN. Flip to the achiral control and the same gesture ends
+  in a clean white click: SEATED. Your two hands, and the mirror you can never cross.
+
+  It carries a THEOREM — proven exact in core.test.mjs (Horn-quaternion Kabsch,
+  proper rotations only, 20k-turn Monte-Carlo backstop: the enantiomer's best-fit
+  RMSD clears ε; the achiral control seats to ~machine-ε) — AND a PAYOFF you feel.
+
+  ENGINE   tools/scene3d/core.mjs — the estate's orbitable 3-D core, inlined
+           byte-for-byte between the SCENE3D CORE sentinels (a twin byte-checks it).
+  SHELL    in-the-round/shell.mjs — the room shell (orbit clamp, flywheel, gates),
+           ridden UNFORKED. (The DoD's "riding in-the-round unforked" is this reuse;
+           in-the-round/scene.mjs — armillary geometry — is irrelevant and not forked.)
+  CORE     ./core.mjs — the sole math authority (chirality = min RMSD over turn × relabelling).
+  SCENE    ./molecule.mjs — the ball-and-stick render geometry + the ghost socket.
+  PROBE    ./probe.mjs — the payoff-liveness body, shared by the chip and the twin.
+  Build:   node tools/forge/forge.mjs alchemy/the-left-handed-bench/index.src.html
+-->
+<style>
+  :root{
+    --gold:#dca74a; --gold-bright:#f4cf7a; --gold-soft:rgba(220,167,74,0.14); --gold-edge:rgba(220,167,74,0.32);
+    --ink:#f1ece2; --ink-dim:#a99e88; --strain:#ff8a5c;
+    --font-serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+    --font-mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,monospace;
+    --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; overflow:hidden; }
+  body{ color:var(--ink); background:#0b0910;
+    font-family:var(--font-serif); -webkit-font-smoothing:antialiased; }
+  canvas#cv{ position:fixed; inset:0; width:100%; height:100%; display:block; z-index:0;
+    touch-action:none; cursor:grab; }
+  canvas#cv.tumbling{ cursor:grabbing; }
+
+  /* the apothecary word-column, top-left */
+  .words{ position:fixed; z-index:5; top:58px; left:20px; max-width:min(330px,86vw);
+    pointer-events:none; }
+  .words .kk{ font:600 10px/1 var(--font-mono); letter-spacing:.28em; text-transform:uppercase;
+    color:var(--gold); opacity:.9; }
+  .words h1{ font-family:var(--font-serif); font-weight:600; font-size:clamp(21px,4.6vw,29px);
+    margin:9px 0 10px; line-height:1.08;
+    background:linear-gradient(176deg,#f9efd6,var(--gold) 62%,#9a6e26);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  .words p{ font:14px/1.62 var(--font-serif); color:var(--ink); opacity:.86; margin:0 0 9px; }
+  .words p.small{ font:11.5px/1.55 var(--font-mono); color:var(--ink-dim); opacity:.8; }
+  .words .kin{ pointer-events:auto; color:var(--gold); text-decoration:none; border-bottom:1px solid var(--gold-soft); }
+  .words .kin:hover{ color:var(--gold-bright); border-color:var(--gold-edge); }
+
+  /* the top chrome — back, kin, chips */
+  a.back,a.xlink{ position:fixed; z-index:8; top:15px; text-decoration:none;
+    font:12px var(--font-mono); letter-spacing:.10em; padding:6px 11px; border-radius:7px;
+    background:rgba(8,7,5,.62); backdrop-filter:blur(3px); transition:color .2s,border-color .2s; }
+  a.back{ left:16px; color:#f0e2bc; border:1px solid rgba(220,167,74,.30); }
+  a.back:hover{ color:var(--gold); border-color:var(--gold-edge); }
+  a.xlink{ right:16px; color:#d8c48f; border:1px solid rgba(220,167,74,.24); }
+  a.xlink:hover{ color:var(--gold-bright); border-color:var(--gold-edge); }
+
+  #chip{ position:fixed; right:16px; top:52px; z-index:8; cursor:pointer;
+    font:10.5px var(--font-mono); letter-spacing:.04em; padding:5px 9px; border-radius:999px;
+    background:rgba(8,7,5,.62); border:1px solid rgba(214,178,116,.24); color:#bfae82; opacity:.66;
+    transition:opacity .25s; user-select:none; }
+  #chip:hover{ opacity:1; }
+  #chip.ok{ border-color:rgba(120,220,150,.42); color:#9fe3b0; }
+  #chip.bad{ border-color:rgba(230,120,120,.55); color:#f0a0a0; opacity:.95; }
+  #chip .led{ display:inline-block; width:7px; height:7px; border-radius:50%; vertical-align:middle;
+    margin-right:6px; background:#5fd08a; box-shadow:0 0 8px #5fd08a; }
+  #chip.bad .led{ background:#e06a6a; box-shadow:0 0 8px #e06a6a; }
+  #panel{ position:fixed; right:16px; top:84px; z-index:9; display:none; max-width:360px;
+    font:11px/1.5 var(--font-mono); color:#c7bfa8;
+    background:rgba(10,8,6,.96); border:1px solid rgba(214,178,116,.22); border-radius:10px; padding:11px 13px; }
+  #panel.open{ display:block; }
+  #panel h4{ margin:0 0 8px; color:#efe4c4; font-size:11.5px; letter-spacing:.04em; }
+  #panel .row{ display:flex; gap:8px; padding:3px 0; border-top:1px solid rgba(214,178,116,.09); }
+  #panel .row:first-of-type{ border-top:0; }
+  #panel .m{ color:#7fdda0; } #panel .row.f .m{ color:#e88; }
+
+  /* the DOM controls — real buttons with ids + own listeners, over the canvas */
+  .controls{ position:fixed; z-index:6; left:50%; bottom:22px; transform:translateX(-50%);
+    display:flex; flex-wrap:wrap; gap:10px; justify-content:center; padding:0 10px; }
+  .controls button{ font:600 11px/1 var(--font-mono); letter-spacing:.12em; text-transform:uppercase;
+    color:var(--ink); background:rgba(20,16,12,.82); border:1px solid var(--gold-edge); border-radius:9px;
+    padding:11px 16px; cursor:pointer; transition:border-color .2s, background .2s, color .2s; }
+  .controls button:hover{ border-color:var(--gold); color:var(--gold-bright); background:rgba(30,22,14,.9); }
+  .controls button#seat{ border-color:rgba(255,138,92,.5); color:#ffcaa8; }
+  .controls button#seat:hover{ border-color:var(--strain); color:#fff; background:rgba(50,26,16,.9); }
+
+  /* the verdict banner */
+  #banner{ position:fixed; z-index:6; left:50%; top:20%; transform:translateX(-50%);
+    text-align:center; pointer-events:none; opacity:0; transition:opacity .5s;
+    white-space:nowrap; }
+  #banner.show{ opacity:1; }
+  #banner .v{ font:600 clamp(20px,5vw,34px)/1.1 var(--font-serif); letter-spacing:.04em; }
+  #banner .s{ font:11px/1.5 var(--font-mono); letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-dim); margin-top:8px; }
+  #banner.refuse .v{ color:#ffb38a; text-shadow:0 0 26px rgba(255,138,92,.55); }
+  #banner.seated .v{ color:#eaf4ee; text-shadow:0 0 26px rgba(180,235,200,.5); }
+
+  #mute{ position:fixed; left:16px; bottom:14px; z-index:8; cursor:pointer;
+    font:10.5px var(--font-mono); letter-spacing:.06em; padding:5px 10px; border-radius:999px;
+    background:rgba(8,7,5,.55); border:1px solid rgba(214,178,116,.2); color:#9a8f72; opacity:.5;
+    transition:opacity .2s; user-select:none; }
+  #mute:hover{ opacity:.92; }
+
+  @media (max-width:640px){
+    .words{ top:52px; }
+    .words p:not(.small){ display:none; }
+  }
+  @media (max-width:420px){ #banner{ white-space:normal; max-width:88vw; } }
+</style>
+
+<script>try{ var __ck='ws:seen:the-left-handed-bench'; if(!localStorage.getItem(__ck)) localStorage.setItem(__ck, String(Date.now())); }catch(e){}</script>
+
+<a class="back" href="../index.html" title="back to The Alchemy Lab">&larr; The Alchemy Lab</a>
+<a class="xlink" href="../the-crystal-garden/index.html" title="its kin — a claim-free living jar, the other bench that proves nothing by proving something">&harr; The Crystal Garden</a>
+<div id="chip"><span class="led"></span><span id="chipT">payoff …</span></div>
+<div id="panel"></div>
+
+<canvas id="cv"></canvas>
+
+<div class="words">
+  <div class="kk">Alchemy · in the round</div>
+  <h1>The Left-Handed Bench</h1>
+  <p>Turn the molecule in your hands. Press <b>SEAT</b> and it rotates to its best fit
+     in the mirror socket — and stays splayed. A reflection is the move your hand cannot make.</p>
+  <p class="small">Your two hands, and the mirror you can never cross. Its kin, the
+     <a class="kin" href="../the-crystal-garden/index.html">Crystal Garden</a>, grows; this one refuses.</p>
+</div>
+
+<div class="controls">
+  <button id="seat" title="rotate the molecule to its best possible seating in the mirror socket">Seat it</button>
+  <button id="mirror" title="swap between the chiral pair (CHFClBr) and the achiral control (CH₂Cl₂)">Mirror-control</button>
+  <button id="reset" title="unseat and re-centre">Reset</button>
+</div>
+
+<div id="banner"><div class="v"></div><div class="s"></div></div>
+<div id="mute" title="the shared estate mute — this room is silent, but honors it (stills the faint idle drift)">◐ drift</div>
+
+<script>
+"use strict";
+/* ===== the estate's orbitable 3-D core, inlined byte-for-byte ===== */
+<!-- forge:include ../../tools/scene3d/core.mjs -->
+
+/* ===== the room shell (orbit clamp, flywheel, stillness gate), ridden unforked ===== */
+<!-- forge:include ../../in-the-round/shell.mjs -->
+
+/* ===== the rigor core — the sole math authority ===== */
+<!-- forge:include ./core.mjs -->
+
+/* ===== the ball-and-stick geometry + the ghost socket ===== */
+<!-- forge:include ./molecule.mjs -->
+
+/* ===== the payoff-liveness body (chip + twin share it) ===== */
+<!-- forge:include ./probe.mjs -->
+
+/* ============================ THE ROOM / DRIVER ============================ */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const reduced = readReduced();
+let muted = readMuted();
+
+/* ── state ── */
+let which = 'pair';
+let mol = MOLECULES[which];
+let Rmol = IDENT3();                 // the object tumble
+const cam = Object.assign({}, POSTURE.home);
+const shell = makeShell(POSTURE.shell);
+const roomWheel = makeFlywheel(POSTURE.wheel);
+const tumbleWheel = makeFlywheel({ tau: 2.6, max: 3.2, idle: 0, blend: 0.68 });
+let tumbleAxis = [0, 1, 0];
+
+/* ── the snap / seat animation ── */
+let snap = null;                     // { q0, q1, t, dur, phase, rmsd, res:[{from,to,mag}], chiral }
+let tethers = null;                  // steady-state tethers after a seat
+let clickFlash = 0;                  // the achiral white-click bloom
+
+/* ── quaternion slerp for the seat easing ── */
+function slerp(a, b, t) {
+  let d = a[0]*b[0]+a[1]*b[1]+a[2]*b[2]+a[3]*b[3];
+  let bb = b.slice();
+  if (d < 0) { bb = bb.map(x=>-x); d = -d; }
+  if (d > 0.9995) { const r=[a[0]+t*(bb[0]-a[0]),a[1]+t*(bb[1]-a[1]),a[2]+t*(bb[2]-a[2]),a[3]+t*(bb[3]-a[3])];
+    const n=Math.hypot(r[0],r[1],r[2],r[3])||1; return [r[0]/n,r[1]/n,r[2]/n,r[3]/n]; }
+  const th0=Math.acos(d), th=th0*t, s0=Math.sin(th0);
+  const s1=Math.sin(th0-th)/s0, s2=Math.sin(th)/s0;
+  return [s1*a[0]+s2*bb[0], s1*a[1]+s2*bb[1], s1*a[2]+s2*bb[2], s1*a[3]+s2*bb[3]];
+}
+const easeCubic = t => t<0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2;
+
+/* build the current scene config */
+function cfg() { return { live: mol.A, ghost: mol.B, bonds: mol.bonds, Rmol, cam }; }
+
+/* ── SEAT: hand the live cloud + the ghost to the math, ease Rmol → its best fit ── */
+function seatIt() {
+  const ba = bestAlignment(mol.B, mol.A, mol.groups);     // fixed=ghost, mobile=live
+  const chiral = ba.rmsd > EPS;
+  const q0 = matToQuat(Rmol), q1 = matToQuat(ba.R);
+  // the strain tethers: from where each atom LANDS to the ghost socket it aims at
+  const res = ba.perAtomResidual.map((d, i) => ({
+    from: worldPos(mol.A[i], ba.R),
+    to:   worldPos(mol.B[ba.perm[i]], null),
+    mag:  Math.hypot(d[0], d[1], d[2]) * MSCALE,
+  }));
+  snap = { q0, q1, R1: ba.R, t: 0, dur: 620, phase: 'seat', rmsd: ba.rmsd, res, chiral, recoil: 0 };
+  tethers = null;
+  showBanner(null);
+}
+
+/* ── the DOM controls ── */
+document.getElementById('seat').addEventListener('click', () => { armSnap = false; seatIt(); });
+document.getElementById('mirror').addEventListener('click', () => {
+  which = which === 'pair' ? 'control' : 'pair';
+  mol = MOLECULES[which];
+  Rmol = IDENT3(); snap = null; tethers = null; armSnap = false; clickFlash = 0;
+  roomWheel.set(0); tumbleWheel.set(0); showBanner(null);
+});
+document.getElementById('reset').addEventListener('click', () => {
+  Rmol = IDENT3(); snap = null; tethers = null; armSnap = false; clickFlash = 0;
+  roomWheel.set(0); tumbleWheel.set(0);
+  Object.assign(cam, POSTURE.home); showBanner(null);
+});
+
+/* ── the banner ── */
+const bannerEl = document.getElementById('banner');
+function showBanner(kind) {
+  if (!kind) { bannerEl.classList.remove('show','refuse','seated'); return; }
+  bannerEl.className = 'show ' + (kind === 'refuse' ? 'refuse' : 'seated');
+  bannerEl.querySelector('.v').textContent = kind === 'refuse' ? 'IT WILL NOT BE WORN' : 'SEATED';
+  bannerEl.querySelector('.s').textContent = kind === 'refuse'
+    ? 'RMSD ' + snap.rmsd.toFixed(2) + ' Å · no proper turn closes it'
+    : 'RMSD ' + snap.rmsd.toExponential(0) + ' Å · flush';
+}
+
+/* ── the viewport (device pixels, like hall two) ── */
+const viewp = makeViewport(cv, ctx, { mode: 'raw', vp: (W, H) => ({ cx: W/2, cy: H*0.5, scale: Math.min(W, H)*0.40 }) });
+viewp.fit();
+let lastSorted = [];
+
+/* ── the hand: grab the molecule → tumble it; grab the void/ghost → orbit the room ── */
+let armSnap = false;
+const orbit = bindOrbit(cv, {
+  cam, shell, wheelSpeed: 0.0022,
+  cursor: (m) => { cv.classList.toggle('tumbling', m === 'tumble'); },
+  onDown: (e, p) => {
+    roomWheel.set(0); tumbleWheel.set(0); armSnap = false;
+    // bail only if the gesture began on an interactive overlay (a control keeps its
+    // own tap). cv's own pointerdown only fires over the canvas, so this is belt-and-
+    // suspenders — but check by ancestry, never identity (a retargeted event still
+    // has cv in its path when the pointer is on the canvas).
+    const t = e.target;
+    if (t && t !== cv && t.closest && t.closest('.controls,#panel,.words,#chip,#mute,a')) return null;
+    const rect = cv.getBoundingClientRect(), dpr = viewp.dpr;
+    const sx = (e.clientX - rect.left) * dpr, sy = (e.clientY - rect.top) * dpr;
+    const hit = occludedAt(lastSorted, sx, sy);
+    if (hit && hit.mol === 'live') { snap = null; tethers = null; showBanner(null); return { mode: 'tumble' }; }
+    return null;                                            // void/ghost → the shell orbits the room
+  },
+  onOrbit: (drag, dYaw, dx, dy, p, dt) => { roomWheel.track(dYaw, dt); },
+  onMove: (drag, dx, dy, p, dt) => {                       // tumble mode
+    const b = camBasis(cam);
+    Rmol = tumbleStep(Rmol, cam, dx, dy, POSTURE.shell.speed);
+    const ax = [b.up[0]*dx + b.right[0]*dy, b.up[1]*dx + b.right[1]*dy, b.up[2]*dx + b.right[2]*dy];
+    const al = Math.hypot(ax[0], ax[1], ax[2]) || 1; tumbleAxis = [ax[0]/al, ax[1]/al, ax[2]/al];
+    tumbleWheel.track(POSTURE.shell.speed * Math.hypot(dx, dy), dt);
+  },
+  onEnd: (d) => {
+    if (d.mode === 'tumble') { tumbleWheel.release(reduced); armSnap = true; }   // release-to-snap after settle
+    else roomWheel.release(reduced);
+  },
+});
+
+/* ── overlays: the handedness star, the strain tethers, the click flash ── */
+function drawStar(vp) {
+  const c = worldPos(mol.A[0], Rmol);                       // the chiral-centre C
+  const s = toScreen(project(c, cam), vp);
+  if (s.depth <= NEAR_EPS) return;
+  const r = Math.max(4, vp.scale * 0.020 * (FOCAL / s.depth));
+  ctx.save(); ctx.translate(s.x, s.y); ctx.globalAlpha = 0.95;
+  ctx.fillStyle = 'rgba(244,207,122,0.95)'; ctx.strokeStyle = 'rgba(244,207,122,0.6)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let k = 0; k < 10; k++) { const a = -Math.PI/2 + k*Math.PI/5, rr = (k%2? r*0.42 : r);
+    const x = Math.cos(a)*rr, y = Math.sin(a)*rr; k? ctx.lineTo(x,y):ctx.moveTo(x,y); }
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function drawTethers(vp, list, glow) {
+  for (const t of list) {
+    const a = toScreen(project(t.from, cam), vp), b = toScreen(project(t.to, cam), vp);
+    if (a.depth <= NEAR_EPS || b.depth <= NEAR_EPS) continue;
+    const rr = Math.max(0, vp.scale * t.mag * 0.5 * (FOCAL / Math.max(0.4, a.depth)));
+    if (rr > 1.2) {                                          // the strain aura around where it landed
+      const g = ctx.createRadialGradient(a.x, a.y, 0, a.x, a.y, rr);
+      g.addColorStop(0, 'rgba(255,138,92,' + (0.34*glow).toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(255,138,92,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(a.x, a.y, rr, 0, 7); ctx.fill();
+    }
+    ctx.strokeStyle = 'rgba(255,150,105,' + (0.85*glow).toFixed(3) + ')';
+    ctx.lineWidth = Math.max(1, vp.scale * 0.006 * (FOCAL / Math.max(0.4, a.depth)));
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  }
+}
+function drawClick(vp) {
+  if (clickFlash <= 0) return;
+  const c = worldPos(mol.A[0], Rmol), s = toScreen(project(c, cam), vp);
+  const rr = vp.scale * 0.9 * (1 - clickFlash);
+  const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, Math.max(1, rr));
+  g.addColorStop(0, 'rgba(240,250,244,' + (0.5*clickFlash).toFixed(3) + ')');
+  g.addColorStop(0.6, 'rgba(200,235,210,' + (0.14*clickFlash).toFixed(3) + ')');
+  g.addColorStop(1, 'rgba(200,235,210,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(s.x, s.y, Math.max(1, rr), 0, 7); ctx.fill();
+}
+
+/* ── the dark round the molecule floats in ── */
+function drawGround(W, H, vp) {
+  const g = ctx.createRadialGradient(vp.cx, vp.cy, 0, vp.cx, vp.cy, Math.max(W, H) * 0.62);
+  g.addColorStop(0, '#181019'); g.addColorStop(0.5, '#0e0a12'); g.addColorStop(1, '#080609');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+}
+
+/* ── the frame loop ── */
+let prev = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - prev) / 1000); prev = now;
+
+  if (snap) {
+    snap.t += (now - (snap.last || now)); snap.last = now;
+    if (snap.phase === 'seat') {
+      const u = Math.min(1, snap.t / snap.dur);
+      Rmol = quatToMat(slerp(snap.q0, snap.q1, easeCubic(u)));
+      if (u >= 1) {
+        if (snap.chiral) { snap.phase = 'recoil'; snap.t = 0; snap.last = now; }
+        else { finishSeat(); }
+      }
+    } else if (snap.phase === 'recoil') {
+      const u = Math.min(1, snap.t / 360);
+      const ang = (2 * Math.PI / 180) * Math.sin(u * Math.PI) * Math.exp(-2.2 * u);  // ~2° past and back
+      Rmol = mm(axisAngle(tumbleAxisOr(cam), ang), snap.R1);
+      if (u >= 1) { Rmol = snap.R1; finishSeat(); }
+    }
+  } else if (!orbit.drag) {
+    const d = roomWheel.step(dt, reduced, muted);
+    cam.yaw += d; shell.settle(cam);
+    const ang = tumbleWheel.step(dt, reduced, muted);
+    if (Math.abs(ang) > 1e-5) Rmol = mm(axisAngle(tumbleAxis, ang), Rmol);
+    if (armSnap && Math.abs(tumbleWheel.vel) < 0.12) { armSnap = false; seatIt(); }
+  }
+  if (clickFlash > 0) clickFlash = Math.max(0, clickFlash - dt * 1.6);
+
+  viewp.fitIfNeeded();
+  const vp = viewp.vp, W = cv.width, H = cv.height;
+  drawGround(W, H, vp);
+  lastSorted = render(ctx, buildScene(cfg()), cam, vp);
+  drawStar(vp);
+  if (tethers) drawTethers(vp, tethers, 1);
+  else if (snap && snap.phase === 'recoil') drawTethers(vp, snap.res, 1);
+  drawClick(vp);
+  requestAnimationFrame(frame);
+}
+function tumbleAxisOr(c) { const b = camBasis(c); return b.up; }
+function finishSeat() {
+  if (snap.chiral) { tethers = snap.res; showBanner('refuse'); }
+  else { tethers = null; clickFlash = 1; showBanner('seated'); }
+  snap = null;
+}
+requestAnimationFrame(frame);
+
+/* ── the read-only handle: drives the REAL math + payoff, for verification ── */
+try {
+  window.__LHB = {
+    get which(){ return which; }, get Rmol(){ return Rmol; }, get sorted(){ return lastSorted; },
+    setWhich(w){ which = w; mol = MOLECULES[w]; Rmol = IDENT3(); snap = null; tethers = null; },
+    seat(){ seatIt(); }, reset(){ Rmol = IDENT3(); snap = null; tethers = null; },
+    // the payoff, measured on the real data: min RMSD over all turns
+    liveRmsd(){ return rmsdAtRotation(mol.B, mol.A, Rmol, mol.groups); },
+    bestRmsd(w){ const m = MOLECULES[w||which]; return bestAlignment(m.B, m.A, m.groups).rmsd; },
+    hitAt(cx, cy){ const rect = cv.getBoundingClientRect(), dpr = viewp.dpr;
+      const sx = (cx - rect.left) * dpr, sy = (cy - rect.top) * dpr;
+      const hit = occludedAt(lastSorted, sx, sy);
+      return { sx, sy, mol: hit ? hit.mol : null, dpr, rectW: rect.width, cvW: cv.width, n: lastSorted.length }; },
+    runLiveness,
+  };
+} catch (e) {}
+
+/* ===================== THE PAYOFF-LIVENESS CHIP (in-page) ===================== */
+const MOCKC = { createRadialGradient:()=>({addColorStop(){}}), createLinearGradient:()=>({addColorStop(){}}),
+  save(){},restore(){},beginPath(){},moveTo(){},lineTo(){},arc(){},stroke(){},closePath(){},fill(){},
+  fillRect(){},clip(){},set fillStyle(v){},set strokeStyle(v){},set lineWidth(v){},set lineCap(v){},
+  set lineJoin(v){},set globalAlpha(v){},set shadowColor(v){},set shadowBlur(v){} };
+function runLiveness() {
+  return probe({ render, occludedAt, project, toScreen,
+    buildScene, liveCenters, ghostCenters, worldPos, tumbleStep,
+    bestAlignment, rmsdAtRotation, MOLECULES, EPS, CONTROL_TOL,
+    makeShell, makeFlywheel, POSTURE, MOCK: MOCKC });
+}
+const lv = runLiveness();
+const chip = document.getElementById('chip'), chipT = document.getElementById('chipT'), panel = document.getElementById('panel');
+chipT.textContent = lv.ok ? `payoff ${lv.pass}/${lv.total} fires` : `payoff ${lv.pass}/${lv.total}`;
+chip.classList.add(lv.ok ? 'ok' : 'bad');
+panel.innerHTML = '<h4>payoff-liveness — the impossibility, on the live path</h4>' +
+  lv.cks.map(c => `<div class="row ${c.ok?'':'f'}"><span class="m">${c.ok?'✓':'✕'}</span><span>${c.n}</span></div>`).join('') +
+  `<div style="margin-top:8px;opacity:.6">enantiomer ${lv.enantiomer.toFixed(3)} Å · control ${lv.control.toExponential(1)} Å · theorem proven exact in core.test.mjs</div>`;
+chip.addEventListener('click', () => panel.classList.toggle('open'));
+console.log('[left-handed-bench liveness]', lv.pass + '/' + lv.total, lv.cks);
+
+/* ===== estate citizenship: the shared mute + the seen breadcrumb ===== */
+<!-- forge:include ../../tools/ws/ws.js -->
+try { WS.seen('the-left-handed-bench'); } catch (e) {}
+const muteEl = document.getElementById('mute');
+function paintMute() { muteEl.textContent = muted ? '◐ drift stilled' : '◐ drift living'; muteEl.style.opacity = muted ? 0.85 : 0.5; }
+try { muted = (typeof WS !== 'undefined' && WS.muted) ? WS.muted() : muted; } catch (e) {} paintMute();
+muteEl.addEventListener('click', () => { muted = !muted;
+  try { if (typeof WS !== 'undefined' && WS.setMuted) WS.setMuted(muted); else localStorage.setItem('ws:pref:muted', muted?'1':'0'); } catch (e) {} paintMute(); });
+try { if (typeof WS !== 'undefined' && WS.onMuteChange) WS.onMuteChange(v => { muted = v; paintMute(); }); } catch (e) {}
+</script>
