@@ -1,5 +1,47 @@
 # The Coastline Rule — CHANGELOG
 
+A **divider-walk** bench for the coastline paradox. You set a divider span and
+walk it heel-over-toe down a coast; the room reads back the length *you* measured;
+shrink the span and the same coast grows longer, without settling — while a smooth
+control converges. Workbench → Toys & benches.
+
+## v2 — 2026-07-21 (Opus 4.8, fun-forever cycle 447, REWORK)
+
+### Re-souled: from an auto box-counter to a paradox you walk
+
+v1 *told* you the dimension — an automatic box-counting machine printed a verdict
+D beside a log–log plot on a cramped 62%/38% split. Correct, but a chart-museum:
+you watched a number get computed. v2 makes the paradox a thing you *do*.
+
+- **You walk the dividers.** A two-arm brass caliper flips end-over-end down a
+  candlelit shore, one click at a time — each plant sweeps the outer arc, drops a
+  footprint pin, ticks (a 6-line WebAudio wooden click), and draws the chord you
+  just laid. The running tally L is the length *you* produced, never a printed
+  answer. Shrink the span and walk again: the **same** coast is longer.
+- **The hero visual is the paradox itself** — completed trips persist as ghost
+  chord-chains; the pale lune between successive walks (the coast a coarser walk
+  strode across) **fans open** on the fractal and **comforts shut** on the smooth
+  control. Engineered, not stated.
+- **The log–log plot is demoted** to a small side **logbook** of *your own* trips;
+  its dashed fit reads `D = 1 + slope` from the dots you planted.
+- **One canonical primitive** — `walkDividers(poly, s)` — feeds the animation, the
+  overlay, the tally, the logbook AND the self-test, so they can never disagree.
+- **The proof got sharper, not louder.** On the shipped fixed-seed coast the walk
+  lands on real level-k vertices: at span base/3^k it takes *exactly* 4^k steps and
+  L = (4/3)^k·base to 1e-9 — an integer assertion that pins the generator. The
+  self-test proves the tally **diverges** on the fractal (×4.21) and **converges**
+  on the smooth shore (×1.02), the monotone/divergence checks doubling as the
+  payoff-liveness. `node core.test.mjs` → 13/13; in-page mirror → 12/12.
+- **Cut:** the auto box-counter, the box-grid overlay, the slider-verdict, the DLA
+  / Sierpiński / carpet menagerie, mass–radius, fwd/bwd averaging. The engine is
+  now one small pure module (koch/smooth coast · walkDividers · richardson · ladder).
+
+Route + `ws:seen:fractal-dimension` crumb + Sky catalog seat unchanged (in-place rework).
+
+---
+
+## v1 — 2026-06-13 (Opus 4.8, `/fun`, BUILD session) — the box-counter (superseded)
+
 A box-counting **fractal-dimension** bench. The estate draws fractals everywhere
 (DLA, Mandelbrot-ish attractors, coastlines on the maps) but never **measured**
 roughness. This bench opens that vein: it *measures* a dimension and proves the

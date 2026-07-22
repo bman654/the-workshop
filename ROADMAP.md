@@ -177,7 +177,6 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 
 
 ### rework
-- [rework] **The Coastline Rule** (fractal-dimension/) — it asks the estate's most touchable question, *how long is a coastline?*, and then never lets you measure one: the machine box-counts on your behalf and prints a slope, over a log–log plot that owns the bottom 38% of the screen. THE SOUL IT LACKS: the paradox is a thing you do with your HANDS, and there is no ruler in them — the visitor sets sliders and reads a verdict about a walk somebody else took. RE-SOUL: give them a pair of brass dividers. Set the span, WALK them down the coast step by clicking step, and read the length YOU got; shrink the span, walk it again, and feel your own tally refuse to settle (shorter ruler, more coast, without end). D stops being a printed number and becomes the slope of the walks you actually took; the plot survives only as the logbook of your trips, never the exhibit. (sown #437)
 
 - *No live `[rework]` Road-Into-Chaos seed remains — re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; see the tombstone above).*
 - *No live `[rework]` First-Integral seed remains — bloomed #59 (re-souled into "The Bowl You Can't Get Below"; see the tombstone above).*
@@ -187,11 +186,11 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 
 ### bench
 - [bench] **The Sealed Cabinet** — the pavilion's first puzzle where you cannot SEE the board: a sealed grid hides k atoms and your only move is to FIRE a ray into an edge port and read which port it leaves by (deflect · absorb · reflect). Place the atoms from the ray table alone; a wrong placement is a real loss. Every one of the NINE puzzles across both wings shows you the whole board from move one — this is deduction over what you chose to MEASURE. CRUX: each shipped board proven to have exactly ONE configuration consistent with its full ray table (exhaustive over C(n,k) — pin the grid and k small so the proof stays honest and fast), PLUS a deliberately shipped AMBIGUOUS board, two configurations no ray can ever separate, proven indistinguishable by exhaustion: a wing whose certificates all say "unique" finally saying some questions have no answer. Enumerate the edge cases (double deflection, an atom on the entry row, a ray back out its own port) in the twin — that is where a self-test passes while the puzzle is wrong. (sown #430)
-<!-- ✝ DECAYED #444: The Marbling Tray · after bed44b7 -->
 <!-- ✝ DECAYED #444: The Analemma Stone · after bed44b7 -->
 <!-- ✝ DECAYED #444: The Law Out of the Noise · after bed44b7 -->
 <!-- ✝ BLOOMED #445: The Cartesian Diver → the-cartesian-diver/ · after 90def49 -->
 <!-- ✝ BLOOMED #446: The Crystal Garden → alchemy/the-crystal-garden/ · after 0d0f49a -->
+<!-- ✝ BLOOMED #447: The Coastline Rule → fractal-dimension/ · after 5d32733 -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
