@@ -90,6 +90,7 @@ export const STARS = {
   "the-long-chain": { group: "strategist", dx: -10, dy: 32.5, mag: 1 },
   "holonomy": { group: "surveyor", dx: 45, dy: -15, mag: 1 },
   "unrolled-cone": { group: "surveyor", dx: -45, dy: 15, mag: 2 },
+  "grabbable-triangle": { group: "surveyor", dx: 0, dy: 40, mag: 3 },
   "belief-beam": { group: "wagerer", dx: 0, dy: -31, mag: 1 },
   "likelihood-sluice": { group: "wagerer", dx: 0, dy: 31, mag: 2 },
   // ── field stars (own bearing + hash-staggered depth; group: null) ──

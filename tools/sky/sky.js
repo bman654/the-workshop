@@ -86,6 +86,7 @@
     "the-long-chain": { x: 2645.3, y: 2169.7, mag: 1 },
     "holonomy": { x: 508.9, y: 2160.5, mag: 1 },
     "unrolled-cone": { x: 418.9, y: 2190.5, mag: 2 },
+    "grabbable-triangle": { x: 463.9, y: 2215.5, mag: 3 },
     "belief-beam": { x: 2757.1, y: 2081.4, mag: 1 },
     "likelihood-sluice": { x: 2757.1, y: 2143.4, mag: 2 },
     "aerodrome": { x: 604.8, y: 698.9, mag: 1 },
@@ -143,6 +144,7 @@
     "the-long-chain": {"name":"The Long Chain","href":"the-long-chain/index.html"},
     "holonomy": {"name":"Curved Country","href":"holonomy/index.html"},
     "unrolled-cone": {"name":"The Unrolled Cone","href":"unrolled-cone/index.html"},
+    "grabbable-triangle": {"name":"The Grabbable Triangle","href":"grabbable-triangle/index.html"},
     "belief-beam": {"name":"The Belief Beam","href":"belief-beam/index.html"},
     "likelihood-sluice": {"name":"The Likelihood Sluice","href":"likelihood-sluice/index.html"},
     "aerodrome": {"name":"The Aerodrome","href":"aerodrome/index.html"},
@@ -217,7 +219,7 @@
     // deficit angle, a curvature-cancelling torus). Like every feat-group it is
     // ADDITIVE — it NEVER feeds the wings-only all-skies capstone.
     { id: 'surveyor', name: 'The Surveyor', myth: 'Walks the loop; brings home the twist no chart can hide.',
-      members: ['holonomy', 'unrolled-cone'] },
+      members: ['holonomy', 'unrolled-cone', 'grabbable-triangle'] },
     // The Strategist — the number wing's solved-games reward constellation: two rooms where you
     // learn to beat a provably perfect opponent. Founded by The Matchbox That Learns (Hexapawn, a
     // machine that teaches itself to stop losing) and grown by The Long Chain (Dots-and-Boxes, won
