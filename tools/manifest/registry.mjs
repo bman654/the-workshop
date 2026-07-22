@@ -109,6 +109,13 @@ export const INTERNAL = [
   // the landing in the `hall-link` idiom. A DEEPEN — same engine, same room shell,
   // same roof — so it mints no second front-door footprint.
   { hub: 'in-the-round', rule: 'internal-links', file: 'in-the-round/index.html', firstClass: ['hall-link'], kind: 'exhibit' },
+  // The Ten-Fold Glass GATHERS its twin The Hour-Glass as a nested exhibit
+  // (ten-fold/hour-glass/) — the same brass wheel + zoom-to-descend engine, but
+  // its number d picks which TEMPO is real instead of which SIZE fills the frame.
+  // A DEEPEN — one engine (glass.mjs), one room shell, two glasses on one bench —
+  // so it mints no second front-door footprint and no new sky star. Presented off
+  // the Glass's chrome via the `sib-glass` first-class idiom.
+  { hub: 'ten-fold', rule: 'internal-links', file: 'ten-fold/index.html', firstClass: ['sib-glass'], kind: 'exhibit' },
   // `flat` — explicit visitor leaf pages that live DIRECTLY in a hub dir (not a
   // subdir, not in a js-manifest), so no scrape rule can find them. hours/almanac.html
   // (the Almanac bench, WS4) was the first: a sibling leaf of the-hours.html.

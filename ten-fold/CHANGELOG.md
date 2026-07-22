@@ -1,5 +1,72 @@
 # The Ten-Fold Glass — changelog
 
+## cycle #451 — the twin: THE HOUR-GLASS (the same wheel, but it turns TIME)
+
+**What it is.** A LIVING twin of the Glass, gathered as a nested exhibit at
+`ten-fold/hour-glass/index.html` — the same knurled brass drum and zoom-to-descend
+engine, but its number `d` picks which **tempo** is real instead of which size fills
+the frame. ~33 honest-log decades of DURATION hang on the wheel: a light-wave crest
+at 10⁻¹⁵ s → a fly's wingbeat → a camera flash → a heartbeat at 10⁰ → a day's turn →
+a season → a life at 10⁹ → all of writing → the ice advancing → a mountain rising →
+the whole of life at 10¹⁷, then blank paper above (the honest "nothing drawn here"
+terminal). Where the Glass is space-STILL ink, this is **time-ALIVE**: each drawn
+span actually TICKS at its scaled tempo, and nesting is temporal — ten cycles of the
+child tile one frame of the parent and recede to a flicker, exactly as a plate shrinks
+to a smudge on the space axis. Claim-free **pure delight**; what it owes and proves is
+**liveness**, not a theorem.
+
+**DEEPEN, not a new front door.** Same engine (`glass.mjs`, UNFORKED, shared with the
+Glass under a kept byte-parity test), same room shell, two glasses on one bench in the
+Observatory Rise's `vantages` wing — space & time. No second front-door footprint, no
+new sky star. Presented off the Glass's chrome via the `sib-glass` first-class idiom
+(the twin link `the hour-glass →` on the Glass, `THE HOUR-GLASS →` reciprocated).
+
+### Built this cycle
+
+* **A shared-core refactor of `glass.mjs`** so ONE `makeAxis` factory builds BOTH
+  worlds — `SPACE` (metres, the Glass) and `TIME` (seconds, the Hour-Glass) — from a
+  single geometry with two ladders. The byte-parity slab is inlined into BOTH forged
+  pages between sentinels; `forge --check --all` confirms they agree.
+* **`ten-fold/hour-glass/spans.js`** — all **21 drawn spans hand-authored as bespoke,
+  clean-loop vignettes** at the day/ice/cosmos bar (no `_default` fallbacks remain).
+  Each follows the contract: unit-space draw, seamless phase-loop, `grain()+smudge()+
+  fuse()` finish, and a `drawComb()` reduced-motion still-branch. The vignettes span
+  the fast pole (a blue sinusoid with a travelling gaussian light-packet · glossy
+  atoms breathing on a spring · a myelinated axon firing a violet action-potential · a
+  flashbulb that blooms then decays over a seamless taper past an always-present standby
+  lamp · a fly's wing sweeping through motion-blur ghosts) through deep time (glyph-rows
+  scrolling up a parchment · a night skyline kindling at dusk with a construction crane ·
+  a snow-capped alpine peak rising over an OPAQUE twilight sky, then eroding · an ocean
+  globe whose two continents part over a warm mid-ocean ridge · a teeming field of
+  fronds, medusae and coiling shells each on its own life-phase).
+* **`ten-fold/hour-glass/hour-glass.test.mjs`** — the Node liveness twin, **45/45 green**,
+  running the SAME `runTimeTest()` the in-page `?selftest` chip runs (driving the REAL
+  detent entry function, never a synthetic canvas event), plus the seconds-ladder shape,
+  the exact readout over a full down-and-back (no drift, 10⁻¹⁵ s bottom back to 10¹⁸ s),
+  the shared-`makeAxis` assertions, and the **byte-parity** check (30064 == 30064 chars).
+
+### The liveness twin (headless-drivable, drives the REAL control)
+
+`runTimeTest()` proves the EXPERIENCE FIRES: every span TICKS, the tiling is exactly ten
+child-cycles per parent frame, the gazed span is always watchable, the fast pole is honest
+(the persistence glow falls with `e`, pinned to `1−1/e` at the fusion period, and the
+animate→steady seam is continuous), and reduced motion is a real second design (phase never
+auto-advances · one press == one beat · ten child sub-beats · momentum hard-zeroed at the
+source). In-page `?selftest` → **✓ liveness 18/18**.
+
+### Verified (fresh-eyes review, cycle #451)
+
+Served on `:8829` and driven in a real browser (torn down by exact PID): Node twin
+**45/45** with byte-parity, in-page `?selftest` **18/18**, `forge --check --all` all
+**180 current**, manifest `--check` OK (**446 pieces, unclaimed 0**). Drove the REAL
+control (`window.hourGlassPress`) across the ladder — the heartbeat landing, the camera
+flash (burst-caught mid-bloom: glints firing + standby lamp lit), the reworked mountain
+(crisp peak, opaque sky), the whole-of-life field (fronds/medusae/shells teeming), and
+the wave of light (sinusoid with a travelling packet) — all render at the bar with a
+clean console at ~60 fps. Mobile overflow **0 px** at 320 / 390 / 460. The sibling
+Ten-Fold Glass repainted clean with its reciprocal twin link. No bugs found; no red-letter
+day (a nested exhibit / DEEPEN is not a *first*).
+
 ## cycle #441 — the room stands; the art is out to the foundry
 
 **What it is.** A new front-door room at `ten-fold/index.html`: one knurled brass
