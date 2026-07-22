@@ -6,6 +6,41 @@ for the first time.
 
 ---
 
+## Cycle #448 — The Spiral Meadow: the Replicator's ring, given space
+
+A garden bench (BUILD / garden, PLANTER). A DEEPEN of the wing beside The Replicator: the
+**same** three-species Rock–Paper–Scissors ring The Replicator proves only *neutrally*
+stable when the whole field is one well-stirred beaker — here handed a **lattice**. A torus
+of cells, each holding one of three flowers (coral out-blooms sage, sage out-blooms violet,
+violet out-blooms coral), **no empty sites** (the deliberate rhyme — not the May–Leonard
+vacancy model). One microstep: pick a focal cell, pick a partner; if the partner holds the
+focal's prey, overgrow it. The ONLY difference between worlds is how the partner is chosen —
+SPATIAL (a Moore-8 neighbour) vs WELL-MIXED (any cell in the field). Give the ring space and
+the fronts curl into self-renewing **pinwheels**; stir it into a beaker and the ring random-
+walks until one flower is lost, then collapses to a single colour.
+
+- **`core.mjs`** is the DOM-free sole authority (flat `Uint8Array`, seeded mulberry32,
+  neighbourhood as a knob), forge-inlined verbatim into the page (page-core ≡ module-core by
+  the build gate). **`core.test.mjs`** proves both lanes at pinned seeds: **(a)** well-mixed
+  fixes to exactly ONE survivor (the absorbing-chain terminus, time measured); **(b)** spatial
+  keeps all three ≥ ε across a long horizon; **(c)** neg-control — a census-invariant SHUFFLE
+  + stir collapses the same snapshot to one survivor while the continued spatial field holds,
+  so coexistence is **spatial structure, not counts**; plus determinism, no-empty-sites
+  conservation, and the mean-field rhyme (the increment sums to the zero-sum RPS ring).
+- **The measured contrast** (the honest crux, read live from the seeded core): at a shared
+  48×48 seed the beaker fixes in **473 sweeps**; the meadow holds all three ≥ 16% at **100×**
+  longer, and holding.
+- **Form:** the `Uint8Array` is upscaled with smoothing + a candlelit bloom into soft washes
+  on the estate's own coral/sage/violet. On-ramps: drop-a-pinwheel (a three-wedge seed that
+  spins up a spiral), a three-pigment brush, **the flip** (meadow ⟷ beaker rocker with a
+  reach-diagram), a coarse same-seed **living twin** running the opposite world, and **break
+  the spell** (the enacted shuffle neg-control). Payoff-liveness twin drives the real entry
+  fns headless — spatial persists with organised fronts, well-mixed drives to extinction.
+- Placement: a DEEPEN (one landing card with a live preview off the SAME core, reciprocal
+  kin-nav to Predator & Prey and The Replicator). No new PLACES/map dot; manifest reconciled.
+
+---
+
 ## Cycle #357 — Schelling's Tipping Town (the 10th bench): a mild wish, a stark segregation
 
 A garden bench (BUILD / garden, PLANTER). The Drift Jar's kin — but where the Drift Jar
