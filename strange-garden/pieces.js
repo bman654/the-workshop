@@ -211,5 +211,11 @@ window.PIECES = [
     name: "Marbling Bath",
     blurb: "drop a ring of ink, rake the still water, and keep the marbled print",
     accent: "#3fb6c9"
+  },
+  {
+    file: "the-raked-garden.html",
+    name: "The Raked Garden",
+    blurb: "drag a wooden rake through dry sand, part the grooves around a stone, and keep the garden",
+    accent: "#c8a86a"
   }
 ];

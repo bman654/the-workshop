@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Raked Garden — Strange Garden</title>
+<style>
+  :root { --accent:#c8a86a; }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;overflow:hidden;background:#1c1913;
+    font-family:system-ui,sans-serif;color:#efe6d2;-webkit-user-select:none;user-select:none;}
+  #c{display:block;width:100vw;height:100vh;cursor:crosshair;touch-action:none;}
+  #panel{position:fixed;top:16px;left:16px;width:236px;padding:15px 15px 13px;
+    background:rgba(34,29,21,.72);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);
+    border:1px solid rgba(220,200,160,.14);border-radius:13px;
+    box-shadow:0 8px 40px rgba(0,0,0,.55);font-size:13px;transition:opacity .2s;
+    max-height:calc(100vh - 32px);overflow:auto;}
+  .head{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  #panel h1{font-size:14px;margin:0;letter-spacing:.02em;font-weight:600;}
+  #fold{flex:0 0 auto;width:26px;height:26px;padding:0;line-height:1;font-size:14px;border-radius:7px;
+    color:#efe6d2;background:rgba(220,200,160,.08);border:1px solid rgba(220,200,160,.16);cursor:pointer;}
+  #fold:hover{background:rgba(220,200,160,.16);}
+  #panel.fold > :not(.head){display:none;}
+  #panel.fold{padding-bottom:13px;}
+  .desc{font-size:11px;opacity:.55;margin:6px 0 10px;line-height:1.5;}
+  .desc a{color:var(--accent);text-decoration:none;}
+  .desc em{font-style:italic;opacity:.9;}
+  .sect{font:10px ui-monospace,Menlo,monospace;opacity:.4;letter-spacing:.12em;
+    text-transform:uppercase;margin:13px 0 5px;}
+  .row{display:flex;gap:7px;}
+  button{flex:1;padding:7px 4px;font-size:12px;cursor:pointer;color:#efe6d2;
+    background:rgba(220,200,160,.07);border:1px solid rgba(220,200,160,.16);
+    border-radius:8px;transition:background .15s;}
+  button:hover{background:rgba(220,200,160,.15);}
+  button.on{border-color:color-mix(in srgb,var(--accent) 70%,transparent);
+    background:color-mix(in srgb,var(--accent) 24%,transparent);color:#fff;}
+  label{font:11px ui-monospace,Menlo,monospace;opacity:.8;margin:11px 0 3px;
+    display:flex;justify-content:space-between;}
+  label b{color:var(--accent);font-weight:600;}
+  input[type=range]{width:100%;accent-color:var(--accent);margin:0;}
+  #hint{position:fixed;bottom:11px;left:16px;font:11px ui-monospace,Menlo,monospace;opacity:.32;}
+  a.back{position:fixed;top:18px;right:18px;font:12px ui-monospace,Menlo,monospace;
+    color:#efe6d2;opacity:.4;text-decoration:none;}
+  a.back:hover{opacity:.85;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <div class="head"><h1>The Raked Garden</h1>
+    <button id="fold" title="collapse panel (h)" aria-label="collapse panel">▾</button></div>
+  <p class="desc">A dry garden of combed sand. Drag the rake and parallel grooves
+    follow your stroke; set a stone and the grooves part around it in quiet rings.
+    Sweep flat to begin again — or walk away and return to the garden you left.
+    Kin to the <a href="the-marbling-bath.html">Marbling Bath</a>: there you keep the
+    <em>ink</em>, here you keep the <em>sand</em>.</p>
+
+  <div class="sect">In hand</div>
+  <div class="row">
+    <button id="tRake" class="on">Rake</button>
+    <button id="tStone">Stone</button>
+  </div>
+  <label>Rake width <b id="vW">120</b></label>
+  <input type="range" id="sW" min="50" max="240" step="2" value="120">
+  <label>Groove spacing <b id="vS">17</b></label>
+  <input type="range" id="sS" min="10" max="30" step="1" value="17">
+
+  <div class="sect">Bed</div>
+  <div class="row">
+    <button id="flat">Sweep flat</button>
+    <button id="clear">Clear stones</button>
+  </div>
+</div>
+<div id="hint">drag to rake · Stone to set/move a rock · Sweep flat resets · ▾ folds</div>
+<a class="back" href="../index.html">← garden</a>
+<script>
+"use strict";
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const $=id=>document.getElementById(id);
+const STORE='ws:raked-garden';
+
+// ── field: a scalar groove-PHASE buffer, sampled every FSTEP canvas px ────────
+// FSTEP 3 (was 4): finer sampling tames near-horizontal staircase aliasing on the
+// grooves; the shade loop stays shade-only, so 60fps holds over the larger grid.
+const FSTEP=3;
+// L = a far virtual centre used to flatten concentric rings into stroke-parallel
+// grooves *within one distance-to-a-point field* (see phaseAt). Large enough that a
+// full-comb groove is near-straight; small enough to keep float precision sweet.
+const L=8000;
+let W=0,H=0, GW=0,GH=0, cx=0,cy=0;
+let combA, combW;             // per-cell rake angle + strength (0..1)
+let heightBuf, nx,ny,nz;      // relief height + surface normal
+let grain;                    // static sand-grain micro-texture (per cell, ~[-1,1])
+let img;                      // ImageData at field resolution
+let stones=[];                // {x,y,r,seed}
+let spacing=17, relief=2.4;
+
+// deterministic hash → [0,1): seeds the static sand grain (no per-frame shimmer)
+function hash2(i,j){ let h=(i*374761393+j*668265263)>>>0; h=(h^(h>>>13))*1274126177>>>0;
+  return ((h^(h>>>16))>>>0)/4294967296; }
+
+function resize(){
+  W=cv.width=innerWidth; H=cv.height=innerHeight;
+  GW=Math.ceil(W/FSTEP)+1; GH=Math.ceil(H/FSTEP)+1;
+  cx=W/2; cy=H/2;
+  const n=GW*GH;
+  const nA=new Float32Array(n), nW=new Float32Array(n);
+  // preserve existing comb on resize by copying the overlapping cells
+  if(combA){ const oGW=window.__oGW||GW, oLen=combA.length;
+    for(let j=0;j<GH;j++)for(let i=0;i<GW;i++){
+      const oIdx=j*oGW+i; if(i<oGW && oIdx<oLen){ nA[j*GW+i]=combA[oIdx]; nW[j*GW+i]=combW[oIdx]; }
+  }}
+  window.__oGW=GW; combA=nA; combW=nW;
+  heightBuf=new Float32Array(n); nx=new Float32Array(n); ny=new Float32Array(n); nz=new Float32Array(n);
+  grain=new Float32Array(n);
+  for(let j=0;j<GH;j++)for(let i=0;i<GW;i++){
+    // two octaves of value-ish noise → a fine sandy tooth
+    grain[j*GW+i]=(hash2(i,j)-0.5)*1.0 + (hash2(i>>1,j>>1)-0.5)*0.6;
+  }
+  img=ctx.createImageData(GW,GH);
+  rebuild();
+}
+
+// ── the phase field — ONE distance-to-a-point function, its reference WARPED ───
+// Rather than lerping two phase VALUES (which collapses the gradient at the seam and
+// shimmers into moiré), we keep a single unit-gradient field — distance to a point —
+// and MOVE the point:
+//   • uncombed      → the point is the garden centre        ⇒ concentric rings
+//   • fully combed   → the point slides to infinity (∝ L) along the stroke-perp,
+//                      so the rings flatten into grooves running ALONG the stroke
+//   • near a stone   → the point blends to the stone centre  ⇒ grooves part into
+//                      concentric ring-halos hugging the rock
+// Because it is ALWAYS distance-to-a-point, |∇phase| stays ~1 everywhere: groove
+// COUNT is continuous across every boundary — no beat, no fork.
+let _sw=0,_sx=0,_sy=0;     // scratch: strongest stone weight + its centre, per sample
+function smooth(a,b,x){ let t=(x-a)/(b-a); return t<0?0:t>1?1:t*t*(3-2*t); }
+function wave(th){ let h=Math.sin(th); return h>=0?Math.pow(h,0.85):-Math.pow(-h,1.25); }
+// The SURROUNDING phase: ONE distance-to-a-point field, its reference WARPED.
+// Rather than lerping two phase VALUES (which collapses the gradient at the seam
+// and shimmers into moiré), we keep a single unit-gradient field — distance to a
+// point — and MOVE the point: at the garden centre it gives concentric rings; slid
+// to infinity (∝ L) along the stroke-perp it flattens the rings into grooves that
+// run ALONG the stroke. |∇phase|≈1 everywhere ⇒ groove COUNT is continuous, no beat.
+// The STONE halo is a SEPARATE unit-gradient field (distance-to-stone); the two are
+// cross-faded through a flat moat (see rebuild) so they never overlap and interfere.
+function phaseAt(x,y,i){
+  const w=combW[i];
+  let ex=cx, ey=cy, off=0;
+  if(w>0.0001){
+    const a=combA[i], px=-Math.sin(a), py=Math.cos(a);   // stroke-perpendicular dir
+    ex=cx - L*w*px; ey=cy - L*w*py; off=L*w;
+  }
+  // note the strongest nearby stone (the halo is drawn in rebuild)
+  let sw=0, sx=0, sy=0;
+  for(let k=0;k<stones.length;k++){
+    const s=stones[k], dx=x-s.x, dy=y-s.y, d=Math.sqrt(dx*dx+dy*dy);
+    const infl=s.r+72;
+    if(d<infl){ let t=1-(d-s.r)/(infl-s.r); t=t<0?0:t>1?1:t; const tt=t*t*(3-2*t);
+      if(tt>sw){ sw=tt; sx=s.x; sy=s.y; } }
+  }
+  _sw=sw; _sx=sx; _sy=sy;
+  const dx=x-ex, dy=y-ey;
+  return Math.sqrt(dx*dx+dy*dy)-off;
+}
+
+function rebuild(){
+  const invSp=Math.PI*2/spacing;
+  for(let j=0;j<GH;j++){
+    for(let i=0;i<GW;i++){
+      const idx=j*GW+i, x=i*FSTEP, y=j*FSTEP;
+      const phi=phaseAt(x,y,idx);
+      const sw=_sw;
+      // the surrounding grooves (comb + concentric base)
+      let h=wave(phi*invSp);
+      // the stone halo: an independent concentric field cross-faded through a flat
+      // moat, so the two ring systems NEVER coexist → no interference, no moiré.
+      if(sw>0){
+        const ds=Math.hypot(x-_sx,y-_sy);
+        const hStone=wave(ds*invSp);
+        const aSurr=1-smooth(0.30,0.50,sw);   // grooves fade out approaching the rock
+        const aStone=smooth(0.60,0.86,sw);    // tight rings hug only very close in
+        h=h*aSurr + hStone*aStone;            // moat (sw≈.5): both ≈0 → swept-flat border
+      }
+      // damp the r→0 curvature knot: a calm apron at the very centre
+      const r0=Math.hypot(x-cx,y-cy);
+      let amp=r0<26?0:r0>62?1:(r0-26)/36; amp=amp*amp*(3-2*amp);
+      heightBuf[idx]=h*amp;
+    }
+  }
+  // surface normals from the height gradient
+  for(let j=0;j<GH;j++){
+    for(let i=0;i<GW;i++){
+      const idx=j*GW+i;
+      const l=heightBuf[j*GW+Math.max(0,i-1)], r=heightBuf[j*GW+Math.min(GW-1,i+1)];
+      const u=heightBuf[Math.max(0,j-1)*GW+i], d=heightBuf[Math.min(GH-1,j+1)*GW+i];
+      let vx=-(r-l)*relief, vy=-(d-u)*relief;
+      const inv=1/Math.sqrt(vx*vx+vy*vy+1);
+      nx[idx]=vx*inv; ny[idx]=vy*inv; nz[idx]=inv;
+    }
+  }
+  // NB: no save() here — rebuild runs every rake-move; persistence happens only on
+  // discrete actions (below) so boot's base-render can't clobber a restored garden.
+}
+
+// ── raking / stones ───────────────────────────────────────────────────────────
+let tool='rake', rakeW=120;
+function rake(x0,y0,x1,y1){
+  const dx=x1-x0, dy=y1-y0, ang=Math.atan2(dy,dx);
+  const hw=rakeW/2;
+  const minI=Math.max(0,Math.floor((Math.min(x0,x1)-hw)/FSTEP));
+  const maxI=Math.min(GW-1,Math.ceil((Math.max(x0,x1)+hw)/FSTEP));
+  const minJ=Math.max(0,Math.floor((Math.min(y0,y1)-hw)/FSTEP));
+  const maxJ=Math.min(GH-1,Math.ceil((Math.max(y0,y1)+hw)/FSTEP));
+  const len=Math.hypot(dx,dy)||1, ux=dx/len, uy=dy/len;
+  for(let j=minJ;j<=maxJ;j++)for(let i=minI;i<=maxI;i++){
+    const px=i*FSTEP, py=j*FSTEP;
+    let t=((px-x0)*ux+(py-y0)*uy); t=t<0?0:t>len?len:t;
+    const qx=x0+ux*t, qy=y0+uy*t, dd=Math.hypot(px-qx,py-qy);
+    if(dd<hw){
+      const idx=j*GW+i, fall=1-dd/hw;
+      const s=0.5+0.5*fall*fall;              // stronger toward the centre-line
+      const nw=Math.min(1, combW[idx]+s*0.9);
+      // blend the stored angle toward the current stroke along the SHORT arc, so a
+      // curved sweep reads as one continuous comb rather than snapping
+      let ca=combA[idx];
+      if(combW[idx]<0.05) ca=ang; else {
+        let diff=((ang-ca+Math.PI*3)%(Math.PI*2))-Math.PI; ca=ca+diff*Math.min(1,s);
+      }
+      combA[idx]=ca; combW[idx]=nw;
+    }
+  }
+}
+function stoneAt(x,y){ for(let k=stones.length-1;k>=0;k--){ const s=stones[k];
+  if(Math.hypot(x-s.x,y-s.y)<s.r+8) return k; } return -1; }
+
+// ── render: raking-light shaded relief + hand-shaded pebbles ───────────────────
+const sand=[0x50,0x45,0x31];          // deep groove shadow (dusk)
+const sandHi=[0xe6,0xd5,0xa8];        // parchment ridge crest
+let t0=performance.now();
+function draw(now){
+  const t=(now-t0)/1000;
+  // low raking light (~20°), az/el drifting slowly for a living self-shadow
+  const az=-2.35 + 0.16*Math.sin(t*0.062);
+  const el=0.34 + 0.05*Math.sin(t*0.043);
+  const ce=Math.cos(el);
+  const lx=ce*Math.cos(az), ly=ce*Math.sin(az), lz=Math.sin(el);
+  const d=img.data;
+  for(let idx=0,p=0;idx<GW*GH;idx++,p+=4){
+    let dot=nx[idx]*lx+ny[idx]*ly+nz[idx]*lz;
+    if(dot<0)dot=0;
+    const hb=heightBuf[idx];
+    let g=(0.30+0.78*dot)*(0.85+0.15*(hb*0.5+0.5));   // ambient+diffuse, crest AO
+    // faint granular tooth on the lit crests so the sand reads sandy, not plastic
+    if(hb>0) g+=grain[idx]*0.05*hb*dot;
+    if(g<0)g=0; else if(g>1.15)g=1.15;
+    d[p]  =sand[0]+(sandHi[0]-sand[0])*g;
+    d[p+1]=sand[1]+(sandHi[1]-sand[1])*g;
+    d[p+2]=sand[2]+(sandHi[2]-sand[2])*g;
+    d[p+3]=255;
+  }
+  // blit field → canvas, bilinear-smoothed for soft relief + upscale AA
+  const off=draw._off||(draw._off=document.createElement('canvas'));
+  off.width=GW; off.height=GH; off.getContext('2d').putImageData(img,0,0);
+  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+  ctx.drawImage(off,0,0,GW,GH,0,0,W,H);
+  // stones — irregular hand-shaded pebbles, lit to match the raking light
+  for(const s of stones) drawPebble(s,lx,ly,lz);
+  requestAnimationFrame(draw);
+}
+
+// a fixed irregular silhouette per stone (seeded) → baked dome shading + cast shadow
+function pebbleVerts(s){
+  if(s._v) return s._v;
+  const N=11, v=[]; let sd=s.seed||1;
+  const rnd=()=>{ sd=(sd*1103515245+12345)&0x7fffffff; return sd/0x7fffffff; };
+  const rot=rnd()*Math.PI*2, sq=0.78+rnd()*0.16;   // slight squash, random orientation
+  for(let k=0;k<N;k++){
+    const a=k/N*Math.PI*2, rr=s.r*(0.82+rnd()*0.30);
+    let px=Math.cos(a)*rr, py=Math.sin(a)*rr*sq;
+    const cr=Math.cos(rot), sr=Math.sin(rot);
+    v.push([px*cr-py*sr, px*sr+py*cr]);
+  }
+  s._v=v; return v;
+}
+function pebblePath(s){ const v=pebbleVerts(s); ctx.beginPath();
+  // Catmull-Rom through the verts for a smooth waterworn outline
+  for(let k=0;k<v.length;k++){
+    const p0=v[(k-1+v.length)%v.length], p1=v[k], p2=v[(k+1)%v.length], p3=v[(k+2)%v.length];
+    if(k===0) ctx.moveTo(s.x+p1[0], s.y+p1[1]);
+    for(let u=1;u<=6;u++){ const tt=u/6, t2=tt*tt, t3=t2*tt;
+      const bx=0.5*((2*p1[0])+(-p0[0]+p2[0])*tt+(2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2+(-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3);
+      const by=0.5*((2*p1[1])+(-p0[1]+p2[1])*tt+(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2+(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3);
+      ctx.lineTo(s.x+bx, s.y+by);
+    }
+  }
+  ctx.closePath();
+}
+function drawPebble(s,lx,ly,lz){
+  ctx.save();
+  // soft cast shadow, thrown opposite the light and squashed by the low elevation
+  ctx.save();
+  ctx.translate(-lx*s.r*0.5, -ly*s.r*0.5);
+  ctx.filter='blur(7px)'; pebblePath(s);
+  ctx.fillStyle='rgba(18,14,9,.40)'; ctx.fill(); ctx.restore();
+  // clip to the pebble body for the baked dome shading
+  pebblePath(s); ctx.clip();
+  const gx=s.x+lx*s.r*0.55, gy=s.y+ly*s.r*0.55;   // highlight toward the light
+  const gr=ctx.createRadialGradient(gx,gy,s.r*0.12, s.x,s.y,s.r*1.25);
+  gr.addColorStop(0,'#7b6e59'); gr.addColorStop(.42,'#5a4f3e');
+  gr.addColorStop(.78,'#3d3427'); gr.addColorStop(1,'#241e16');
+  ctx.fillStyle=gr; ctx.fillRect(s.x-s.r*1.6,s.y-s.r*1.6,s.r*3.2,s.r*3.2);
+  // dark terminator on the far side
+  const tg=ctx.createRadialGradient(s.x-lx*s.r,s.y-ly*s.r,s.r*0.2, s.x-lx*s.r,s.y-ly*s.r,s.r*1.7);
+  tg.addColorStop(0,'rgba(12,9,6,.55)'); tg.addColorStop(1,'rgba(12,9,6,0)');
+  ctx.fillStyle=tg; ctx.fillRect(s.x-s.r*2,s.y-s.r*2,s.r*4,s.r*4);
+  ctx.restore();
+  // a hair of rim light on the lit edge
+  ctx.save(); pebblePath(s); ctx.clip();
+  const rg=ctx.createRadialGradient(gx,gy,s.r*0.7, gx,gy,s.r*1.15);
+  rg.addColorStop(0,'rgba(0,0,0,0)'); rg.addColorStop(.85,'rgba(0,0,0,0)');
+  rg.addColorStop(1,'rgba(220,206,170,.22)');
+  ctx.fillStyle=rg; ctx.fillRect(s.x-s.r*1.6,s.y-s.r*1.6,s.r*3.2,s.r*3.2);
+  ctx.restore();
+  ctx.restore();
+}
+
+// ── input ─────────────────────────────────────────────────────────────────────
+let down=false,px=0,py=0,dragStone=-1;
+function pos(e){ const r=cv.getBoundingClientRect(); const p=e.touches?e.touches[0]:e;
+  return [p.clientX-r.left,p.clientY-r.top]; }
+cv.addEventListener('pointerdown',e=>{ cv.setPointerCapture(e.pointerId);
+  const [x,y]=pos(e); down=true; px=x; py=y;
+  if(tool==='stone'){ const k=stoneAt(x,y);
+    if(k>=0) dragStone=k;
+    else { stones.push({x,y,r:20+Math.random()*16,seed:(Math.random()*1e9)|0}); rebuild(); save(); }
+  }
+});
+cv.addEventListener('pointermove',e=>{ if(!down)return; const [x,y]=pos(e);
+  if(tool==='rake'){ rake(px,py,x,y); rebuild(); }
+  else if(dragStone>=0){ stones[dragStone].x=x; stones[dragStone].y=y; rebuild(); }
+  px=x; py=y;
+});
+function release(){ if(!down)return; down=false; dragStone=-1; save(); }   // save ONLY here
+cv.addEventListener('pointerup',release);
+cv.addEventListener('pointercancel',release);
+
+// ── controls ──────────────────────────────────────────────────────────────────
+function setTool(t){ tool=t; $('tRake').classList.toggle('on',t==='rake');
+  $('tStone').classList.toggle('on',t==='stone');
+  cv.style.cursor=t==='stone'?'pointer':'crosshair'; }
+$('tRake').onclick=()=>setTool('rake');
+$('tStone').onclick=()=>setTool('stone');
+$('sW').oninput=e=>{ rakeW=+e.target.value; $('vW').textContent=rakeW; };
+$('sS').oninput=e=>{ spacing=+e.target.value; $('vS').textContent=spacing; rebuild(); };
+$('sS').onchange=save;                                   // persist once, on release
+$('flat').onclick=()=>{ combW.fill(0); rebuild(); save(); };
+$('clear').onclick=()=>{ stones=[]; rebuild(); save(); };
+$('fold').onclick=()=>$('panel').classList.toggle('fold');
+addEventListener('keydown',e=>{ if(e.key==='h')$('panel').classList.toggle('fold'); });
+
+// ── persistence: the KEPT garden restores on reload ───────────────────────────
+function pack(){ // quantise the comb buffers to bytes + the stones as JSON
+  const a=new Uint8Array(GW*GH), w=new Uint8Array(GW*GH);
+  for(let i=0;i<GW*GH;i++){ a[i]=(((combA[i]%(Math.PI*2))+Math.PI*2)%(Math.PI*2))/(Math.PI*2)*255|0;
+    w[i]=combW[i]*255|0; }
+  let sa=''; for(let i=0;i<a.length;i+=8192) sa+=String.fromCharCode.apply(null,a.subarray(i,i+8192));
+  let sw=''; for(let i=0;i<w.length;i+=8192) sw+=String.fromCharCode.apply(null,w.subarray(i,i+8192));
+  const st=stones.map(s=>({x:Math.round(s.x),y:Math.round(s.y),r:Math.round(s.r*10)/10,seed:s.seed|0}));
+  return {gw:GW,gh:GH,sp:spacing,st,a:btoa(sa),w:btoa(sw)};
+}
+function save(){ try{ localStorage.setItem(STORE,JSON.stringify(pack())); }catch(e){} }
+function load(){ try{ const raw=localStorage.getItem(STORE); if(!raw)return false;
+  const o=JSON.parse(raw);
+  spacing=o.sp||spacing; stones=(o.st||[]).map(s=>({x:s.x,y:s.y,r:s.r,seed:s.seed|0}));
+  if(o.gw!==GW||o.gh!==GH) return true;   // grid changed: keep stones+spacing, drop fine comb
+  const da=atob(o.a), dw=atob(o.w);
+  for(let i=0;i<GW*GH;i++){ combA[i]=da.charCodeAt(i)/255*Math.PI*2; combW[i]=dw.charCodeAt(i)/255; }
+  return true;
+}catch(e){ return false; } }
+
+// ── boot ──────────────────────────────────────────────────────────────────────
+addEventListener('resize',resize);
+resize();
+if(load()){ $('vS').textContent=spacing; $('sS').value=spacing; rebuild(); }
+try{ if(!localStorage.getItem('ws:seen:the-raked-garden'))
+  localStorage.setItem('ws:seen:the-raked-garden',String(Date.now())); }catch(e){}
+requestAnimationFrame(draw);
+
+// ── payoff-liveness twin (headless-drivable; not chrome) ──────────────────────
+// Exposes the REAL entries so a headless check can drive save() → reload → load()
+// and assert the kept garden restored. No canvas events; drives the live path.
+window.__rg={
+  rake, save, load,
+  placeStone:(x,y)=>{ stones.push({x,y,r:24,seed:(Math.random()*1e9)|0}); rebuild(); },
+  snapshot:()=>{ let combed=0,mx=0; for(let i=0;i<combW.length;i++){ if(combW[i]>0.5)combed++;
+      if(combW[i]>mx)mx=combW[i]; }
+    return {stones:stones.map(s=>({x:Math.round(s.x),y:Math.round(s.y),seed:s.seed})),
+      combed, maxCombW:Math.round(mx*100)/100, gw:GW, gh:GH}; },
+  rebuild
+};
+</script>
+</body>
+</html>
