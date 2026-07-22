@@ -1115,7 +1115,8 @@
     'daedalus-rep': function (g, baseX, baseY, pick) { drawRepDaedalus(g, baseX, baseY, pick); },
     'compositor-rep': function (g, baseX, baseY, pick) { drawRepCompositor(g, baseX, baseY, pick); },
     'stellar-forge-rep': function (g, baseX, baseY, pick) { drawRepStellarForge(g, baseX, baseY, pick); },
-    'the-keystone-arch-rep': function (g, baseX, baseY, pick) { drawRepTheKeystoneArch(g, baseX, baseY, pick); }
+    'the-keystone-arch-rep': function (g, baseX, baseY, pick) { drawRepTheKeystoneArch(g, baseX, baseY, pick); },
+    'the-deep-hearth-rep': function (g, baseX, baseY, pick) { drawRepTheDeepHearth(g, baseX, baseY, pick); }
   };
 
   function drawRoomRep(parent) {
@@ -5171,6 +5172,337 @@
     el('circle', { cx: fx(Ktop[0]), cy: fx(Ktop[1] - 1.2), r: 0.85, fill: BRI, opacity: '0.95' }, g);
 
     S.refs.keystoneArchRep = g;
+  }
+
+  function drawRepTheDeepHearth(parent, cx, baseY, pick) {
+    // The Deep Hearth — a squat side-on CUT through the living planet — a ground-hugging
+    // wedge of dark faceted basalt crust seen in SECTION (rock sliced open), with a magma
+    // CHAMBER pooling ember-orange low within it and a thin bright ember hint of the molten
+    // core glowing at the very base; glow brightest deep in the chamber / at the base and
+    // fading as it climbs toward the cold crust rim (hot heart, cold shell).
+    //
+    // TAKE 2 — "the cloven hearth-stone / geological section". A broken basalt outcrop cut
+    // clean through: horizontal bedding STRATA cross the wedge (the layered rock read), a
+    // rounded magma chamber sits trapped BETWEEN the strata low-centre with a feeder throat
+    // down to a bright molten seam at the base. Not a cave mouth (no dark arch you look INTO)
+    // — the magma is bounded on ALL sides by rock, revealed only by the cut. Lit from above:
+    // up/left crust facets catch a warm brass-bright light-catch, down/right faces turn away.
+    // A quiet ember SHIMMER breathes the pool + a faint heat-haze rises off the hot crest
+    // (reduced-motion-safe). Emissive strictly through the glow slots so it blazes at night
+    // and recedes (not below its floor) by day; crust recolours per band via rep.swatch1.
+    var g = group('deep-hearth', parent);
+    var CRUST = 'var(--rep-swatch1-ref, #221513)';       // swappable dark basalt crust body
+    var DARK  = 'rgba(11,14,22,.85)';                     // estate brass dark body
+    var BRASS = 'var(--brass-stroke-ref, #9c8350)';      // brass edge stroke
+    var BRI   = 'var(--brass-bright-ref, #cdb375)';      // brass-bright TOP sheen / warm light-catch
+    var MAGMA = 'var(--rep-glow1-ref, #e24a2a)';         // EMISSIVE deep chamber / core pool (hottest deep ember)
+    var EMBER = 'var(--rep-glow2-ref, #ff7a3a)';         // EMISSIVE bright ember lip / veins / base core hint
+    var fx = function (n) { return (Math.round(n * 10) / 10); };
+
+    var W = 150, H = 112;                  // LOW + WIDE footprint (squat, hugging ground)
+    var halfW = W / 2;                     // 75
+    var topY = baseY - H;                  // y608 — crest region
+    var L = cx - halfW, R = cx + halfW;    // x155 .. x305
+
+    // a private soft-feather filter for the pooled magma light (own id — do NOT reuse
+    // another rep's #cavern-maw-glow / #glasshouse-bloom).
+    var defs = parent.ownerSVGElement && parent.ownerSVGElement.querySelector('defs');
+    if (defs && !defs.querySelector('#hearth-magma-glow')) {
+      var fG = el('filter', { id: 'hearth-magma-glow', x: '-80%', y: '-80%', width: '260%', height: '260%' }, defs);
+      el('feGaussianBlur', { 'in': 'SourceGraphic', stdDeviation: '5' }, fG);
+    }
+    // a gentler feather for the fine veins / base seam (keeps them crisp-hot)
+    if (defs && !defs.querySelector('#hearth-ember-glow')) {
+      var fE = el('filter', { id: 'hearth-ember-glow', x: '-70%', y: '-70%', width: '240%', height: '240%' }, defs);
+      el('feGaussianBlur', { 'in': 'SourceGraphic', stdDeviation: '2' }, fE);
+    }
+
+    // ── soft contact shadow so the wedge sits ON the grass (light from above) ──
+    el('ellipse', { cx: cx + 6, cy: baseY + 2, rx: halfW * 0.98, ry: 8,
+      fill: '#000', opacity: '0.30', filter: 'url(#glow-soft)' }, g);
+
+    // ════════════ CRUST BODY — a craggy, BLOCKY low basalt outcrop silhouette ═══════
+    // A jagged asymmetric run of angular ledges: crest left-of-centre, notched saddle,
+    // a lower stepped right bench. Many short segments → reads as fractured basalt, never
+    // a smooth dome.
+    var pk = [                                              // the jagged up-facing ridgeline
+      [L,        baseY],
+      [L + 3,    baseY - 40],
+      [cx - 58,  baseY - 58],
+      [cx - 60,  topY + 30],
+      [cx - 44,  topY + 12],
+      [cx - 30,  topY + 2],                                 // CREST (highest)
+      [cx - 14,  topY + 22],
+      [cx + 2,   topY + 12],
+      [cx + 18,  topY + 34],
+      [cx + 36,  topY + 24],
+      [cx + 52,  topY + 46],
+      [R - 8,    baseY - 56],
+      [R,        baseY - 30],
+      [R - 2,    baseY]
+    ];
+    var bodyD = 'M ' + fx(pk[0][0]) + ' ' + fx(pk[0][1]);
+    for (var pi = 1; pi < pk.length; pi++) bodyD += ' L ' + fx(pk[pi][0]) + ' ' + fx(pk[pi][1]);
+    bodyD += ' Z';
+    el('path', { d: bodyD, fill: CRUST, stroke: BRASS, 'stroke-width': '1.4',
+      filter: 'url(#glow-soft)' }, g);
+
+    // ── the CUT-FACE plane: a thin inset rim paralleling the top edge reads as the near
+    //    cut edge of the crust (rock has THICKNESS — this is a slice, not a shell). Also
+    //    a faint darkening over the section face so the interior sits back of the rim. ──
+    var cutInset = 7;
+    el('path', { d: 'M ' + fx(cx - 58) + ' ' + fx(baseY - 58 + cutInset) +
+      ' L ' + fx(cx - 60) + ' ' + fx(topY + 30 + cutInset) +
+      ' L ' + fx(cx - 44) + ' ' + fx(topY + 12 + cutInset) +
+      ' L ' + fx(cx - 30) + ' ' + fx(topY + 2 + cutInset) +
+      ' L ' + fx(cx - 14) + ' ' + fx(topY + 22 + cutInset) +
+      ' L ' + fx(cx + 2) + ' ' + fx(topY + 12 + cutInset) +
+      ' L ' + fx(cx + 18) + ' ' + fx(topY + 34 + cutInset) +
+      ' L ' + fx(cx + 36) + ' ' + fx(topY + 24 + cutInset) +
+      ' L ' + fx(cx + 52) + ' ' + fx(topY + 46 + cutInset) +
+      ' L ' + fx(R - 10) + ' ' + fx(baseY - 54),
+      fill: 'none', stroke: 'rgba(0,0,0,.28)', 'stroke-width': '1.2',
+      'stroke-linejoin': 'round' }, g);
+
+    // ════════════ FACET PLANES — up/left-facing warm light-catch; down/right dark ════
+    // No second swappable role exists for this rep, so the lit facets are the crust body
+    // (swatch1) lifted by a translucent brass-bright light-catch on up-facing planes, and
+    // knocked back by translucent black on the down/right faces. Keeps it top-lit AND warm.
+    // left massif up-face (broad lit shoulder), split by a fold crease into two planes
+    el('path', { d: 'M ' + fx(cx - 60) + ' ' + fx(topY + 30) +
+      ' L ' + fx(cx - 44) + ' ' + fx(topY + 12) +
+      ' L ' + fx(cx - 38) + ' ' + fx(topY + 22) +
+      ' L ' + fx(cx - 52) + ' ' + fx(topY + 44) + ' Z',
+      fill: BRI, opacity: '0.26' }, g);
+    el('path', { d: 'M ' + fx(cx - 44) + ' ' + fx(topY + 12) +
+      ' L ' + fx(cx - 30) + ' ' + fx(topY + 2) +
+      ' L ' + fx(cx - 26) + ' ' + fx(topY + 16) +
+      ' L ' + fx(cx - 38) + ' ' + fx(topY + 22) + ' Z',
+      fill: BRI, opacity: '0.34' }, g);
+    // a thin shadow crease along the fold (the break between the two planes)
+    el('path', { d: 'M ' + fx(cx - 52) + ' ' + fx(topY + 44) + ' L ' + fx(cx - 38) + ' ' + fx(topY + 22),
+      fill: 'none', stroke: 'rgba(0,0,0,.34)', 'stroke-width': '1.1', 'stroke-linecap': 'round' }, g);
+    // mid-peak lit cap
+    el('path', { d: 'M ' + fx(cx - 14) + ' ' + fx(topY + 22) +
+      ' L ' + fx(cx + 2) + ' ' + fx(topY + 12) +
+      ' L ' + fx(cx + 8) + ' ' + fx(topY + 26) +
+      ' L ' + fx(cx - 8) + ' ' + fx(topY + 32) + ' Z',
+      fill: BRI, opacity: '0.24' }, g);
+    // right shoulder up-plane
+    el('path', { d: 'M ' + fx(cx + 18) + ' ' + fx(topY + 34) +
+      ' L ' + fx(cx + 36) + ' ' + fx(topY + 24) +
+      ' L ' + fx(cx + 50) + ' ' + fx(topY + 44) +
+      ' L ' + fx(cx + 30) + ' ' + fx(topY + 46) + ' Z',
+      fill: BRI, opacity: '0.20' }, g);
+    // down/right SHADOW faces (the right flank + the mid-saddle turn away from the
+    // overhead light — deepened so the lit up-planes read distinctly against them)
+    el('path', { d: 'M ' + fx(cx + 52) + ' ' + fx(topY + 46) +
+      ' L ' + fx(R - 8) + ' ' + fx(baseY - 56) +
+      ' L ' + fx(R) + ' ' + fx(baseY - 30) +
+      ' L ' + fx(cx + 48) + ' ' + fx(baseY - 26) + ' Z',
+      fill: 'rgba(0,0,0,.34)' }, g);
+    // the saddle's right-facing wall (between crest and mid-peak) drops into shadow
+    el('path', { d: 'M ' + fx(cx - 30) + ' ' + fx(topY + 2) +
+      ' L ' + fx(cx - 14) + ' ' + fx(topY + 22) +
+      ' L ' + fx(cx - 8) + ' ' + fx(topY + 32) +
+      ' L ' + fx(cx - 26) + ' ' + fx(topY + 16) + ' Z',
+      fill: 'rgba(0,0,0,.22)' }, g);
+
+    // ════════════ THE MAGMA CHAMBER — pooled ember light trapped WITHIN the rock ═════
+    // Built by STACKING the two emissive tones + opacity (NOT a gradient): a broad soft
+    // halo, a rounded chamber pool (glow1, the deep magma), a hotter inner pool, a bright
+    // core (glow2) seated DEEP + LOW, then a feeder throat dropping to a bright molten
+    // seam right at the base. The crust strata (drawn AFTER) swallow the upper edge so the
+    // read is hot+bright deep/low, fading as it climbs toward the cold rim.
+    var chCx = cx + 2, chCy = baseY - 40;    // chamber centre (low within the wedge)
+    var chW = 78, chH = 46, chHalf = chW / 2;
+    // 1) broad soft bloom seated low + deep (the heat filling the pocket)
+    el('ellipse', { cx: chCx, cy: chCy + 8, rx: chHalf * 1.12, ry: chH * 0.72,
+      fill: MAGMA, opacity: '0.30', filter: 'url(#hearth-magma-glow)' }, g);
+    // 2) the rounded chamber POOL — a lens of deep magma (glow1)
+    var poolD = 'M ' + fx(chCx - chHalf) + ' ' + fx(chCy) +
+      ' Q ' + fx(chCx - chHalf) + ' ' + fx(chCy - chH * 0.62) + ' ' + fx(chCx - chHalf * 0.34) + ' ' + fx(chCy - chH * 0.70) +
+      ' Q ' + fx(chCx) + ' ' + fx(chCy - chH * 0.74) + ' ' + fx(chCx + chHalf * 0.34) + ' ' + fx(chCy - chH * 0.70) +
+      ' Q ' + fx(chCx + chHalf) + ' ' + fx(chCy - chH * 0.62) + ' ' + fx(chCx + chHalf) + ' ' + fx(chCy) +
+      ' Q ' + fx(chCx + chHalf) + ' ' + fx(chCy + chH * 0.66) + ' ' + fx(chCx + chHalf * 0.30) + ' ' + fx(chCy + chH * 0.74) +
+      ' Q ' + fx(chCx) + ' ' + fx(chCy + chH * 0.78) + ' ' + fx(chCx - chHalf * 0.30) + ' ' + fx(chCy + chH * 0.74) +
+      ' Q ' + fx(chCx - chHalf) + ' ' + fx(chCy + chH * 0.66) + ' ' + fx(chCx - chHalf) + ' ' + fx(chCy) + ' Z';
+    var poolEl = el('path', { d: poolD, fill: MAGMA, opacity: '0.52', filter: 'url(#hearth-magma-glow)' }, g);
+    // 3) a hotter inner pool, seated low (brightest mass sinks)
+    var innerEl = el('ellipse', { cx: chCx, cy: chCy + chH * 0.30, rx: chHalf * 0.62, ry: chH * 0.46,
+      fill: MAGMA, opacity: '0.80', filter: 'url(#hearth-magma-glow)' }, g);
+    // 4) the HOT CORE — bright ember (glow2) deep + low in the chamber
+    var coreEl = el('ellipse', { cx: chCx, cy: chCy + chH * 0.40, rx: chHalf * 0.36, ry: chH * 0.26,
+      fill: EMBER, opacity: '0.92', filter: 'url(#hearth-magma-glow)' }, g);
+    // 5) a small near-white kernel at the very heart
+    el('ellipse', { cx: chCx, cy: chCy + chH * 0.42, rx: chHalf * 0.16, ry: chH * 0.12,
+      fill: '#fff2e0', opacity: '0.34', filter: 'url(#hearth-ember-glow)' }, g);
+
+    // ── FEEDER THROAT — a tapering tongue of magma dropping from the chamber to the base
+    var feedTopY = chCy + chH * 0.62;
+    var feedD = 'M ' + fx(chCx - 11) + ' ' + fx(feedTopY) +
+      ' Q ' + fx(chCx - 7) + ' ' + fx((feedTopY + baseY) / 2) + ' ' + fx(chCx - 8) + ' ' + fx(baseY - 4) +
+      ' L ' + fx(chCx + 8) + ' ' + fx(baseY - 4) +
+      ' Q ' + fx(chCx + 7) + ' ' + fx((feedTopY + baseY) / 2) + ' ' + fx(chCx + 11) + ' ' + fx(feedTopY) + ' Z';
+    var feedEl = el('path', { d: feedD, fill: MAGMA, opacity: '0.62', filter: 'url(#hearth-magma-glow)' }, g);
+
+    // ── the BASE MOLTEN SEAM — a thin bright ember hint of the core, glowing at the very
+    //    base (the hottest, lowest highlight; glow2). Halo + a crisp hot line.
+    var seamEl = el('ellipse', { cx: chCx, cy: baseY - 5, rx: chHalf * 0.94, ry: 6,
+      fill: EMBER, opacity: '0.60', filter: 'url(#hearth-magma-glow)' }, g);
+    el('ellipse', { cx: chCx, cy: baseY - 5, rx: chHalf * 0.62, ry: 3,
+      fill: EMBER, opacity: '0.92', filter: 'url(#hearth-ember-glow)' }, g);
+    el('ellipse', { cx: chCx, cy: baseY - 5, rx: chHalf * 0.30, ry: 1.6,
+      fill: '#fff2e0', opacity: '0.42', filter: 'url(#hearth-ember-glow)' }, g);
+    // a couple of fine hot veins threading up out of the chamber into the crust (cooling
+    // as they climb — thin ember cracks); glow2, feathered.
+    // left vein: forks partway up (a branching crack in the stone)
+    el('path', { d: 'M ' + fx(chCx - 20) + ' ' + fx(chCy - chH * 0.30) +
+      ' L ' + fx(chCx - 27) + ' ' + fx(chCy - chH * 0.86) +
+      ' L ' + fx(chCx - 24) + ' ' + fx(chCy - chH * 1.16),
+      fill: 'none', stroke: EMBER, 'stroke-width': '1.3', opacity: '0.52',
+      'stroke-linecap': 'round', 'stroke-linejoin': 'round', filter: 'url(#hearth-ember-glow)' }, g);
+    el('path', { d: 'M ' + fx(chCx - 26) + ' ' + fx(chCy - chH * 0.80) +
+      ' L ' + fx(chCx - 33) + ' ' + fx(chCy - chH * 1.04),
+      fill: 'none', stroke: EMBER, 'stroke-width': '1', opacity: '0.34',
+      'stroke-linecap': 'round', 'stroke-linejoin': 'round', filter: 'url(#hearth-ember-glow)' }, g);
+    el('path', { d: 'M ' + fx(chCx + 17) + ' ' + fx(chCy - chH * 0.24) +
+      ' L ' + fx(chCx + 23) + ' ' + fx(chCy - chH * 0.78) +
+      ' L ' + fx(chCx + 21) + ' ' + fx(chCy - chH * 1.02),
+      fill: 'none', stroke: EMBER, 'stroke-width': '1.1', opacity: '0.42',
+      'stroke-linecap': 'round', 'stroke-linejoin': 'round', filter: 'url(#hearth-ember-glow)' }, g);
+    // a short hairline vein threading into the right flank rock
+    el('path', { d: 'M ' + fx(chCx + 30) + ' ' + fx(chCy - chH * 0.10) +
+      ' L ' + fx(chCx + 38) + ' ' + fx(chCy - chH * 0.44) +
+      ' L ' + fx(chCx + 36) + ' ' + fx(chCy - chH * 0.66),
+      fill: 'none', stroke: EMBER, 'stroke-width': '0.9', opacity: '0.30',
+      'stroke-linecap': 'round', 'stroke-linejoin': 'round', filter: 'url(#hearth-ember-glow)' }, g);
+
+    // approx crust silhouette x at a given height (shared by the side-rock walls + strata)
+    var edgeAtBody = function (y, side) {
+      var t = Math.max(0, Math.min(1, (baseY - y) / H));
+      if (side < 0) return L + 5 + t * 52;    // left flank narrows inward with height
+      return R - 5 - t * 30;                  // right flank
+    };
+    // ════════════ SIDE-ROCK WALLS — the chamber is bounded by stone on BOTH flanks ════
+    // Two CRUST slivers hug the pool's lower-left/right bulge so the magma does not run
+    // flank-to-flank — it reads as trapped WITHIN a body of rock, with a clear stone
+    // margin on either side (never edge-to-edge). Drawn over the glow's outer edge; the
+    // base seam between them stays open (hottest at the very base).
+    el('path', { d: 'M ' + fx(chCx - 30) + ' ' + fx(baseY - 8) +
+      ' Q ' + fx(chCx - 44) + ' ' + fx(baseY - 26) + ' ' + fx(chCx - 40) + ' ' + fx(baseY - 48) +
+      ' L ' + fx(edgeAtBody(baseY - 48, -1)) + ' ' + fx(baseY - 48) +
+      ' L ' + fx(L + 5) + ' ' + fx(baseY - 4) + ' Z',
+      fill: CRUST, opacity: '0.9' }, g);
+    el('path', { d: 'M ' + fx(chCx + 30) + ' ' + fx(baseY - 8) +
+      ' Q ' + fx(chCx + 44) + ' ' + fx(baseY - 26) + ' ' + fx(chCx + 40) + ' ' + fx(baseY - 48) +
+      ' L ' + fx(edgeAtBody(baseY - 48, 1)) + ' ' + fx(baseY - 48) +
+      ' L ' + fx(R - 5) + ' ' + fx(baseY - 4) + ' Z',
+      fill: CRUST, opacity: '0.9' }, g);
+
+    // ════════════ CRUST STRATA — bedding layers INTERRUPTED by the chamber ════════════
+    // The layered-rock read that makes this a SECTION. Bedding bands run through the
+    // wedge but the magma cavity SLICES them: each bright bedding edge is drawn only in
+    // the flanking ROCK and stops at the cavity, resuming on the far side — broken, never
+    // clean parallel hoops crossing the glow. Bands over the upper chamber are backed by
+    // an opaque CRUST cap slab that SWALLOWS the climbing glow (hot heart → cold shell).
+    var cavityHalfAt = function (y) {         // half-width of the sliced-open cavity at y
+      var span = 36;                          // vertical half-span of the visible cavity
+      var d = Math.abs(y - (baseY - 40)) / span;
+      if (d >= 1) return 0;                   // above/below the cavity: bed is solid rock
+      return 40 * Math.sqrt(1 - d * d);       // elliptical cavity profile (~40 at mid)
+    };
+    var beds = [
+      { y: baseY - 62, cap: true,  o: 0.62, jl: 3,  jr: -2 }, // cold cap over the crown
+      { y: baseY - 52, cap: true,  o: 0.42, jl: -2, jr: 2  }, // dims the upper glow
+      { y: baseY - 24, cap: false, o: 0.34, jl: 2,  jr: 3  }, // lower bedding, below mid
+      { y: baseY - 80, cap: false, o: 0.30, jl: -1, jr: -3 }  // a high cold band up top
+    ];
+    for (var bi = 0; bi < beds.length; bi++) {
+      var bd = beds[bi];
+      var le = edgeAtBody(bd.y, -1), re = edgeAtBody(bd.y, 1);
+      var dip = (bi % 2 ? 2 : -2);
+      var gap = cavityHalfAt(bd.y);           // 0 ⇒ unbroken (solid rock); >0 ⇒ sliced
+      if (bd.cap) {
+        // an opaque-ish crust slab that occludes the climbing glow (cold shell over hot)
+        el('path', { d: 'M ' + fx(le) + ' ' + fx(bd.y) + ' L ' + fx(re) + ' ' + fx(bd.y + dip) +
+          ' L ' + fx(re - 3) + ' ' + fx(bd.y + dip + 8) + ' L ' + fx(le + 3) + ' ' + fx(bd.y + 8) + ' Z',
+          fill: CRUST, opacity: fx(bd.o) }, g);
+      }
+      // draw a bedding edge (bright up-line + shadow under-ledge) as a flank segment,
+      // interrupted by the cavity — irregular endpoints (jl/jr) so no two read parallel
+      var seg = function (x0, x1) {
+        if (x1 - x0 < 4) return;
+        var y0 = bd.y + (x0 - le) / (re - le) * dip;
+        var y1 = bd.y + (x1 - le) / (re - le) * dip;
+        el('line', { x1: fx(x0), y1: fx(y0 + 0.4), x2: fx(x1), y2: fx(y1 + 0.4),
+          stroke: BRI, 'stroke-width': '1', opacity: (bi % 2 ? '0.38' : '0.28') }, g);
+        el('line', { x1: fx(x0 + 2), y1: fx(y0 + 7), x2: fx(x1 - 2), y2: fx(y1 + 7),
+          stroke: 'rgba(0,0,0,.28)', 'stroke-width': '1' }, g);
+      };
+      if (gap > 0) {
+        seg(le + 2 + bd.jl, chCx - gap);      // left rock only
+        seg(chCx + gap, re - 2 + bd.jr);      // right rock only
+      } else {
+        seg(le + 2 + bd.jl, re - 2 + bd.jr);  // unbroken band above/below the cavity
+      }
+    }
+
+    // a couple of short columnar/joint fracture lines in the cold crust (basalt jointing)
+    el('path', { d: 'M ' + fx(cx - 40) + ' ' + fx(baseY - 8) + ' L ' + fx(cx - 42) + ' ' + fx(baseY - 46) +
+      ' L ' + fx(cx - 40) + ' ' + fx(baseY - 68),
+      fill: 'none', stroke: 'rgba(0,0,0,.26)', 'stroke-width': '1.3', 'stroke-linecap': 'round',
+      'stroke-linejoin': 'round' }, g);
+    el('path', { d: 'M ' + fx(cx + 44) + ' ' + fx(baseY - 6) + ' L ' + fx(cx + 46) + ' ' + fx(baseY - 40) +
+      ' L ' + fx(cx + 43) + ' ' + fx(baseY - 60),
+      fill: 'none', stroke: 'rgba(0,0,0,.22)', 'stroke-width': '1.3', 'stroke-linecap': 'round',
+      'stroke-linejoin': 'round' }, g);
+
+    // ════════════ BRASS-BRIGHT TOP EDGES — sheen on the UP-facing crust rim ══════════
+    var ridgeD = 'M ' + fx(cx - 60) + ' ' + fx(topY + 30);
+    for (var ri = 4; ri <= 10; ri++) ridgeD += ' L ' + fx(pk[ri][0]) + ' ' + fx(pk[ri][1]);
+    el('path', { d: ridgeD, fill: 'none', stroke: BRI, 'stroke-width': '1.2', opacity: '0.48',
+      'stroke-linejoin': 'round', filter: 'url(#glow-soft)' }, g);
+    // a brighter accent on the crest itself
+    el('path', { d: 'M ' + fx(cx - 44) + ' ' + fx(topY + 12) +
+      ' L ' + fx(cx - 30) + ' ' + fx(topY + 2) + ' L ' + fx(cx - 18) + ' ' + fx(topY + 15),
+      fill: 'none', stroke: BRI, 'stroke-width': '1.6', opacity: '0.80', 'stroke-linecap': 'round' }, g);
+
+    // ════════════ QUIET EMBER SHIMMER + HEAT-HAZE — the room is a live vent ══════════
+    // Self-contained SMIL on the rep's own glow nodes: the pool + core breathe gently in
+    // opacity (out of phase) and a faint warm haze rises off the hot crest. Reduced-motion
+    // gated; never strobes, never touches the crust structure, preserves lit-from-above.
+    var prefersReduced = (typeof window !== 'undefined' && window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if (!prefersReduced) {
+      var breathe = function (node, lo, hi, dur, begin) {
+        el('animate', { attributeName: 'opacity', values: hi + ';' + lo + ';' + hi,
+          keyTimes: '0;0.5;1', dur: dur + 's', begin: (begin || '0') + 's',
+          repeatCount: 'indefinite', calcMode: 'spline',
+          keySplines: '0.4 0 0.6 1;0.4 0 0.6 1' }, node);
+      };
+      breathe(poolEl, 0.42, 0.58, 5.5, '0');
+      breathe(innerEl, 0.68, 0.86, 4.5, '-1.4');
+      breathe(coreEl, 0.80, 0.98, 6, '-2.6');
+      breathe(feedEl, 0.50, 0.70, 5, '-0.8');
+      breathe(seamEl, 0.50, 0.70, 4.8, '-3');
+      // a faint heat-haze: two soft warm wisps drifting up off the hot crest, feathered
+      // and low-opacity so they never pull focus. Each rises + fades on its own phase.
+      var hazeSpots = [ { x: chCx - 10, d: 6.5, b: '0' }, { x: chCx + 12, d: 7.5, b: '-3' } ];
+      for (var hi2 = 0; hi2 < hazeSpots.length; hi2++) {
+        var hs = hazeSpots[hi2];
+        var haze = el('g', {}, g);
+        el('ellipse', { cx: fx(hs.x), cy: fx(baseY - 70), rx: 7, ry: 13,
+          fill: MAGMA, opacity: '0', filter: 'url(#hearth-magma-glow)' }, haze);
+        el('animateTransform', { attributeName: 'transform', type: 'translate',
+          values: '0 6;0 -14', dur: hs.d + 's', begin: hs.b + 's',
+          repeatCount: 'indefinite', calcMode: 'linear' }, haze);
+        el('animate', { attributeName: 'opacity', values: '0;0.14;0', keyTimes: '0;0.4;1',
+          dur: hs.d + 's', begin: hs.b + 's', repeatCount: 'indefinite' }, haze);
+      }
+    }
+
+    S.refs.deepHearthRep = g;
   }
 
   /* ── the GLYPH STAND — the fallback rep for every room WITHOUT a bespoke rep
