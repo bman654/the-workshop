@@ -159,7 +159,6 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 <!-- gauge:garden-seeds:start -->
 ### exhibit
 - [exhibit] **The Light That Can't Get Out** (Hall of Mirrors · TIR) — a glowing stream of water arcs from a spout and the light POURS WITH IT, curving around every bend, unable to leap free: Tyndall's 1870 light-fountain, ancestor of the fibre optic. DELIGHT-FIRST, touchable, curved not flat — aim the spout / bend the stream and watch light stay trapped. DEEPEN: the Hall already USES total internal reflection inside Rainbow's second bounce and the Mirror-Maze channel — this is the first bench ABOUT it, kin-navved to both, distinct because here TIR is the whole subject. Claim: light trapped wherever incidence > θc = arcsin(n2/n1); self-test = every internal bounce along the traced ray has θ ≥ θc, and it visibly LEAKS the instant you tilt the stream so one bounce dips below. (sown #458)
-- [exhibit] **A Message, Cast to the Tide** — the estate's first SEA. Stand on a night shore, write a line, cork it in a bottle and THROW: it arcs, plops, bobs on the swell, shrinks to a speck over the horizon. Come back later — real wall-clock minutes or a day — and the tide has carried one IN: weathered, barnacle-flecked, stamped with the days it drifted, your own words returned or a stranger's line in the estate's OWN hand (a baked drift-pool, single-user, no network). PURE DELIGHT / story — kin to the verse oracle and the decayed Candle Bench's real-minutes register. PAYOFF-LIVENESS (headless): a cast persists+timestamps the bottle; advancing the clock lands a return whose weathering matches the elapsed drift; a restored session resumes a voyage mid-drift; a graceful empty-tide state shows before any bottle is due. (grep-confirmed: 0 sea/tide hits; the-aquarium is a sealed deep tank, not a shore.) (sown #452)
 
 
 
@@ -186,11 +185,11 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 
 ### bench
 - [bench] **It Holds, It Holds, It Breaks — the Buffer Flask** (alchemy) — grow the Lab beside Titration (strong/strong, explicitly NO plateau): a weak-acid / conjugate-base buffer you drip acid into while the pH needle barely stirs — a plateau you can lean on — as a capacity gauge quietly drains, until the buffer is spent and the needle SUDDENLY plunges. Touchable/dramatic, not a curve; the sibling Titration named by its absence. CRUX: pH tracks Henderson–Hasselbalch pH=pKa+log([A⁻]/[HA]) through the plateau; buffer capacity β=dn/dpH peaks EXACTLY at pH=pKa (half-neutralized); the flask breaks precisely when added moles exceed the buffering species — against titration's own charge-balance root, with a strong-acid neg-control that shows no plateau at all. Deepen the built roof. (sown #452)
-<!-- ✝ BLOOMED #454: The Powder Sky → powder-sky/ · after 652732f -->
 <!-- ✝ BLOOMED #455: The Sound Garden, made to sing → sound-garden/ · after 94618ef -->
 <!-- ✝ BLOOMED #457: The Straight Line with One Bar Fewer — Hart's Inversor → the-drawing-room/hart-inversor/ · after 4e91de1 -->
 <!-- ✝ BLOOMED #460: The Left-Handed Bench → alchemy/the-left-handed-bench/ · after f0ce045 -->
 <!-- ✝ BLOOMED #462: The Raked Garden → strange-garden/pieces/the-raked-garden.html · after 97ffbc6 -->
+<!-- ✝ BLOOMED #463: A Message, Cast to the Tide → night-shore/ · after 1738bad3 -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
