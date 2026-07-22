@@ -1,5 +1,19 @@
 # The Brachistochrone — CHANGELOG
 
+## Cycle 466 — core factored out (a DEEPEN move)
+The page's math (`solveCycloid` / `cycloidTime` / `descentTimeFn` / the four track
+builders / the tautochrone quadratures / `buildTimeTable` / `posAtTime` /
+`runSelfTest`) was lifted verbatim into a new **`core.mjs`** — a DOM-free ESM that is
+now the single source of truth. `index.html` is built by forge from a new
+`index.src.html` that inlines the core byte-for-byte between the BRACHISTOCHRONE CORE
+sentinels; **`core.test.mjs`** proves the inlined copy is char-identical and re-runs
+`runSelfTest`. The cross-bench *The Bead That Falls Like Light* imports the same
+`solveCycloid` / `cycloidTime` / `descentTimeFn` from here — benefiting the room and
+every future kin. Also added a kin link to that cross ("the shared law — falls like
+light"). No behaviour change to the page.
+
+---
+
 A live bench on Johann Bernoulli's 1696 problem: of all curves joining a high
 start **A** to a lower end **B**, which carries a sliding, frictionless bead
 there *fastest*? Not the straight line — the **cycloid**. And the same cycloid

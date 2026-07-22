@@ -80,6 +80,7 @@ export const STARS = {
   "scriptorium": { group: "letters", dx: 45, dy: 12, mag: 2 },
   "refraction-run": { group: "pilot", dx: 0, dy: -31, mag: 1 },
   "starlight-bend": { group: "pilot", dx: 0, dy: 31, mag: 2 },
+  "the-bead-that-falls-like-light": { group: "pilot", dx: 0, dy: 93, mag: 3 },  // Pilot's 3rd star: the least-time bead-road IS the least-time light-road
   "cartographer": { group: "realm", dx: 34, dy: -30, mag: 1 },
   "bastion": { group: "realm", dx: -34, dy: 30, mag: 2 },
   "differential-gear": { group: "reckoner", dx: 0, dy: -34, mag: 1 },

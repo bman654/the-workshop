@@ -304,8 +304,8 @@ export const CROSS = {
     'felt-gravity-curve', 'one-falling-two-ways', 'one-velocity-two-shifts',
     'the-fold-they-share', 'the-same-beat', 'the-same-heat',
     'the-same-hump-two-clocks', 'the-same-sinc', 'the-same-threshold',
-    'the-shape-they-share', 'two-costumes', 'two-roads-one-rhythm',
-    'two-ways-to-pi', 'weightless-at-the-top',
+    'the-shape-they-share', 'the-bead-that-falls-like-light', 'two-costumes',
+    'two-roads-one-rhythm', 'two-ways-to-pi', 'weightless-at-the-top',
   ],
 };
 

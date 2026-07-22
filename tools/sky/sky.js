@@ -76,6 +76,7 @@
     "scriptorium": { x: 1206.8, y: 369.3, mag: 2 },
     "refraction-run": { x: 605.6, y: 1855.5, mag: 1 },
     "starlight-bend": { x: 546.6, y: 1874.7, mag: 2 },
+    "the-bead-that-falls-like-light": { x: 487.6, y: 1893.9, mag: 3 },
     "cartographer": { x: 405.6, y: 1947.6, mag: 1 },
     "bastion": { x: 337.6, y: 2007.6, mag: 2 },
     "differential-gear": { x: 2587.8, y: 2215.7, mag: 1 },
@@ -228,14 +229,16 @@
     { id: 'strategist', name: 'The Strategist', myth: 'Wins by the move that looks like a mistake.',
       members: ['hexapawn', 'the-long-chain'] },
     // The Pilot — Optics' fly-through reward constellation. Founded by The Photon's Errand
-    // (`ws:seen:refraction-run`, fly least-time through slow glass) and grown by The Light
+    // (`ws:seen:refraction-run`, fly least-time through slow glass), grown by The Light
     // That Falls Around a Star (`ws:seen:starlight-bend`, fly the SAME least-time road bent
-    // by gravity instead of glass — thread the hidden star, earn the Einstein ring on-axis);
-    // the engraved name now sits over TWO dots. Like every feat-group it is ADDITIVE — it
-    // NEVER feeds the wings-only all-skies capstone. Sized to keep growing as more piloted
-    // least-time scenes ship.
+    // by gravity instead of glass — thread the hidden star, earn the Einstein ring on-axis),
+    // and now The Bead That Falls Like Light (`ws:seen:the-bead-that-falls-like-light`, a
+    // crossing where the fastest-descent bead and the least-time photon are literally ONE
+    // curve — the Pilot's myth "falls into the law" made touchable). The engraved name now
+    // sits over THREE dots. Like every feat-group it is ADDITIVE — it NEVER feeds the
+    // wings-only all-skies capstone. Sized to keep growing as more piloted least-time scenes ship.
     { id: 'pilot', name: 'The Pilot', myth: 'Flies the least-time road; falls into the law.',
-      members: ['refraction-run', 'starlight-bend'] },
+      members: ['refraction-run', 'starlight-bend', 'the-bead-that-falls-like-light'] },
     // The Reckoner — the Reckoning Cabinet's reward constellation. Founded with The Differential
     // Gear (the adder) and grown by The Ball-and-Disk Integrator (the integrating organ) — both
     // plain `ws:seen:<id>` room crumbs; the engraved name now sits over TWO stars (the two organs
