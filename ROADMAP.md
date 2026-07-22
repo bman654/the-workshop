@@ -175,7 +175,6 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 
 
 ### rework
-- [rework] **The Murmuration, Un-Metered** — re-soul murmuration-meter/: a living Vicsek flock (KEEP core.mjs+twin verbatim) is buried under a hero φ-meter, brass order-dial, readouts grid, and self-test pill. RE-SOUL toward Newton's Cradle / the Strange Garden: full-bleed dusk-sky flock (wheeling, folding, pouring toward a roost), visitor as a cursor-falcon the flock splits and reforms around, roost-drain at the dusk transition; DEMOTE φ to a quiet summonable chip. Payoff-liveness: predator splits+reforms; roost-drain fires at dusk; φ computable but never fronts. Preserve reciprocals (the-quorum, the-phantom-jam) + the ws:seen crumb; differentiate from strange-garden's boids. Rework fence empty — one nomination. (sown #458)
 
 - *No live `[rework]` Road-Into-Chaos seed remains — re-souled & bloomed #70 (the v1 two-plots bench became a steerable cobweb staircase; see the tombstone above).*
 - *No live `[rework]` First-Integral seed remains — bloomed #59 (re-souled into "The Bowl You Can't Get Below"; see the tombstone above).*
@@ -186,11 +185,11 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 ### bench
 - [bench] **The Thaumatrope** — the zoetrope's tiny elder (worklog-flagged still-dark), deepening The Turning Lantern (the-faithful-drum's room) toward a two-toy Studies-parlour optical family — riding WITHIN the room, no new front door. A two-face card on twisted strings — BIRD one side, empty CAGE the other (swap pairs: fish/bowl, rider/horse) — whirled until the two FUSE and the bird sits in the cage; make-your-own faces, keep the card. Claim-free delight, no crux (persistence-of-vision stays a whisper like the drum); magic distinct from the zoetrope (two frames→one, no strip, no slots). Payoff-liveness: above the fusion spin-rate both faces composite into one frame, below it they flicker apart. (sown #465)
 - [bench] **It Holds, It Holds, It Breaks — the Buffer Flask** (alchemy) — grow the Lab beside Titration (strong/strong, explicitly NO plateau): a weak-acid / conjugate-base buffer you drip acid into while the pH needle barely stirs — a plateau you can lean on — as a capacity gauge quietly drains, until the buffer is spent and the needle SUDDENLY plunges. Touchable/dramatic, not a curve; the sibling Titration named by its absence. CRUX: pH tracks Henderson–Hasselbalch pH=pKa+log([A⁻]/[HA]) through the plateau; buffer capacity β=dn/dpH peaks EXACTLY at pH=pKa (half-neutralized); the flask breaks precisely when added moles exceed the buffering species — against titration's own charge-balance root, with a strong-acid neg-control that shows no plateau at all. Deepen the built roof. (sown #452)
-<!-- ✝ BLOOMED #462: The Raked Garden → strange-garden/pieces/the-raked-garden.html · after 97ffbc6 -->
 <!-- ✝ BLOOMED #463: A Message, Cast to the Tide → night-shore/ · after 1738bad3 -->
 <!-- ✝ BLOOMED #464: The Light That Can't Get Out → light-fountain/ · after 8d947f4a -->
 <!-- ✝ BLOOMED #466: The Bead That Falls Like Light → cross/the-bead-that-falls-like-light/ · after fa7bb789 -->
 <!-- ✝ BLOOMED #467: The Strobe Mill → strobe-mill/ · after 40ffc221 -->
+<!-- ✝ BLOOMED #468: The Murmuration, Un-Metered → murmuration-meter/ · after 37bdefea -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
