@@ -259,6 +259,7 @@ export const HERITAGE = [
    priority (a piece is claimed once), the companion tie is recorded as an
    annotation, never a second claim. */
 export const COMPANIONS = {
+  'the-cartesian-diver':     'glasshouse-range',  // water-kin of the-aquarium; reached via companion chips from the-aquarium + pool
   blazon:                    'compositor',
   orrery:                    'firmament',
   scriptorium:               'verse',
