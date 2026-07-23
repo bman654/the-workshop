@@ -146,7 +146,6 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 (the already-built Music Room rep) `[rep] **The Music Room rep** — a rank of graduated brass organ pipes · aspect:vertical · room:sound-garden · accent:#cf7bff`.
 
 <!-- gauge:foundry-seeds:start -->
-- [rep] **The Maker's Shed rep** — a low sawhorse-trestle workbench, a vise clamped at one end, a hand-plane, saw and mallet across the top, curls of shaving beneath · aspect:horizontal · room:workbench · accent:#b07a3c — 2nd-oldest un-repped room (entry 164, outbuilding); the estate's literal maker-table and a textbook wide-low silhouette. (sown #469 · contest #12)
 - [rep] **The Hall of Mirrors rep** — a tall gilt-framed standing mirror holding an infinite receding corridor of ever-smaller, ever-dimmer frames, one cool glint travelling to the vanishing point · aspect:vertical · room:hall-of-mirrors · accent:#8fd9ff — 3rd-oldest un-repped (entry 227, opticks); the most alluring name in the backlog, an unmistakable tall silhouette; slab-accent blue adds cool relief to a gold-heavy shelf. (sown #469 · contest #12)
 - [rep] **The Engine Room rep** — the great brass flywheel breaching the top of its brick pit, a curved brass safety rail arcing over it, a small flyball governor spinning off to one side · aspect:mound · room:engine-room · accent:#c9a24a — oldest un-repped works room (entry 307); the room's lede names 'the great flywheel'. Keep it a static front-elevation (gate reps don't animate). (sown #469 · contest #12)
 - [rep] **The Numbers Room rep** — a brass-framed abacus, a counting frame of beaded rods with some beads slid up · aspect:horizontal · room:numbers-room · accent:#c9a24a — namesake + thematic anchor of the number district (entry 312); 'arithmetic truth made visible' as one touchable object. (sown #469 · contest #12)
@@ -154,11 +153,11 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 - [rep] **The Alchemy Lab rep** — a swan-necked glass alembic still, a rounded gourd over a low brazier ember, its condenser neck arcing down to a receiving flask, one glowing bead of distillate mid-drip · aspect:vertical · room:alchemy · accent:#dca74a — the archetypal what's-in-there door (entry 374, works); the gourd-and-swan-neck retort reads 'alchemy' instantly. (sown #469 · contest #12)
 - [rep] **The Reckoning Cabinet rep** — a wide walnut-and-brass cabinet face, three engraved calculating dials with pointer-needles at different angles, a small hand-crank at the right edge · aspect:horizontal · room:reckoning · accent:#c9a24a — 'Six Brass Minds that Compute' (entry 424, manor); the name promises a secret machine and pays off. (sown #469 · contest #12)
 - [rep] **The Contrary Stone rep** — a polished canoe-shaped rattleback celt resting on its curved belly on a small plinth, caught mid-spin with two motion-arcs showing it reverse against the push · aspect:mound · room:rattleback · accent:#e8b86b — 'a top that argues with your hand' (entry 457, fairground); pure playful delight, the object IS its own mound. (sown #469 · contest #12)
-<!-- ✝ BLOOMED #423: The Print Room rep → the-gate/scene.js drawRepCompositor · after 0647a7c -->
 <!-- ✝ BLOOMED #432: The Stellar Forge rep → the-gate/scene.js drawRepStellarForge · after 9008913 -->
 <!-- ✝ BLOOMED #443: The Keystone Arch rep → the-gate/scene.js · after af2e7f9 -->
 <!-- ✝ BLOOMED #456: The Deep Hearth rep → the-gate/scene.js#drawRepTheDeepHearth · after a91733b -->
 <!-- ✝ DECAYED #458: The Turning Lantern rep · after 15cdd11 -->
+<!-- ✝ BLOOMED #475: The Maker's Shed rep → the-gate/scene.js#drawRepWorkbench · after fef87321 -->
 <!-- gauge:foundry-seeds:end -->
 
 ---

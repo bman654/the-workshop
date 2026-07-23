@@ -1116,7 +1116,8 @@
     'compositor-rep': function (g, baseX, baseY, pick) { drawRepCompositor(g, baseX, baseY, pick); },
     'stellar-forge-rep': function (g, baseX, baseY, pick) { drawRepStellarForge(g, baseX, baseY, pick); },
     'the-keystone-arch-rep': function (g, baseX, baseY, pick) { drawRepTheKeystoneArch(g, baseX, baseY, pick); },
-    'the-deep-hearth-rep': function (g, baseX, baseY, pick) { drawRepTheDeepHearth(g, baseX, baseY, pick); }
+    'the-deep-hearth-rep': function (g, baseX, baseY, pick) { drawRepTheDeepHearth(g, baseX, baseY, pick); },
+    'workbench-rep': function (g, baseX, baseY, pick) { drawRepWorkbench(g, baseX, baseY, pick); }
   };
 
   function drawRoomRep(parent) {
@@ -5503,6 +5504,295 @@
     }
 
     S.refs.deepHearthRep = g;
+  }
+
+  function drawRepWorkbench(parent, cx, baseY, pick) {
+    // The Maker's Shed — a low sawhorse-trestle workbench in front-elevation: a stout plank top on two splayed trestle legs, a wooden bench-vise clamped at one end with a brass screw glinting, a hand-plane, handsaw and mallet laid across the top, and a few curls of shaving settled beneath
+    // aspect: horizontal — WIDE + SHORT — width up to ~156, height ~60..110, on short legs / a low frame. Bottom-aligned at baseY (~y720), centered about cx (~x230). Stay within [78..156]×[114..228]. LAYER 6 furniture.
+    // brass idiom + lit-from-above; emissive via pick's rep.glow1; recolor per band via the rep.* roles.
+    // TAKE 1 — "the honest bench": a plain, sturdy sawhorse-trestle workbench read square-on. The
+    // whole read is the SPLAY — each end is an inverted-V (A-frame) sawhorse, feet planted wide on the
+    // grass, carrying a stout oak plank top. A wooden bench-vise grips the LEFT plank edge, its BRASS
+    // SCREW the single lit accent (blazes at night via rep.glow1, recedes by day per dayRecede). Laid
+    // across the top, spaced for a clean still-life: a mallet (left), a hand-plane (centre), a handsaw
+    // leaned at the right (handle on the top, toe touching the plank). A few ribbon curls of shaving
+    // settle on the grass beneath. Wood via the swappable rep.swatch* roles, brass-stroke edges +
+    // brass-bright TOP sheen, lit convincingly from above, contact shadows grounding feet + curls.
+    // STATIC — a gate rep never animates; the payoff is the still glint, not motion.
+    var g = group('workbench-rep', parent);
+    var WOOD = 'var(--rep-swatch1-ref, #b07a3c)';       // swappable main oak body
+    var WLITE = 'var(--rep-swatch2-ref, #d0a460)';      // swappable lighter/up-facing wood + end-grain
+    var DARK = 'rgba(11,14,22,.85)';                     // estate brass dark body (members turned away)
+    var BRASS = 'var(--brass-stroke-ref, #9c8350)';      // brass edge stroke
+    var BRI = 'var(--brass-bright-ref, #cdb375)';        // brass-bright TOP sheen (up-facing edges)
+    var GLOW = 'var(--rep-glow1-ref, #ffcf7a)';          // EMISSIVE warm-gold brass vise-screw glint
+    var STEEL = '#8b939d';                                // cool, quiet, non-emissive tool metal
+    var STEELD = '#5a626c';                              // darker steel shadow tone
+    var fx = function (n) { return (Math.round(n * 10) / 10); };
+
+    // ── footprint: WIDE + SHORT. plank top on short splayed trestles. ──
+    var halfP = 66;                       // plank half-width → x164 .. x296
+    var plankL = cx - halfP, plankR = cx + halfP;
+    var plankTh = 15;                     // plank thickness (front face)
+    var plankBotY = baseY - 52;           // y668 — underside of the plank
+    var plankTopY = plankBotY - plankTh;  // y653 — top surface line (tools rest here)
+    var leftTx = cx - 42, rightTx = cx + 42;   // the two trestle centres
+    var trestles = [leftTx, rightTx];
+
+    // ── private soft-feather filter for the vise-screw's pooled glint (own id) ──
+    var defs = parent.ownerSVGElement && parent.ownerSVGElement.querySelector('defs');
+    if (defs && !defs.querySelector('#workbench-screw-glint')) {
+      var fG = el('filter', { id: 'workbench-screw-glint', x: '-120%', y: '-120%', width: '340%', height: '340%' }, defs);
+      el('feGaussianBlur', { 'in': 'SourceGraphic', stdDeviation: '2.4' }, fG);
+    }
+
+    // ── soft contact shadow so the whole bench sits ON the grass (light from above) ──
+    el('ellipse', { cx: cx + 2, cy: baseY + 2, rx: halfP * 0.86, ry: 6,
+      fill: '#000', opacity: '0.30', filter: 'url(#glow-soft)' }, g);
+
+    // ════════════ TRESTLE SAWHORSES — inverted-V, feet splayed WIDE (the read) ════
+    // Drawn first so the plank top occludes their apexes. Each end: a short bearer beam
+    // just under the plank + two legs splaying out+down to wide-planted feet. A faint
+    // DARK back-leg sliver behind each front leg gives the sawhorse volume.
+    var bearerBotY = plankBotY + 6;       // bearer beam sits directly under the plank
+    var legTopHalf = 12;                  // leg spacing at the apex (top)
+    var legSplay = 15;                    // outward splay at the foot (the whole read)
+    for (var ti = 0; ti < trestles.length; ti++) {
+      var tx = trestles[ti];
+      // per-foot contact shadow (feet planted on the grass)
+      el('ellipse', { cx: tx - (legTopHalf + legSplay), cy: baseY + 1.5, rx: 8, ry: 3,
+        fill: '#000', opacity: '0.26', filter: 'url(#glow-soft)' }, g);
+      el('ellipse', { cx: tx + (legTopHalf + legSplay), cy: baseY + 1.5, rx: 8, ry: 3,
+        fill: '#000', opacity: '0.26', filter: 'url(#glow-soft)' }, g);
+      // faint DARK back-leg slivers (offset), read as the rear pair of the sawhorse
+      el('path', { d: 'M ' + fx(tx - legTopHalf + 3) + ' ' + fx(plankBotY) +
+        ' L ' + fx(tx - legTopHalf + 5.5) + ' ' + fx(plankBotY) +
+        ' L ' + fx(tx - legTopHalf - legSplay + 8) + ' ' + fx(baseY) +
+        ' L ' + fx(tx - legTopHalf - legSplay + 5.5) + ' ' + fx(baseY) + ' Z',
+        fill: DARK, opacity: '0.7' }, g);
+      el('path', { d: 'M ' + fx(tx + legTopHalf - 3) + ' ' + fx(plankBotY) +
+        ' L ' + fx(tx + legTopHalf - 5.5) + ' ' + fx(plankBotY) +
+        ' L ' + fx(tx + legTopHalf + legSplay - 8) + ' ' + fx(baseY) +
+        ' L ' + fx(tx + legTopHalf + legSplay - 5.5) + ' ' + fx(baseY) + ' Z',
+        fill: DARK, opacity: '0.7' }, g);
+      // the two FRONT legs — tapered posts splaying outward to wide feet
+      var legDefs = [
+        { xt: tx - legTopHalf, xf: tx - legTopHalf - legSplay, lit: true },   // left leg (light side)
+        { xt: tx + legTopHalf, xf: tx + legTopHalf + legSplay, lit: false }   // right leg (shadow side)
+      ];
+      for (var lj = 0; lj < legDefs.length; lj++) {
+        var ld = legDefs[lj];
+        el('path', { d: 'M ' + fx(ld.xt - 3.5) + ' ' + fx(bearerBotY - 1) +
+          ' L ' + fx(ld.xt + 3.5) + ' ' + fx(bearerBotY - 1) +
+          ' L ' + fx(ld.xf + 3) + ' ' + fx(baseY) +
+          ' L ' + fx(ld.xf - 3) + ' ' + fx(baseY) + ' Z',
+          fill: WOOD, stroke: BRASS, 'stroke-width': '1.4', 'stroke-linejoin': 'round' }, g);
+        // brass-bright top-lit sliver down the up-lit (left) edge of each leg
+        el('line', { x1: fx(ld.xt - 3), y1: fx(bearerBotY + 1), x2: fx(ld.xf - 2.4), y2: fx(baseY - 3),
+          stroke: BRI, 'stroke-width': '1', opacity: ld.lit ? '0.55' : '0.32' }, g);
+        // a brass foot pad, planted flat on the grass
+        el('rect', { x: fx(ld.xf - 4.5), y: fx(baseY - 2.6), width: 9, height: 3.4, rx: 1.3,
+          fill: DARK, stroke: BRASS, 'stroke-width': '1' }, g);
+      }
+      // the sawhorse cross-stretcher (a low WOODEN rail tying that end's two legs → the "A")
+      var stChTopY = baseY - 22;
+      el('rect', { x: fx(tx - legTopHalf - legSplay * 0.45), y: fx(stChTopY),
+        width: fx((legTopHalf + legSplay * 0.45) * 2), height: 4, rx: 1.4,
+        fill: WOOD, stroke: BRASS, 'stroke-width': '1' }, g);
+      el('line', { x1: fx(tx - legTopHalf - legSplay * 0.45 + 2), y1: fx(stChTopY + 0.7),
+        x2: fx(tx + legTopHalf + legSplay * 0.45 - 2), y2: fx(stChTopY + 0.7),
+        stroke: BRI, 'stroke-width': '0.8', opacity: '0.45' }, g);
+      // the bearer beam under the plank (the sawhorse's top member the plank rests on) —
+      // a WARM WOOD member (not a black bar in daylight), with a thin dark shadow seam
+      // under the plank so the plank still reads seated on top, then a lower sheen
+      el('rect', { x: fx(tx - legTopHalf - 3), y: fx(plankBotY), width: fx((legTopHalf + 3) * 2), height: 6, rx: 1.4,
+        fill: WOOD, stroke: BRASS, 'stroke-width': '1.1' }, g);
+      el('line', { x1: fx(tx - legTopHalf - 2), y1: fx(plankBotY + 0.6),
+        x2: fx(tx + legTopHalf + 2), y2: fx(plankBotY + 0.6),
+        stroke: DARK, 'stroke-width': '1', opacity: '0.42' }, g);
+      el('line', { x1: fx(tx - legTopHalf - 1), y1: fx(plankBotY + 2.6),
+        x2: fx(tx + legTopHalf + 1), y2: fx(plankBotY + 2.6),
+        stroke: BRI, 'stroke-width': '0.7', opacity: '0.42' }, g);
+    }
+    // a LONG WOODEN stretcher rail tying the two trestles together lengthwise (reads as ONE bench)
+    el('rect', { x: fx(leftTx - 4), y: fx(baseY - 15), width: fx((rightTx - leftTx) + 8), height: 4.5, rx: 1.6,
+      fill: WOOD, stroke: BRASS, 'stroke-width': '1.1' }, g);
+    el('line', { x1: fx(leftTx - 1), y1: fx(baseY - 14.2), x2: fx(rightTx + 1), y2: fx(baseY - 14.2),
+      stroke: BRI, 'stroke-width': '0.9', opacity: '0.45' }, g);
+    // a soft shadow the long rail casts on itself / underside (keeps it from reading flat)
+    el('line', { x1: fx(leftTx + 2), y1: fx(baseY - 11.2), x2: fx(rightTx - 2), y2: fx(baseY - 11.2),
+      stroke: DARK, 'stroke-width': '1', opacity: '0.32' }, g);
+
+    // ════════════ THE PLANK TOP — a stout oak beam, lit on its up-facing edge ═════
+    // front face (the swappable oak body), with a lighter end-grain band at the right cut.
+    el('rect', { x: fx(plankL), y: fx(plankTopY), width: fx(halfP * 2), height: plankTh,
+      fill: WOOD, stroke: BRASS, 'stroke-width': '1.4' }, g);
+    // a lighter END-GRAIN band at the right-hand cut end (up-facing wood catches light)
+    el('rect', { x: fx(plankR - 5), y: fx(plankTopY + 1), width: 4, height: plankTh - 2,
+      fill: WLITE, opacity: '0.55' }, g);
+    // two faint horizontal grain courses across the front face (subtle, not busy)
+    el('line', { x1: fx(plankL + 4), y1: fx(plankTopY + 5.5), x2: fx(plankR - 6), y2: fx(plankTopY + 5.5),
+      stroke: DARK, 'stroke-width': '0.7', opacity: '0.28' }, g);
+    el('line', { x1: fx(plankL + 8), y1: fx(plankTopY + 10), x2: fx(plankR - 4), y2: fx(plankTopY + 10),
+      stroke: DARK, 'stroke-width': '0.6', opacity: '0.2' }, g);
+    // the UP-FACING top edge: a thin lit band + the brightest brass sheen line (lit from above)
+    el('rect', { x: fx(plankL + 1), y: fx(plankTopY - 2), width: fx(halfP * 2 - 2), height: 3, rx: 1,
+      fill: WLITE, opacity: '0.5' }, g);
+    el('line', { x1: fx(plankL + 2), y1: fx(plankTopY - 0.4), x2: fx(plankR - 2), y2: fx(plankTopY - 0.4),
+      stroke: BRI, 'stroke-width': '1.4', opacity: '0.85' }, g);
+    el('line', { x1: fx(plankL + 8), y1: fx(plankTopY - 0.2), x2: fx(plankR - 8), y2: fx(plankTopY - 0.2),
+      stroke: BRI, 'stroke-width': '2.2', opacity: '0.22', filter: 'url(#glow-soft)' }, g);
+
+    // ════════════ THE TOOLS — laid across the top, spaced for a clean still-life ═══
+    var restY = plankTopY;                // tools rest ON the plank top surface line
+
+    // ── MALLET (left): a chunky barrel head with a clear END-GRAIN cap + a stout handle
+    //    lying flat on the plank — firmed so it reads unmistakably as a mallet, not a block ──
+    var mHeadL = cx - 60, mHeadR = cx - 39, mHeadTop = restY - 14, mHeadBot = restY - 1;
+    var mHy = (mHeadTop + mHeadBot) / 2;
+    // the barrel head (rounded ends → a mallet head, not a plain block)
+    el('rect', { x: fx(mHeadL), y: fx(mHeadTop), width: fx(mHeadR - mHeadL), height: fx(mHeadBot - mHeadTop), rx: 4.5,
+      fill: WOOD, stroke: BRASS, 'stroke-width': '1.3' }, g);
+    // the lighter END-GRAIN cap on the struck (left) face, ringed with brass
+    el('ellipse', { cx: fx(mHeadL + 3), cy: fx(mHy), rx: 3, ry: fx((mHeadBot - mHeadTop) / 2 - 1.6),
+      fill: WLITE, opacity: '0.6', stroke: BRASS, 'stroke-width': '0.6' }, g);
+    // brass-bright top sheen across the head crown (lit from above)
+    el('line', { x1: fx(mHeadL + 3), y1: fx(mHeadTop + 1.4), x2: fx(mHeadR - 2), y2: fx(mHeadTop + 1.4),
+      stroke: BRI, 'stroke-width': '1.1', opacity: '0.72' }, g);
+    // the stout handle, a solid shaft extending right from the head, lying flat
+    el('rect', { x: fx(mHeadR - 1), y: fx(mHy - 3), width: 22, height: 6, rx: 2.8,
+      fill: WOOD, stroke: BRASS, 'stroke-width': '1' }, g);
+    el('line', { x1: fx(mHeadR + 1), y1: fx(mHy - 2), x2: fx(mHeadR + 20), y2: fx(mHy - 2),
+      stroke: BRI, 'stroke-width': '0.8', opacity: '0.55' }, g);
+    el('line', { x1: fx(mHeadR + 2), y1: fx(mHy + 1.7), x2: fx(mHeadR + 19), y2: fx(mHy + 1.7),
+      stroke: DARK, 'stroke-width': '0.7', opacity: '0.3' }, g);
+
+    // ── HAND-PLANE (centre): a low wooden plane body with a clear domed front KNOB, an
+    //    angled rear TOTE, and a DEEPENED dark blade-mouth seating a quiet steel iron —
+    //    crisped so the centre tool reads instantly as a plane, not a lump ──
+    var pL = cx - 8, pR = cx + 26, pTop = restY - 11, pBot = restY - 1;
+    var pMouth = cx + 10;                 // the mouth / iron line, just back of centre
+    // sole/body block (a low wedge: a touch taller toward the heel)
+    el('path', { d: 'M ' + fx(pL) + ' ' + fx(pBot) + ' L ' + fx(pR) + ' ' + fx(pBot) +
+      ' L ' + fx(pR) + ' ' + fx(pTop) + ' L ' + fx(pL + 3) + ' ' + fx(pTop + 1.5) + ' Z',
+      fill: WOOD, stroke: BRASS, 'stroke-width': '1.3', 'stroke-linejoin': 'round' }, g);
+    // brass-bright top sheen along the up-facing deck (broken cleanly at the mouth)
+    el('line', { x1: fx(pL + 5), y1: fx(pTop + 1.4), x2: fx(pMouth - 3.5), y2: fx(pTop + 0.7), stroke: BRI, 'stroke-width': '1', opacity: '0.72' }, g);
+    el('line', { x1: fx(pMouth + 4.5), y1: fx(pTop + 0.6), x2: fx(pR - 2), y2: fx(pTop + 0.3), stroke: BRI, 'stroke-width': '1', opacity: '0.72' }, g);
+    // the DEEPENED dark blade-MOUTH — a narrow throat recess framing the bedded iron
+    el('path', { d: 'M ' + fx(pMouth - 2.6) + ' ' + fx(pTop + 0.8) + ' L ' + fx(pMouth + 3.4) + ' ' + fx(pTop + 0.8) +
+      ' L ' + fx(pMouth + 1.8) + ' ' + fx(pBot - 0.9) + ' L ' + fx(pMouth - 0.6) + ' ' + fx(pBot - 0.9) + ' Z',
+      fill: DARK }, g);
+    // the steel iron bedded in the throat, filling most of it (quiet, non-emissive)
+    el('path', { d: 'M ' + fx(pMouth - 1.6) + ' ' + fx(pTop + 1.6) + ' L ' + fx(pMouth + 2.9) + ' ' + fx(pTop + 1.6) +
+      ' L ' + fx(pMouth + 1.4) + ' ' + fx(pBot - 1.6) + ' L ' + fx(pMouth - 0.3) + ' ' + fx(pBot - 1.6) + ' Z',
+      fill: STEEL, stroke: STEELD, 'stroke-width': '0.5' }, g);
+    el('line', { x1: fx(pMouth + 0.4), y1: fx(pTop + 2.2), x2: fx(pMouth + 1), y2: fx(pBot - 2), stroke: '#c7ccd2', 'stroke-width': '0.5', opacity: '0.62' }, g);
+    // front KNOB — a clear rounded dome rising at the toe
+    el('path', { d: 'M ' + fx(pL - 1.5) + ' ' + fx(pTop + 2) + ' q 0 -8.5 5.5 -8.5 q 5.5 0 5.5 8.5 Z',
+      fill: WOOD, stroke: BRASS, 'stroke-width': '1.1', 'stroke-linejoin': 'round' }, g);
+    el('path', { d: 'M ' + fx(pL - 0.2) + ' ' + fx(pTop - 4.6) + ' q 1.8 -2.5 4 -2.3',
+      fill: 'none', stroke: BRI, 'stroke-width': '0.9', opacity: '0.62' }, g);
+    // rear TOTE — a solid angled handle leaning back off the heel
+    el('path', { d: 'M ' + fx(pR - 7) + ' ' + fx(pTop + 1.5) + ' q -1.5 -12.5 4.5 -13.5 q 5 -0.8 5 4 q 0 3.6 -3 5.2 l -3 4.3 Z',
+      fill: WOOD, stroke: BRASS, 'stroke-width': '1.1', 'stroke-linejoin': 'round' }, g);
+    el('path', { d: 'M ' + fx(pR - 1) + ' ' + fx(pTop - 10.5) + ' q 2.4 -0.4 3.2 2',
+      fill: 'none', stroke: BRI, 'stroke-width': '0.85', opacity: '0.58' }, g);
+
+    // ── HANDSAW (right): leaned — the wooden handle rests on the top, the steel blade
+    //    slopes down-left, its toe touching the plank (teeth along the lower edge) ──
+    var sawHx = cx + 54, sawHy = restY - 11;                 // handle centre (rests up on the top)
+    var toeX = cx + 30, toeY = restY - 1.5;                  // the blade toe touches the plank
+    // steel blade — a long tapering triangle from the handle down to the toe
+    el('path', { d: 'M ' + fx(sawHx - 2) + ' ' + fx(sawHy - 3) +
+      ' L ' + fx(sawHx - 1) + ' ' + fx(sawHy + 3) +
+      ' L ' + fx(toeX) + ' ' + fx(toeY) + ' Z',
+      fill: STEEL, stroke: STEELD, 'stroke-width': '0.8', 'stroke-linejoin': 'round' }, g);
+    // a bright steel catch along the blade's up-facing back edge (lit from above)
+    el('line', { x1: fx(sawHx - 2), y1: fx(sawHy - 2.6), x2: fx(toeX + 1), y2: fx(toeY - 0.6),
+      stroke: '#cfd4da', 'stroke-width': '0.7', opacity: '0.7' }, g);
+    // the toothed lower edge — a row of fine saw teeth touching the plank
+    var teeth = '';
+    var nTeeth = 9;
+    for (var tth = 0; tth <= nTeeth; tth++) {
+      var f2 = tth / nTeeth;
+      var ex = (sawHx - 1) + (toeX - (sawHx - 1)) * f2;
+      var ey = (sawHy + 3) + (toeY - (sawHy + 3)) * f2;
+      teeth += (tth === 0 ? 'M ' : 'L ') + fx(ex) + ' ' + fx(ey + (tth % 2 ? 1.6 : 0)) + ' ';
+    }
+    el('path', { d: teeth, fill: 'none', stroke: STEELD, 'stroke-width': '0.7', opacity: '0.85' }, g);
+    // the shaped wooden pistol-grip HANDLE, sitting up on the plank at the right
+    el('path', { d: 'M ' + fx(sawHx - 3) + ' ' + fx(sawHy + 4) +
+      ' q -1 -12 8 -12 q 9 0 9 8 q 0 8 -7 8 q 3 -2 3 -6 q 0 -4 -4 -4 q -5 0 -6 6 Z',
+      fill: WOOD, stroke: BRASS, 'stroke-width': '1.2', 'stroke-linejoin': 'round' }, g);
+    // brass-bright sheen on the handle's up-facing crown
+    el('path', { d: 'M ' + fx(sawHx + 1) + ' ' + fx(sawHy - 7.5) + ' q 3.5 -0.6 5.5 2',
+      fill: 'none', stroke: BRI, 'stroke-width': '1', opacity: '0.6' }, g);
+
+    // ════════════ THE BENCH-VISE — clamped at the LEFT plank edge (the payoff) ════
+    // A wooden front jaw straddling the plank's left edge, a brass screw running through
+    // it. The screw head is the ONE self-lit accent: a warm gold glint that BLAZES at
+    // night (rep.glow1) and recedes by day (dayRecede handles the glow role).
+    var jawL = plankL - 8, jawR = plankL + 8;            // front jaw straddles the plank edge
+    var jawTop = plankTopY - 2, jawBot = plankBotY + 9;
+    // a small contact-shadow so the jaw reads clamped in FRONT of the plank
+    el('rect', { x: fx(jawL), y: fx(jawTop), width: fx(jawR - jawL), height: fx(jawBot - jawTop), rx: 2,
+      fill: WOOD, stroke: BRASS, 'stroke-width': '1.3' }, g);
+    // brass-bright top of the jaw (up-facing) + a lighter light-catch panel down its face
+    el('line', { x1: fx(jawL + 1.5), y1: fx(jawTop + 1.2), x2: fx(jawR - 1.5), y2: fx(jawTop + 1.2),
+      stroke: BRI, 'stroke-width': '1.1', opacity: '0.78' }, g);
+    el('rect', { x: fx(jawL + 2), y: fx(jawTop + 4), width: 3, height: fx(jawBot - jawTop - 9),
+      fill: WLITE, opacity: '0.32' }, g);
+    // the screw shaft — a short brass rod running out through the jaw to the left
+    var scy = (jawTop + jawBot) / 2 + 2;                 // screw axis, mid-jaw
+    var scOut = jawL - 12;                                // the screw head, poking out left
+    el('rect', { x: fx(scOut + 2), y: fx(scy - 2.2), width: fx(jawL - (scOut + 2) + 3), height: 4.4, rx: 1.4,
+      fill: DARK, stroke: BRASS, 'stroke-width': '1' }, g);
+    // a couple of brass thread ticks along the shaft
+    for (var thr = 0; thr < 3; thr++) {
+      var thx = jawL - 3 - thr * 3;
+      el('line', { x1: fx(thx), y1: fx(scy - 1.8), x2: fx(thx), y2: fx(scy + 1.8),
+        stroke: BRASS, 'stroke-width': '0.7', opacity: '0.7' }, g);
+    }
+    // the pooled GLINT bloom behind the head (feathered; recedes by day via the glow role)
+    var glintG = el('g', { filter: 'url(#workbench-screw-glint)' }, g);
+    el('circle', { cx: fx(scOut), cy: fx(scy), r: 10, fill: GLOW, opacity: '0.24' }, glintG);
+    el('circle', { cx: fx(scOut), cy: fx(scy), r: 5, fill: GLOW, opacity: '0.42' }, glintG);
+    // the crisp brass screw HEAD (the single lit accent), with a hot white-gold catch
+    el('circle', { cx: fx(scOut), cy: fx(scy), r: 4.6, fill: DARK, stroke: BRASS, 'stroke-width': '1.2' }, g);
+    el('circle', { cx: fx(scOut), cy: fx(scy), r: 2.8, fill: GLOW, opacity: '0.95' }, g);
+    el('circle', { cx: fx(scOut - 1), cy: fx(scy - 1), r: 1.2, fill: '#fff3d6', opacity: '0.9' }, g);
+    // a small tommy-bar through the head so it reads as the screw's turning handle
+    el('line', { x1: fx(scOut), y1: fx(scy - 7), x2: fx(scOut), y2: fx(scy + 7),
+      stroke: BRASS, 'stroke-width': '2', 'stroke-linecap': 'round' }, g);
+    el('line', { x1: fx(scOut), y1: fx(scy - 6.5), x2: fx(scOut), y2: fx(scy + 6.5),
+      stroke: GLOW, 'stroke-width': '0.9', opacity: '0.7' }, g);
+    // a faint second warm touch where the brass catches the plank's left edge (restraint)
+    el('line', { x1: fx(plankL + 1), y1: fx(plankTopY + 2), x2: fx(plankL + 1), y2: fx(plankBotY - 2),
+      stroke: GLOW, 'stroke-width': '1.4', opacity: '0.16', filter: 'url(#glow-soft)' }, g);
+
+    // ════════════ CURLS OF SHAVING — thin ribbon coils on the grass beneath ═══════
+    // the maker's-craft signature: a few loose plane-shavings settled under the bench.
+    var curl = function (ox, oy, s, flip) {
+      var d = flip ? -1 : 1;
+      // a rolled ribbon of pale plane-shaving: a coil that spirals in on itself, lying on
+      // the grass. Drawn in the lighter up-facing wood tone so it reads as a bright shaving.
+      el('ellipse', { cx: fx(ox), cy: fx(oy + 2.5 * s), rx: fx(8 * s), ry: fx(2.2 * s), fill: '#000', opacity: '0.2', filter: 'url(#glow-soft)' }, g);
+      // the ribbon: a longer tail sweeping up into a tight rolled loop at the head
+      el('path', { d: 'M ' + fx(ox - 10 * s * d) + ' ' + fx(oy + 1 * s) +
+        ' q ' + fx(4 * s * d) + ' ' + fx(-1 * s) + ' ' + fx(8 * s * d) + ' ' + fx(-4 * s) +
+        ' q ' + fx(5 * s * d) + ' ' + fx(-4 * s) + ' ' + fx(8 * s * d) + ' ' + fx(-1 * s) +
+        ' q ' + fx(2 * s * d) + ' ' + fx(2.5 * s) + ' ' + fx(-1.5 * s * d) + ' ' + fx(4 * s) +
+        ' q ' + fx(-3.5 * s * d) + ' ' + fx(1.5 * s) + ' ' + fx(-5 * s * d) + ' ' + fx(-1 * s),
+        fill: 'none', stroke: WLITE, 'stroke-width': fx(1.9 * s), 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: '0.92' }, g);
+      // a brass-bright catch along the coil's up-facing crest (lit from above)
+      el('path', { d: 'M ' + fx(ox - 2 * s * d) + ' ' + fx(oy - 4 * s) +
+        ' q ' + fx(3 * s * d) + ' ' + fx(-2.5 * s) + ' ' + fx(6 * s * d) + ' ' + fx(-0.5 * s),
+        fill: 'none', stroke: BRI, 'stroke-width': fx(0.7 * s), opacity: '0.55' }, g);
+    };
+    curl(cx - 18, baseY, 1.25, false);
+    curl(cx + 14, baseY + 1, 1.0, true);
+    curl(cx + 36, baseY - 1, 0.82, false);
   }
 
   /* ── the GLYPH STAND — the fallback rep for every room WITHOUT a bespoke rep
