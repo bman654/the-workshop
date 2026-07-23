@@ -262,8 +262,78 @@
     glyph: function () { return this.silhouette({ t: 0.35 }); }
   };
 
-  var TABLE = { crane: crane, fox: fox, reed: reed, moon: moon, willow: willow, vee: vee };
-  var ORDER = ['moon', 'vee', 'willow', 'reed', 'crane', 'fox'];   // back → front
+  /* ══════════════════════ THE FLATS — set-pieces for the Toy Theatre ══════════════════════
+     A flat is an ORDINARY puppet record (flows through the same renderPuppet path — no new
+     render code) with two extra fields: `isFlat:true` and a `groove` {offX, restX, restY,
+     depth}. It parks fully OFF-STAGE in free-play (offX) and a play slides it in on its
+     groove (0=offstage → 1=onstage) or places it hard in the play's setup. Once on, it is a
+     normal grabbable puppet, so grabbing a flat mid-scene is absorbed like any other. These
+     are wide low horizon pieces — their contours reach past [0,RES] on purpose. */
+
+  /* ── THE FAR HILLS — a wide low rolling horizon band, deepest z ─────────────── */
+  var hills = {
+    id: 'hills', label: 'the far hills', polarity: 'shadow', isFlat: true,
+    box: { w: 100, h: 100 }, anchor: [50, 100], handles: [],
+    depth0: 0.03, x0frac: -0.60, y0frac: 0.99,
+    groove: { offX: -0.60, restX: 0.50, restY: 0.99, depth: 0.03 },
+    silhouette: function () {
+      return [{ fill: 'nonzero', pts: [
+        [-46, 108], [-46, 92], [-32, 88], [-18, 91], [-4, 85], [10, 90], [22, 86],
+        [36, 91], [50, 86], [63, 91], [76, 85], [90, 90], [104, 86], [118, 91],
+        [132, 88], [146, 93], [146, 108]
+      ] }];
+    },
+    glyph: function () { return this.silhouette(); }
+  };
+
+  /* ── THE NEAR BANK — a foreground embankment with a reed tuft, front z ───────── */
+  var bank = {
+    id: 'bank', label: 'the near bank', polarity: 'shadow', isFlat: true,
+    box: { w: 100, h: 100 }, anchor: [50, 100], handles: [],
+    depth0: 0.05, x0frac: -0.55, y0frac: 1.00,
+    groove: { offX: -0.55, restX: 0.50, restY: 1.00, depth: 0.05 },
+    silhouette: function () {
+      return [{ fill: 'nonzero', pts: [
+        [-46, 118], [-46, 90], [-26, 87], [-8, 89], [4, 82],
+        [8, 72], [12, 82], [22, 88], [38, 85], [56, 89], [76, 86],
+        [98, 90], [120, 87], [146, 91], [146, 118]
+      ] }];
+    },
+    glyph: function () { return this.silhouette(); }
+  };
+
+  /* ── THE NEST — a twig cradle with two nestlings; sits BEHIND the willow so its
+        fronds occlude it, and the frond-sweep is the reveal. A tiny `stir` handle
+        shifts the nestlings. ───────────────────────────────────────────────────── */
+  var nest = {
+    id: 'nest', label: 'the nest', polarity: 'shadow', isFlat: true,
+    box: { w: 100, h: 100 }, anchor: [50, 60], handles: [{ id: 'stir', pivot: [50, 52] }],
+    depth0: 0.06, x0frac: -0.80, y0frac: 0.52,
+    groove: { offX: -0.80, restX: 0.34, restY: 0.52, depth: 0.06 },
+    silhouette: function (st) {
+      var stir = (st && st.stir != null) ? st.stir : 0;
+      var s = Math.sin(stir * Math.PI * 2) * 3;
+      var out = [];
+      // the twig cradle — a shallow cupped basket (one solid)
+      out.push({ fill: 'nonzero', pts: [
+        [20, 58], [28, 67], [40, 71], [50, 72], [60, 71], [72, 67], [80, 58],
+        [75, 55], [64, 62], [50, 64], [36, 62], [25, 55]
+      ] });
+      // two nestlings — little rounded heads peeking over the rim, shifting on stir
+      out.push({ fill: 'nonzero', pts: circle(42 + s, 53, 5.2, 14) });
+      out.push({ fill: 'nonzero', pts: circle(58 - s, 54, 5.2, 14) });
+      // tiny upturned beaks
+      out.push({ fill: 'nonzero', pts: [[41 + s, 49], [44 + s, 44.5], [47 + s, 49]] });
+      out.push({ fill: 'nonzero', pts: [[57 - s, 50], [60 - s, 45.5], [63 - s, 50]] });
+      return out;
+    },
+    glyph: function () { return this.silhouette({ stir: 0.25 }); }
+  };
+
+  var TABLE = { crane: crane, fox: fox, reed: reed, moon: moon, willow: willow, vee: vee, hills: hills, bank: bank, nest: nest };
+  // back → front. flats sit at the extremes (hills deepest, bank frontmost) and nest tucks
+  // directly BEHIND the willow so the willow's fronds occlude it — the reveal is that occlusion.
+  var ORDER = ['hills', 'moon', 'vee', 'nest', 'willow', 'reed', 'crane', 'fox', 'bank'];
 
   root.Puppets = {
     RES: RES,

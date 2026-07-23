@@ -13,12 +13,28 @@
    spandrels sink into soft shadow, and a lamp bloom that widens as the lamp dollies in.
 
    THE CONTRACT (what the compositor binds to):
-     Proscenium.drawScreen(ctx, W, H)                 // opaque silk + vignette (CSS px)
+     Proscenium.drawBackdrop(ctx, W, H, phase)        // opaque silk + sky + vignette; phase 0=dawn·.5=dusk·1=night
+     Proscenium.drawScreen(ctx, W, H)                 // === drawBackdrop(ctx,W,H,0.5) — the free-play default (back-compat)
      Proscenium.drawLampBloom(ctx, x, y, W, H, k)     // warm bloom at (x,y), k=intensity
+     Proscenium.drawCurtain(ctx, W, H, drop)          // warm pleated fly-curtain; drop 0=flown·1=lowered (over silk+shadow, behind arch)
      Proscenium.drawFrame(ctx, W, H)                  // the walnut arch, over everything
+
+   PHASE + COMPOSITE NOTE — the backdrop is baked into the silk cache UNDER the lamp
+   bloom ('lighter') and the shadow multiply, so `night` only darkens the periphery: the
+   night CENTRE FLOOR stays warm (rgb≈60,49,32) and the lamp pool stays phase-independently
+   bright, so shadows cast into it never lose contrast. Do not move the backdrop above the
+   bloom/multiply.
    ============================================================================ */
 "use strict";
 (function (root) {
+
+  /* phase colour helpers — a three-point lerp (dawn @0, dusk @0.5, night @1). */
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function mix(c0, c1, t) { return [Math.round(lerp(c0[0], c1[0], t)), Math.round(lerp(c0[1], c1[1], t)), Math.round(lerp(c0[2], c1[2], t))]; }
+  function lerp3(t, a, b, c) { return (t < 0.5) ? mix(a, b, t * 2) : mix(b, c, (t - 0.5) * 2); }
+  function rgb(c) { return 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')'; }
+  function rgba(c, al) { return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + al + ')'; }
+  function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 
   function mulberry32(a) {
     return function () {
@@ -54,22 +70,114 @@
     return c;
   }
 
-  function drawScreen(ctx, W, H) {
-    // base warm amber, brightest toward the middle-upper stage
+  /* the silk, washed by the hour. phase 0=dawn · 0.5=dusk · 1=night. The centre floor
+     stays warm at every phase (so shadow contrast survives night); only the periphery
+     cools + darkens, and a low outdoor sky band cools toward night at the top. */
+  function drawBackdrop(ctx, W, H, phase) {
+    phase = (phase == null) ? 0.5 : clamp01(phase);
+    // the warm floor at the centre — stays warm at every hour (dusk === the old #5a3f1e)
+    var inner = lerp3(phase, [116, 82, 44], [90, 63, 30], [60, 49, 32]);
+    var midc  = lerp3(phase, [78, 56, 30], [58, 40, 18], [34, 27, 17]);
+    var outer = lerp3(phase, [30, 19, 10], [18, 11, 6], [7, 8, 13]);
     var rg = ctx.createRadialGradient(W * 0.5, H * 0.44, 10, W * 0.5, H * 0.5, Math.max(W, H) * 0.75);
-    rg.addColorStop(0, '#5a3f1e');
-    rg.addColorStop(0.45, '#3a2812');
-    rg.addColorStop(1, '#120b06');
+    rg.addColorStop(0, rgb(inner));
+    rg.addColorStop(0.45, rgb(midc));
+    rg.addColorStop(1, rgb(outer));
     ctx.fillStyle = rg;
     ctx.fillRect(0, 0, W, H);
-    // the woven grain, tiled over
+    // a low outdoor sky band across the top — warm rose at dawn, cool blue at night
+    var sky = lerp3(phase, [78, 50, 38], [42, 34, 30], [22, 30, 54]);
+    var skyA = 0.10 + 0.16 * phase;
+    var sg = ctx.createLinearGradient(0, 0, 0, H * 0.42);
+    sg.addColorStop(0, rgba(sky, skyA.toFixed(3)));
+    sg.addColorStop(1, rgba(sky, 0));
+    ctx.fillStyle = sg;
+    ctx.fillRect(0, 0, W, H * 0.42);
+    // the woven grain, tiled over (the cached mulberry weft)
     try { ctx.drawImage(grainTile(W, H), 0, 0, W, H); } catch (e) { }
-    // a soft vignette to seat the silk in shadow
+    // a soft vignette to seat the silk in shadow, deepening toward night
+    var vA = lerp(0.42, 0.74, phase);
     var vg = ctx.createRadialGradient(W * 0.5, H * 0.5, Math.min(W, H) * 0.30, W * 0.5, H * 0.5, Math.max(W, H) * 0.62);
     vg.addColorStop(0, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+    vg.addColorStop(1, 'rgba(0,0,0,' + vA.toFixed(3) + ')');
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, W, H);
+  }
+  // back-compat: the free-play default is dusk, byte-identical call shape for the compositor.
+  function drawScreen(ctx, W, H) { drawBackdrop(ctx, W, H, 0.5); }
+
+  /* the fly-curtain — warm pleated silk hung inside the walnut arch. drop 0=flown
+     (nothing), 1=lowered (hem at the stage floor). Canvas paint only — never eats
+     pointer events; drawn UNDER the arch by the compositor so its top tucks behind
+     the walnut. */
+  function drawCurtain(ctx, W, H, drop) {
+    drop = clamp01(drop);
+    if (drop <= 0.001) return;
+    var t = Math.max(14, Math.min(W, H) * 0.045);       // === drawFrame's thickness
+    var top = t, left = t, right = W - t, span = right - left;
+    var hem = top + (H - 2 * t) * drop;
+    var N = Math.max(8, Math.round(span / 46));         // pleat count
+    var cw = span / N;
+    var scallop = Math.min(cw * 0.5, (H - 2 * t) * 0.05) * (0.55 + 0.45 * drop);
+    // the silhouette path: down the left, scalloped hem across, up the right, close along the fly
+    function silkPath() {
+      ctx.beginPath();
+      ctx.moveTo(left, top);
+      ctx.lineTo(left, hem);
+      for (var i = 0; i < N; i++) {
+        var x0 = left + i * cw, xm = x0 + cw * 0.5, x1 = x0 + cw;
+        ctx.quadraticCurveTo(xm, hem + scallop, x1, hem);
+      }
+      ctx.lineTo(right, top);
+      ctx.closePath();
+    }
+    ctx.save();
+    // base silk
+    silkPath();
+    ctx.fillStyle = 'rgb(102,42,27)';
+    ctx.fill();
+    // pleats — fold shadow at each seam, a silk catch down each pleat centre
+    ctx.save();
+    silkPath(); ctx.clip();
+    var botExtent = hem + scallop - top + 4;
+    for (var i = 0; i < N; i++) {
+      var x0 = left + i * cw;
+      var gf = ctx.createLinearGradient(x0, 0, x0 + cw, 0);
+      gf.addColorStop(0, 'rgba(28,9,5,0.9)');
+      gf.addColorStop(0.5, 'rgba(28,9,5,0)');
+      gf.addColorStop(1, 'rgba(28,9,5,0.9)');
+      ctx.fillStyle = gf; ctx.fillRect(x0, top, cw + 1, botExtent);
+      var gc = ctx.createLinearGradient(x0, 0, x0 + cw, 0);
+      gc.addColorStop(0, 'rgba(214,120,80,0)');
+      gc.addColorStop(0.5, 'rgba(220,128,86,0.38)');
+      gc.addColorStop(1, 'rgba(214,120,80,0)');
+      ctx.fillStyle = gc; ctx.fillRect(x0, top, cw + 1, botExtent);
+    }
+    // lit at the fly, shadowed toward the hem (a hung fabric)
+    var vg = ctx.createLinearGradient(0, top, 0, hem);
+    vg.addColorStop(0, 'rgba(255,222,152,0.14)');
+    vg.addColorStop(0.5, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.30)');
+    ctx.fillStyle = vg; ctx.fillRect(left, top, span, botExtent);
+    ctx.restore();
+    // the gilt fringe following the scallops + a tassel dip under each low point
+    ctx.beginPath();
+    ctx.moveTo(left, hem);
+    for (var j = 0; j < N; j++) {
+      var xa = left + j * cw, xam = xa + cw * 0.5, xb = xa + cw;
+      ctx.quadraticCurveTo(xam, hem + scallop, xb, hem);
+    }
+    ctx.strokeStyle = 'rgba(201,162,74,0.72)';
+    ctx.lineWidth = Math.max(1.2, cw * 0.05);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(201,162,74,0.5)';
+    ctx.lineWidth = Math.max(1, cw * 0.035);
+    var tass = Math.min(11, scallop * 0.95);
+    for (var k = 0; k < N; k++) {
+      var xm = left + k * cw + cw * 0.5;
+      ctx.beginPath(); ctx.moveTo(xm, hem + scallop); ctx.lineTo(xm, hem + scallop + tass); ctx.stroke();
+    }
+    ctx.restore();
   }
 
   function drawLampBloom(ctx, x, y, W, H, k) {
@@ -128,8 +236,10 @@
   }
 
   root.Proscenium = {
+    drawBackdrop: drawBackdrop,
     drawScreen: drawScreen,
     drawLampBloom: drawLampBloom,
+    drawCurtain: drawCurtain,
     drawFrame: drawFrame,
     __forged: true
   };
