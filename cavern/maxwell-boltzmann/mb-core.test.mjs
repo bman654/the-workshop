@@ -110,6 +110,14 @@ console.log('\n— Byte-twin parity (the inlined page core === this module, char
         modSlice != null && pageSlice != null && modSlice === pageSlice,
         modSlice == null ? 'module sentinels MISSING' : pageSlice == null ? 'page sentinels MISSING' :
           (modSlice === pageSlice ? 'slice ' + modSlice.length + ' chars identical' : 'DRIFT (mod ' + modSlice.length + ' vs page ' + pageSlice.length + ')'));
+
+  // ── 5b. …and The Weighted Lid companion (lid.html) inlines the SAME core. ──
+  const lidPage = readFileSync(join(__dir, 'lid.html'), 'utf8');
+  const lidSlice = sliceBetween(lidPage, BEGIN, END);
+  check('MB-CORE byte-twin: lid.html core block === mb-core.mjs (export-stripped), char-for-char',
+        modSlice != null && lidSlice != null && modSlice === lidSlice,
+        lidSlice == null ? 'lid.html sentinels MISSING' :
+          (modSlice === lidSlice ? 'slice ' + modSlice.length + ' chars identical' : 'DRIFT (mod ' + modSlice.length + ' vs lid ' + lidSlice.length + ')'));
 }
 
 console.log('\n—— The Maxwell–Boltzmann core Node twin: ' + pass + '/' + total + ' ——\n');

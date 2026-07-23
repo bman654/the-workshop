@@ -368,6 +368,8 @@ export const DENY = {
     'meta: ART FOUNDRY spec-preview pages (maker-side scaffolding for the room art)',
   'cavern/pendulum-wave/art-specs/':
     'meta: ART FOUNDRY spec-preview pages (maker-side scaffolding for the room art)',
+  'cavern/maxwell-boltzmann/art-specs/':
+    'meta: ART FOUNDRY spec-preview pages (maker-side scaffolding for The Weighted Lid art)',
   // (the Undercroft's interior places are no longer denied: §6.5 both-or-neither
   //  enrolls each as a hidden exhibit locked on its own niche predicate above.)
 };
