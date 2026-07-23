@@ -330,6 +330,25 @@
       </div>
     </a>
 
+    <a class="bed" href="uphill/index.html" style="margin-top:14px">
+      <div class="bedgrid">
+        <div class="bedglass"><canvas id="bedup" width="520" height="460"></canvas></div>
+        <div class="bedbody">
+          <div class="tagrow"><span class="glyph">&#127812;</span><span class="kind">bacterial chemotaxis</span></div>
+          <h2>Uphill With Their Eyes Closed</h2>
+          <p>A warm dish of loam seeded with a haze of <b>blind spores</b>. Drag a fingertip to <b>sow
+          nectar-scent</b> &mdash; no spore can see it; each only knows whether the scent where it sits is
+          <i>getting sweeter or sourer than a moment ago</i>. Yet the haze <b>tears into rivers</b> and floods to
+          your fingertip, etching moss-vein trails. Sow two spots and it splits in two. <b>Blind them</b> and the
+          bloom dissolves into aimless fuzz.</p>
+          <div class="proof">delight-first &mdash; the payoff-liveness twin proves the migration FIRES: the
+          chemotactic swarm's scent climbs and its centre-of-mass floods to the peak, the gain=0 control never
+          does. Run-and-tumble, biased in run <i>length</i>, never in aim.</div>
+          <span class="enter">&#8627; enter the bed</span>
+        </div>
+      </div>
+    </a>
+
     <a class="bed" href="selection-jar/index.html" style="margin-top:14px">
       <div class="bedgrid">
         <div class="bedglass"><canvas id="bedsel" width="520" height="460"></canvas></div>
@@ -438,6 +457,9 @@ import { runSelfTest as geneJarSelfTest, hardyWeinberg as gjHW, P as gjP } from 
 import { runHarvestSelfTest as pondSelfTest, rk4StepH as pondStep, equilibria as pondEq,
   H_CRIT as pondHcrit, EPS_EMPTY as pondEps, P as pondP } from './the-pond/core.mjs';
 const pondHmax = 1.4 * pondHcrit;
+import { runSelfTest as upSelfTest, makeField as upMakeField, paintBump as upPaint,
+  diffuseDecay as upDiffuse, wipe as upWipe, makeSwarm as upMakeSwarm, step as upStep,
+  DEFAULT as upDEFAULT, GW as upGW, GH as upGH, CX as upCX, CY as upCY, RDISH as upR } from './uphill/core.mjs';
 import { runSelfTest as selectionSelfTest, makeState as selMakeState, step as selStep,
   meanShade as selMeanShade, beetleColor as selBeetleColor, bgColor as selBgColor, P as selP }
   from './selection-jar/core.mjs';
@@ -918,6 +940,75 @@ function drawBedPond(advance){
 function rr(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
 
 // ============================================================================
+//  THE UPHILL BED GLASS — a MINIATURE terrarium dish driven by the SAME imported
+//  uphill/core.mjs (preview and bench cannot drift — the wing contract). It loops
+//  a short LIVED cycle: bare soil → sow a nectar bump → the blind swarm floods to
+//  it (bright climbing filaments, dim searching churn) → rake → sow elsewhere, so
+//  the tile teases the bloom-toward-scent migration.
+// ============================================================================
+const bedup = document.getElementById('bedup');
+const upctx = bedup.getContext('2d');
+let upgeo;
+const UP_N = 300;
+const upField = upMakeField();
+let upSwarm = upMakeSwarm(0x1157, UP_N, upR*0.9);
+const upTrail = document.createElement('canvas'); upTrail.width = upTrail.height = 1; // (re)sized in layout
+let uptctx = upTrail.getContext('2d');
+const UP_SPOTS = [ {x:upCX+24, y:upCY-8}, {x:upCX-22, y:upCY+14}, {x:upCX+6, y:upCY+20} ];
+let upPhase = 0, upSpot = 0, upScale = 1, upOx = 0, upOy = 0;
+function upSize(){
+  const W=upgeo.w, H=upgeo.h;
+  upScale = Math.min(W/upGW, H/upGH); upOx = (W-upGW*upScale)/2; upOy = (H-upGH*upScale)/2;
+  upTrail.width = Math.max(1,Math.round(W)); upTrail.height = Math.max(1,Math.round(H));
+  uptctx = upTrail.getContext('2d'); uptctx.fillStyle='#000'; uptctx.fillRect(0,0,upTrail.width,upTrail.height);
+}
+function upG2X(gx){ return upOx + gx*upScale; } function upG2Y(gy){ return upOy + gy*upScale; }
+function upStamp(){
+  uptctx.globalCompositeOperation='source-over'; uptctx.fillStyle='rgba(0,0,0,0.06)'; uptctx.fillRect(0,0,upTrail.width,upTrail.height);
+  uptctx.globalCompositeOperation='lighter';
+  for(const cell of upSwarm.cells){ const climb=Math.max(0,Math.min(1,cell.dcdt*1.6));
+    uptctx.fillStyle='rgba('+(106+climb*60)+','+(143+climb*70)+','+(74+climb*20)+','+(0.05+climb*0.11).toFixed(3)+')';
+    uptctx.beginPath(); uptctx.arc(upG2X(cell.x),upG2Y(cell.y),1.0+climb*0.7,0,6.2832); uptctx.fill(); }
+  uptctx.globalCompositeOperation='source-over';
+}
+function drawBedUp(advance){
+  const W=upgeo.w, H=upgeo.h, dcx=upG2X(upCX), dcy=upG2Y(upCY), dr=upR*upScale;
+  if(advance && !reduce){
+    upPhase += 1;
+    if(upPhase===1){ upPaint(upField, UP_SPOTS[upSpot].x, UP_SPOTS[upSpot].y, 0.95, 12); }
+    for(let k=0;k<2;k++){ upStep(upSwarm, upField, 1/60, upDEFAULT); upDiffuse(upField,0.16,0.997); }
+    upStamp();
+    if(upPhase>60*7){ upPhase=0; upWipe(upField); uptctx.fillStyle='#000'; uptctx.fillRect(0,0,upTrail.width,upTrail.height); upSpot=(upSpot+1)%UP_SPOTS.length; }
+  }
+  upctx.clearRect(0,0,W,H);
+  // loam ground
+  const g=upctx.createRadialGradient(dcx,dcy,dr*0.05,dcx,dcy,dr*1.05);
+  g.addColorStop(0,'#241708'); g.addColorStop(0.55,'#180f06'); g.addColorStop(1,'#0a0703');
+  upctx.fillStyle=g; upctx.beginPath(); upctx.arc(dcx,dcy,dr,0,6.2832); upctx.fill();
+  upctx.save(); upctx.beginPath(); upctx.arc(dcx,dcy,dr,0,6.2832); upctx.clip();
+  // scent glow
+  let mx=0,mi=0; const c=upField.c;
+  for(let i=0;i<c.length;i++){ if(c[i]>mx){mx=c[i];mi=i;} }
+  upctx.globalCompositeOperation='lighter';
+  for(let i=0;i<c.length;i++){ const v=c[i]; if(v<=0.02) continue;
+    const gx=i%upGW, gy=(i/upGW)|0; const w=Math.min(1,Math.max(0,(v-1.2)/1.6));
+    upctx.fillStyle='rgba('+Math.round(240+15*w)+','+Math.round(176+64*w)+','+Math.round(72+138*w)+','+Math.min(0.5,v*0.32).toFixed(3)+')';
+    upctx.fillRect(upG2X(gx)-upScale*0.7, upG2Y(gy)-upScale*0.7, upScale*1.5, upScale*1.5); }
+  // trails + spores
+  upctx.drawImage(upTrail,0,0);
+  upctx.globalCompositeOperation='source-over';
+  for(const cell of upSwarm.cells){ const climb=Math.max(0,Math.min(1,cell.dcdt*1.6));
+    upctx.fillStyle='rgba('+Math.round(207+climb*48)+','+Math.round(232+climb*20)+','+Math.round(138-climb*40)+','+(0.42+climb*0.5).toFixed(3)+')';
+    upctx.save(); upctx.translate(upG2X(cell.x),upG2Y(cell.y)); upctx.rotate(cell.theta);
+    upctx.beginPath(); upctx.ellipse(0,0,2.1+climb*0.7,1.05,0,0,6.2832); upctx.fill(); upctx.restore(); }
+  upctx.restore();
+  // brass rim
+  upctx.strokeStyle='rgba(178,154,100,0.8)'; upctx.lineWidth=4; upctx.beginPath(); upctx.arc(dcx,dcy,dr+1,0,6.2832); upctx.stroke();
+  upctx.font='600 10px var(--font-mono, monospace)'; upctx.fillStyle='rgba(240,176,72,0.85)'; upctx.textAlign='center';
+  upctx.fillText(mx>0.04?'blind swarm floods to the scent':'sow the scent · they cannot see it', W*0.5, H-9); upctx.textAlign='left';
+}
+
+// ============================================================================
 //  THE SELECTION-JAR BED GLASS — a MINIATURE of the same camouflage cloud driven by
 //  the SAME imported selection-jar/core.mjs (preview and bench cannot drift — the
 //  wing contract, as with the Pond). It loops a short LIVED cycle: a fresh
@@ -1115,6 +1206,7 @@ function layout(){
   mdgeo = fitCanvas(bedmeadow, mdctx);
   wgeo = fitCanvas(bedwr, wctx); wrSeeded=false;   // reseed the coral at the new size
   pgeo = fitCanvas(bedpond, pctx);
+  upgeo = fitCanvas(bedup, upctx); upSize();
   selgeo = fitCanvas(bedsel, selctx);
   dgeo = fitCanvas(beddrift, dctx);
   schgeo = fitCanvas(bedsch, schctx);
@@ -1132,6 +1224,7 @@ function loop(){
   drawBedMeadow(true);
   drawBedWr(true);
   drawBedPond(true);
+  drawBedUp(true);
   drawBedSel(true);
   drawBedDrift(true);
   drawBedSch(true);
@@ -1143,6 +1236,11 @@ const SIR_STATIC = SIR_TR.peakT/SIR_TR.ts[SIR_TR.ts.length-1]*SIR_TR.Is.length;
 // a thinned-but-living swarm (the same imported step), then paint one frame.
 function pondStatic(){ pond.h = pondHcrit*0.7; pond.N = POND_N0;
   for(let i=0;i<40000;i++) pond.N = pondStep(pond.N, 0.01, pond.h, pondP); drawBedPond(false); }
+// a still UPHILL dish: sow a bump, run the SAME imported step to a settled bloom, paint once.
+function upStatic(){ upWipe(upField); uptctx.fillStyle='#000'; uptctx.fillRect(0,0,upTrail.width,upTrail.height);
+  upPaint(upField, UP_SPOTS[0].x, UP_SPOTS[0].y, 0.95, 12);
+  for(let i=0;i<520;i++){ upStep(upSwarm, upField, 1/60, upDEFAULT); upDiffuse(upField,0.16,0.997); if(i%3===0) upStamp(); }
+  drawBedUp(false); }
 // a still SELECTION JAR for reduced-motion / statics: run the SAME imported step to a
 // blended cloud (camouflaged on the dark floor), then paint one frame.
 function selStatic(){ selBgIdx = 0; selFreshJar(); for(let g=0;g<24;g++) selState = selStep(selState); drawBedSel(false); }
@@ -1155,14 +1253,14 @@ function schStatic(){ schIdx = 0; schFresh(); for(let g=0;g<60000 && !schTown.ha
 function drawStatics(){ drawFloor(0); drawBed(0); drawBedLog(LOG_TMAX*0.62); drawBedSir(SIR_STATIC); drawBedRep(REP_TR.xs.length*0.55); drawBedGj(0);
   // reduced-motion: grow the coral headlessly to a rich still, then paint once
   if(!wrSeeded) seedWrinkling(); for(let i=0;i<900;i++) wrStep(wrState,wrHash,wrParams,wrRng); drawBedWr(false);
-  meadowStep(mdField, 90); drawBedMeadow(false); pondStatic(); selStatic(); driftStatic(); schStatic(); }
+  meadowStep(mdField, 90); drawBedMeadow(false); pondStatic(); upStatic(); selStatic(); driftStatic(); schStatic(); }
 window.addEventListener('resize', function(){ layout(); if(reduce){ drawStatics(); } }, {passive:true});
 layout();
 // eagerly seed the wrinkling preview so wrState exists (and is simple) before the self-test runs
 if(!wrSeeded) seedWrinkling();
 if (reduce){ drawFloor(ORB.pts.length*0.12); drawBed(bedOrb.pts.length*0.3); drawBedLog(LOG_TMAX*0.62); drawBedSir(SIR_STATIC); drawBedRep(REP_TR.xs.length*0.55); drawBedGj(0);
   if(!wrSeeded) seedWrinkling(); for(let i=0;i<900;i++) wrStep(wrState,wrHash,wrParams,wrRng); drawBedWr(false);
-  meadowStep(mdField, 90); drawBedMeadow(false); pondStatic(); selStatic(); driftStatic(); schStatic(); }
+  meadowStep(mdField, 90); drawBedMeadow(false); pondStatic(); upStatic(); selStatic(); driftStatic(); schStatic(); }
 else raf = requestAnimationFrame(loop);
 
 // ============================================================================
@@ -1214,6 +1312,11 @@ function runSelfTest(){
   ok('the Pond bench link present', !!benchPond);
   ok('the Pond bench link is bare-relative (no leading slash)', benchPond && !/^\//.test(benchPond.getAttribute('href')) && !/^\.\.\//.test(benchPond.getAttribute('href')));
 
+  // the Uphill bench link is present and BARE-RELATIVE (no leading slash)
+  const benchUp = [...document.querySelectorAll('a')].find(a=>/^uphill\/index\.html$/.test(a.getAttribute('href')||''));
+  ok('the Uphill bench link present', !!benchUp);
+  ok('the Uphill bench link is bare-relative (no leading slash)', benchUp && !/^\//.test(benchUp.getAttribute('href')) && !/^\.\.\//.test(benchUp.getAttribute('href')));
+
   // the Selection Jar bench link is present and BARE-RELATIVE (no leading slash)
   const benchSel = [...document.querySelectorAll('a')].find(a=>/^selection-jar\/index\.html$/.test(a.getAttribute('href')||''));
   ok('the Selection Jar bench link present', !!benchSel);
@@ -1229,8 +1332,8 @@ function runSelfTest(){
   ok('the Schelling bench link present', !!benchSch);
   ok('the Schelling bench link is bare-relative (no leading slash)', benchSch && !/^\//.test(benchSch.getAttribute('href')) && !/^\.\.\//.test(benchSch.getAttribute('href')));
 
-  // TEN live beds + ZERO empty planters (the wing has grown a tenth bed — Schelling's town)
-  ok('eleven live beds present (.bed)', document.querySelectorAll('.bed').length === 11);
+  // live beds + ZERO empty planters (the wing has grown a twelfth bed — Uphill)
+  ok('twelve live beds present (.bed)', document.querySelectorAll('.bed').length === 12);
   ok('zero empty planters (the wing is fully planted)', document.querySelectorAll('.planter').length === 0);
 
   // the orbit-light canvas is mounted and sized
@@ -1250,6 +1353,8 @@ function runSelfTest(){
   ok('the Wrinkling preview curve is simple (embedded)', wrState && wrState.simple);
   // the Pond planter-light canvas is mounted and sized
   ok('the Pond planter-light canvas mounted', bedpond instanceof HTMLCanvasElement && bedpond.width > 0);
+  // the Uphill planter-light canvas is mounted and sized
+  ok('the Uphill planter-light canvas mounted', bedup instanceof HTMLCanvasElement && bedup.width > 0);
   // the Selection Jar planter-light canvas is mounted and sized
   ok('the Selection Jar planter-light canvas mounted', bedsel instanceof HTMLCanvasElement && bedsel.width > 0);
   // the Drift Jar planter-light canvas is mounted and sized
@@ -1281,6 +1386,8 @@ function runSelfTest(){
   ok('gene-jar core self-test all green ('+gjCore.pass+'/'+gjCore.total+')', gjCore.pass === gjCore.total);
   const pondCore = pondSelfTest();
   ok('the Pond core self-test all green ('+pondCore.pass+'/'+pondCore.total+')', pondCore.pass === pondCore.total);
+  const upCore = upSelfTest();
+  ok('the Uphill core self-test all green ('+upCore.pass+'/'+upCore.total+')', upCore.pass === upCore.total);
   const selCore = selectionSelfTest();
   ok('the Selection Jar core self-test all green ('+selCore.pass+'/'+selCore.total+')', selCore.pass === selCore.total);
   const driftCore = driftSelfTest({ jars: 1200, nCap: 20 });

@@ -190,12 +190,11 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 
 ### bench
 - [bench] **The Barrier They Have To Clear (Arrhenius collision-gate)** — light the Alchemy Lab's flagged corner (a fresher form for the just-decayed buffer's seat): reaction-you-time shows k's CONSEQUENCE but nothing shows WHY heat speeds a rate. FORM (touchable, not a rate-plot): a Boltzmann-spread swarm rattles at a literal energy GATE at height Ea — heat it and the high-energy TAIL clears and fires; drop a catalyst and the gate LOWERS. CRUX: measured crossing-fraction == Boltzmann tail e^(−Ea/RT); ln k vs 1/T comes out straight, slope −Ea/R; neg-controls Ea=0 (collision ceiling) + catalyst shifts k by e^(+ΔEa/RT). Frame as a NEW chemistry register of the estate's e^(−E/T) (softmax↔Arrhenius, brownian hops), NOT a virgin law. Deepen under the built roof. (sown #474)
-- [bench] **Uphill With Their Eyes Closed (run-and-tumble chemotaxis)** — a delight-first living sim for the Conservatory (grep-confirmed gap: the wing covers populations/evolution/epidemics but not sensing; rides within, no new door): paint a nutrient 'smell' into the dish with your finger and a swarm of bacteria FLOODS uphill — the wonder being that no single cell can sense direction; each just TUMBLES LESS when things improve, and the swarm blooms toward the food anyway. Claim-free delight (watch the bloom migrate, no theorem owed) with a clean payoff-liveness twin: the swarm's centre-of-mass measurably climbs the gradient, while a neg-control that holds the tumble-rate CONSTANT just diffuses and never climbs — payoff FIRES (the felt migration the experience, COM-vs-time the hidden check). Kin to the Pond and the re-souled murmuration. (sown #474)
-<!-- ✝ DECAYED #474: It Holds, It Holds, It Breaks — the Buffer Flask · after 69e0af43 -->
 <!-- ✝ BLOOMED #476: The Thaumatrope → thaumatrope/ · after 88ff7a40 -->
 <!-- ✝ BLOOMED #477: The Gas That Pushes Back (PV=NkT — the M-B gas grows a piston) → cavern/maxwell-boltzmann/lid.html · after 3489ac87 -->
 <!-- ✝ BLOOMED #478: The Fortune-Teller → fortune-teller/ · after 06445fc2 -->
 <!-- ✝ BLOOMED #479: The Reckoner, Fully Cabineted → tools/sky/ (The Reckoner grown 2→5) · after 4673b278 -->
+<!-- ✝ BLOOMED #480: Uphill With Their Eyes Closed (run-and-tumble chemotaxis) → conservatory/uphill/ · after a559ef95 -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
