@@ -1,5 +1,67 @@
 # The Shadow Theater — build log
 
+## v2.0 — THE TOY THEATRE: the sandbox learns to PLAY a play (cycle 481)
+
+The Shadow Theater was a lovely sandbox that never performed on its own. Now a paper
+PLAYBILL is pinned to the proscenium; tap a title and the theatre STAGES the play —
+puppets glide via cued targets eased by the EXISTING critically-damped springs (no
+forked easing), the lamp dollies itself, the backdrop washes dawn→dusk→night, foreground
+flats slide in on their grooves, the cues fire to a closing TABLEAU, the curtain falls,
+and an intermission returns to free-play. Grab a puppet mid-play and the play ABSORBS it.
+A DEEPEN of shadow-theater/ — no new front door, no new render path, no theorem.
+
+### New modules (grow by DATA, not code)
+- **`staging.js` → `window.Director`** — the cue-timeline engine. A play is data; a cue is
+  `{at, do, args}`; `do` resolves against a FROZEN 8-verb allow-list (pos·depth·artic·lamp·
+  show·wash·flat·curtain) and `loadPlay` THROWS with the cue index on any unknown verb. The
+  monotone beat fires each cue exactly once; the L485 springs braid frame-apart targets into
+  one gesture. ABSORB is monotone-safe: a held channel's cue still advances the cursor but its
+  write is withheld and stashed in `score`, re-applied the frame the hand releases. Lifecycle:
+  curtain falls → scene swaps UNDER cover (hides non-cast, hard-sets the setup) → curtain rises
+  → plays → closing tableau → curtain falls → intermission → free-play. Reduced-motion jumps to
+  the closing tableau.
+- **`plays.js` → `window.PLAYS`** — three wordless plays as pure data: *Crane Takes the Moon*
+  (the wing-over-moon MIN-union eclipse as the literal title payoff), *Fox at the Reed-Bank*
+  (the stalk, the pounce, the crane flush), *Willow's Secret* (the frond-sweep reveal of an
+  occluded nest). Explicit hold beats (2 s eclipse / 1.5 s pounce-gather / 2.5 s reveal), lamp
+  dollies, and ≥1 groove slide-in per the two flat-using plays. Every cue is spaced ≥0.05 s and
+  is a genuine change (so the twin can isolate each effect).
+- **`playbill.js` → `window.Playbill`** — a parchment programme pinned top-left over the dark
+  spandrel (letterpress gilt kicker, serif titles, roman numerals, layered-gradient paper). Taps
+  a title → stages; tucks aside to "NOW PLAYING" during a play; re-pins at intermission. Pure
+  DOM/CSS, no canvas cost, arms no sound; transitions gated behind prefers-reduced-motion.
+
+### Edited in place (reuse, no fork)
+- **`proscenium.js`** — `drawBackdrop(ctx,W,H,phase)` (dawn→dusk→night: a warm centre floor at
+  every hour so shadow contrast survives, a cooling sky band + deepening vignette toward night);
+  `drawScreen === drawBackdrop(…,0.5)` so free-play is byte-unchanged. `drawCurtain(ctx,W,H,drop)`
+  — a warm pleated silk fly-curtain with a scalloped gilt-fringe hem, drawn under the walnut arch.
+- **`puppets.js`** — three FLATS (`isFlat` + `groove`): the far **hills** (deep horizon band),
+  the near **bank** (foreground embankment), the **nest** (twig cradle + two nestlings, tucked
+  BEHIND the willow so the frond-sweep is the reveal). Ordinary Puppets records — same
+  renderPuppet path — that park off-stage in free-play and slide in on their grooves.
+- **`index.src.html`** — backdrop-wash + fly-curtain spring channels (the curtain uses a heavier
+  omega on the SAME smoothCD), the Toy-Theatre Stage seam (setVisible/setBackdropPhase/setCurtain/
+  slideFlat/seizedId/isResting/houseLights/toFreeplay + getState/setState threading), the boot
+  mount, and an intermission-tap return.
+
+### Verified (session `st481`)
+- **Payoff-liveness twin** `window.__STAGE_PLAY_TEST` GREEN on **desktop AND mobile 375**, all
+  three plays: the cue-index advances MONOTONE through ALL cues, every fired cue's effect LANDS
+  (getState + measureCast/per-puppet shadow boxes + a spatial coverage-hash that catches
+  reshapes WITHIN the bbox — a frond drift, a nestling stir), and the closing-tableau flag +
+  curtain-fall flag are both reached. Leaves no residue (restores desktop width + free-play).
+- **Real input-level tap** (agent-browser, not dispatchEvent) on the *Crane* playbill title
+  stages the play — observed the curtain fall/rise, the playbill tuck to "NOW PLAYING", the crane
+  loom + wing sweep OVER the moon into solid black (the eclipse), the hills rise, and the full
+  lifecycle run to the closing tableau + curtain fall + auto-return to free-play.
+- **Absorb** — grabbing the crane mid-play withholds its cued position while held (stays put) and
+  resumes the stashed target on release (drag and play never fight).
+- **Originals untouched** — `__SHADOW_TEST` + `__SHADOW_SMOKE` still GREEN.
+- **Gates** — all 8 inlined scripts `node --check` clean; `forge --check --all` current (195
+  files); `manifest --check` OK; DEEPEN — NO new front-door footprint / map dot / sky star. Zero
+  console errors; no horizontal overflow at 1280 or 375.
+
 ## v1.0 — the real cutouts wired in (art forged in-house)
 
 The greybox art is replaced by the FINAL in-house cutouts, and the piece ships. The

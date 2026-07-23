@@ -403,7 +403,11 @@ function measureCast() {
   renderShadow(list);                                /* restore the true union (and each puppet's _box) */
   var boxes = {};
   for (var b = 0; b < list.length; b++) { var bx = list[b]._box; if (bx) boxes[list[b].id] = { cx: bx.x + bx.w / 2, cy: bx.y + bx.h / 2, w: bx.w, h: bx.h }; }
-  return { unionArea: unionArea, sumAreas: sumAreas, castScale: castScale, boxes: boxes };
+  /* a spatial hash of the covered-pixel SET — flips whenever the shadow reshapes even
+     WITHIN its bbox (a frond drift, a nestling stir), which unionArea/castScale can't see. */
+  var img = accCtx.getImageData(0, 0, accW, accH).data, coverHash = 0;
+  for (var h = 0; h < img.length; h += 4) if (img[h] < COVER_T) coverHash = (coverHash + (h >>> 2) * 2654435761) >>> 0;
+  return { unionArea: unionArea, sumAreas: sumAreas, castScale: castScale, boxes: boxes, coverHash: coverHash };
 }
 
 /* ============================ snapshot thumbnail (composited warm-on-dark) ============================ */
@@ -740,12 +744,13 @@ window.__STAGE_PLAY_TEST = function () {
   function boxMoved(a, b, id) { var x = a.mc.boxes[id], y = b.mc.boxes[id]; if (!x || !y) return false; return Math.hypot(x.cx - y.cx, x.cy - y.cy) > 0.6; }
   function boxArea(a, b, id) { var x = a.mc.boxes[id], y = b.mc.boxes[id]; if (!x || !y) return true; return Math.abs(x.w * x.h - y.w * y.h) > 8; }
   function castChg(a, b) { return Math.abs(a.mc.unionArea - b.mc.unionArea) > EPS_AREA || Math.abs(a.mc.castScale - b.mc.castScale) > EPS_SCALE; }
+  function shadowChg(a, b) { return a.mc.coverHash !== b.mc.coverHash; }   /* the shadow reshaped at all */
   function snap() { settleNow(); return { gs: Stage.getState(), mc: measureCast(), vis: visibleList().map(function (p) { return p.id; }) }; }
   function landed(c, pre, post) {
     var v = c.do, id = c.args[0], a, b;
-    if (v === 'pos' || v === 'flat') { a = findP(pre.gs, id); b = findP(post.gs, id); return !!(a && b && (Math.abs(a.x - b.x) > 1e-3 || Math.abs(a.y - b.y) > 1e-3) && (boxMoved(pre, post, id) || castChg(pre, post))); }
-    if (v === 'depth') { a = findP(pre.gs, id); b = findP(post.gs, id); return !!(a && b && Math.abs(a.depth - b.depth) > 1e-3 && (boxArea(pre, post, id) || castChg(pre, post))); }
-    if (v === 'artic') { var jt = c.args[1]; a = findP(pre.gs, id); b = findP(post.gs, id); return !!(a && b && a.artic && b.artic && Math.abs((a.artic[jt] || 0) - (b.artic[jt] || 0)) > 1e-3 && (boxMoved(pre, post, id) || boxArea(pre, post, id) || castChg(pre, post))); }
+    if (v === 'pos' || v === 'flat') { a = findP(pre.gs, id); b = findP(post.gs, id); return !!(a && b && (Math.abs(a.x - b.x) > 1e-3 || Math.abs(a.y - b.y) > 1e-3) && (boxMoved(pre, post, id) || castChg(pre, post) || shadowChg(pre, post))); }
+    if (v === 'depth') { a = findP(pre.gs, id); b = findP(post.gs, id); return !!(a && b && Math.abs(a.depth - b.depth) > 1e-3 && (boxArea(pre, post, id) || castChg(pre, post) || shadowChg(pre, post))); }
+    if (v === 'artic') { var jt = c.args[1]; a = findP(pre.gs, id); b = findP(post.gs, id); return !!(a && b && a.artic && b.artic && Math.abs((a.artic[jt] || 0) - (b.artic[jt] || 0)) > 1e-3 && (boxMoved(pre, post, id) || boxArea(pre, post, id) || castChg(pre, post) || shadowChg(pre, post))); }
     if (v === 'lamp') { return Math.abs(pre.gs.lampD - post.gs.lampD) > 1e-2 && Math.abs(pre.mc.castScale - post.mc.castScale) > EPS_SCALE; }
     if (v === 'show') { return pre.vis.join(',') !== post.vis.join(','); }
     if (v === 'wash') { return Math.abs((pre.gs.backdropPhase || 0) - (post.gs.backdropPhase || 0)) > 1e-3; }
