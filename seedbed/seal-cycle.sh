@@ -32,6 +32,19 @@ set -euo pipefail
 
 die(){ echo "seal-cycle: ERROR — $*" >&2; exit 1; }
 
+# A failed push must never fail a seal (the local commit is the durable record).
+# Loud enough for the publisher to act on the ONE case that needs a hand: a
+# non-fast-forward REJECT means origin is ahead — pull --rebase, then re-run
+# seal-cycle (it takes the clean-tree push-only path). An auth/agent failure
+# (1Password locked while the keeper is away) needs NOTHING — later pushes drain
+# every pending commit once the agent unlocks.
+push_failed_open(){
+  echo "seal-cycle: WARNING — git push FAILED; the cycle IS sealed locally and the work is safe." >&2
+  echo "seal-cycle: WARNING — auth/agent failure (1Password locked): do nothing, a later cycle's push carries this up." >&2
+  echo "seal-cycle: WARNING — non-fast-forward reject (origin ahead): git pull --rebase, then re-run seal-cycle.sh." >&2
+  return 0
+}
+
 # ── args ──────────────────────────────────────────────────────────────────────
 [ "$#" -eq 4 ] || die "need 4 args: <mode> <track> <cycle-N> <commit-msg-file> (got $#)"
 mode="$1"; track="$2"; cycle="$3"; msgfile="$4"
@@ -61,7 +74,7 @@ echo "seal-cycle: mode=$mode track=$track cycle=$cycle  (HEAD=$(git rev-parse --
 # just make sure the existing work is pushed, then exit.
 if [ -z "$(git status --porcelain)" ]; then
   echo "seal-cycle: working tree CLEAN — cycle already sealed (or nothing to seal); ensuring pushed."
-  git push
+  git push || push_failed_open   # fail OPEN — see step 5
   echo "seal-cycle: done (push-only). HEAD=$(git rev-parse --short HEAD), depth $(git rev-list --count HEAD)."
   exit 0
 fi
@@ -92,9 +105,14 @@ else
   git commit -F "$msgfile"
 fi
 
-# ── 5. PUSH.
+# ── 5. PUSH — FAIL OPEN. The keeper's 1Password locks while he is away and then
+#       refuses ssh-agent signing, so a push can fail through no fault of the
+#       cycle. The COMMIT above is the durable record; a failed push must never
+#       fail the seal. Origin catches up automatically: the next cycle whose push
+#       succeeds carries every pending commit up (and the clean-tree path above
+#       re-pushes on re-runs).
 echo "seal-cycle: [5/5] pushing…"
-git push
+git push || push_failed_open
 
 echo "seal-cycle: SEALED cycle $cycle.  HEAD=$(git rev-parse --short HEAD), depth $(git rev-list --count HEAD)."
 node "$root/seedbed/gauge.mjs" --status 2>/dev/null | sed -n '1,2p' || true
