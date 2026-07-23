@@ -1117,7 +1117,8 @@
     'stellar-forge-rep': function (g, baseX, baseY, pick) { drawRepStellarForge(g, baseX, baseY, pick); },
     'the-keystone-arch-rep': function (g, baseX, baseY, pick) { drawRepTheKeystoneArch(g, baseX, baseY, pick); },
     'the-deep-hearth-rep': function (g, baseX, baseY, pick) { drawRepTheDeepHearth(g, baseX, baseY, pick); },
-    'workbench-rep': function (g, baseX, baseY, pick) { drawRepWorkbench(g, baseX, baseY, pick); }
+    'workbench-rep': function (g, baseX, baseY, pick) { drawRepWorkbench(g, baseX, baseY, pick); },
+    'hall-of-mirrors-rep': function (g, baseX, baseY, pick) { drawRepHallOfMirrors(g, baseX, baseY, pick); }
   };
 
   function drawRoomRep(parent) {
@@ -5793,6 +5794,267 @@
     curl(cx - 18, baseY, 1.25, false);
     curl(cx + 14, baseY + 1, 1.0, true);
     curl(cx + 36, baseY - 1, 0.82, false);
+  }
+
+  function drawRepHallOfMirrors(parent, cx, baseY, pick) {
+    // The Hall of Mirrors — a tall gilt-framed CHEVAL (swing) mirror on scrolled
+    // trestle feet, its glass holding an infinite receding corridor of ever-smaller,
+    // ever-dimmer nested gilt frames marching inward on converging rails to a distant
+    // vanishing point where one COOL glint of light blazes; a second glint travels
+    // quietly DOWN the corridor toward it, forever (SMIL, freezes cleanly at rest).
+    // aspect: vertical — TALL + NARROW; grows UPWARD from the ground line, bottom-
+    // aligned at baseY (~y720), centered about cx (~x230). LAYER 6 furniture.
+    // TAKE 1 — "the dressing-room cheval": the FURNITURE is the tell (swing frame
+    // slung between two turned posts on outswept scroll feet, pivot bosses at the
+    // shoulders), the GLASS is the payoff (a straight-on Droste corridor). Gilt =
+    // gilded gold FACE (rep.swatch1) + brass edge + brass-bright TOP sheen, lit from
+    // above; glass = cool near-black void; the one cool light is rep.glow1.
+    var g = group('hall-of-mirrors', parent);
+    var GILT  = 'var(--rep-swatch1-ref, #8f7636)';        // swappable gilded GOLD face
+    var VOID  = 'rgba(11,14,22,.90)';                     // cool near-black glass void
+    var DARK  = 'rgba(11,14,22,.85)';                     // estate brass dark body
+    var BRASS = 'var(--brass-stroke-ref, #9c8350)';       // brass edge stroke
+    var BRI   = 'var(--brass-bright-ref, #cdb375)';       // brass-bright TOP sheen
+    var GLINT = 'var(--rep-glow1-ref, #8fd9ff)';          // EMISSIVE cool glint (night payoff)
+    var fx = function (n) { return (Math.round(n * 10) / 10); };
+
+    // ── private feathers: the cool glint's bloom + a soft frame glow ──
+    var defs = parent.ownerSVGElement && parent.ownerSVGElement.querySelector('defs');
+    if (defs && !defs.querySelector('#hom-glint')) {
+      var fG = el('filter', { id: 'hom-glint', x: '-300%', y: '-300%', width: '700%', height: '700%' }, defs);
+      el('feGaussianBlur', { 'in': 'SourceGraphic', stdDeviation: '2.4' }, fG);
+    }
+    if (defs && !defs.querySelector('#hom-feather')) {
+      var fF = el('filter', { id: 'hom-feather', x: '-80%', y: '-80%', width: '260%', height: '260%' }, defs);
+      el('feGaussianBlur', { 'in': 'SourceGraphic', stdDeviation: '1.3' }, fF);
+    }
+
+    /* ═══════════ GEOMETRY ═══════════ tall + narrow, grown up from baseY ═════════ */
+    var frameOuterTop = baseY - 186;     // y534 — top of the gilt frame moulding
+    var frameOuterBot = baseY - 26;      // y694 — bottom of the frame (feet below)
+    var fHalf = 42;                      // frame half-width → outer x 188..272 (W 84)
+    var fL = cx - fHalf, fR = cx + fHalf;
+    var mould = 9;                       // frame moulding thickness
+    // glass opening (the void the corridor lives in)
+    var gL = fL + mould, gR = fR - mould;
+    var gT = frameOuterTop + mould, gB = frameOuterBot - mould;
+    var gW = gR - gL, gH = gB - gT;
+    var gCx = (gL + gR) / 2;
+    // vanishing point — straight-on, a touch ABOVE glass-centre so the corridor
+    // floor reads (looking slightly down the hall).
+    var vpX = gCx, vpY = gT + gH * 0.44;
+
+    // posts flank the frame; feet splay to the ground line at baseY
+    var postX = [fL - 5, fR + 5];        // post centres just outside the frame
+    var postW = 7;
+    var postTop = frameOuterTop - 8;     // finials crown the frame
+    var postBot = baseY - 12;            // where the post meets its foot
+
+    /* ── soft contact shadow so the cheval stands ON the grass (light from above) ── */
+    el('ellipse', { cx: fx(cx + 3), cy: fx(baseY + 2), rx: 56, ry: 7,
+      fill: '#000', opacity: '0.30', filter: 'url(#glow-soft)' }, g);
+
+    /* ═══════════ SCROLL FEET + POSTS ═══════════ the standing furniture ═════════ */
+    // Drawn first so the mirror frame + pivot bosses seat in FRONT of them.
+    for (var pi = 0; pi < 2; pi++) {
+      var px0 = postX[pi];
+      var out = (pi === 0) ? -1 : 1;     // scroll direction (outward)
+      // outswept scroll foot: post base flares to a pad, tip curls outward+up
+      var footPadY = baseY - 3, toeX = px0 + out * 26;
+      el('path', { d:
+        'M ' + fx(px0 - postW / 2) + ' ' + fx(postBot) +
+        ' L ' + fx(px0 + postW / 2) + ' ' + fx(postBot) +
+        ' L ' + fx(px0 + out * 5) + ' ' + fx(footPadY - 4) +
+        ' Q ' + fx(px0 + out * 20) + ' ' + fx(baseY + 1) + ' ' + fx(toeX) + ' ' + fx(footPadY - 5) +
+        ' Q ' + fx(toeX + out * 4) + ' ' + fx(footPadY - 11) + ' ' + fx(toeX - out * 3) + ' ' + fx(footPadY - 9) +
+        ' Q ' + fx(px0 + out * 12) + ' ' + fx(footPadY - 2) + ' ' + fx(px0 - out * 2) + ' ' + fx(footPadY - 1) +
+        ' Z',
+        fill: GILT, stroke: BRASS, 'stroke-width': '1.4', 'stroke-linejoin': 'round' }, g);
+      // foot pad on the ground
+      el('rect', { x: fx(px0 + out * 6 - 7), y: fx(baseY - 4), width: 15, height: 4, rx: 1.5,
+        fill: DARK, stroke: BRASS, 'stroke-width': '1.1' }, g);
+      // brass-bright top-lit edge of the scroll toe
+      el('path', { d: 'M ' + fx(px0 + out * 6) + ' ' + fx(footPadY - 6) +
+        ' Q ' + fx(px0 + out * 18) + ' ' + fx(footPadY - 10) + ' ' + fx(toeX - out * 2) + ' ' + fx(footPadY - 9),
+        fill: 'none', stroke: BRI, 'stroke-width': '1', opacity: '0.5' }, g);
+
+      // the turned POST — a slender gilt upright with a machined collar
+      el('rect', { x: fx(px0 - postW / 2), y: fx(postTop), width: postW, height: fx(postBot - postTop),
+        rx: 2, fill: GILT, stroke: BRASS, 'stroke-width': '1.4' }, g);
+      // top-lit sheen down the post's up-lit (left) reveal
+      el('line', { x1: fx(px0 - postW / 2 + 1.4), y1: fx(postTop + 3), x2: fx(px0 - postW / 2 + 1.4), y2: fx(postBot - 3),
+        stroke: BRI, 'stroke-width': '1', opacity: '0.42' }, g);
+      // a machined collar banding the post (a purposeful turned course)
+      var colY = (postTop + postBot) / 2 + 14;
+      el('rect', { x: fx(px0 - postW / 2 - 1.5), y: fx(colY), width: postW + 3, height: 4.5, rx: 1,
+        fill: DARK, stroke: BRASS, 'stroke-width': '1' }, g);
+      el('line', { x1: fx(px0 - postW / 2 - 0.5), y1: fx(colY + 0.7), x2: fx(px0 + postW / 2 + 0.5), y2: fx(colY + 0.7),
+        stroke: BRI, 'stroke-width': '0.9', opacity: '0.5' }, g);
+      // turned FINIAL crowning the post — stacked cap + orb
+      el('circle', { cx: fx(px0), cy: fx(postTop - 1), r: 4, fill: GILT, stroke: BRASS, 'stroke-width': '1.2' }, g);
+      el('circle', { cx: fx(px0 - 1), cy: fx(postTop - 2.2), r: 1.4, fill: BRI, opacity: '0.85' }, g);
+      el('rect', { x: fx(px0 - 3), y: fx(postTop + 2), width: 6, height: 3, rx: 1,
+        fill: GILT, stroke: BRASS, 'stroke-width': '1' }, g);
+    }
+    // a low stretcher tying the two posts (stabiliser bar just above the feet)
+    var strY = baseY - 20;
+    el('rect', { x: fx(postX[0]), y: fx(strY), width: fx(postX[1] - postX[0]), height: 5, rx: 2,
+      fill: GILT, stroke: BRASS, 'stroke-width': '1.3' }, g);
+    el('line', { x1: fx(postX[0] + 2), y1: fx(strY + 0.8), x2: fx(postX[1] - 2), y2: fx(strY + 0.8),
+      stroke: BRI, 'stroke-width': '1', opacity: '0.4' }, g);
+
+    /* ═══════════ THE GILT MIRROR FRAME ═══════════ ornate gilded moulding ═══════ */
+    // outer moulding face — gilded GOLD (the swappable surface), brass-edged
+    el('rect', { x: fx(fL), y: fx(frameOuterTop), width: fx(fR - fL), height: fx(frameOuterBot - frameOuterTop),
+      rx: 5, fill: GILT, stroke: BRASS, 'stroke-width': '1.6', filter: 'url(#glow-soft)' }, g);
+    // re-draw the crisp gilt body over the soft glow (glow was the halo pass)
+    el('rect', { x: fx(fL), y: fx(frameOuterTop), width: fx(fR - fL), height: fx(frameOuterBot - frameOuterTop),
+      rx: 5, fill: GILT, stroke: BRASS, 'stroke-width': '1.6' }, g);
+    // recessed inner reveal (a dark bevel where the moulding steps down to the glass)
+    el('rect', { x: fx(gL - 2), y: fx(gT - 2), width: fx(gW + 4), height: fx(gH + 4), rx: 2,
+      fill: 'none', stroke: 'rgba(0,0,0,.34)', 'stroke-width': '2' }, g);
+    // brass-bright TOP rail sheen — the brightest edge, lit from above
+    el('line', { x1: fx(fL + 4), y1: fx(frameOuterTop + 1.6), x2: fx(fR - 4), y2: fx(frameOuterTop + 1.6),
+      stroke: BRI, 'stroke-width': '1.6', opacity: '0.66' }, g);
+    // a subtler top-lit sheen on the inner top reveal
+    el('line', { x1: fx(gL), y1: fx(gT - 1.4), x2: fx(gR), y2: fx(gT - 1.4),
+      stroke: BRI, 'stroke-width': '1', opacity: '0.44' }, g);
+    // the down-facing bottom rail falls into shadow (light from above)
+    el('line', { x1: fx(fL + 4), y1: fx(frameOuterBot - 1.4), x2: fx(fR - 4), y2: fx(frameOuterBot - 1.4),
+      stroke: 'rgba(0,0,0,.28)', 'stroke-width': '1.4' }, g);
+    // a small carved CREST crowning the frame top-centre
+    el('path', { d: 'M ' + fx(cx - 12) + ' ' + fx(frameOuterTop + 1) +
+      ' Q ' + fx(cx) + ' ' + fx(frameOuterTop - 11) + ' ' + fx(cx + 12) + ' ' + fx(frameOuterTop + 1) + ' Z',
+      fill: GILT, stroke: BRASS, 'stroke-width': '1.3', 'stroke-linejoin': 'round' }, g);
+    el('circle', { cx: fx(cx), cy: fx(frameOuterTop - 4), r: 2.4, fill: GILT, stroke: BRASS, 'stroke-width': '1.1' }, g);
+    el('circle', { cx: fx(cx - 0.7), cy: fx(frameOuterTop - 5), r: 0.9, fill: BRI, opacity: '0.8' }, g);
+    // corner rosettes on the moulding face
+    var rc = [[fL + 7, frameOuterTop + 7], [fR - 7, frameOuterTop + 7], [fL + 7, frameOuterBot - 7], [fR - 7, frameOuterBot - 7]];
+    for (var ci = 0; ci < 4; ci++) {
+      el('circle', { cx: fx(rc[ci][0]), cy: fx(rc[ci][1]), r: 2.6, fill: DARK, stroke: BRASS, 'stroke-width': '1.1' }, g);
+      if (ci < 2) el('circle', { cx: fx(rc[ci][0] - 0.7), cy: fx(rc[ci][1] - 0.8), r: 0.9, fill: BRI, opacity: '0.75' }, g);
+    }
+
+    /* ═══════════ THE GLASS ═══════════ the cool void the corridor recedes into ══ */
+    el('rect', { x: fx(gL), y: fx(gT), width: fx(gW), height: fx(gH), fill: VOID }, g);
+    // a private clip so the corridor + glint never spill past the glass
+    if (defs && !defs.querySelector('#hom-glass-clip')) {
+      var clip = el('clipPath', { id: 'hom-glass-clip' }, defs);
+      el('rect', { x: fx(gL), y: fx(gT), width: fx(gW), height: fx(gH) }, clip);
+    }
+    var glass = el('g', { 'clip-path': 'url(#hom-glass-clip)' }, g);
+
+    /* ── converging corridor RAILS from the opening corners to the vanishing point.
+       Faint gilt lines that sell TRUE perspective (the frames sit on rails). The two
+       CEILING rails catch the light from above (brighter, with a brass-bright echo);
+       the two FLOOR rails fall into shadow — the lit-from-above read on the corridor. */
+    var corners = [[gL, gT, true], [gR, gT, true], [gR, gB, false], [gL, gB, false]];
+    for (var ei = 0; ei < 4; ei++) {
+      var cLit = corners[ei][2];
+      el('line', { x1: fx(corners[ei][0]), y1: fx(corners[ei][1]), x2: fx(vpX), y2: fx(vpY),
+        stroke: GILT, 'stroke-width': '0.8', opacity: cLit ? '0.20' : '0.11' }, glass);
+      if (cLit) {
+        el('line', { x1: fx(corners[ei][0]), y1: fx(corners[ei][1] + 0.6), x2: fx(vpX), y2: fx(vpY + 0.6),
+          stroke: BRI, 'stroke-width': '0.6', opacity: '0.14' }, glass);
+      } else {
+        el('line', { x1: fx(corners[ei][0]), y1: fx(corners[ei][1] - 0.6), x2: fx(vpX), y2: fx(vpY - 0.6),
+          stroke: 'rgba(0,0,0,.5)', 'stroke-width': '0.6', opacity: '0.4' }, glass);
+      }
+    }
+
+    /* ── the RECEDING NESTED FRAMES — concentric gilt rectangles marching inward on
+       the rails toward the VP, each smaller + DIMMER (stepped luminance) than the
+       last, so the eye falls endlessly inward (the Droste / hall-of-mirrors regress). */
+    var N = 13, k = 0.80;                 // ring count + geometric shrink toward VP
+    var lerp = function (a, b, t) { return a + (b - a) * t; };
+    for (var ri = 1; ri <= N; ri++) {
+      var s = Math.pow(k, ri);            // 0.80, 0.64, … → 0 near the VP
+      var rl = lerp(vpX, gL, s), rr = lerp(vpX, gR, s);
+      var rt = lerp(vpY, gT, s), rb = lerp(vpY, gB, s);
+      var rw = rr - rl, rh = rb - rt;
+      if (rw < 1.1 || rh < 1.1) break;
+      var dim = Math.pow(0.84, ri - 1);   // stepped-down luminance with depth
+      // floors lifted a hair so the deepest rings stay legible + individually
+      // separated rather than collapsing into one dark mass near the VP.
+      var op = fx(Math.max(0.12, 0.9 * dim));
+      var sw = fx(Math.max(0.6, 2.3 * dim));
+      // the gilt frame ring (a stroked moulding on the dark void)
+      el('rect', { x: fx(rl), y: fx(rt), width: fx(rw), height: fx(rh),
+        fill: 'none', stroke: GILT, 'stroke-width': sw, opacity: op }, glass);
+      // a lit TOP rail (brass-bright) gives every ring a crisp discrete edge — the
+      // lit-from-above read carries deep into the glass and keeps adjacent rings apart.
+      if (ri <= 9) {
+        el('line', { x1: fx(rl + rw * 0.08), y1: fx(rt + sw * 0.4), x2: fx(rr - rw * 0.08), y2: fx(rt + sw * 0.4),
+          stroke: BRI, 'stroke-width': fx(Math.max(0.5, sw * 0.72)), opacity: fx(Math.min(0.72, op * 0.66)) }, glass);
+      }
+      // the down-facing bottom rail falls a touch into shadow (lit-from-above)
+      if (ri <= 7) {
+        el('line', { x1: fx(rl + rw * 0.1), y1: fx(rb - sw * 0.4), x2: fx(rr - rw * 0.1), y2: fx(rb - sw * 0.4),
+          stroke: 'rgba(0,0,0,.5)', 'stroke-width': fx(Math.max(0.4, sw * 0.5)), opacity: fx(op * 0.7) }, glass);
+      }
+    }
+
+    /* ── the STEADY cool glint at the vanishing point — the emissive NIGHT payoff.
+       rep.glow1 (cool blue vs the warm gold): blazes at NIGHT, recedes in bright DAY.
+       Palette-immune role; layered bloom → body → hot core. ── */
+    el('circle', { cx: fx(vpX), cy: fx(vpY), r: 7, fill: GLINT, opacity: '0.6', filter: 'url(#hom-glint)' }, glass);
+    el('circle', { cx: fx(vpX), cy: fx(vpY), r: 2.6, fill: GLINT, opacity: '0.98', filter: 'url(#hom-feather)' }, glass);
+    el('circle', { cx: fx(vpX), cy: fx(vpY), r: 1.1, fill: '#eaf7ff', opacity: '0.85' }, glass);
+
+    /* ── the TRAVELLING glint — one cool light sliding slowly DOWN the corridor from
+       the outer glass toward the vanishing point, seamlessly looping. Quiet + secondary.
+       Position + radius + opacity animate together; born at the near floor, shrinks and
+       dims as it recedes, fades out before the VP (so the loop seam is invisible) and
+       fades back in at the mouth. SMIL → the boot's pauseAnimations() FREEZES it at a
+       clean mid-corridor rest frame under prefers-reduced-motion / ?smil=0. ── */
+    var startY = gB - gH * 0.10, startX = gCx;       // near the corridor floor mouth
+    var midX = lerp(vpX, startX, 0.45), midY = lerp(vpY, startY, 0.45);
+    var trav = el('circle', { r: 3.4, fill: GLINT, opacity: '0.85', filter: 'url(#hom-feather)' }, glass);
+    var TP = 7.2;                                     // travel period (s) — slow, quiet
+    // cx: mouth → mid → VP (eased inward)
+    el('animate', { attributeName: 'cx', values: fx(startX) + ';' + fx(midX) + ';' + fx(vpX),
+      keyTimes: '0;0.5;1', dur: TP + 's', repeatCount: 'indefinite',
+      calcMode: 'spline', keySplines: '0.3 0 0.7 1;0.3 0 0.7 1' }, trav);
+    el('animate', { attributeName: 'cy', values: fx(startY) + ';' + fx(midY) + ';' + fx(vpY),
+      keyTimes: '0;0.5;1', dur: TP + 's', repeatCount: 'indefinite',
+      calcMode: 'spline', keySplines: '0.3 0 0.7 1;0.3 0 0.7 1' }, trav);
+    // shrink as it recedes
+    el('animate', { attributeName: 'r', values: '3.6;2.2;0.7',
+      keyTimes: '0;0.5;1', dur: TP + 's', repeatCount: 'indefinite' }, trav);
+    // born-in at the mouth, fade out before the seam at the VP
+    el('animate', { attributeName: 'opacity', values: '0;0.9;0.85;0',
+      keyTimes: '0;0.12;0.72;1', dur: TP + 's', repeatCount: 'indefinite' }, trav);
+    // a soft halo trailing the travelling glint (breathes with it)
+    var travH = el('circle', { r: 6.5, fill: GLINT, opacity: '0.28', filter: 'url(#hom-glint)' }, glass);
+    el('animate', { attributeName: 'cx', values: fx(startX) + ';' + fx(midX) + ';' + fx(vpX),
+      keyTimes: '0;0.5;1', dur: TP + 's', repeatCount: 'indefinite',
+      calcMode: 'spline', keySplines: '0.3 0 0.7 1;0.3 0 0.7 1' }, travH);
+    el('animate', { attributeName: 'cy', values: fx(startY) + ';' + fx(midY) + ';' + fx(vpY),
+      keyTimes: '0;0.5;1', dur: TP + 's', repeatCount: 'indefinite',
+      calcMode: 'spline', keySplines: '0.3 0 0.7 1;0.3 0 0.7 1' }, travH);
+    el('animate', { attributeName: 'r', values: '7;4.5;1.5',
+      keyTimes: '0;0.5;1', dur: TP + 's', repeatCount: 'indefinite' }, travH);
+    el('animate', { attributeName: 'opacity', values: '0;0.32;0.26;0',
+      keyTimes: '0;0.12;0.72;1', dur: TP + 's', repeatCount: 'indefinite' }, travH);
+
+    /* ── a faint diagonal GLASS sheen over the void — one soft band says "this is a
+       pane of glass", kept low so it never fights the corridor. Top-lit. ── */
+    el('path', { d: 'M ' + fx(gL) + ' ' + fx(gT + gH * 0.14) +
+      ' L ' + fx(gL + gW * 0.34) + ' ' + fx(gT) +
+      ' L ' + fx(gL + gW * 0.60) + ' ' + fx(gT) +
+      ' L ' + fx(gL) + ' ' + fx(gT + gH * 0.42) + ' Z',
+      fill: '#dfeefc', opacity: '0.065' }, glass);
+
+    /* ═══════════ PIVOT BOSSES ═══════════ the swing hardware at the shoulders ════ */
+    // round brass bosses where each post pivots the swinging frame (sells "cheval").
+    var pivY = frameOuterTop + (frameOuterBot - frameOuterTop) * 0.32;
+    for (var bi = 0; bi < 2; bi++) {
+      var bx = (bi === 0) ? fL : fR;
+      el('circle', { cx: fx(bx), cy: fx(pivY), r: 5, fill: GILT, stroke: BRASS, 'stroke-width': '1.4' }, g);
+      el('circle', { cx: fx(bx), cy: fx(pivY), r: 2, fill: DARK, stroke: BRASS, 'stroke-width': '1' }, g);
+      // top-lit glint on the boss (light from above)
+      el('circle', { cx: fx(bx - 1.3), cy: fx(pivY - 1.5), r: 1.1, fill: BRI, opacity: '0.85' }, g);
+    }
   }
 
   /* ── the GLYPH STAND — the fallback rep for every room WITHOUT a bespoke rep
