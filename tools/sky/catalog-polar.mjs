@@ -83,8 +83,11 @@ export const STARS = {
   "the-bead-that-falls-like-light": { group: "pilot", dx: 0, dy: 93, mag: 3 },  // Pilot's 3rd star: the least-time bead-road IS the least-time light-road
   "cartographer": { group: "realm", dx: 34, dy: -30, mag: 1 },
   "bastion": { group: "realm", dx: -34, dy: 30, mag: 2 },
-  "differential-gear": { group: "reckoner", dx: 0, dy: -34, mag: 1 },
-  "ball-and-disk": { group: "reckoner", dx: 0, dy: 34, mag: 2 },
+  "differential-gear": { group: "reckoner", dx: -14, dy: -48, mag: 1 },
+  "ball-and-disk": { group: "reckoner", dx: 14, dy: -24, mag: 2 },
+  "planimeter": { group: "reckoner", dx: -14, dy: 0, mag: 3 },
+  "pick-and-wheel": { group: "reckoner", dx: 14, dy: 24, mag: 3 },
+  "slipstick": { group: "reckoner", dx: -14, dy: 48, mag: 2 },
   "tone-mill": { group: "sirenist", dx: 0, dy: 25.5, mag: 1 },
   "singing-plate": { group: "sirenist", dx: 0, dy: -25.5, mag: 2 },
   "strobe-mill": { group: "sirenist", dx: 0, dy: 76.5, mag: 3 },  // Sirenist's 3rd star: the promised free stroboscope — the same strobe rate, SEEN as a freeze
@@ -134,7 +137,7 @@ export const HINTS = {
   "letters": "Speaks the verse; copies it fair.",
   "pilot": "Flies the least-time road; falls into the law.",
   "realm": "Draws the coast; raises the keep.",
-  "reckoner": "Reckons by measuring a shape; one reads the mean, one the integral.",
+  "reckoner": "Reckons by measuring a shape; the mean, the area, the product — each measured, never counted.",
   "sirenist": "Spins the rate you watch into the pitch you hear.",
   "strategist": "Wins by the move that looks like a mistake.",
   "surveyor": "Walks the loop; brings home the twist no chart can hide.",
