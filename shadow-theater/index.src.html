@@ -141,6 +141,17 @@
 <!-- forge:include ./proscenium.js -->
 </script>
 
+<!-- THE TOY THEATRE — the Director, the repertoire, the paper programme. -->
+<script>
+<!-- forge:include ./staging.js -->
+</script>
+<script>
+<!-- forge:include ./plays.js -->
+</script>
+<script>
+<!-- forge:include ./playbill.js -->
+</script>
+
 <!-- The LANTERN HUSH BED (foundry-forged voice). Sets window.HushBed + Gate.sfx. -->
 <script>
 <!-- forge:include ./sound-hush.js -->
@@ -179,8 +190,8 @@ var COVER_T = 180;                          /* acc luminance below this === cove
 var REDUCED = false;
 try { REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches; } catch (e) { }
 
-/* per-puppet display size as a fraction of stage height */
-var SIZE_FRAC = { crane: 0.42, fox: 0.34, reed: 0.52, moon: 0.5, willow: 0.62, vee: 0.28 };
+/* per-puppet display size as a fraction of stage height (flats are wide set-pieces) */
+var SIZE_FRAC = { crane: 0.42, fox: 0.34, reed: 0.52, moon: 0.5, willow: 0.62, vee: 0.28, hills: 1.0, bank: 0.9, nest: 0.24 };
 
 /* ============================ canvas + geometry plumbing ============================ */
 var wrapEl = document.getElementById('stagewrap');
@@ -199,6 +210,15 @@ var silkCtx = silkCache.getContext('2d');
 /* the lamp — a point behind the silk. Screen-projected glow sits above centre so
    rod-UP (+depth) casts the loom DOWNWARD, matching the projection direction. */
 var lamp = { D: Z_L0, tD: Z_L0, vD: 0, xFrac: 0.5, yFrac: 0.40 };
+/* the Toy Theatre's extra live state: the dawn->night backdrop wash + the fly-curtain.
+   Both ride the SAME critically-damped springs as everything else (no forked easing) —
+   the curtain just uses a heavier omega. bakedPhase/silkDirty gate the silk re-bake so
+   the wash only re-renders the cached backdrop when it drifts enough to matter. */
+var backdrop = { phase: 0.5, tphase: 0.5, vphase: 0 };
+var bakedPhase = 0.5, silkDirty = false;
+var curtain = { drop: 0, tdrop: 0, vdrop: 0 };
+var CURTAIN_OMEGA = 7;                              /* heavier fabric — a stiffness arg to the SAME smoothCD */
+var FREEPLAY_LAMP = Z_L0;                           /* lamp.tD captured at first load — the house-lights distance */
 function lampX() { return W * lamp.xFrac; }
 function lampY() { return H * lamp.yFrac; }
 function mOf(depth) { var g = depth * G_MAX; return lamp.D / (lamp.D - g); }
@@ -225,6 +245,7 @@ function initPuppets() {
       artic: artic, tartic: tartic, vartic: vartic,
       visible: true, _box: null, _bboxArea: 0
     });
+    if (def.groove) { var pf = P[P.length - 1]; pf.x = pf.tx = def.groove.offX; pf.depth = pf.tdepth = def.groove.depth; }  /* flats park off-stage, ready to slide */
   }
 }
 
@@ -240,7 +261,7 @@ function resize() {
   acc.width = accW; acc.height = accH;
   silkCache.width = Math.round(W * dpr); silkCache.height = Math.round(H * dpr);
   silkCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  try { window.Proscenium.drawScreen(silkCtx, W, H); } catch (e) { }
+  try { window.Proscenium.drawBackdrop(silkCtx, W, H, backdrop.phase); bakedPhase = backdrop.phase; } catch (e) { }
   shadowDirty = true;
 }
 
@@ -344,6 +365,8 @@ function composite() {
   dctx.globalCompositeOperation = 'multiply';
   dctx.drawImage(acc, 0, 0, accW, accH, 0, 0, W, H);
   dctx.globalCompositeOperation = 'source-over';
+  /* the fly-curtain sits in front of silk+shadow, BEHIND the walnut arch (drawn next) */
+  if (curtain.drop > 0.001) { try { window.Proscenium.drawCurtain(dctx, W, H, curtain.drop); } catch (e) { } }
   try { window.Proscenium.drawFrame(dctx, W, H); } catch (e) { }
   /* the faint control-rod glint while grabbed */
   if (grab && grab.p && (grab.kind === 'rod' || grab.kind === 'artic')) drawRodGlint(grab.p);
@@ -377,8 +400,10 @@ function measureCast() {
   var castScale = 0; for (var i = 0; i < list.length; i++) castScale += list[i]._bboxArea;
   var sumAreas = 0;
   for (var j = 0; j < list.length; j++) { renderShadow([list[j]]); sumAreas += coveredPixels(); }
-  renderShadow(list);                                /* restore the true union */
-  return { unionArea: unionArea, sumAreas: sumAreas, castScale: castScale };
+  renderShadow(list);                                /* restore the true union (and each puppet's _box) */
+  var boxes = {};
+  for (var b = 0; b < list.length; b++) { var bx = list[b]._box; if (bx) boxes[list[b].id] = { cx: bx.x + bx.w / 2, cy: bx.y + bx.h / 2, w: bx.w, h: bx.h }; }
+  return { unionArea: unionArea, sumAreas: sumAreas, castScale: castScale, boxes: boxes };
 }
 
 /* ============================ snapshot thumbnail (composited warm-on-dark) ============================ */
@@ -435,6 +460,7 @@ function pointerToStage(e) {
 }
 function onDown(e) {
   Sound.unlock(); Sound.startBed();                  /* first real gesture unlocks the hush (if unmuted) */
+  if (window.Director && Director.isRunning() && Director.nudge()) { e.preventDefault(); return; }  /* intermission tap → back to free-play */
   var pt = pointerToStage(e);
   grab = hitTest(pt[0], pt[1]); grab.last = pt; grab.moved = false;
   canvas.classList.add('grabbing');
@@ -492,6 +518,10 @@ function tickPhysics(dt) {
     for (var k in p.artic) { r = smoothCD(p.artic[k], p.tartic[k], p.vartic[k], dt, OMEGA); if (chg(p.artic[k], r[0], p.vartic[k])) moved = true; p.artic[k] = r[0]; p.vartic[k] = r[1]; }
   }
   r = smoothCD(lamp.D, lamp.tD, lamp.vD, dt, OMEGA); if (chg(lamp.D / 100, r[0] / 100, lamp.vD)) moved = true; lamp.D = r[0]; lamp.vD = r[1];
+  /* the backdrop wash + the fly-curtain — same spring, curtain heavier */
+  r = smoothCD(backdrop.phase, backdrop.tphase, backdrop.vphase, dt, OMEGA); if (chg(backdrop.phase, r[0], backdrop.vphase)) moved = true; backdrop.phase = r[0]; backdrop.vphase = r[1];
+  if (Math.abs(backdrop.phase - bakedPhase) > 0.012) silkDirty = true;
+  r = smoothCD(curtain.drop, curtain.tdrop, curtain.vdrop, dt, CURTAIN_OMEGA); if (chg(curtain.drop, r[0], curtain.vdrop)) moved = true; curtain.drop = r[0]; curtain.vdrop = r[1];
   return moved;
 }
 function chg(a, b, v) { return Math.abs(a - b) > 1e-4 || Math.abs(v) > 1e-4; }
@@ -562,13 +592,36 @@ var Stage = {
   joint: function (id) { var p = byId(id); return p ? p.def.handles : null; },
   snapshotThumbnail: snapshotThumbnail,
   measureCast: measureCast,
+  /* ── the Toy Theatre seam (the Director drives these; never a new render path) ── */
+  setVisible: function (id, b) { var p = byId(id); if (p) p.visible = !!b; shadowDirty = true; },
+  setBackdropPhase: function (ph, o) { backdrop.tphase = clamp(ph, 0, 1); if (o && o.animate === false) { backdrop.phase = backdrop.tphase; silkDirty = true; } },
+  getBackdropPhase: function () { return backdrop.phase; },
+  setCurtain: function (d, o) { curtain.tdrop = clamp(d, 0, 1); if (o && o.animate === false) curtain.drop = curtain.tdrop; shadowDirty = true; },
+  isCurtainDown: function () { return curtain.drop >= 0.98; },
+  slideFlat: function (id, g, o) { var p = byId(id); if (!p || !p.def.groove) return; var gr = p.def.groove, f = clamp(g, 0, 1); p.tx = gr.offX + (gr.restX - gr.offX) * f; if (gr.restY != null) p.ty = gr.restY; if (o && o.animate === false) { p.x = p.tx; p.y = p.ty; } shadowDirty = true; },
+  seizedId: function () { if (!grab) return null; if (grab.kind === 'lamp') return { kind: 'lamp', id: null }; return grab.p ? { kind: grab.kind, id: grab.p.id } : null; },
+  isResting: function () {
+    for (var i = 0; i < P.length; i++) { var p = P[i]; if (chg(p.x, p.tx, p.vx) || chg(p.y, p.ty, p.vy) || chg(p.depth, p.tdepth, p.vdepth)) return false; for (var k in p.artic) if (chg(p.artic[k], p.tartic[k], p.vartic[k])) return false; }
+    return !chg(lamp.D / 100, lamp.tD / 100, lamp.vD) && !chg(backdrop.phase, backdrop.tphase, backdrop.vphase) && !chg(curtain.drop, curtain.tdrop, curtain.vdrop);
+  },
+  houseLights: function (o) { this.setBackdropPhase(0.5, o); lamp.tD = FREEPLAY_LAMP; if (o && o.animate === false) lamp.D = FREEPLAY_LAMP; },
+  toFreeplay: function (o) {
+    var hard = o && o.animate === false;
+    for (var i = 0; i < P.length; i++) P[i].visible = true;      /* restore the whole cast */
+    resetScene(!hard);                                            /* positions + artic + lampD; flats park at x0frac=offX */
+    this.houseLights(o);
+    this.setCurtain(0, o);
+    shadowDirty = true;
+  },
   getState: function () {
     var ps = []; for (var i = 0; i < P.length; i++) { var p = P[i]; var a = {}; for (var k in p.artic) a[k] = p.artic[k]; ps.push({ id: p.id, x: p.tx, y: p.ty, depth: p.tdepth, artic: a }); }
-    return { puppets: ps, lampD: lamp.tD };
+    return { puppets: ps, lampD: lamp.tD, backdropPhase: backdrop.tphase, curtainDown: curtain.drop >= 0.98, curtainDrop: curtain.drop };
   },
   setState: function (state, opts) {
     var animate = opts && opts.animate;
     if (state.lampD != null) lamp.tD = clamp(state.lampD, D_MIN, D_MAX);
+    if (state.backdropPhase != null) backdrop.tphase = clamp(state.backdropPhase, 0, 1);
+    if (state.curtainDown != null) curtain.tdrop = state.curtainDown ? 1 : 0;
     if (state.puppets) for (var i = 0; i < state.puppets.length; i++) {
       var s = state.puppets[i], p = byId(s.id); if (!p) continue;
       p.tx = s.x; p.ty = s.y; p.tdepth = s.depth;
@@ -576,6 +629,8 @@ var Stage = {
     }
     if (!animate) {
       if (state.lampD != null) lamp.D = lamp.tD;
+      if (state.backdropPhase != null) { backdrop.phase = backdrop.tphase; silkDirty = true; }
+      if (state.curtainDown != null) curtain.drop = curtain.tdrop;
       if (state.puppets) for (var j = 0; j < state.puppets.length; j++) { var q = byId(state.puppets[j].id); if (!q) continue; q.x = q.tx; q.y = q.ty; q.depth = q.tdepth; for (var kk in q.artic) q.artic[kk] = q.tartic[kk]; }
     }
     shadowDirty = true;
@@ -599,11 +654,13 @@ function frame(now) {
   var dt = lastNow ? Math.min(0.05, (now - lastNow) / 1000) : 1 / 60; lastNow = now;
   globalT += dt;
   breath = Math.sin(now * 0.0011) * 0.5 + 0.5;      /* the silk's slow lamp-breath (silk-dirty, cheap) */
+  if (window.Director && window.Director.isRunning()) { window.Director.tick(dt); shadowDirty = true; }
   var moved = tickPhysics(dt);
   var veeVisible = !!byId('vee') && byId('vee').visible;
   if (moved || veeVisible) shadowDirty = true;      /* the vee flaps → shadow stays alive */
+  if (silkDirty) { try { window.Proscenium.drawBackdrop(silkCtx, W, H, backdrop.phase); } catch (e) { } bakedPhase = backdrop.phase; silkDirty = false; }
   if (shadowDirty) { renderShadow(); if (!moved && !veeVisible) shadowDirty = false; }
-  composite();                                       /* cheap: cached silk + bloom + multiply */
+  composite();                                       /* cheap: cached silk + bloom + multiply + curtain */
   requestAnimationFrame(frame);
 }
 
@@ -667,6 +724,67 @@ window.__SHADOW_SMOKE = function () {
   return { ok: checks.every(function (c) { return c[1]; }), checks: checks };
 };
 
+/* ============================ THE PAYOFF-LIVENESS TWIN (the Toy Theatre) ============================
+   NOT a theorem — a delight piece with a PAYOFF (the play PLAYS) owes a liveness twin. For each
+   of the 3 plays it drives THIS Director headless (fixed step, the SAME tick + tickPhysics the
+   rAF loop runs) and asserts: (1) the cue-index advances MONOTONE through ALL cues (each fires
+   once, none skipped); (2) each fired cue's effect LANDS — the intended channel's target moved
+   AND the rendered shadow reflects it (measureCast / per-puppet shadow boxes / visibility); (3)
+   the closing TABLEAU flag and the curtain-fall flag are both reached. Run twice — desktop width
+   AND forced-mobile — then restore. Leaves no residue. */
+window.__STAGE_PLAY_TEST = function () {
+  if (!W) resize();
+  var EPS_AREA = 10, EPS_SCALE = 16;
+  var D = window.Director;
+  function findP(gs, id) { for (var i = 0; i < gs.puppets.length; i++) if (gs.puppets[i].id === id) return gs.puppets[i]; return null; }
+  function boxMoved(a, b, id) { var x = a.mc.boxes[id], y = b.mc.boxes[id]; if (!x || !y) return false; return Math.hypot(x.cx - y.cx, x.cy - y.cy) > 0.6; }
+  function boxArea(a, b, id) { var x = a.mc.boxes[id], y = b.mc.boxes[id]; if (!x || !y) return true; return Math.abs(x.w * x.h - y.w * y.h) > 8; }
+  function castChg(a, b) { return Math.abs(a.mc.unionArea - b.mc.unionArea) > EPS_AREA || Math.abs(a.mc.castScale - b.mc.castScale) > EPS_SCALE; }
+  function snap() { settleNow(); return { gs: Stage.getState(), mc: measureCast(), vis: visibleList().map(function (p) { return p.id; }) }; }
+  function landed(c, pre, post) {
+    var v = c.do, id = c.args[0], a, b;
+    if (v === 'pos' || v === 'flat') { a = findP(pre.gs, id); b = findP(post.gs, id); return !!(a && b && (Math.abs(a.x - b.x) > 1e-3 || Math.abs(a.y - b.y) > 1e-3) && (boxMoved(pre, post, id) || castChg(pre, post))); }
+    if (v === 'depth') { a = findP(pre.gs, id); b = findP(post.gs, id); return !!(a && b && Math.abs(a.depth - b.depth) > 1e-3 && (boxArea(pre, post, id) || castChg(pre, post))); }
+    if (v === 'artic') { var jt = c.args[1]; a = findP(pre.gs, id); b = findP(post.gs, id); return !!(a && b && a.artic && b.artic && Math.abs((a.artic[jt] || 0) - (b.artic[jt] || 0)) > 1e-3 && (boxMoved(pre, post, id) || boxArea(pre, post, id) || castChg(pre, post))); }
+    if (v === 'lamp') { return Math.abs(pre.gs.lampD - post.gs.lampD) > 1e-2 && Math.abs(pre.mc.castScale - post.mc.castScale) > EPS_SCALE; }
+    if (v === 'show') { return pre.vis.join(',') !== post.vis.join(','); }
+    if (v === 'wash') { return Math.abs((pre.gs.backdropPhase || 0) - (post.gs.backdropPhase || 0)) > 1e-3; }
+    if (v === 'curtain') { return pre.gs.curtainDown !== post.gs.curtainDown || Math.abs(pre.gs.curtainDrop - post.gs.curtainDrop) > 1e-3; }
+    return false;
+  }
+  function step(n) { for (var i = 0; i < n; i++) { D.tick(1 / 60); tickPhysics(1 / 60); } }
+  function runOne(play) {
+    var wasR = D.__setReduced(false);
+    D.loadPlay(play); D.start();
+    var g = 0; while (D.getState().phase !== 'playing' && g++ < 2400) step(1);   /* wait out fall + swap + rise */
+    var monotone = true, prev = 0, arr = [], pre = snap();
+    for (var i = 0; i < play.cues.length; i++) {
+      var guard = 0; while (D.getState().cursor <= i && guard++ < 6000) step(1);
+      var cur = D.getState().cursor; if (cur < prev) monotone = false; prev = cur;
+      var post = snap();
+      arr.push({ at: play.cues[i].at, do: play.cues[i].do, id: play.cues[i].args[0], ok: landed(play.cues[i], pre, post) });
+      pre = post;
+    }
+    var reachedAll = D.getState().cursor >= play.cues.length;
+    var g2 = 0; while (!(D.isTableauReached() && D.isCurtainDown()) && g2++ < 8000) step(1);
+    var tableau = D.isTableauReached(), curtainDown = D.isCurtainDown();
+    D.abort(); D.__setReduced(wasR);
+    var fails = arr.filter(function (x) { return !x.ok; });
+    return { id: play.id, nCues: play.cues.length, monotone: monotone && reachedAll, allLanded: fails.length === 0, fails: fails.map(function (x) { return x.do + '@' + x.at + '(' + x.id + ')'; }), tableau: tableau, curtain: curtainDown };
+  }
+  function battery() { var out = []; for (var i = 0; i < window.PLAYS.length; i++) out.push(runOne(window.PLAYS[i])); return out; }
+  var desktop = battery();
+  var prevW = wrapEl.style.width;
+  wrapEl.style.width = '360px'; resize();
+  var mobile = battery();
+  wrapEl.style.width = prevW; resize();
+  if (window.Director) Director.abort();
+  for (var j = 0; j < P.length; j++) P[j].visible = true;
+  resetScene(false);
+  function okAll(rs) { return rs.every(function (r) { return r.monotone && r.allLanded && r.tableau && r.curtain; }); }
+  return { ok: okAll(desktop) && okAll(mobile), desktop: desktop, mobile: mobile };
+};
+
 /* ============================ scene + boot ============================ */
 function resetScene(animate) {
   Stage.setState({ puppets: P.map(function (p) {
@@ -706,6 +824,19 @@ initPuppets();
 resize();
 renderShelf();
 syncSound();
+
+/* the Toy Theatre — pin the playbill; a title taps the stage into a play, "Free Play" returns */
+FREEPLAY_LAMP = lamp.tD;
+if (window.Playbill && window.PLAYS) {
+  Playbill.mount(wrapEl, PLAYS.map(function (p) { return { id: p.id, title: p.title, sub: p.blurb }; }));
+  Playbill.onPick(function (id) {
+    Sound.unlock(); Sound.startBed();               /* a title tap is a real gesture — unlock the hush */
+    if (id === 'free') { if (window.Director) Director.abort(); return; }
+    var play = PLAYS.byId(id); if (!play || !window.Director) return;
+    Director.loadPlay(play); Director.start();
+  });
+}
+
 requestAnimationFrame(frame);
 
 /* front-door breadcrumb (literal key so a direct visit registers + the built HTML carries it) */

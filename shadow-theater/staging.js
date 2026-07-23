@@ -192,6 +192,8 @@
     start: start,
     tick: tick,
     abort: abort,
+    // a tap during the closing intermission returns to free-play (animated); returns true if consumed
+    nudge: function () { if (phase === 'intermission' || phase === 'closing') { returnToFreeplay(true); return true; } return false; },
     getState: getState,
     isRunning: isRunning,
     isTableauReached: isTableauReached,

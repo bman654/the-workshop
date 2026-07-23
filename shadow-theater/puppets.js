@@ -274,8 +274,8 @@
   var hills = {
     id: 'hills', label: 'the far hills', polarity: 'shadow', isFlat: true,
     box: { w: 100, h: 100 }, anchor: [50, 100], handles: [],
-    depth0: 0.03, x0frac: -0.60, y0frac: 0.99,
-    groove: { offX: -0.60, restX: 0.50, restY: 0.99, depth: 0.03 },
+    depth0: 0.03, x0frac: -1.10, y0frac: 0.99,
+    groove: { offX: -1.10, restX: 0.50, restY: 0.99, depth: 0.03 },
     silhouette: function () {
       return [{ fill: 'nonzero', pts: [
         [-46, 108], [-46, 92], [-32, 88], [-18, 91], [-4, 85], [10, 90], [22, 86],
@@ -290,8 +290,8 @@
   var bank = {
     id: 'bank', label: 'the near bank', polarity: 'shadow', isFlat: true,
     box: { w: 100, h: 100 }, anchor: [50, 100], handles: [],
-    depth0: 0.05, x0frac: -0.55, y0frac: 1.00,
-    groove: { offX: -0.55, restX: 0.50, restY: 1.00, depth: 0.05 },
+    depth0: 0.05, x0frac: -1.00, y0frac: 1.00,
+    groove: { offX: -1.00, restX: 0.50, restY: 1.00, depth: 0.05 },
     silhouette: function () {
       return [{ fill: 'nonzero', pts: [
         [-46, 118], [-46, 90], [-26, 87], [-8, 89], [4, 82],

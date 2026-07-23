@@ -909,8 +909,78 @@
     glyph: function () { return this.silhouette({ t: 0.35 }); }
   };
 
-  var TABLE = { crane: crane, fox: fox, reed: reed, moon: moon, willow: willow, vee: vee };
-  var ORDER = ['moon', 'vee', 'willow', 'reed', 'crane', 'fox'];   // back → front
+  /* ══════════════════════ THE FLATS — set-pieces for the Toy Theatre ══════════════════════
+     A flat is an ORDINARY puppet record (flows through the same renderPuppet path — no new
+     render code) with two extra fields: `isFlat:true` and a `groove` {offX, restX, restY,
+     depth}. It parks fully OFF-STAGE in free-play (offX) and a play slides it in on its
+     groove (0=offstage → 1=onstage) or places it hard in the play's setup. Once on, it is a
+     normal grabbable puppet, so grabbing a flat mid-scene is absorbed like any other. These
+     are wide low horizon pieces — their contours reach past [0,RES] on purpose. */
+
+  /* ── THE FAR HILLS — a wide low rolling horizon band, deepest z ─────────────── */
+  var hills = {
+    id: 'hills', label: 'the far hills', polarity: 'shadow', isFlat: true,
+    box: { w: 100, h: 100 }, anchor: [50, 100], handles: [],
+    depth0: 0.03, x0frac: -1.10, y0frac: 0.99,
+    groove: { offX: -1.10, restX: 0.50, restY: 0.99, depth: 0.03 },
+    silhouette: function () {
+      return [{ fill: 'nonzero', pts: [
+        [-46, 108], [-46, 92], [-32, 88], [-18, 91], [-4, 85], [10, 90], [22, 86],
+        [36, 91], [50, 86], [63, 91], [76, 85], [90, 90], [104, 86], [118, 91],
+        [132, 88], [146, 93], [146, 108]
+      ] }];
+    },
+    glyph: function () { return this.silhouette(); }
+  };
+
+  /* ── THE NEAR BANK — a foreground embankment with a reed tuft, front z ───────── */
+  var bank = {
+    id: 'bank', label: 'the near bank', polarity: 'shadow', isFlat: true,
+    box: { w: 100, h: 100 }, anchor: [50, 100], handles: [],
+    depth0: 0.05, x0frac: -1.00, y0frac: 1.00,
+    groove: { offX: -1.00, restX: 0.50, restY: 1.00, depth: 0.05 },
+    silhouette: function () {
+      return [{ fill: 'nonzero', pts: [
+        [-46, 118], [-46, 90], [-26, 87], [-8, 89], [4, 82],
+        [8, 72], [12, 82], [22, 88], [38, 85], [56, 89], [76, 86],
+        [98, 90], [120, 87], [146, 91], [146, 118]
+      ] }];
+    },
+    glyph: function () { return this.silhouette(); }
+  };
+
+  /* ── THE NEST — a twig cradle with two nestlings; sits BEHIND the willow so its
+        fronds occlude it, and the frond-sweep is the reveal. A tiny `stir` handle
+        shifts the nestlings. ───────────────────────────────────────────────────── */
+  var nest = {
+    id: 'nest', label: 'the nest', polarity: 'shadow', isFlat: true,
+    box: { w: 100, h: 100 }, anchor: [50, 60], handles: [{ id: 'stir', pivot: [50, 52] }],
+    depth0: 0.06, x0frac: -0.80, y0frac: 0.52,
+    groove: { offX: -0.80, restX: 0.34, restY: 0.52, depth: 0.06 },
+    silhouette: function (st) {
+      var stir = (st && st.stir != null) ? st.stir : 0;
+      var s = Math.sin(stir * Math.PI * 2) * 3;
+      var out = [];
+      // the twig cradle — a shallow cupped basket (one solid)
+      out.push({ fill: 'nonzero', pts: [
+        [20, 58], [28, 67], [40, 71], [50, 72], [60, 71], [72, 67], [80, 58],
+        [75, 55], [64, 62], [50, 64], [36, 62], [25, 55]
+      ] });
+      // two nestlings — little rounded heads peeking over the rim, shifting on stir
+      out.push({ fill: 'nonzero', pts: circle(42 + s, 53, 5.2, 14) });
+      out.push({ fill: 'nonzero', pts: circle(58 - s, 54, 5.2, 14) });
+      // tiny upturned beaks
+      out.push({ fill: 'nonzero', pts: [[41 + s, 49], [44 + s, 44.5], [47 + s, 49]] });
+      out.push({ fill: 'nonzero', pts: [[57 - s, 50], [60 - s, 45.5], [63 - s, 50]] });
+      return out;
+    },
+    glyph: function () { return this.silhouette({ stir: 0.25 }); }
+  };
+
+  var TABLE = { crane: crane, fox: fox, reed: reed, moon: moon, willow: willow, vee: vee, hills: hills, bank: bank, nest: nest };
+  // back → front. flats sit at the extremes (hills deepest, bank frontmost) and nest tucks
+  // directly BEHIND the willow so the willow's fronds occlude it — the reveal is that occlusion.
+  var ORDER = ['hills', 'moon', 'vee', 'nest', 'willow', 'reed', 'crane', 'fox', 'bank'];
 
   root.Puppets = {
     RES: RES,
@@ -941,12 +1011,28 @@
    spandrels sink into soft shadow, and a lamp bloom that widens as the lamp dollies in.
 
    THE CONTRACT (what the compositor binds to):
-     Proscenium.drawScreen(ctx, W, H)                 // opaque silk + vignette (CSS px)
+     Proscenium.drawBackdrop(ctx, W, H, phase)        // opaque silk + sky + vignette; phase 0=dawn·.5=dusk·1=night
+     Proscenium.drawScreen(ctx, W, H)                 // === drawBackdrop(ctx,W,H,0.5) — the free-play default (back-compat)
      Proscenium.drawLampBloom(ctx, x, y, W, H, k)     // warm bloom at (x,y), k=intensity
+     Proscenium.drawCurtain(ctx, W, H, drop)          // warm pleated fly-curtain; drop 0=flown·1=lowered (over silk+shadow, behind arch)
      Proscenium.drawFrame(ctx, W, H)                  // the walnut arch, over everything
+
+   PHASE + COMPOSITE NOTE — the backdrop is baked into the silk cache UNDER the lamp
+   bloom ('lighter') and the shadow multiply, so `night` only darkens the periphery: the
+   night CENTRE FLOOR stays warm (rgb≈60,49,32) and the lamp pool stays phase-independently
+   bright, so shadows cast into it never lose contrast. Do not move the backdrop above the
+   bloom/multiply.
    ============================================================================ */
 "use strict";
 (function (root) {
+
+  /* phase colour helpers — a three-point lerp (dawn @0, dusk @0.5, night @1). */
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function mix(c0, c1, t) { return [Math.round(lerp(c0[0], c1[0], t)), Math.round(lerp(c0[1], c1[1], t)), Math.round(lerp(c0[2], c1[2], t))]; }
+  function lerp3(t, a, b, c) { return (t < 0.5) ? mix(a, b, t * 2) : mix(b, c, (t - 0.5) * 2); }
+  function rgb(c) { return 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')'; }
+  function rgba(c, al) { return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + al + ')'; }
+  function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 
   function mulberry32(a) {
     return function () {
@@ -982,22 +1068,114 @@
     return c;
   }
 
-  function drawScreen(ctx, W, H) {
-    // base warm amber, brightest toward the middle-upper stage
+  /* the silk, washed by the hour. phase 0=dawn · 0.5=dusk · 1=night. The centre floor
+     stays warm at every phase (so shadow contrast survives night); only the periphery
+     cools + darkens, and a low outdoor sky band cools toward night at the top. */
+  function drawBackdrop(ctx, W, H, phase) {
+    phase = (phase == null) ? 0.5 : clamp01(phase);
+    // the warm floor at the centre — stays warm at every hour (dusk === the old #5a3f1e)
+    var inner = lerp3(phase, [116, 82, 44], [90, 63, 30], [60, 49, 32]);
+    var midc  = lerp3(phase, [78, 56, 30], [58, 40, 18], [34, 27, 17]);
+    var outer = lerp3(phase, [30, 19, 10], [18, 11, 6], [7, 8, 13]);
     var rg = ctx.createRadialGradient(W * 0.5, H * 0.44, 10, W * 0.5, H * 0.5, Math.max(W, H) * 0.75);
-    rg.addColorStop(0, '#5a3f1e');
-    rg.addColorStop(0.45, '#3a2812');
-    rg.addColorStop(1, '#120b06');
+    rg.addColorStop(0, rgb(inner));
+    rg.addColorStop(0.45, rgb(midc));
+    rg.addColorStop(1, rgb(outer));
     ctx.fillStyle = rg;
     ctx.fillRect(0, 0, W, H);
-    // the woven grain, tiled over
+    // a low outdoor sky band across the top — warm rose at dawn, cool blue at night
+    var sky = lerp3(phase, [78, 50, 38], [42, 34, 30], [22, 30, 54]);
+    var skyA = 0.10 + 0.16 * phase;
+    var sg = ctx.createLinearGradient(0, 0, 0, H * 0.42);
+    sg.addColorStop(0, rgba(sky, skyA.toFixed(3)));
+    sg.addColorStop(1, rgba(sky, 0));
+    ctx.fillStyle = sg;
+    ctx.fillRect(0, 0, W, H * 0.42);
+    // the woven grain, tiled over (the cached mulberry weft)
     try { ctx.drawImage(grainTile(W, H), 0, 0, W, H); } catch (e) { }
-    // a soft vignette to seat the silk in shadow
+    // a soft vignette to seat the silk in shadow, deepening toward night
+    var vA = lerp(0.42, 0.74, phase);
     var vg = ctx.createRadialGradient(W * 0.5, H * 0.5, Math.min(W, H) * 0.30, W * 0.5, H * 0.5, Math.max(W, H) * 0.62);
     vg.addColorStop(0, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+    vg.addColorStop(1, 'rgba(0,0,0,' + vA.toFixed(3) + ')');
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, W, H);
+  }
+  // back-compat: the free-play default is dusk, byte-identical call shape for the compositor.
+  function drawScreen(ctx, W, H) { drawBackdrop(ctx, W, H, 0.5); }
+
+  /* the fly-curtain — warm pleated silk hung inside the walnut arch. drop 0=flown
+     (nothing), 1=lowered (hem at the stage floor). Canvas paint only — never eats
+     pointer events; drawn UNDER the arch by the compositor so its top tucks behind
+     the walnut. */
+  function drawCurtain(ctx, W, H, drop) {
+    drop = clamp01(drop);
+    if (drop <= 0.001) return;
+    var t = Math.max(14, Math.min(W, H) * 0.045);       // === drawFrame's thickness
+    var top = t, left = t, right = W - t, span = right - left;
+    var hem = top + (H - 2 * t) * drop;
+    var N = Math.max(8, Math.round(span / 46));         // pleat count
+    var cw = span / N;
+    var scallop = Math.min(cw * 0.5, (H - 2 * t) * 0.05) * (0.55 + 0.45 * drop);
+    // the silhouette path: down the left, scalloped hem across, up the right, close along the fly
+    function silkPath() {
+      ctx.beginPath();
+      ctx.moveTo(left, top);
+      ctx.lineTo(left, hem);
+      for (var i = 0; i < N; i++) {
+        var x0 = left + i * cw, xm = x0 + cw * 0.5, x1 = x0 + cw;
+        ctx.quadraticCurveTo(xm, hem + scallop, x1, hem);
+      }
+      ctx.lineTo(right, top);
+      ctx.closePath();
+    }
+    ctx.save();
+    // base silk
+    silkPath();
+    ctx.fillStyle = 'rgb(102,42,27)';
+    ctx.fill();
+    // pleats — fold shadow at each seam, a silk catch down each pleat centre
+    ctx.save();
+    silkPath(); ctx.clip();
+    var botExtent = hem + scallop - top + 4;
+    for (var i = 0; i < N; i++) {
+      var x0 = left + i * cw;
+      var gf = ctx.createLinearGradient(x0, 0, x0 + cw, 0);
+      gf.addColorStop(0, 'rgba(28,9,5,0.9)');
+      gf.addColorStop(0.5, 'rgba(28,9,5,0)');
+      gf.addColorStop(1, 'rgba(28,9,5,0.9)');
+      ctx.fillStyle = gf; ctx.fillRect(x0, top, cw + 1, botExtent);
+      var gc = ctx.createLinearGradient(x0, 0, x0 + cw, 0);
+      gc.addColorStop(0, 'rgba(214,120,80,0)');
+      gc.addColorStop(0.5, 'rgba(220,128,86,0.38)');
+      gc.addColorStop(1, 'rgba(214,120,80,0)');
+      ctx.fillStyle = gc; ctx.fillRect(x0, top, cw + 1, botExtent);
+    }
+    // lit at the fly, shadowed toward the hem (a hung fabric)
+    var vg = ctx.createLinearGradient(0, top, 0, hem);
+    vg.addColorStop(0, 'rgba(255,222,152,0.14)');
+    vg.addColorStop(0.5, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.30)');
+    ctx.fillStyle = vg; ctx.fillRect(left, top, span, botExtent);
+    ctx.restore();
+    // the gilt fringe following the scallops + a tassel dip under each low point
+    ctx.beginPath();
+    ctx.moveTo(left, hem);
+    for (var j = 0; j < N; j++) {
+      var xa = left + j * cw, xam = xa + cw * 0.5, xb = xa + cw;
+      ctx.quadraticCurveTo(xam, hem + scallop, xb, hem);
+    }
+    ctx.strokeStyle = 'rgba(201,162,74,0.72)';
+    ctx.lineWidth = Math.max(1.2, cw * 0.05);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(201,162,74,0.5)';
+    ctx.lineWidth = Math.max(1, cw * 0.035);
+    var tass = Math.min(11, scallop * 0.95);
+    for (var k = 0; k < N; k++) {
+      var xm = left + k * cw + cw * 0.5;
+      ctx.beginPath(); ctx.moveTo(xm, hem + scallop); ctx.lineTo(xm, hem + scallop + tass); ctx.stroke();
+    }
+    ctx.restore();
   }
 
   function drawLampBloom(ctx, x, y, W, H, k) {
@@ -1056,11 +1234,524 @@
   }
 
   root.Proscenium = {
+    drawBackdrop: drawBackdrop,
     drawScreen: drawScreen,
     drawLampBloom: drawLampBloom,
+    drawCurtain: drawCurtain,
     drawFrame: drawFrame,
     __forged: true
   };
+
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+</script>
+
+<!-- THE TOY THEATRE — the Director, the repertoire, the paper programme. -->
+<script>
+/* ============================================================================
+   staging.js — THE DIRECTOR.  [in-house]  Sets window.Director.
+
+   The Toy Theatre's beating heart: it turns a PLAY (pure data) into a performance
+   on the standing Shadow Theater. A play is a list of cues {at, do, args}; the
+   Director advances a monotone beat, fires each cue EXACTLY once when the beat
+   passes its `at`, and lets the stage's OWN critically-damped springs (the L485
+   smoothCD channels) ease every cued TARGET into one flowing gesture. There is NO
+   forked easing here and NO new render path — a cue only ever SETS a target on the
+   Stage seam; the springs do the motion, exactly as a dragged hand would.
+
+   Grow-by-data, not code: a company/playbill grows by adding play objects. The verb
+   table is a FROZEN allow-list — loadPlay THROWS (with the offending cue index) on any
+   `do` not in it, so a typo can't silently sail through.
+
+   ABSORB (monotone-safe): if the viewer grabs a channel mid-play, that channel's cue
+   STILL fires (cursor advances — the beat never stalls) but its WRITE is withheld and
+   stashed in `score`; the frame the hand lets go, the latest stashed target is
+   re-applied. Drag and play never fight over a channel.
+
+   THE VERB TABLE (8) — every entry is a TARGET-setter on the Stage seam:
+     pos(id,xF,yF) depth(id,d) artic(id,joint,v) lamp(D)
+     show(id,bool) wash(phase)  flat(id,groove)   curtain(drop)
+
+   LIFECYCLE — start() drops the curtain, swaps the scene UNDER cover (hides non-cast,
+   hard-sets the play's setup), raises the curtain, then plays. When every cue has fired
+   and the stage is at rest, the closing TABLEAU is held, the curtain falls, and an
+   intermission holds it until a tap (or a timeout) returns to free-play — restoring the
+   cast, the flats to their grooves, and the house lights.
+
+   Payoff-liveness (the required verification, NOT a theorem) lives in the page as
+   window.__STAGE_PLAY_TEST — it drives THIS Director headless and asserts every cue's
+   effect lands. This module only has to make the play PLAY.
+   ============================================================================ */
+"use strict";
+(function (root) {
+
+  function S() { return root.Stage; }          // the Stage seam (index owns it)
+
+  /* ── the frozen verb allow-list — each maps a cue onto a Stage target-setter ── */
+  var VERBS = Object.freeze({
+    pos:     function (a) { S().setPuppetPos(a[0], a[1], a[2]); },
+    depth:   function (a) { S().setPuppetDepth(a[0], a[1]); },
+    artic:   function (a) { S().articulate(a[0], a[1], a[2]); },
+    lamp:    function (a) { S().setLampDistance(a[0]); },
+    show:    function (a) { S().setVisible(a[0], a[1]); },
+    wash:    function (a) { S().setBackdropPhase(a[0]); },
+    flat:    function (a) { S().slideFlat(a[0], a[1]); },
+    curtain: function (a) { S().setCurtain(a[0]); }
+  });
+
+  /* which channel a cue writes (fine-grained so absorb re-applies each of a puppet's
+     withheld targets on release), and which PUPPET owns that channel (for seized()). */
+  function chanKey(c) {
+    if (c.do === 'lamp') return 'lamp';
+    if (c.do === 'wash') return 'wash';
+    if (c.do === 'curtain') return 'curtain';
+    if (c.do === 'artic') return c.args[0] + ':artic:' + c.args[1];
+    return c.args[0] + ':' + c.do;                       // pos/depth/show/flat, keyed per puppet+verb
+  }
+  function ownerOf(c) {                                   // the puppet id a cue's channel belongs to (or null for lamp/wash/curtain)
+    if (c.do === 'lamp' || c.do === 'wash' || c.do === 'curtain') return null;
+    return c.args[0];
+  }
+
+  /* ── the Director state ── */
+  var data = null, cues = [], nCues = 0;
+  var phase = 'dormant';   // dormant · entering · rising · playing · closing · intermission
+  var beat = 0, cursor = 0, score = {}, heldPrev = {};
+  var tableau = false, holdT = 0;
+  var AUTO_RETURN = 4.0;   // intermission auto-returns to free-play after this many seconds
+  var reduced = false;
+  try { reduced = root.matchMedia && root.matchMedia('(prefers-reduced-motion:reduce)').matches; } catch (e) { }
+
+  /* ── loadPlay: validate + stable-sort by `at`, freeze cursor state ── */
+  function loadPlay(playData) {
+    if (!playData || !playData.cues) throw new Error('Director.loadPlay: no cues');
+    var src = playData.cues;
+    for (var i = 0; i < src.length; i++) {
+      if (!VERBS[src[i].do]) throw new Error('Director.loadPlay: unknown verb "' + src[i].do + '" at cue ' + i);
+    }
+    // stable sort by `at` (decorate-sort-undecorate keeps equal-at order authored)
+    cues = src.map(function (c, i) { return { c: c, i: i }; })
+              .sort(function (p, q) { return (p.c.at - q.c.at) || (p.i - q.i); })
+              .map(function (p) { return p.c; });
+    data = playData; nCues = cues.length;
+    phase = 'dormant'; beat = 0; cursor = 0; score = {}; heldPrev = {}; tableau = false; holdT = 0;
+    return nCues;
+  }
+
+  /* ── seized: is a cue's channel currently held by the viewer's hand? ── */
+  function seized(c) {
+    var sid = S().seizedId(); if (!sid) return false;
+    var key = chanKey(c);
+    if (key === 'lamp') return sid.kind === 'lamp';
+    if (key === 'wash' || key === 'curtain') return false;   // not grabbable
+    return sid.id === ownerOf(c);
+  }
+
+  /* ── resumeReleased: the frame a held channel is let go, re-apply its stashed target ── */
+  function resumeReleased() {
+    var sid = S().seizedId();
+    var heldId = sid ? sid.id : null, heldKind = sid ? sid.kind : null;
+    for (var key in score) {
+      var rec = score[key];
+      var nowHeld = (key === 'lamp') ? (heldKind === 'lamp') : (rec.owner === heldId && heldId != null);
+      if (heldPrev[key] && !nowHeld) VERBS[rec.cue.do](rec.cue.args);   // just released → re-apply latest target
+      heldPrev[key] = nowHeld;
+    }
+  }
+
+  /* ── the scene swap, done UNDER the fallen curtain (hard, the one lawful instant set) ── */
+  function applyScene() {
+    var cast = (data && data.cast) || [];
+    var order = root.Puppets.order;
+    for (var i = 0; i < order.length; i++) S().setVisible(order[i], cast.indexOf(order[i]) >= 0);
+    for (var j = 0; j < order.length; j++) {             // park every flat off-stage first
+      if (root.Puppets.get(order[j]).groove) S().slideFlat(order[j], 0, { animate: false });
+    }
+    if (data && data.setup) S().setState(data.setup, { animate: false });
+  }
+
+  /* ── the clock ── */
+  function tick(dt) {
+    if (phase === 'entering') {
+      if (S().isCurtainDown()) { applyScene(); S().setCurtain(0); phase = 'rising'; }
+      return;
+    }
+    if (phase === 'rising') {
+      if (S().getState().curtainDrop <= 0.02) {          // curtain fully up → the play begins
+        phase = 'playing'; beat = 0; cursor = 0; score = {}; heldPrev = {}; tableau = false;
+      }
+      return;
+    }
+    if (phase === 'playing') {
+      beat += dt;
+      while (cursor < cues.length && cues[cursor].at <= beat) {
+        var c = cues[cursor];
+        score[chanKey(c)] = { cue: c, owner: ownerOf(c) };
+        if (!seized(c)) VERBS[c.do](c.args);
+        cursor++;
+      }
+      resumeReleased();
+      if (cursor >= cues.length && S().isResting()) { tableau = true; S().setCurtain(1); phase = 'closing'; }
+      return;
+    }
+    if (phase === 'closing') {
+      if (S().isCurtainDown() && S().isResting()) enterIntermission();
+      return;
+    }
+    if (phase === 'intermission') {
+      holdT += dt;
+      if (holdT >= AUTO_RETURN) returnToFreeplay(true);
+      return;
+    }
+  }
+  function enterIntermission() { phase = 'intermission'; holdT = 0; }
+
+  /* ── to free-play: house lights up, cast restored, flats to their grooves ── */
+  function returnToFreeplay(animate) {
+    if (root.Playbill) root.Playbill.setNowPlaying(null);
+    S().toFreeplay({ animate: animate !== false });
+    phase = 'dormant'; tableau = false; beat = 0; cursor = 0; score = {}; heldPrev = {};
+  }
+  function abort() { returnToFreeplay(false); }
+
+  /* ── start a loaded play ── */
+  function start() {
+    if (!data) return;
+    if (root.Playbill) root.Playbill.setNowPlaying(data.id);
+    if (reduced) {                                        // reduced motion → jump to the closing tableau, no animation
+      applyScene();
+      if (data.finalState) S().setState(data.finalState, { animate: false });
+      tableau = true; S().setCurtain(1, { animate: false });
+      enterIntermission();
+      return;
+    }
+    S().setCurtain(1);                                    // drop the curtain; the swap happens under cover (phase 'entering')
+    phase = 'entering';
+  }
+
+  function isRunning() { return phase !== 'dormant'; }
+  function isTableauReached() { return tableau; }
+  function isCurtainDown() { return S().isCurtainDown(); }
+  function getState() {
+    return { phase: phase, beat: beat, cursor: cursor, nCues: nCues, tableau: tableau, curtainDown: isCurtainDown() };
+  }
+
+  root.Director = {
+    VERBS: VERBS,
+    loadPlay: loadPlay,
+    start: start,
+    tick: tick,
+    abort: abort,
+    // a tap during the closing intermission returns to free-play (animated); returns true if consumed
+    nudge: function () { if (phase === 'intermission' || phase === 'closing') { returnToFreeplay(true); return true; } return false; },
+    getState: getState,
+    isRunning: isRunning,
+    isTableauReached: isTableauReached,
+    isCurtainDown: isCurtainDown,
+    measureCast: function () { return S().measureCast(); },
+    // test hook — the payoff-liveness twin forces non-reduced-motion so cues actually play
+    __setReduced: function (v) { var was = reduced; reduced = (v == null ? was : !!v); return was; },
+    __chanKey: chanKey,
+    __forged: true
+  };
+
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+</script>
+<script>
+/* ============================================================================
+   plays.js — THE COMPANY'S REPERTOIRE.  [in-house]  Sets window.PLAYS.
+
+   Three short wordless plays, each pure DATA the Director stages on the standing
+   Shadow Theater. A play is:
+     { id, title, blurb, dur,
+       cast:  [ids visible while it plays],
+       setup: a getState-shaped snapshot applied HARD under the fallen curtain,
+       cues:  ordered { at, do, args } — a verb from the Director's frozen table,
+       finalState: the closing tableau (hard) — reduced-motion jump + the twin's anchor }
+
+   AUTHORING CONTRACT (so the payoff-liveness twin can isolate each cue): every cue's
+   `at` is unique and consecutive cues differ by ≥ 0.05 s, and each cue is a GENUINE
+   change on its channel (never a no-op) so its effect is observably landed. The
+   dramatic HOLD beats are simply GAPS between cues (2 s eclipse / 1.5 s pounce-gather
+   / 2.5 s nest-reveal) where the springs settle and the tableau breathes.
+
+   The grow-by-data promise: to add a play, append an object here — no engine change.
+   ============================================================================ */
+"use strict";
+(function (root) {
+
+  /* ── PLAY 1 — "Crane Takes the Moon" ──────────────────────────────────────────
+     The literal title as the hero merge: the crane rises to the moon and sweeps its
+     wing UP and OVER the pierced disc — the two shadows MIN-union to solid black, an
+     eclipse held for two full beats, then the wing eases back and the moon re-lights
+     as the crane crests and glides off. A dusk→night wash; the far hills rise on the
+     wide reveal; the lamp dollies in for the eclipse and pulls back after. */
+  var crane = {
+    id: 'crane', title: 'Crane Takes the Moon',
+    blurb: 'A wing sweeps up, and for two beats the moon goes dark.',
+    dur: 22,
+    cast: ['hills', 'moon', 'vee', 'reed', 'crane'],
+    setup: {
+      lampD: 480, backdropPhase: 0.55, curtainDown: false,
+      puppets: [
+        { id: 'moon',  x: 0.62, y: 0.24, depth: 0.05, artic: {} },
+        { id: 'crane', x: 0.30, y: 0.55, depth: 0.30, artic: { wing: 0.10 } },
+        { id: 'vee',   x: 0.52, y: 0.18, depth: 0.02, artic: {} },
+        { id: 'reed',  x: 0.82, y: 0.72, depth: 0.08, artic: { sway: 0.10 } }
+      ]
+    },
+    cues: [
+      { at: 0.50, do: 'wash',  args: [0.72] },                       // the dusk deepens as the house opens
+      { at: 1.00, do: 'flat',  args: ['hills', 1] },                 // the far hills rise on the wide reveal
+      { at: 2.50, do: 'pos',   args: ['crane', 0.40, 0.50] },        // the crane wades forward
+      { at: 3.50, do: 'artic', args: ['crane', 'wing', 0.35] },      // lifts a wing, testing the air
+      { at: 4.50, do: 'lamp',  args: [360] },                        // the lamp dollies in — all looms
+      { at: 5.50, do: 'wash',  args: [0.90] },                       // night falls
+      { at: 6.50, do: 'pos',   args: ['crane', 0.58, 0.40] },        // rises toward the moon
+      { at: 7.50, do: 'depth', args: ['crane', 0.50] },             // looms as it nears the lamp
+      { at: 8.50, do: 'artic', args: ['crane', 'wing', 0.88] },      // ★ the wing sweeps up and OVER the moon
+      // ── 2 s eclipse hold ──
+      { at: 11.00, do: 'wash',  args: [1.00] },                      // deepest night at the eclipse
+      { at: 11.50, do: 'pos',   args: ['vee', 0.34, 0.16] },         // the far vee drifts across
+      { at: 13.50, do: 'artic', args: ['crane', 'wing', 0.50] },     // the wing eases back — the moon re-lights
+      { at: 14.50, do: 'pos',   args: ['crane', 0.62, 0.34] },       // the crane crests, moon-lit
+      { at: 15.50, do: 'lamp',  args: [460] },                       // the lamp pulls back a touch
+      { at: 16.50, do: 'depth', args: ['crane', 0.34] },
+      { at: 17.50, do: 'pos',   args: ['crane', 0.72, 0.30] },       // glides off toward the moon
+      { at: 18.50, do: 'artic', args: ['crane', 'wing', 0.28] },     // settles
+      { at: 19.50, do: 'wash',  args: [0.85] }                       // the night holds — TABLEAU
+    ],
+    finalState: {
+      lampD: 460, backdropPhase: 0.85, curtainDown: false,
+      puppets: [
+        { id: 'moon',  x: 0.62, y: 0.24, depth: 0.05, artic: {} },
+        { id: 'crane', x: 0.72, y: 0.30, depth: 0.34, artic: { wing: 0.28 } },
+        { id: 'vee',   x: 0.34, y: 0.16, depth: 0.02, artic: {} },
+        { id: 'reed',  x: 0.82, y: 0.72, depth: 0.08, artic: { sway: 0.10 } },
+        { id: 'hills', x: 0.50, y: 0.99, depth: 0.03, artic: {} }
+      ]
+    }
+  };
+
+  /* ── PLAY 2 — "Fox at the Reed-Bank" ──────────────────────────────────────────
+     The near bank slides in as cover; the fox creeps low along it, gathers, and
+     POUNCES — and a crane hidden in the reeds FLUSHES, wings bursting up, and escapes
+     toward the moon while the fox lands empty. A 1.5 s pounce-gather hold before the
+     spring. */
+  var fox = {
+    id: 'fox', title: 'Fox at the Reed-Bank',
+    blurb: 'A low creep, a gather, a pounce — and the reeds burst into wings.',
+    dur: 21,
+    cast: ['bank', 'moon', 'reed', 'crane', 'fox'],
+    setup: {
+      lampD: 480, backdropPhase: 0.70, curtainDown: false,
+      puppets: [
+        { id: 'moon',  x: 0.72, y: 0.22, depth: 0.05, artic: {} },
+        { id: 'reed',  x: 0.70, y: 0.70, depth: 0.08, artic: { sway: 0.15 } },
+        { id: 'crane', x: 0.72, y: 0.60, depth: 0.22, artic: { wing: 0.10 } },
+        { id: 'fox',   x: -0.10, y: 0.62, depth: 0.20, artic: { look: 0.45 } }
+      ]
+    },
+    cues: [
+      { at: 0.50, do: 'flat',  args: ['bank', 1] },                  // the near bank slides in — cover
+      { at: 1.50, do: 'pos',   args: ['fox', 0.18, 0.62] },          // the fox creeps in behind it
+      { at: 2.50, do: 'artic', args: ['fox', 'look', 0.28] },        // head low, stalking
+      { at: 3.50, do: 'lamp',  args: [420] },                        // the light tightens
+      { at: 4.50, do: 'pos',   args: ['fox', 0.34, 0.63] },          // closer
+      { at: 5.50, do: 'wash',  args: [0.85] },                       // dusk deepens
+      { at: 6.50, do: 'pos',   args: ['fox', 0.50, 0.64] },          // near the reeds
+      { at: 7.50, do: 'artic', args: ['reed', 'sway', 0.45] },       // the reeds stir — something is there
+      { at: 8.50, do: 'artic', args: ['fox', 'look', 0.14] },        // gathers, head lowest
+      // ── 1.5 s pounce-gather hold ──
+      { at: 10.00, do: 'depth', args: ['fox', 0.36] },              // coils — looms
+      { at: 10.50, do: 'pos',   args: ['fox', 0.62, 0.50] },         // ★ the POUNCE — up and forward
+      { at: 11.00, do: 'artic', args: ['fox', 'look', 0.80] },       // head snaps up
+      { at: 11.50, do: 'artic', args: ['crane', 'wing', 0.92] },     // ★ the crane FLUSHES — wings burst
+      { at: 12.00, do: 'pos',   args: ['crane', 0.72, 0.35] },       // bolts upward
+      { at: 12.50, do: 'depth', args: ['crane', 0.46] },            // looms as it climbs
+      { at: 13.50, do: 'pos',   args: ['crane', 0.84, 0.22] },       // escapes toward the moon
+      { at: 14.50, do: 'pos',   args: ['fox', 0.60, 0.60] },         // the fox lands, empty
+      { at: 15.50, do: 'depth', args: ['fox', 0.20] },
+      { at: 16.50, do: 'artic', args: ['fox', 'look', 0.55] },       // watches it go
+      { at: 17.50, do: 'artic', args: ['crane', 'wing', 0.42] },     // the crane glides off
+      { at: 18.50, do: 'lamp',  args: [470] },                       // the light eases back
+      { at: 19.50, do: 'wash',  args: [0.75] }                       // settle — TABLEAU
+    ],
+    finalState: {
+      lampD: 470, backdropPhase: 0.75, curtainDown: false,
+      puppets: [
+        { id: 'moon',  x: 0.72, y: 0.22, depth: 0.05, artic: {} },
+        { id: 'reed',  x: 0.70, y: 0.70, depth: 0.08, artic: { sway: 0.45 } },
+        { id: 'crane', x: 0.84, y: 0.22, depth: 0.46, artic: { wing: 0.42 } },
+        { id: 'fox',   x: 0.60, y: 0.60, depth: 0.20, artic: { look: 0.55 } },
+        { id: 'bank',  x: 0.50, y: 1.00, depth: 0.05, artic: {} }
+      ]
+    }
+  };
+
+  /* ── PLAY 3 — "Willow's Secret" ───────────────────────────────────────────────
+     The willow's fronds sweep aside — and behind them, occluded until now, a nest of
+     two nestlings. They stir, a parent returns out of the far vee and settles at the
+     nest, and the fronds fall half-back over the secret. A 2.5 s reveal hold. (No
+     slide-in flat here — the reveal is OCCLUSION, the willow uncovering the nest.) */
+  var willow = {
+    id: 'willow', title: "Willow's Secret",
+    blurb: 'The fronds part, and a small kept thing is stirring.',
+    dur: 21,
+    cast: ['moon', 'nest', 'willow', 'reed', 'vee'],
+    setup: {
+      lampD: 480, backdropPhase: 0.60, curtainDown: false,
+      puppets: [
+        { id: 'moon',   x: 0.70, y: 0.24, depth: 0.05, artic: {} },
+        { id: 'nest',   x: 0.34, y: 0.50, depth: 0.06, artic: { stir: 0.0 } },
+        { id: 'willow', x: 0.28, y: 0.14, depth: 0.12, artic: { sway: 0.0 } },
+        { id: 'reed',   x: 0.82, y: 0.72, depth: 0.08, artic: { sway: 0.10 } },
+        { id: 'vee',    x: 0.52, y: 0.16, depth: 0.02, artic: {} }
+      ]
+    },
+    cues: [
+      { at: 0.50, do: 'wash',  args: [0.70] },                       // evening
+      { at: 1.50, do: 'artic', args: ['willow', 'sway', 0.25] },     // the tree stirs
+      { at: 2.50, do: 'lamp',  args: [430] },                        // the lamp leans toward the willow
+      { at: 3.50, do: 'artic', args: ['willow', 'sway', 0.45] },     // fronds sway more
+      { at: 4.50, do: 'pos',   args: ['willow', 0.34, 0.14] },       // the crown leans over
+      { at: 5.50, do: 'artic', args: ['willow', 'sway', 0.72] },     // ★ the fronds sweep aside — the reveal begins
+      { at: 6.50, do: 'pos',   args: ['nest', 0.36, 0.50] },         // the nest edges into the light
+      { at: 7.50, do: 'artic', args: ['nest', 'stir', 0.40] },       // the nestlings stir
+      // ── 2.5 s reveal hold ──
+      { at: 10.00, do: 'wash',  args: [0.85] },                      // night settles on the secret
+      { at: 10.50, do: 'artic', args: ['nest', 'stir', 0.70] },      // they shift, hungry
+      { at: 11.50, do: 'pos',   args: ['vee', 0.42, 0.18] },         // a parent returns out of the vee
+      { at: 12.50, do: 'pos',   args: ['vee', 0.38, 0.30] },         // descends toward the nest
+      { at: 13.50, do: 'pos',   args: ['vee', 0.36, 0.40] },         // nearer
+      { at: 14.50, do: 'artic', args: ['nest', 'stir', 0.92] },      // the nestlings reach up
+      { at: 15.50, do: 'artic', args: ['willow', 'sway', 0.40] },    // the fronds begin to fall back
+      { at: 16.50, do: 'pos',   args: ['vee', 0.35, 0.45] },         // the parent at the nest
+      { at: 17.50, do: 'lamp',  args: [470] },                       // the lamp pulls back, tender
+      { at: 18.50, do: 'artic', args: ['willow', 'sway', 0.22] },    // fronds settle — the secret half-hidden again
+      { at: 19.50, do: 'wash',  args: [0.75] }                       // TABLEAU
+    ],
+    finalState: {
+      lampD: 470, backdropPhase: 0.75, curtainDown: false,
+      puppets: [
+        { id: 'moon',   x: 0.70, y: 0.24, depth: 0.05, artic: {} },
+        { id: 'nest',   x: 0.36, y: 0.50, depth: 0.06, artic: { stir: 0.92 } },
+        { id: 'willow', x: 0.34, y: 0.14, depth: 0.12, artic: { sway: 0.22 } },
+        { id: 'reed',   x: 0.82, y: 0.72, depth: 0.08, artic: { sway: 0.10 } },
+        { id: 'vee',    x: 0.35, y: 0.45, depth: 0.02, artic: {} }
+      ]
+    }
+  };
+
+  root.PLAYS = [crane, fox, willow];
+  root.PLAYS.byId = function (id) { for (var i = 0; i < root.PLAYS.length; i++) if (root.PLAYS[i].id === id) return root.PLAYS[i]; return null; };
+
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+</script>
+<script>
+/* ============================================================================
+   playbill.js — THE PAPER PROGRAMME.  [in-house]  Sets window.Playbill.
+
+   A parchment programme pinned to the set, top-left over the dark spandrel — it reads
+   as a card tacked to the proscenium, not a floating HUD. Tap a title and the theatre
+   stages that play; tap "Free Play" to return to the sandbox. While a play runs the
+   programme tucks aside, dims the un-chosen titles, and shows what is NOW PLAYING; at
+   intermission it re-pins full.
+
+   Pure DOM + CSS (no canvas cost, arms no sound — honours the page's sound-hush idiom).
+   Transitions are gated behind prefers-reduced-motion.
+
+   API:
+     Playbill.mount(stagewrapEl, plays[{id,title,sub}])  // adds an implicit 'free' row
+     Playbill.onPick(cb)                                 // cb(id | 'free') on a title tap
+     Playbill.setNowPlaying(id | null)                   // id → tuck-aside; null → re-pin full
+   ============================================================================ */
+"use strict";
+(function (root) {
+
+  var CSS = '' +
+    '.stpb{position:absolute;left:14px;top:12px;z-index:4;width:min(38%,232px);' +
+      'padding:13px 15px 12px;border-radius:5px;transform:rotate(-1.4deg);transform-origin:top left;' +
+      'font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;color:#2a1c0e;' +
+      'background:linear-gradient(150deg,#efe0c2,#e7d3ab 46%,#dcc79b);' +
+      'box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 -14px 26px rgba(120,86,40,.16) inset,0 12px 24px -10px rgba(0,0,0,.6);' +
+      'border:1px solid rgba(150,116,64,.5);cursor:default;' +
+      'transition:transform .5s cubic-bezier(.2,.8,.2,1),opacity .5s,width .5s;}' +
+    '.stpb::after{content:"";position:absolute;inset:0;border-radius:5px;pointer-events:none;' +
+      'background:radial-gradient(120% 80% at 20% -10%,rgba(255,246,225,.5),rgba(0,0,0,0) 60%),' +
+      'radial-gradient(140% 120% at 110% 120%,rgba(120,80,30,.22),rgba(0,0,0,0) 55%);mix-blend-mode:multiply;opacity:.5;}' +
+    '.stpb .kick{font:600 8.5px/1.3 ui-monospace,Menlo,monospace;letter-spacing:.26em;text-transform:uppercase;' +
+      'color:#7a5a24;text-shadow:0 1px 0 rgba(255,250,235,.5);margin:0 0 2px;}' +
+    '.stpb h4{margin:0 0 9px;font-weight:600;font-size:16px;letter-spacing:.01em;color:#3a2510;' +
+      'border-bottom:1px solid rgba(122,90,36,.34);padding-bottom:7px;}' +
+    '.stpb ol{list-style:none;margin:0;padding:0;counter-reset:pb;}' +
+    '.stpb li{position:relative;counter-increment:pb;padding:6px 4px 6px 22px;border-radius:3px;cursor:pointer;' +
+      'transition:background .18s,opacity .35s,color .18s;}' +
+    '.stpb li::before{content:counter(pb,upper-roman) ".";position:absolute;left:2px;top:6px;' +
+      'font:600 10px/1.3 ui-monospace,monospace;color:#9a7534;opacity:.85;}' +
+    '.stpb li .t{font-size:13.5px;font-weight:600;color:#33210f;display:block;line-height:1.22;}' +
+    '.stpb li .s{font-size:10px;font-style:italic;color:#6d5326;opacity:.9;display:block;margin-top:1px;line-height:1.28;}' +
+    '.stpb li:hover{background:rgba(122,90,36,.13);}' +
+    '.stpb li:hover .t{color:#1c1206;}' +
+    '.stpb li.free{margin-top:7px;padding-top:9px;border-top:1px dashed rgba(122,90,36,.4);}' +
+    '.stpb li.free .t{font-style:italic;font-weight:600;color:#5a4320;}' +
+    '.stpb .np{display:none;font:600 8px/1.3 ui-monospace,monospace;letter-spacing:.2em;text-transform:uppercase;' +
+      'color:#8a3b1e;margin:0 0 6px;}' +
+    '.stpb.playing{width:min(30%,182px);opacity:.9;transform:rotate(-1.4deg) scale(.9);}' +
+    '.stpb.playing .np{display:block;}' +
+    '.stpb.playing li{opacity:.32;}' +
+    '.stpb.playing li.now{opacity:1;background:rgba(122,90,36,.16);}' +
+    '.stpb.playing li.free{opacity:.7;}' +
+    '@media (max-width:560px){.stpb{width:min(52%,180px);left:9px;top:8px;padding:9px 10px;}' +
+      '.stpb h4{font-size:13px;margin-bottom:6px;}.stpb li .t{font-size:11.5px;}.stpb li .s{display:none;}}' +
+    '@media (prefers-reduced-motion:reduce){.stpb,.stpb li{transition:none;}}';
+
+  var root_el = null, pickCb = null, injected = false;
+
+  function injectCSS() {
+    if (injected) return; injected = true;
+    var s = document.createElement('style'); s.textContent = CSS; document.head.appendChild(s);
+  }
+
+  function mount(stagewrapEl, plays) {
+    if (!stagewrapEl) return;
+    injectCSS();
+    if (root_el && root_el.parentNode) root_el.parentNode.removeChild(root_el);
+    root_el = document.createElement('div');
+    root_el.className = 'stpb';
+    root_el.setAttribute('aria-label', "Tonight's programme");
+    var html = '<p class="kick">The Toy Theatre</p><h4>Tonight&rsquo;s Programme</h4><p class="np">Now Playing</p><ol>';
+    for (var i = 0; i < plays.length; i++) {
+      var p = plays[i];
+      html += '<li data-id="' + esc(p.id) + '" role="button" tabindex="0">' +
+        '<span class="t">' + esc(p.title) + '</span>' +
+        (p.sub ? '<span class="s">' + esc(p.sub) + '</span>' : '') + '</li>';
+    }
+    html += '<li class="free" data-id="free" role="button" tabindex="0"><span class="t">Free Play</span>' +
+      '<span class="s">the lamp, the silk, your own hands</span></li></ol>';
+    root_el.innerHTML = html;
+    stagewrapEl.appendChild(root_el);
+    // one delegated handler for tap + keyboard; NEVER touches audio
+    root_el.addEventListener('click', function (e) { var li = closestLi(e.target); if (li) fire(li.getAttribute('data-id')); });
+    root_el.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var li = closestLi(e.target); if (li) { e.preventDefault(); fire(li.getAttribute('data-id')); }
+    });
+  }
+
+  function closestLi(el) { while (el && el !== root_el) { if (el.tagName === 'LI') return el; el = el.parentNode; } return null; }
+  function fire(id) { if (pickCb) pickCb(id); }
+  function onPick(cb) { pickCb = cb; }
+
+  function setNowPlaying(id) {
+    if (!root_el) return;
+    var lis = root_el.querySelectorAll('li');
+    for (var i = 0; i < lis.length; i++) lis[i].classList.toggle('now', id != null && lis[i].getAttribute('data-id') === id);
+    root_el.classList.toggle('playing', id != null);
+  }
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  root.Playbill = { mount: mount, onPick: onPick, setNowPlaying: setNowPlaying, __forged: true };
 
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
 </script>
@@ -1251,8 +1942,8 @@ var COVER_T = 180;                          /* acc luminance below this === cove
 var REDUCED = false;
 try { REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches; } catch (e) { }
 
-/* per-puppet display size as a fraction of stage height */
-var SIZE_FRAC = { crane: 0.42, fox: 0.34, reed: 0.52, moon: 0.5, willow: 0.62, vee: 0.28 };
+/* per-puppet display size as a fraction of stage height (flats are wide set-pieces) */
+var SIZE_FRAC = { crane: 0.42, fox: 0.34, reed: 0.52, moon: 0.5, willow: 0.62, vee: 0.28, hills: 1.0, bank: 0.9, nest: 0.24 };
 
 /* ============================ canvas + geometry plumbing ============================ */
 var wrapEl = document.getElementById('stagewrap');
@@ -1271,6 +1962,15 @@ var silkCtx = silkCache.getContext('2d');
 /* the lamp — a point behind the silk. Screen-projected glow sits above centre so
    rod-UP (+depth) casts the loom DOWNWARD, matching the projection direction. */
 var lamp = { D: Z_L0, tD: Z_L0, vD: 0, xFrac: 0.5, yFrac: 0.40 };
+/* the Toy Theatre's extra live state: the dawn->night backdrop wash + the fly-curtain.
+   Both ride the SAME critically-damped springs as everything else (no forked easing) —
+   the curtain just uses a heavier omega. bakedPhase/silkDirty gate the silk re-bake so
+   the wash only re-renders the cached backdrop when it drifts enough to matter. */
+var backdrop = { phase: 0.5, tphase: 0.5, vphase: 0 };
+var bakedPhase = 0.5, silkDirty = false;
+var curtain = { drop: 0, tdrop: 0, vdrop: 0 };
+var CURTAIN_OMEGA = 7;                              /* heavier fabric — a stiffness arg to the SAME smoothCD */
+var FREEPLAY_LAMP = Z_L0;                           /* lamp.tD captured at first load — the house-lights distance */
 function lampX() { return W * lamp.xFrac; }
 function lampY() { return H * lamp.yFrac; }
 function mOf(depth) { var g = depth * G_MAX; return lamp.D / (lamp.D - g); }
@@ -1297,6 +1997,7 @@ function initPuppets() {
       artic: artic, tartic: tartic, vartic: vartic,
       visible: true, _box: null, _bboxArea: 0
     });
+    if (def.groove) { var pf = P[P.length - 1]; pf.x = pf.tx = def.groove.offX; pf.depth = pf.tdepth = def.groove.depth; }  /* flats park off-stage, ready to slide */
   }
 }
 
@@ -1312,7 +2013,7 @@ function resize() {
   acc.width = accW; acc.height = accH;
   silkCache.width = Math.round(W * dpr); silkCache.height = Math.round(H * dpr);
   silkCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  try { window.Proscenium.drawScreen(silkCtx, W, H); } catch (e) { }
+  try { window.Proscenium.drawBackdrop(silkCtx, W, H, backdrop.phase); bakedPhase = backdrop.phase; } catch (e) { }
   shadowDirty = true;
 }
 
@@ -1416,6 +2117,8 @@ function composite() {
   dctx.globalCompositeOperation = 'multiply';
   dctx.drawImage(acc, 0, 0, accW, accH, 0, 0, W, H);
   dctx.globalCompositeOperation = 'source-over';
+  /* the fly-curtain sits in front of silk+shadow, BEHIND the walnut arch (drawn next) */
+  if (curtain.drop > 0.001) { try { window.Proscenium.drawCurtain(dctx, W, H, curtain.drop); } catch (e) { } }
   try { window.Proscenium.drawFrame(dctx, W, H); } catch (e) { }
   /* the faint control-rod glint while grabbed */
   if (grab && grab.p && (grab.kind === 'rod' || grab.kind === 'artic')) drawRodGlint(grab.p);
@@ -1449,8 +2152,10 @@ function measureCast() {
   var castScale = 0; for (var i = 0; i < list.length; i++) castScale += list[i]._bboxArea;
   var sumAreas = 0;
   for (var j = 0; j < list.length; j++) { renderShadow([list[j]]); sumAreas += coveredPixels(); }
-  renderShadow(list);                                /* restore the true union */
-  return { unionArea: unionArea, sumAreas: sumAreas, castScale: castScale };
+  renderShadow(list);                                /* restore the true union (and each puppet's _box) */
+  var boxes = {};
+  for (var b = 0; b < list.length; b++) { var bx = list[b]._box; if (bx) boxes[list[b].id] = { cx: bx.x + bx.w / 2, cy: bx.y + bx.h / 2, w: bx.w, h: bx.h }; }
+  return { unionArea: unionArea, sumAreas: sumAreas, castScale: castScale, boxes: boxes };
 }
 
 /* ============================ snapshot thumbnail (composited warm-on-dark) ============================ */
@@ -1507,6 +2212,7 @@ function pointerToStage(e) {
 }
 function onDown(e) {
   Sound.unlock(); Sound.startBed();                  /* first real gesture unlocks the hush (if unmuted) */
+  if (window.Director && Director.isRunning() && Director.nudge()) { e.preventDefault(); return; }  /* intermission tap → back to free-play */
   var pt = pointerToStage(e);
   grab = hitTest(pt[0], pt[1]); grab.last = pt; grab.moved = false;
   canvas.classList.add('grabbing');
@@ -1564,6 +2270,10 @@ function tickPhysics(dt) {
     for (var k in p.artic) { r = smoothCD(p.artic[k], p.tartic[k], p.vartic[k], dt, OMEGA); if (chg(p.artic[k], r[0], p.vartic[k])) moved = true; p.artic[k] = r[0]; p.vartic[k] = r[1]; }
   }
   r = smoothCD(lamp.D, lamp.tD, lamp.vD, dt, OMEGA); if (chg(lamp.D / 100, r[0] / 100, lamp.vD)) moved = true; lamp.D = r[0]; lamp.vD = r[1];
+  /* the backdrop wash + the fly-curtain — same spring, curtain heavier */
+  r = smoothCD(backdrop.phase, backdrop.tphase, backdrop.vphase, dt, OMEGA); if (chg(backdrop.phase, r[0], backdrop.vphase)) moved = true; backdrop.phase = r[0]; backdrop.vphase = r[1];
+  if (Math.abs(backdrop.phase - bakedPhase) > 0.012) silkDirty = true;
+  r = smoothCD(curtain.drop, curtain.tdrop, curtain.vdrop, dt, CURTAIN_OMEGA); if (chg(curtain.drop, r[0], curtain.vdrop)) moved = true; curtain.drop = r[0]; curtain.vdrop = r[1];
   return moved;
 }
 function chg(a, b, v) { return Math.abs(a - b) > 1e-4 || Math.abs(v) > 1e-4; }
@@ -1634,13 +2344,36 @@ var Stage = {
   joint: function (id) { var p = byId(id); return p ? p.def.handles : null; },
   snapshotThumbnail: snapshotThumbnail,
   measureCast: measureCast,
+  /* ── the Toy Theatre seam (the Director drives these; never a new render path) ── */
+  setVisible: function (id, b) { var p = byId(id); if (p) p.visible = !!b; shadowDirty = true; },
+  setBackdropPhase: function (ph, o) { backdrop.tphase = clamp(ph, 0, 1); if (o && o.animate === false) { backdrop.phase = backdrop.tphase; silkDirty = true; } },
+  getBackdropPhase: function () { return backdrop.phase; },
+  setCurtain: function (d, o) { curtain.tdrop = clamp(d, 0, 1); if (o && o.animate === false) curtain.drop = curtain.tdrop; shadowDirty = true; },
+  isCurtainDown: function () { return curtain.drop >= 0.98; },
+  slideFlat: function (id, g, o) { var p = byId(id); if (!p || !p.def.groove) return; var gr = p.def.groove, f = clamp(g, 0, 1); p.tx = gr.offX + (gr.restX - gr.offX) * f; if (gr.restY != null) p.ty = gr.restY; if (o && o.animate === false) { p.x = p.tx; p.y = p.ty; } shadowDirty = true; },
+  seizedId: function () { if (!grab) return null; if (grab.kind === 'lamp') return { kind: 'lamp', id: null }; return grab.p ? { kind: grab.kind, id: grab.p.id } : null; },
+  isResting: function () {
+    for (var i = 0; i < P.length; i++) { var p = P[i]; if (chg(p.x, p.tx, p.vx) || chg(p.y, p.ty, p.vy) || chg(p.depth, p.tdepth, p.vdepth)) return false; for (var k in p.artic) if (chg(p.artic[k], p.tartic[k], p.vartic[k])) return false; }
+    return !chg(lamp.D / 100, lamp.tD / 100, lamp.vD) && !chg(backdrop.phase, backdrop.tphase, backdrop.vphase) && !chg(curtain.drop, curtain.tdrop, curtain.vdrop);
+  },
+  houseLights: function (o) { this.setBackdropPhase(0.5, o); lamp.tD = FREEPLAY_LAMP; if (o && o.animate === false) lamp.D = FREEPLAY_LAMP; },
+  toFreeplay: function (o) {
+    var hard = o && o.animate === false;
+    for (var i = 0; i < P.length; i++) P[i].visible = true;      /* restore the whole cast */
+    resetScene(!hard);                                            /* positions + artic + lampD; flats park at x0frac=offX */
+    this.houseLights(o);
+    this.setCurtain(0, o);
+    shadowDirty = true;
+  },
   getState: function () {
     var ps = []; for (var i = 0; i < P.length; i++) { var p = P[i]; var a = {}; for (var k in p.artic) a[k] = p.artic[k]; ps.push({ id: p.id, x: p.tx, y: p.ty, depth: p.tdepth, artic: a }); }
-    return { puppets: ps, lampD: lamp.tD };
+    return { puppets: ps, lampD: lamp.tD, backdropPhase: backdrop.tphase, curtainDown: curtain.drop >= 0.98, curtainDrop: curtain.drop };
   },
   setState: function (state, opts) {
     var animate = opts && opts.animate;
     if (state.lampD != null) lamp.tD = clamp(state.lampD, D_MIN, D_MAX);
+    if (state.backdropPhase != null) backdrop.tphase = clamp(state.backdropPhase, 0, 1);
+    if (state.curtainDown != null) curtain.tdrop = state.curtainDown ? 1 : 0;
     if (state.puppets) for (var i = 0; i < state.puppets.length; i++) {
       var s = state.puppets[i], p = byId(s.id); if (!p) continue;
       p.tx = s.x; p.ty = s.y; p.tdepth = s.depth;
@@ -1648,6 +2381,8 @@ var Stage = {
     }
     if (!animate) {
       if (state.lampD != null) lamp.D = lamp.tD;
+      if (state.backdropPhase != null) { backdrop.phase = backdrop.tphase; silkDirty = true; }
+      if (state.curtainDown != null) curtain.drop = curtain.tdrop;
       if (state.puppets) for (var j = 0; j < state.puppets.length; j++) { var q = byId(state.puppets[j].id); if (!q) continue; q.x = q.tx; q.y = q.ty; q.depth = q.tdepth; for (var kk in q.artic) q.artic[kk] = q.tartic[kk]; }
     }
     shadowDirty = true;
@@ -1671,11 +2406,13 @@ function frame(now) {
   var dt = lastNow ? Math.min(0.05, (now - lastNow) / 1000) : 1 / 60; lastNow = now;
   globalT += dt;
   breath = Math.sin(now * 0.0011) * 0.5 + 0.5;      /* the silk's slow lamp-breath (silk-dirty, cheap) */
+  if (window.Director && window.Director.isRunning()) { window.Director.tick(dt); shadowDirty = true; }
   var moved = tickPhysics(dt);
   var veeVisible = !!byId('vee') && byId('vee').visible;
   if (moved || veeVisible) shadowDirty = true;      /* the vee flaps → shadow stays alive */
+  if (silkDirty) { try { window.Proscenium.drawBackdrop(silkCtx, W, H, backdrop.phase); } catch (e) { } bakedPhase = backdrop.phase; silkDirty = false; }
   if (shadowDirty) { renderShadow(); if (!moved && !veeVisible) shadowDirty = false; }
-  composite();                                       /* cheap: cached silk + bloom + multiply */
+  composite();                                       /* cheap: cached silk + bloom + multiply + curtain */
   requestAnimationFrame(frame);
 }
 
@@ -1739,6 +2476,67 @@ window.__SHADOW_SMOKE = function () {
   return { ok: checks.every(function (c) { return c[1]; }), checks: checks };
 };
 
+/* ============================ THE PAYOFF-LIVENESS TWIN (the Toy Theatre) ============================
+   NOT a theorem — a delight piece with a PAYOFF (the play PLAYS) owes a liveness twin. For each
+   of the 3 plays it drives THIS Director headless (fixed step, the SAME tick + tickPhysics the
+   rAF loop runs) and asserts: (1) the cue-index advances MONOTONE through ALL cues (each fires
+   once, none skipped); (2) each fired cue's effect LANDS — the intended channel's target moved
+   AND the rendered shadow reflects it (measureCast / per-puppet shadow boxes / visibility); (3)
+   the closing TABLEAU flag and the curtain-fall flag are both reached. Run twice — desktop width
+   AND forced-mobile — then restore. Leaves no residue. */
+window.__STAGE_PLAY_TEST = function () {
+  if (!W) resize();
+  var EPS_AREA = 10, EPS_SCALE = 16;
+  var D = window.Director;
+  function findP(gs, id) { for (var i = 0; i < gs.puppets.length; i++) if (gs.puppets[i].id === id) return gs.puppets[i]; return null; }
+  function boxMoved(a, b, id) { var x = a.mc.boxes[id], y = b.mc.boxes[id]; if (!x || !y) return false; return Math.hypot(x.cx - y.cx, x.cy - y.cy) > 0.6; }
+  function boxArea(a, b, id) { var x = a.mc.boxes[id], y = b.mc.boxes[id]; if (!x || !y) return true; return Math.abs(x.w * x.h - y.w * y.h) > 8; }
+  function castChg(a, b) { return Math.abs(a.mc.unionArea - b.mc.unionArea) > EPS_AREA || Math.abs(a.mc.castScale - b.mc.castScale) > EPS_SCALE; }
+  function snap() { settleNow(); return { gs: Stage.getState(), mc: measureCast(), vis: visibleList().map(function (p) { return p.id; }) }; }
+  function landed(c, pre, post) {
+    var v = c.do, id = c.args[0], a, b;
+    if (v === 'pos' || v === 'flat') { a = findP(pre.gs, id); b = findP(post.gs, id); return !!(a && b && (Math.abs(a.x - b.x) > 1e-3 || Math.abs(a.y - b.y) > 1e-3) && (boxMoved(pre, post, id) || castChg(pre, post))); }
+    if (v === 'depth') { a = findP(pre.gs, id); b = findP(post.gs, id); return !!(a && b && Math.abs(a.depth - b.depth) > 1e-3 && (boxArea(pre, post, id) || castChg(pre, post))); }
+    if (v === 'artic') { var jt = c.args[1]; a = findP(pre.gs, id); b = findP(post.gs, id); return !!(a && b && a.artic && b.artic && Math.abs((a.artic[jt] || 0) - (b.artic[jt] || 0)) > 1e-3 && (boxMoved(pre, post, id) || boxArea(pre, post, id) || castChg(pre, post))); }
+    if (v === 'lamp') { return Math.abs(pre.gs.lampD - post.gs.lampD) > 1e-2 && Math.abs(pre.mc.castScale - post.mc.castScale) > EPS_SCALE; }
+    if (v === 'show') { return pre.vis.join(',') !== post.vis.join(','); }
+    if (v === 'wash') { return Math.abs((pre.gs.backdropPhase || 0) - (post.gs.backdropPhase || 0)) > 1e-3; }
+    if (v === 'curtain') { return pre.gs.curtainDown !== post.gs.curtainDown || Math.abs(pre.gs.curtainDrop - post.gs.curtainDrop) > 1e-3; }
+    return false;
+  }
+  function step(n) { for (var i = 0; i < n; i++) { D.tick(1 / 60); tickPhysics(1 / 60); } }
+  function runOne(play) {
+    var wasR = D.__setReduced(false);
+    D.loadPlay(play); D.start();
+    var g = 0; while (D.getState().phase !== 'playing' && g++ < 2400) step(1);   /* wait out fall + swap + rise */
+    var monotone = true, prev = 0, arr = [], pre = snap();
+    for (var i = 0; i < play.cues.length; i++) {
+      var guard = 0; while (D.getState().cursor <= i && guard++ < 6000) step(1);
+      var cur = D.getState().cursor; if (cur < prev) monotone = false; prev = cur;
+      var post = snap();
+      arr.push({ at: play.cues[i].at, do: play.cues[i].do, id: play.cues[i].args[0], ok: landed(play.cues[i], pre, post) });
+      pre = post;
+    }
+    var reachedAll = D.getState().cursor >= play.cues.length;
+    var g2 = 0; while (!(D.isTableauReached() && D.isCurtainDown()) && g2++ < 8000) step(1);
+    var tableau = D.isTableauReached(), curtainDown = D.isCurtainDown();
+    D.abort(); D.__setReduced(wasR);
+    var fails = arr.filter(function (x) { return !x.ok; });
+    return { id: play.id, nCues: play.cues.length, monotone: monotone && reachedAll, allLanded: fails.length === 0, fails: fails.map(function (x) { return x.do + '@' + x.at + '(' + x.id + ')'; }), tableau: tableau, curtain: curtainDown };
+  }
+  function battery() { var out = []; for (var i = 0; i < window.PLAYS.length; i++) out.push(runOne(window.PLAYS[i])); return out; }
+  var desktop = battery();
+  var prevW = wrapEl.style.width;
+  wrapEl.style.width = '360px'; resize();
+  var mobile = battery();
+  wrapEl.style.width = prevW; resize();
+  if (window.Director) Director.abort();
+  for (var j = 0; j < P.length; j++) P[j].visible = true;
+  resetScene(false);
+  function okAll(rs) { return rs.every(function (r) { return r.monotone && r.allLanded && r.tableau && r.curtain; }); }
+  return { ok: okAll(desktop) && okAll(mobile), desktop: desktop, mobile: mobile };
+};
+
 /* ============================ scene + boot ============================ */
 function resetScene(animate) {
   Stage.setState({ puppets: P.map(function (p) {
@@ -1778,6 +2576,19 @@ initPuppets();
 resize();
 renderShelf();
 syncSound();
+
+/* the Toy Theatre — pin the playbill; a title taps the stage into a play, "Free Play" returns */
+FREEPLAY_LAMP = lamp.tD;
+if (window.Playbill && window.PLAYS) {
+  Playbill.mount(wrapEl, PLAYS.map(function (p) { return { id: p.id, title: p.title, sub: p.blurb }; }));
+  Playbill.onPick(function (id) {
+    Sound.unlock(); Sound.startBed();               /* a title tap is a real gesture — unlock the hush */
+    if (id === 'free') { if (window.Director) Director.abort(); return; }
+    var play = PLAYS.byId(id); if (!play || !window.Director) return;
+    Director.loadPlay(play); Director.start();
+  });
+}
+
 requestAnimationFrame(frame);
 
 /* front-door breadcrumb (literal key so a direct visit registers + the built HTML carries it) */
