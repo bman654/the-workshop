@@ -273,6 +273,7 @@ export const COMPANIONS = {
   blazon:                    'compositor',
   orrery:                    'firmament',
   scriptorium:               'verse',
+  'apocryphal-lexicon':      'verse',   // the invented-etymology shelf-mate of the Oracle; sib-linked both ways (deepen, no new map dot)
   theogony:                  'threshold',
   tessellarium:              'strange-garden',
   'the-homicidal-chauffeur': 'warren',       // also WITHIN
