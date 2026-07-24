@@ -67,7 +67,8 @@
     'the-keystone-arch': { rep: 'the-keystone-arch-rep', repColors: { DAY: { 'rep.swatch1': '#9a8e7b', 'rep.swatch2': '#c6baa2', 'rep.glow1': '#ffcf7a' }, DUSK: { 'rep.swatch1': '#7f7565', 'rep.swatch2': '#a89b84', 'rep.glow1': '#ffbe64' }, NIGHT: { 'rep.swatch1': '#4b463d', 'rep.swatch2': '#665f52', 'rep.glow1': '#ffd98a' } } },
     'the-deep-hearth': { rep: 'the-deep-hearth-rep', repColors: { DAY: { 'rep.swatch1': '#3a2b26', 'rep.glow1': '#ff7a2a', 'rep.glow2': '#ffd06a' }, DUSK: { 'rep.swatch1': '#2e211d', 'rep.glow1': '#f0561f', 'rep.glow2': '#ff9a3a' }, NIGHT: { 'rep.swatch1': '#221513', 'rep.glow1': '#e24a2a', 'rep.glow2': '#ff7a3a' } } },
     'workbench': { rep: 'workbench-rep', repColors: { DAY: { 'rep.swatch1': '#b07a3c', 'rep.swatch2': '#d0a460', 'rep.glow1': '#ffcf7a' }, DUSK: { 'rep.swatch1': '#96652f', 'rep.swatch2': '#b0864a', 'rep.glow1': '#ffbe64' }, NIGHT: { 'rep.swatch1': '#5c4226', 'rep.swatch2': '#755738', 'rep.glow1': '#ffd98a' } } },
-    'hall-of-mirrors': { rep: 'hall-of-mirrors-rep', repColors: { DAY: { 'rep.swatch1': '#d9b85a', 'rep.glow1': '#8fd9ff' }, DUSK: { 'rep.swatch1': '#c99f48', 'rep.glow1': '#a7dcff' }, NIGHT: { 'rep.swatch1': '#8f7636', 'rep.glow1': '#8fd9ff' } } }
+    'hall-of-mirrors': { rep: 'hall-of-mirrors-rep', repColors: { DAY: { 'rep.swatch1': '#d9b85a', 'rep.glow1': '#8fd9ff' }, DUSK: { 'rep.swatch1': '#c99f48', 'rep.glow1': '#a7dcff' }, NIGHT: { 'rep.swatch1': '#8f7636', 'rep.glow1': '#8fd9ff' } } },
+    'engine-room': { rep: 'engine-room-rep', repColors: { DAY: { 'rep.swatch1': '#c9a24a', 'rep.glow1': '#ffe08a' }, DUSK: { 'rep.swatch1': '#b8903f', 'rep.glow1': '#f0c96a' }, NIGHT: { 'rep.swatch1': '#9c7a34', 'rep.glow1': '#d9a94e' } } }
   };
 
   /* loadSlab(): parse the GATE-ROOMS JSON slab inlined by forge. Returns an array

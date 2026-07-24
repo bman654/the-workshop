@@ -1118,7 +1118,8 @@
     'the-keystone-arch-rep': function (g, baseX, baseY, pick) { drawRepTheKeystoneArch(g, baseX, baseY, pick); },
     'the-deep-hearth-rep': function (g, baseX, baseY, pick) { drawRepTheDeepHearth(g, baseX, baseY, pick); },
     'workbench-rep': function (g, baseX, baseY, pick) { drawRepWorkbench(g, baseX, baseY, pick); },
-    'hall-of-mirrors-rep': function (g, baseX, baseY, pick) { drawRepHallOfMirrors(g, baseX, baseY, pick); }
+    'hall-of-mirrors-rep': function (g, baseX, baseY, pick) { drawRepHallOfMirrors(g, baseX, baseY, pick); },
+    'engine-room-rep': function (g, baseX, baseY, pick) { drawRepEngineRoom(g, baseX, baseY, pick); }
   };
 
   function drawRoomRep(parent) {
@@ -6055,6 +6056,286 @@
       // top-lit glint on the boss (light from above)
       el('circle', { cx: fx(bx - 1.3), cy: fx(pivY - 1.5), r: 1.1, fill: BRI, opacity: '0.85' }, g);
     }
+  }
+
+  /* ── the ENGINE ROOM room-rep (The Engine Room, room id 'engine-room') ─────────
+     A steam-age engine hall reduced to its three unmistakable parts, read at a
+     glance: (1) a GREAT BRASS FLYWHEEL breaching the TOP of its brick pit — only
+     the upper arc rises above the pit's masonry line, a broad brass rim, a dark
+     spoked web, and a hub; the lower half is hidden below the rim. (2) a squat
+     coursed BRICK PIT (the estate dark masonry) the wheel sinks into, its rim
+     running near the baseline with a dark SLOT where the wheel passes through.
+     (3) a slender curved BRASS SAFETY RAIL arcing over the exposed crown on little
+     stanchions. (4) a small flyball (Watt) GOVERNOR off to one side — a brass
+     spindle topped by two pivoted arms each ending in a ball. EMISSIVE payoff: a
+     warm FIREBOX glow (rep.glow1) pools UP out of the slot from beneath the wheel,
+     brightest deep in the slot, so the engine reads banked-and-alive at night and
+     recedes to a dull ember by day (dayRecede). LOW + WIDE, bottom-aligned at
+     baseY, centered about cx. Estate idiom: brass = swappable brass body (swatch1)
+     + brass stroke + brass-bright TOP-lit edges, LIT FROM ABOVE; the brick is dark
+     body + brass coursing; glow is emissive. MOTION: a QUIET, seamless, reduced-
+     motion-safe SMIL turn — the flywheel's spokes+hub rotate about the hub (the
+     lit rim + top sheen stay ANCHORED so lit-from-above holds every frame, cf.
+     drawRepClockwork) and the governor arms breathe a hair — kept secondary to the
+     hero gate; frame 0 is a clean, legible rest state so a reduced-motion / ?smil=0
+     freeze reads perfectly. Aspect ~150×100 inside [78..156]×[114..228]. */
+  function drawRepEngineRoom(parent, cx, baseY, pick) {
+    var g = group('engine-room', parent);
+    var BODY  = 'var(--rep-swatch1-ref, #9c7a34)';       // swappable BRASS body (wheel/rail/governor)
+    var DARK  = 'rgba(11,14,22,.85)';                    // estate dark body (brick + recesses)
+    var BRASS = 'var(--brass-stroke-ref, #9c8350)';      // brass edge stroke
+    var BRI   = 'var(--brass-bright-ref, #cdb375)';      // brass-bright TOP sheen
+    var GLOW  = 'var(--rep-glow1-ref, #d9a94e)';         // EMISSIVE warm firebox glow
+    var fx = function (n) { return (Math.round(n * 10) / 10); };
+    var reduced = false;
+    try { reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
+
+    // ── geometry: squat, hugging the ground, centered on cx, footed at baseY ──────
+    var pitRimY = baseY - 44;                   // top masonry face of the pit (near baseline)
+    var pitL = cx - 66, pitR = cx + 66;         // pit spans x164 .. x296 (width 132)
+    var hubX = cx - 14, hubY = pitRimY + 2;     // wheel centered slightly left; hub AT the rim
+    var rimR = 54, rimIn = 43;                   // broad flywheel: outer/inner rim radii
+    var slotL = hubX - 46, slotR = hubX + 46;    // the slot the wheel passes through
+    var crownTopY = hubY - rimR;                 // y ~624 — the wheel's exposed crest
+
+    // per-rep feather for the firebox glow (soft pooled light in the slot)
+    var defs = parent.ownerSVGElement && parent.ownerSVGElement.querySelector('defs');
+    if (defs && !defs.querySelector('#engine-firebox-glow')) {
+      var fG = el('filter', { id: 'engine-firebox-glow', x: '-90%', y: '-90%', width: '280%', height: '280%' }, defs);
+      el('feGaussianBlur', { 'in': 'SourceGraphic', stdDeviation: '5' }, fG);
+    }
+    // a clip so the flywheel shows ONLY its crown (above the pit rim); the lower
+    // half stays hidden below the masonry line.
+    var clipId = 'engine-crown-clip';
+    if (defs && !defs.querySelector('#' + clipId)) {
+      var cp = el('clipPath', { id: clipId }, defs);
+      el('rect', { x: fx(hubX - rimR - 6), y: fx(crownTopY - 8),
+        width: fx(rimR * 2 + 12), height: fx(hubY - (crownTopY - 8)) }, cp);
+    }
+
+    // ── soft contact shadow so the whole mass sits ON the grass (light from above) ─
+    el('ellipse', { cx: cx + 5, cy: baseY + 2, rx: 74, ry: 8,
+      fill: '#000', opacity: '0.30', filter: 'url(#glow-soft)' }, g);
+
+    // ════════════ FIREBOX GLOW (behind the wheel) — deep pooled warm light ═════════
+    // A soft warm bloom seated LOW + DEEP in the slot, rising up from beneath the
+    // flywheel. Emissive (rep.glow1): blazes at night, recedes to an ember by day.
+    el('ellipse', { cx: hubX + 4, cy: pitRimY + 3, rx: 32, ry: 20,
+      fill: GLOW, opacity: '0.32', filter: 'url(#engine-firebox-glow)' }, g);
+
+    // ════════════ THE FLYWHEEL — a great brass wheel breaching the pit ═════════════
+    // Clipped to its crown. The RIM + hub-well + top sheen are ANCHORED (static, so
+    // lit-from-above holds); only the SPOKES + hub TURN inside (a slow engine turn).
+    var wheel = el('g', { 'clip-path': 'url(#' + clipId + ')' }, g);
+    // broad brass rim ring (outer disc minus dark web) — anchored
+    el('circle', { cx: hubX, cy: hubY, r: rimR, fill: BODY, stroke: BRASS,
+      'stroke-width': '1.4', filter: 'url(#glow-soft)' }, wheel);
+    // dark recessed web between rim and hub (so spokes read against dark)
+    el('circle', { cx: hubX, cy: hubY, r: rimIn, fill: DARK, stroke: BRASS,
+      'stroke-width': '1' }, wheel);
+    // a warm firebox uplight welling UP into the wheel's lower web (from the pit) —
+    // the fire licking up between the lower spokes, brightest low + center
+    el('ellipse', { cx: hubX, cy: hubY + rimIn * 0.48, rx: rimIn * 0.60, ry: rimIn * 0.50,
+      fill: GLOW, opacity: '0.55', filter: 'url(#engine-firebox-glow)' }, wheel);
+
+    // ── rotating SPOKES + HUB (the turning body), pivoted about the hub ──
+    var spinG = el('g', { transform: 'translate(' + fx(hubX) + ',' + fx(hubY) + ')' }, wheel);
+    var nSpokes = 6;
+    for (var s = 0; s < nSpokes; s++) {
+      var sa = s * (Math.PI * 2 / nSpokes) + 0.26;
+      el('line', { x1: fx(Math.cos(sa) * (rimR * 0.20)), y1: fx(Math.sin(sa) * (rimR * 0.20)),
+        x2: fx(Math.cos(sa) * (rimIn - 1)), y2: fx(Math.sin(sa) * (rimIn - 1)),
+        stroke: BODY, 'stroke-width': '3.2', 'stroke-linecap': 'round', opacity: '0.95' }, spinG);
+      // a thin brass-bright crease down each spoke (machined edge)
+      el('line', { x1: fx(Math.cos(sa) * (rimR * 0.20)), y1: fx(Math.sin(sa) * (rimR * 0.20)),
+        x2: fx(Math.cos(sa) * (rimIn - 1)), y2: fx(Math.sin(sa) * (rimIn - 1)),
+        stroke: BRASS, 'stroke-width': '1', opacity: '0.7' }, spinG);
+    }
+    // hub boss + bore (turns with the spokes)
+    el('circle', { cx: 0, cy: 0, r: 11, fill: BODY, stroke: BRASS, 'stroke-width': '1.4' }, spinG);
+    el('circle', { cx: 0, cy: 0, r: 4.5, fill: DARK, stroke: BRASS, 'stroke-width': '1' }, spinG);
+    if (!reduced) {
+      el('animateTransform', { attributeName: 'transform', type: 'rotate',
+        from: '0 0 0', to: '360 0 0', dur: '11s', repeatCount: 'indefinite',
+        calcMode: 'linear', additive: 'sum' }, spinG);
+    }
+    // ── ANCHORED LIGHTING on the wheel (does NOT spin; keeps lit-from-above) ──
+    // brass-bright TOP sheen arc on the up-facing outer rim
+    el('path', { d: 'M ' + fx(hubX + Math.cos(-2.5) * (rimR - 1)) + ' ' + fx(hubY + Math.sin(-2.5) * (rimR - 1)) +
+      ' A ' + fx(rimR - 1) + ' ' + fx(rimR - 1) + ' 0 0 1 ' + fx(hubX + Math.cos(-0.6) * (rimR - 1)) + ' ' + fx(hubY + Math.sin(-0.6) * (rimR - 1)),
+      fill: 'none', stroke: BRI, 'stroke-width': '2', opacity: '0.7',
+      'stroke-linecap': 'round', filter: 'url(#glow-soft)' }, wheel);
+    // a second, tighter brass-bright glint on the inner-rim up edge
+    el('path', { d: 'M ' + fx(hubX + Math.cos(-2.3) * (rimIn + 1)) + ' ' + fx(hubY + Math.sin(-2.3) * (rimIn + 1)) +
+      ' A ' + fx(rimIn + 1) + ' ' + fx(rimIn + 1) + ' 0 0 1 ' + fx(hubX + Math.cos(-0.85) * (rimIn + 1)) + ' ' + fx(hubY + Math.sin(-0.85) * (rimIn + 1)),
+      fill: 'none', stroke: BRI, 'stroke-width': '1', opacity: '0.4', 'stroke-linecap': 'round' }, wheel);
+    // a soft down-right shadow wedge on the rim (turning-away side)
+    el('path', { d: 'M ' + fx(hubX) + ' ' + fx(hubY) +
+      ' L ' + fx(hubX + Math.cos(0.5) * rimR) + ' ' + fx(hubY + Math.sin(0.5) * rimR) +
+      ' A ' + fx(rimR) + ' ' + fx(rimR) + ' 0 0 1 ' + fx(hubX + Math.cos(1.5) * rimR) + ' ' + fx(hubY + Math.sin(1.5) * rimR) + ' Z',
+      fill: 'rgba(0,0,0,.22)' }, wheel);
+
+    // ════════════ THE BRICK PIT — squat coursed masonry the wheel sinks into ═══════
+    // Drawn OVER the wheel's lower half. The dark SLOT (a gap in the pit top) reveals
+    // the firebox; the wheel emerges through it. Estate dark body + brass coursing +
+    // a brass-bright top-lit rim on the shoulders (lit from above).
+    var pit = el('g', {}, g);
+    // left shoulder + right shoulder + front band as ONE masonry body with a slot cut
+    var pitD =
+      'M ' + fx(pitL) + ' ' + fx(baseY) +
+      ' L ' + fx(pitL) + ' ' + fx(pitRimY) +
+      ' L ' + fx(slotL) + ' ' + fx(pitRimY) +
+      ' L ' + fx(slotL) + ' ' + fx(pitRimY + 16) +          // slot inner wall (left, dips in)
+      ' L ' + fx(slotR) + ' ' + fx(pitRimY + 16) +          // slot floor
+      ' L ' + fx(slotR) + ' ' + fx(pitRimY) +               // slot inner wall (right)
+      ' L ' + fx(pitR) + ' ' + fx(pitRimY) +
+      ' L ' + fx(pitR) + ' ' + fx(baseY) + ' Z';
+    el('path', { d: pitD, fill: DARK, stroke: BRASS, 'stroke-width': '1.4',
+      filter: 'url(#glow-soft)' }, pit);
+    // coursed brick lines (horizontal courses + staggered head-joints) on each shoulder
+    var courseYs = [pitRimY + 10, pitRimY + 20, pitRimY + 30, pitRimY + 40];
+    for (var ci = 0; ci < courseYs.length; ci++) {
+      var cy2 = courseYs[ci];
+      // left shoulder course
+      el('line', { x1: fx(pitL + 2), y1: fx(cy2), x2: fx(slotL - 1), y2: fx(cy2),
+        stroke: BRASS, 'stroke-width': '0.8', opacity: '0.42' }, pit);
+      // right shoulder course
+      el('line', { x1: fx(slotR + 1), y1: fx(cy2), x2: fx(pitR - 2), y2: fx(cy2),
+        stroke: BRASS, 'stroke-width': '0.8', opacity: '0.42' }, pit);
+    }
+    // a few staggered head-joints (short verticals) so it reads as coursed brick
+    var headJoints = [
+      [pitL + 22, pitRimY + 10, pitRimY + 20], [pitL + 44, pitRimY + 20, pitRimY + 30],
+      [pitL + 22, pitRimY + 30, pitRimY + 40], [pitR - 22, pitRimY + 10, pitRimY + 20],
+      [pitR - 44, pitRimY + 20, pitRimY + 30], [pitR - 22, pitRimY + 30, pitRimY + 40]
+    ];
+    for (var hj = 0; hj < headJoints.length; hj++) {
+      var H = headJoints[hj];
+      el('line', { x1: fx(H[0]), y1: fx(H[1]), x2: fx(H[0]), y2: fx(H[2]),
+        stroke: BRASS, 'stroke-width': '0.8', opacity: '0.30' }, pit);
+    }
+    // brass-bright TOP-lit rim on the two shoulders' up-facing edge (lit from above)
+    el('line', { x1: fx(pitL + 1), y1: fx(pitRimY - 0.6), x2: fx(slotL), y2: fx(pitRimY - 0.6),
+      stroke: BRI, 'stroke-width': '1.4', opacity: '0.62', 'stroke-linecap': 'round' }, pit);
+    el('line', { x1: fx(slotR), y1: fx(pitRimY - 0.6), x2: fx(pitR - 1), y2: fx(pitRimY - 0.6),
+      stroke: BRI, 'stroke-width': '1.4', opacity: '0.62', 'stroke-linecap': 'round' }, pit);
+    // a low engine-bed plinth line at the very foot (masonry footing, lit top edge)
+    el('line', { x1: fx(pitL - 3), y1: fx(baseY - 1), x2: fx(pitR + 3), y2: fx(baseY - 1),
+      stroke: BRASS, 'stroke-width': '1.2', opacity: '0.5' }, pit);
+
+    // ════════════ FIREBOX POOL (in the slot, in front of pit) — the night payoff ═══
+    // The bright pooled ember light welling up in the slot around the wheel base +
+    // licking the inner slot walls. Brightest deep + low; feathers up around the wheel.
+    // deep hot core, low in the slot — pooled tight + bright deep in the recess
+    el('ellipse', { cx: hubX, cy: pitRimY + 12, rx: 24, ry: 7,
+      fill: GLOW, opacity: '0.92', filter: 'url(#engine-firebox-glow)' }, g);
+    // a narrow warm TONGUE welling straight up out of the slot (the fire rising)
+    el('ellipse', { cx: hubX, cy: pitRimY + 7, rx: 12, ry: 12,
+      fill: GLOW, opacity: '0.5', filter: 'url(#engine-firebox-glow)' }, g);
+    el('ellipse', { cx: hubX, cy: pitRimY + 11, rx: 11, ry: 3.5,
+      fill: '#ffe9c2', opacity: '0.36', filter: 'url(#engine-firebox-glow)' }, g);
+    // warm light licking UP the two inner slot walls (the wheel emerging from fire)
+    el('line', { x1: fx(slotL + 1.5), y1: fx(pitRimY + 15), x2: fx(slotL + 1.5), y2: fx(pitRimY + 1),
+      stroke: GLOW, 'stroke-width': '2', opacity: '0.55', 'stroke-linecap': 'round',
+      filter: 'url(#engine-firebox-glow)' }, g);
+    el('line', { x1: fx(slotR - 1.5), y1: fx(pitRimY + 15), x2: fx(slotR - 1.5), y2: fx(pitRimY + 1),
+      stroke: GLOW, 'stroke-width': '2', opacity: '0.55', 'stroke-linecap': 'round',
+      filter: 'url(#engine-firebox-glow)' }, g);
+    // a faint warm spill onto the shoulder tops beside the slot
+    el('ellipse', { cx: slotL - 6, cy: pitRimY + 1, rx: 8, ry: 2.6,
+      fill: GLOW, opacity: '0.22', filter: 'url(#engine-firebox-glow)' }, g);
+    el('ellipse', { cx: slotR + 6, cy: pitRimY + 1, rx: 8, ry: 2.6,
+      fill: GLOW, opacity: '0.22', filter: 'url(#engine-firebox-glow)' }, g);
+
+    // ════════════ SAFETY RAIL — slender brass hoop arcing over the exposed crown ═══
+    // A thin bright brass handrail following the wheel's curve, on little stanchions
+    // standing on the pit shoulders. The guard a stoker leans on.
+    var rail = el('g', {}, g);
+    var railR = rimR + 12;                       // rail sits a hand's-width outside the rim
+    var railL = hubX - Math.cos(0.35) * railR,   // left foot springs near the rim shoulders
+        railLy = hubY - Math.sin(0.35) * railR;
+    // stanchion feet on the pit rim (left + right), rising to the rail
+    var stanchX = [hubX - railR * 0.86, hubX - railR * 0.30, hubX + railR * 0.30, hubX + railR * 0.86];
+    for (var si = 0; si < stanchX.length; si++) {
+      var stx = stanchX[si];
+      // where the rail meets this x (on the arc): y = hubY - sqrt(railR^2 - (stx-hubX)^2)
+      var dxr = stx - hubX;
+      var railYat = hubY - Math.sqrt(Math.max(0, railR * railR - dxr * dxr));
+      el('line', { x1: fx(stx), y1: fx(pitRimY - 1), x2: fx(stx), y2: fx(railYat),
+        stroke: BRASS, 'stroke-width': '1.6', opacity: '0.8', 'stroke-linecap': 'round' }, rail);
+      // a bright glint down the up-left side of each stanchion
+      el('line', { x1: fx(stx - 0.7), y1: fx(pitRimY - 1), x2: fx(stx - 0.7), y2: fx(railYat),
+        stroke: BRI, 'stroke-width': '0.7', opacity: '0.4' }, rail);
+      // small brass foot-boss where the stanchion seats on the masonry rim (machined crispness)
+      el('circle', { cx: fx(stx), cy: fx(pitRimY - 1), r: 2, fill: BODY, stroke: BRASS, 'stroke-width': '1' }, rail);
+    }
+    // the rail hoop itself — a slender arc over the crown (dark under-body + bright top)
+    var railArc = function (r, stroke, w, op, filt) {
+      var aL = -Math.PI + 0.42, aR = -0.42;      // spans upper arc, springs down at both ends
+      var pL = [hubX + Math.cos(aL) * r, hubY + Math.sin(aL) * r];
+      var pR = [hubX + Math.cos(aR) * r, hubY + Math.sin(aR) * r];
+      var att = { d: 'M ' + fx(pL[0]) + ' ' + fx(pL[1]) + ' A ' + fx(r) + ' ' + fx(r) +
+        ' 0 0 1 ' + fx(pR[0]) + ' ' + fx(pR[1]), fill: 'none', stroke: stroke,
+        'stroke-width': String(w), opacity: String(op), 'stroke-linecap': 'round' };
+      if (filt) att.filter = filt;
+      el('path', att, rail);
+    };
+    railArc(railR, BRASS, 3, 0.9, 'url(#glow-soft)');   // brass body of the rail
+    railArc(railR - 0.9, BRI, 1.2, 0.72, null);          // brass-bright top edge (lit from above)
+
+    // ════════════ FLYBALL GOVERNOR — the small Watt satellite, off to one side ═════
+    // A miniature brass spindle topped by two pivoted arms, each ending in a ball,
+    // hung out at an angle — the classic centrifugal-governor silhouette. Clearly the
+    // smaller instrument beside the great wheel. Sits on the right pit shoulder.
+    var gov = el('g', {}, g);
+    var govX = pitR - 8;                           // perched on the right shoulder, clear of the wheel crown (reads as a distinct satellite)
+    var pivotY = pitRimY - 40;                     // spindle top / pivot height
+    var footY = pitRimY - 1;
+    // spindle column (brass rod) from shoulder up to the pivot
+    el('line', { x1: fx(govX), y1: fx(footY), x2: fx(govX), y2: fx(pivotY + 2),
+      stroke: BRASS, 'stroke-width': '2.4', opacity: '0.9', 'stroke-linecap': 'round' }, gov);
+    el('line', { x1: fx(govX - 0.8), y1: fx(footY), x2: fx(govX - 0.8), y2: fx(pivotY + 2),
+      stroke: BRI, 'stroke-width': '0.8', opacity: '0.45' }, gov);
+    // a small base bracket / bedplate the spindle stands on
+    el('rect', { x: fx(govX - 6), y: fx(footY - 3), width: 12, height: 4, rx: 1.2,
+      fill: BODY, stroke: BRASS, 'stroke-width': '1', filter: 'url(#glow-soft)' }, gov);
+    // the pivot cap
+    el('circle', { cx: fx(govX), cy: fx(pivotY), r: 3, fill: BODY, stroke: BRASS, 'stroke-width': '1.2' }, gov);
+    // two pivoted arms + balls, each in its OWN group so they can breathe a hair
+    var armLen = 18, ballR = 5;
+    var makeArm = function (sign, restDeg) {
+      var ag = el('g', { transform: 'translate(' + fx(govX) + ',' + fx(pivotY) + ')' }, gov);
+      var a = restDeg * Math.PI / 180;             // measured from straight-down
+      var bx = sign * Math.sin(a) * armLen, by = Math.cos(a) * armLen;
+      // the arm rod
+      el('line', { x1: 0, y1: 0, x2: fx(bx), y2: fx(by),
+        stroke: BRASS, 'stroke-width': '1.8', opacity: '0.9', 'stroke-linecap': 'round' }, ag);
+      // the fly-ball at the arm's end (brass, top-lit)
+      el('circle', { cx: fx(bx), cy: fx(by), r: ballR, fill: BODY, stroke: BRASS, 'stroke-width': '1.4',
+        filter: 'url(#glow-soft)' }, ag);
+      // brass-bright crown on the ball's up-facing top (lit from above)
+      el('path', { d: 'M ' + fx(bx - ballR * 0.62) + ' ' + fx(by - ballR * 0.34) +
+        ' A ' + fx(ballR * 0.9) + ' ' + fx(ballR * 0.9) + ' 0 0 1 ' + fx(bx + ballR * 0.5) + ' ' + fx(by - ballR * 0.62),
+        fill: 'none', stroke: BRI, 'stroke-width': '1.1', opacity: '0.8', 'stroke-linecap': 'round' }, ag);
+      // a whisper of governor "hunt": the arm lifts a hair and settles (reduced-safe)
+      if (!reduced) {
+        el('animateTransform', { attributeName: 'transform', type: 'rotate',
+          values: '0 0 0; ' + (sign * -4) + ' 0 0; 0 0 0', keyTimes: '0;0.5;1',
+          dur: '5.5s', repeatCount: 'indefinite', calcMode: 'spline',
+          keySplines: '0.4 0 0.6 1; 0.4 0 0.6 1', additive: 'sum' }, ag);
+      }
+    };
+    makeArm(-1, 34);    // left ball, flung out 34° from vertical
+    makeArm(1, 34);     // right ball
+    // the crank-link stubs from the pivot down to a sleeve on the spindle (Watt gear)
+    el('line', { x1: fx(govX - Math.sin(0.5) * 8), y1: fx(pivotY + Math.cos(0.5) * 8),
+      x2: fx(govX), y2: fx(pivotY + 13), stroke: BRASS, 'stroke-width': '1', opacity: '0.7' }, gov);
+    el('line', { x1: fx(govX + Math.sin(0.5) * 8), y1: fx(pivotY + Math.cos(0.5) * 8),
+      x2: fx(govX), y2: fx(pivotY + 13), stroke: BRASS, 'stroke-width': '1', opacity: '0.7' }, gov);
+    el('rect', { x: fx(govX - 3), y: fx(pivotY + 12), width: 6, height: 4, rx: 1,
+      fill: BODY, stroke: BRASS, 'stroke-width': '1' }, gov);
+
+    S.refs.engineRoomRep = g;
   }
 
   /* ── the GLYPH STAND — the fallback rep for every room WITHOUT a bespoke rep
