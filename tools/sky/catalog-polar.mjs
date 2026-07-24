@@ -96,6 +96,7 @@ export const STARS = {
   "holonomy": { group: "surveyor", dx: 45, dy: -15, mag: 1 },
   "unrolled-cone": { group: "surveyor", dx: -45, dy: 15, mag: 2 },
   "grabbable-triangle": { group: "surveyor", dx: 0, dy: 40, mag: 3 },
+  "the-torus-that-owes-nothing": { group: "surveyor", dx: 0, dy: -40, mag: 2 },
   "belief-beam": { group: "wagerer", dx: 0, dy: -31, mag: 1 },
   "likelihood-sluice": { group: "wagerer", dx: 0, dy: 31, mag: 2 },
   // ── field stars (own bearing + hash-staggered depth; group: null) ──

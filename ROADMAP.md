@@ -164,7 +164,6 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 
 <!-- gauge:garden-seeds:start -->
 ### exhibit
-- [exhibit] **The Torus That Owes Nothing** — Curved Country's promised-but-dark 4th hall (sky.js:228) and The Surveyor's 4th star: a doughnut you orbit, skin painted by curvature sign — gold outer rim (K>0), slate inner throat (K<0), hairline zero-circles at the crests. A brass accountant sweeps band-by-band; the total ∮∮K dA climbs to +4π, the throat pays it all back, lands on exactly 0 = 2πχ_torus. Crux: quadrature of K = cosθ/(r(R+r·cosθ)) = 0 with a +4π/−4π split (core.mjs Node twin, forge-inlined). DEEPEN the standing wing (wire ws:seen crumb + CATALOG star + surveyor members id) — no new front door; NOT the already-built saddle triangle. (sown #482)
 
 
 
@@ -190,11 +189,11 @@ A `[rep]` seed names the room + the drawn object + its aspect (vertical | horizo
 - [bench] **The Fire Piston** — Slam the transparent plunger and the trapped air FLASHES — a fleck of tinder ignites from the squeeze alone, no spark; drag the stroke, pick the slam-speed. Self-test: peak T = T0·(V0/V1)^(γ−1) fires IFF ≥ the tinder's kindle point; neg-control: push SLOW (isothermal, heat leaks) or short-stroke and it never lights. DEEPEN the Engine Room beside Carnot & Stirling — no new door (grep-confirmed: no compression-ignition object exists; the Cloud Bench covers only adiabatic COOLING). (sown #482)
 - [bench] **Hot Ice** — Tap the still clear dish and a crystal FRONT races out from your fingertip — a room-temp melt freezing on contact, dendrites branching, the liquid warming as it hardens (many taps = rival fronts colliding at grain seams). Self-test: front radius r = v·t, temperature climbing to the ≈58°C plateau; neg-control: untouched, the supersaturated melt stays liquid forever. DEEPEN the Alchemy Lab beside The Crystal Garden — no new door (grep-confirmed distinct: Crystal Garden is a SILICATE garden; BZ/clock reactions live elsewhere). (sown #482)
 - [bench] **The Barrier They Have To Clear (Arrhenius collision-gate)** — light the Alchemy Lab's flagged corner (a fresher form for the just-decayed buffer's seat): reaction-you-time shows k's CONSEQUENCE but nothing shows WHY heat speeds a rate. FORM (touchable, not a rate-plot): a Boltzmann-spread swarm rattles at a literal energy GATE at height Ea — heat it and the high-energy TAIL clears and fires; drop a catalyst and the gate LOWERS. CRUX: measured crossing-fraction == Boltzmann tail e^(−Ea/RT); ln k vs 1/T comes out straight, slope −Ea/R; neg-controls Ea=0 (collision ceiling) + catalyst shifts k by e^(+ΔEa/RT). Frame as a NEW chemistry register of the estate's e^(−E/T) (softmax↔Arrhenius, brownian hops), NOT a virgin law. Deepen under the built roof. (sown #474)
-<!-- ✝ BLOOMED #480: Uphill With Their Eyes Closed (run-and-tumble chemotaxis) → conservatory/uphill/ · after a559ef95 -->
 <!-- ✝ DECAYED #482: Which Sky Is Random? · after bb14e960 -->
 <!-- ✝ BLOOMED #485: The Hexaflexagon → hexaflexagon/ · after 8ea5161c -->
 <!-- ✝ BLOOMED #486: The Apocryphal Lexicon → apocryphal-lexicon/ · after 44e19129 -->
 <!-- ✝ BLOOMED #487: The Game That Can't Be Drawn (Sim) → arcade/games/sim.html · after 78df58f3 -->
+<!-- ✝ BLOOMED #488: The Torus That Owes Nothing → the-torus-that-owes-nothing/ · after 911e2703 -->
 <!-- gauge:garden-seeds:end -->
 
 *Other exhibit ideas were cleanly pruned in the v2 cleanup (they're free to return as fresh seeds);
