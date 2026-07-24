@@ -268,6 +268,7 @@ export const HERITAGE = [
 export const COMPANIONS = {
   thaumatrope:               'the-faithful-drum', // persistence-of-vision PAIR under The Turning Lantern; sib-linked both ways
   'fortune-teller':          'glasshouse-range',  // paper-folly companion of kirigami; sib-linked both ways (deepen, no new map dot)
+  hexaflexagon:              'glasshouse-range',  // paper-folly companion of fortune-teller + kirigami; sib-linked all ways (deepen, no new map dot)
   'the-cartesian-diver':     'glasshouse-range',  // water-kin of the-aquarium; reached via companion chips from the-aquarium + pool
   blazon:                    'compositor',
   orrery:                    'firmament',
