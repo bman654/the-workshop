@@ -139,5 +139,11 @@ window.GAMES = [
     name: "Tiltyard",
     blurb: "tilt the whole neon board — roll the marble home before the clock",
     accent: "#7c5cff"
+  },
+  {
+    file: "sim.html",
+    name: "Sim",
+    blurb: "claim chords; force the machine to close a triangle — the game that can't be drawn",
+    accent: "#d9a441"
   }
 ];

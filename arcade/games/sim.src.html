@@ -1,0 +1,792 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>SIM — the game that can't be drawn</title>
+<style>
+  :root{
+    --bg:#060608; --brass:#d9a441; --brass-dim:#7a5f26; --cyan:#38e8ff; --rose:#ff4d7d;
+    --ink:#e9e4d6; --warn:#ffb23d;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; background:var(--bg); overflow:hidden;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    color:var(--ink); -webkit-font-smoothing:antialiased; cursor:default;
+    -webkit-tap-highlight-color:transparent; }
+  #stage{ position:fixed; inset:0; }
+  canvas{ display:block; position:absolute; inset:0; touch-action:none; }
+
+  /* whose-turn HUD (top center) */
+  .turn-hud{ position:fixed; top:16px; left:50%; transform:translateX(-50%);
+    z-index:5; pointer-events:none; text-align:center; }
+  .turn-line{ font-size:12px; letter-spacing:.30em; text-transform:uppercase; font-weight:700;
+    transition:color .25s, text-shadow .25s; }
+  .turn-line.you{ color:var(--cyan); text-shadow:0 0 16px rgba(56,232,255,.6); }
+  .turn-line.machine{ color:var(--rose); text-shadow:0 0 16px rgba(255,77,125,.55); }
+  .safe-line{ font-size:10px; letter-spacing:.22em; color:var(--brass); opacity:.78;
+    text-transform:uppercase; margin-top:5px; font-variant-numeric:tabular-nums; }
+  .safe-line b{ color:#ffd98a; }
+  .safe-line.danger b{ color:var(--rose); }
+
+  /* claimed meter (top left) */
+  .meter-hud{ position:fixed; top:14px; left:18px; z-index:5; pointer-events:none; }
+  .meter-label{ font-size:9px; letter-spacing:.26em; color:var(--brass-dim); text-transform:uppercase; }
+  .meter-val{ font-size:22px; font-weight:700; color:var(--brass); letter-spacing:.03em;
+    text-shadow:0 0 14px rgba(217,164,65,.45); font-variant-numeric:tabular-nums; }
+  .meter-val small{ font-size:12px; color:var(--brass-dim); }
+
+  /* self-test chip */
+  #selftest{ position:fixed; left:50%; bottom:13px; transform:translateX(-50%);
+    z-index:6; font-size:10px; letter-spacing:.20em; text-transform:uppercase;
+    color:#0a0a04; background:var(--brass); border-radius:10px; padding:3px 11px;
+    box-shadow:0 0 14px rgba(217,164,65,.6); opacity:0; transition:opacity .4s, background .4s, color .4s;
+    pointer-events:none; font-weight:700; }
+  #selftest.show{ opacity:.94; }
+  #selftest.proving{ background:#2a2620; color:var(--brass); box-shadow:0 0 12px rgba(217,164,65,.25); }
+  #selftest.fail{ color:#fff; background:var(--rose); box-shadow:0 0 14px rgba(255,77,125,.8); }
+
+  #muteTag{ position:fixed; bottom:13px; right:16px; font-size:10px; letter-spacing:.20em;
+    color:var(--brass-dim); opacity:.7; text-transform:uppercase; pointer-events:none; }
+
+  /* overlays */
+  .overlay{ position:fixed; inset:0; z-index:10; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; gap:8px; padding:22px;
+    background:radial-gradient(120% 120% at 50% 40%, rgba(8,8,12,.55), rgba(2,2,4,.95));
+    backdrop-filter:blur(1.5px); opacity:0; pointer-events:none; transition:opacity .4s; }
+  .overlay.show{ opacity:1; pointer-events:auto; }
+  .bigtitle{ font-size:clamp(42px,13vw,132px); font-weight:800; letter-spacing:.10em; line-height:.9;
+    color:var(--brass); text-shadow:0 0 34px rgba(217,164,65,.5), 0 0 80px rgba(217,164,65,.22);
+    -webkit-text-stroke:1px rgba(217,164,65,.28); }
+  .subtitle{ font-size:13px; letter-spacing:.32em; color:var(--ink); text-transform:uppercase;
+    opacity:.85; margin-top:14px; }
+  .flavour{ font-size:12px; letter-spacing:.05em; color:#a9a291; max-width:52ch; line-height:1.75;
+    margin-top:16px; }
+  .flavour .cy{ color:var(--cyan); } .flavour .ro{ color:var(--rose); }
+  .prompt{ font-size:13px; letter-spacing:.14em; color:var(--ink); margin-top:22px;
+    animation:pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:.42} 50%{opacity:1} }
+  .seat-toggle{ margin-top:20px; pointer-events:auto; font-size:11.5px; letter-spacing:.14em;
+    color:var(--brass); background:none; border:1px solid rgba(217,164,65,.34); border-radius:9px;
+    padding:8px 15px; cursor:pointer; text-transform:uppercase; transition:all .2s;
+    font-family:inherit; }
+  .seat-toggle:hover{ border-color:var(--brass); background:rgba(217,164,65,.08); color:#ffd98a; }
+  .seat-toggle .arm{ opacity:.6; }
+
+  .verdict-kick{ font-size:11px; letter-spacing:.30em; text-transform:uppercase; opacity:.7;
+    color:var(--brass); margin-bottom:2px; }
+  .verdict{ font-size:clamp(30px,8vw,74px); font-weight:800; letter-spacing:.06em; line-height:.95; }
+  .verdict.loss{ color:var(--rose); text-shadow:0 0 30px rgba(255,77,125,.55); }
+  .verdict.win{ color:var(--cyan); text-shadow:0 0 30px rgba(56,232,255,.6); }
+  .verdict-sub{ font-size:13px; letter-spacing:.06em; color:#a9a291; margin-top:14px; font-style:italic; }
+  .why-link{ margin-top:14px; pointer-events:auto; font-size:11px; letter-spacing:.16em;
+    color:var(--brass); text-transform:uppercase; opacity:.75; cursor:pointer; text-decoration:none;
+    border-bottom:1px dashed rgba(217,164,65,.4); }
+  .why-link:hover{ opacity:1; color:#ffd98a; }
+
+  /* the "why it can't be a draw" drawer (native details) */
+  #drawer{ position:fixed; left:50%; bottom:44px; transform:translateX(-50%);
+    z-index:11; width:min(92vw,540px); max-height:64vh; overflow:auto;
+    font-size:12.5px; line-height:1.7; color:#c9c2b1; }
+  #drawer summary{ list-style:none; cursor:pointer; text-align:center; padding:7px 0;
+    font-size:10.5px; letter-spacing:.22em; text-transform:uppercase; color:var(--brass-dim);
+    opacity:.75; transition:color .2s, opacity .2s; }
+  #drawer summary::-webkit-details-marker{ display:none; }
+  #drawer summary:hover{ color:var(--brass); opacity:1; }
+  #drawer[open] summary{ color:var(--brass); opacity:1; }
+  .drawer-body{ background:linear-gradient(180deg, rgba(14,14,18,.96), rgba(6,6,9,.98));
+    border:1px solid rgba(217,164,65,.22); border-radius:13px; padding:17px 19px; margin-top:6px;
+    box-shadow:0 20px 60px -24px rgba(0,0,0,.85); }
+  .drawer-body h4{ font-size:13px; letter-spacing:.06em; color:var(--ink); margin-bottom:8px; font-weight:700; }
+  .drawer-body p{ margin:0 0 10px; }
+  .drawer-body .num{ color:#ffd98a; font-weight:700; font-variant-numeric:tabular-nums; }
+  .drawer-body .cy{ color:var(--cyan); } .drawer-body .ro{ color:var(--rose); }
+  .negctrl{ display:flex; gap:16px; align-items:center; margin-top:6px; padding-top:12px;
+    border-top:1px solid rgba(217,164,65,.14); }
+  .negctrl svg{ flex:0 0 auto; }
+  .negctrl .cap{ font-size:11.5px; color:#a9a291; line-height:1.6; }
+  .negctrl .cap b{ color:var(--brass); }
+
+  #drawer.game-open summary{ display:none; }
+
+  .arc-back{ position:fixed; left:16px; bottom:13px; z-index:9999; pointer-events:auto;
+    font-family:inherit; font-size:11.5px; letter-spacing:.18em; text-transform:uppercase;
+    text-decoration:none; color:var(--ink); opacity:.4; transition:opacity .2s, text-shadow .2s;
+    text-shadow:0 0 8px rgba(217,164,65,.4); }
+  .arc-back:hover{ opacity:.95; text-shadow:0 0 12px rgba(217,164,65,.85); }
+  body.playing #drawer, body.title #drawer{ display:block; }
+</style>
+</head>
+<body class="title">
+<div id="stage">
+  <canvas id="bg"></canvas>
+  <canvas id="game"></canvas>
+</div>
+
+<!-- whose-turn + safe HUD -->
+<div class="turn-hud" id="turnHud" style="display:none">
+  <div class="turn-line you" id="turnLine">YOUR MOVE</div>
+  <div class="safe-line" id="safeLine">SAFE <b>15</b></div>
+</div>
+
+<!-- claimed meter -->
+<div class="meter-hud" id="meterHud" style="display:none">
+  <div class="meter-label">claimed</div>
+  <div class="meter-val"><span id="claimN">0</span><small>/15</small></div>
+</div>
+
+<div id="muteTag">M · sound off</div>
+<div id="selftest">✓ self-test</div>
+
+<!-- title -->
+<div class="overlay show" id="titleScreen">
+  <div class="bigtitle">SIM</div>
+  <div class="subtitle">the game that can't be drawn</div>
+  <div class="flavour">Six studs. Fifteen chords. You claim <span class="cy">cyan</span>, the machine claims <span class="ro">rose</span>. Whoever is forced to close a triangle in their own colour <b>loses</b> — and by a theorem of Ramsey, the board can never fill clean. The machine plays perfectly. So can you.</div>
+  <div class="prompt" id="titlePrompt">proving the game…</div>
+  <button class="seat-toggle" id="seatToggle"><span class="arm">▸</span> dare to go first</button>
+</div>
+
+<!-- game over -->
+<div class="overlay" id="endScreen">
+  <div class="verdict-kick" id="endKick">the web closed</div>
+  <div class="verdict" id="endVerdict">—</div>
+  <div class="verdict-sub">No web on six studs stays clean.</div>
+  <a class="why-link" id="whyLink">▾ why it can't be a draw</a>
+  <div class="prompt">press R or tap to play again</div>
+</div>
+
+<!-- the "why it can't be a draw" drawer -->
+<details id="drawer">
+  <summary>▸ why it can't be a draw</summary>
+  <div class="drawer-body">
+    <h4>R(3,3) = 6 — the no-draw theorem</h4>
+    <p>Colour every one of the <span class="num" id="dK6total">32768</span> ways to 2-colour K6's 15 chords, and check each for a same-colour triangle. Exactly <span class="num" id="dK6free">0</span> escape — <b>every</b> complete colouring hides a monochromatic triangle. So the board can never fill without a loser. There is no draw to be had.</p>
+    <p>Five studs <em>can</em> escape: of the <span class="num" id="dK5total">1024</span> ways to 2-colour K5, <span class="num" id="dK5free">12</span> are triangle-free. The cleanest is the pentagon-and-pentagram split — one 5-cycle in each colour, neither holding a triangle. Six is the exact threshold where escape becomes impossible.</p>
+    <div class="negctrl">
+      <svg width="120" height="120" viewBox="0 0 120 120" aria-label="pentagon and pentagram on five studs">
+        <!-- red pentagon: 0-1-2-3-4-0 -->
+        <polygon points="60,10 107.55,44.55 89.39,100.45 30.61,100.45 12.45,44.55"
+                 fill="none" stroke="#ff4d7d" stroke-width="2" opacity="0.92"/>
+        <!-- blue pentagram: 0-2-4-1-3-0 -->
+        <polygon points="60,10 89.39,100.45 12.45,44.55 107.55,44.55 30.61,100.45"
+                 fill="none" stroke="#38e8ff" stroke-width="1.6" opacity="0.9"/>
+        <!-- five studs -->
+        <g fill="#d9a441">
+          <circle cx="60" cy="10" r="4"/><circle cx="107.55" cy="44.55" r="4"/>
+          <circle cx="89.39" cy="100.45" r="4"/><circle cx="30.61" cy="100.45" r="4"/>
+          <circle cx="12.45" cy="44.55" r="4"/>
+        </g>
+      </svg>
+      <div class="cap"><b>K5 escapes. K6 cannot.</b><br>The <span class="ro">pentagon</span> and the <span class="cy">pentagram</span> — the unique triangle-free split of five studs. Add a sixth and no split survives.</div>
+    </div>
+  </div>
+</details>
+
+<a class="arc-back" href="../index.html">← arcade</a>
+
+<script>
+"use strict";
+<!-- forge:include ../../tools/ws/ws.js -->
+</script>
+<script>
+"use strict";
+<!-- forge:include ../../tools/game/adversary.js -->
+</script>
+<script>
+"use strict";
+<!-- forge:include ../../tools/game/games/sim.js -->
+</script>
+<script>
+"use strict";
+<!-- forge:include sim.core.js -->
+</script>
+<script>
+"use strict";
+(function(){
+/* ══════════════════════════════════════════════════════════════════════════
+   SIM — the page shell. Render loop, pointer/touch input, WebAudio synth, DOM
+   overlays, the honesty chip. All game TRUTH lives in sim.core.js (commitMove,
+   the reveal, threats) and the verified def GAME_sim; this file owns only pixels
+   and sound. Display remap: the human's def-colour reads CYAN, the machine's
+   reads ROSE, over neutral brass studs — regardless of which seat you took.
+   ══════════════════════════════════════════════════════════════════════════ */
+const TAU = Math.PI*2;
+const clamp = (v,lo,hi)=> v<lo?lo:(v>hi?hi:v);
+const CYAN='#38e8ff', ROSE='#ff4d7d', BRASS='#d9a441', WARN='#ffb23d';
+
+//============================================================== canvas / view
+const bgCanvas=document.getElementById('bg'), canvas=document.getElementById('game');
+const bgx=bgCanvas.getContext('2d'), ctx2d=canvas.getContext('2d');
+let W=0,H=0,DPR=1, CX=0,CY=0, RING=200, STUDR=15;
+const studPos=[];   // 6 stud centres, top-first clockwise
+function computeStuds(){
+  studPos.length=0;
+  for(let v=0; v<6; v++){
+    const ang = -Math.PI/2 + v*(Math.PI/3);
+    studPos.push({ x: CX + RING*Math.cos(ang), y: CY + RING*Math.sin(ang) });
+  }
+}
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  W=window.innerWidth; H=window.innerHeight;
+  for(const c of [bgCanvas,canvas]){
+    c.width=Math.floor(W*DPR); c.height=Math.floor(H*DPR);
+    c.style.width=W+'px'; c.style.height=H+'px';
+  }
+  bgx.setTransform(DPR,0,0,DPR,0,0); ctx2d.setTransform(DPR,0,0,DPR,0,0);
+  CX=W/2; CY=H/2 + 6;
+  RING = Math.max(90, Math.min(W,H)*0.34);
+  STUDR = clamp(RING*0.075, 9, 18);
+  computeStuds(); drawBackground();
+}
+window.addEventListener('resize', resize);
+
+//============================================================== engine handles
+const GAME = GAME_sim;                 // the verified def (forge-inlined global)
+const EDGES = GAME.EDGES;              // EDGES[e] = [i,j]
+let SOL = null, READY = false;         // solved table; play gated on it
+function edgeEndpoints(e){ const uv=EDGES[e]; return [studPos[uv[0]], studPos[uv[1]]]; }
+// circular chord class: 1 = adjacent (high pluck), 2 = skip (mid), 3 = diameter (low)
+function chordClass(e){ const uv=EDGES[e]; const d=Math.abs(uv[0]-uv[1]); return Math.min(d,6-d); }
+
+//============================================================== game state
+let ctx=null;                          // the sim.core context (board truth)
+let mode='title';                      // 'title' | 'playing' | 'over'
+let ui='idle';                         // 'idle' | 'armed' | 'busy'
+let humanSeat=1;                       // default P2 = Blue = the winning seat
+let machineSeat=0;
+let armedStud=-1, pressArmed=false;
+let pointer={x:0,y:0,on:false};
+let machineTimer=null;
+function humanColorStr(){ return GAME.players[humanSeat]; }
+function edgeIsHuman(defCol){ return defCol === humanColorStr(); }
+function displayColor(defCol){ return edgeIsHuman(defCol) ? CYAN : ROSE; }
+
+// per-edge claim animation (page-owned; the snap-taut + riding spark)
+const claimAnim = {};                  // edge → { t0, from(stud), cls }
+const sparks = [];                     // riding sparks along a just-claimed chord
+const parts = [];                      // burst particles
+let shake=0, flashAmt=0, flashCol=BRASS;
+function addShake(v){ shake=Math.min(28, shake+v); }
+function flash(v,col){ flashAmt=Math.min(1,flashAmt+v); if(col) flashCol=col; }
+
+//============================================================== audio (in-house synth)
+const Audio_ = {
+  ctx:null, master:null, muted:true,
+  init(){ if(this.ctx) return; try{
+    const AC=window.AudioContext||window.webkitAudioContext; this.ctx=new AC();
+    window.__wsAudioCtx=this.ctx; this.master=this.ctx.createGain();
+    this.master.gain.value=0.30; this.master.connect(this.ctx.destination);
+  }catch(e){ this.ctx=null; } },
+  resume(){ if(this.ctx && this.ctx.state==='suspended') this.ctx.resume(); },
+  tone(type,f,dur,vol,sweep,when){ if(!this.ctx||this.muted) return;
+    const t=(when||this.ctx.currentTime), o=this.ctx.createOscillator(), g=this.ctx.createGain();
+    o.type=type; o.frequency.setValueAtTime(f,t);
+    if(sweep) o.frequency.exponentialRampToValueAtTime(Math.max(40,f*sweep),t+dur);
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t+dur+0.03); },
+  // the filling web plays a 3-note scale: adjacent=high, skip=mid, diameter=low
+  pluck(cls, human){ const base = cls===1?659.25 : cls===2?493.88 : 392.00;
+    const f = human ? base : base*0.5;   // machine an octave down, darker
+    this.tone(human?'triangle':'sawtooth', f, 0.16, human?0.10:0.08, 2.2); },
+  arm(){ this.tone('sine',330,0.09,0.05,1.6); },
+  threat(){ this.tone('sine',180,0.4,0.05,1.0); this.tone('sine',185,0.4,0.04,1.0); },
+  coldTick(){ this.tone('square',96,0.05,0.03,0.8); },
+  win(){ [523.25,659.25,783.99,1046.5].forEach((f,i)=> this.tone('triangle',f,0.24,0.09,1.0, this.ctx&&this.ctx.currentTime+i*0.11)); },
+  loss(){ [246.94,220.00,207.65].forEach((f,i)=> this.tone('sawtooth',f,0.6,0.10,0.5, this.ctx&&this.ctx.currentTime+i*0.05));
+          this.tone('sine',110,0.9,0.10,0.4); }
+};
+function syncMuteTag(){ document.getElementById('muteTag').textContent='M · sound '+(Audio_.muted?'off':'on'); }
+Audio_.muted = WS.muted();
+WS.onMuteChange(function(on){ Audio_.muted=on; syncMuteTag(); if(!on) Audio_.resume(); });
+
+//============================================================== background (static)
+function drawBackground(){
+  bgx.clearRect(0,0,W,H);
+  const g=bgx.createRadialGradient(CX,CY,RING*0.2, CX,CY,Math.max(W,H)*0.75);
+  g.addColorStop(0,'#0c0c12'); g.addColorStop(0.55,'#08080c'); g.addColorStop(1,'#040406');
+  bgx.fillStyle=g; bgx.fillRect(0,0,W,H);
+  // faint scanlines
+  bgx.globalAlpha=0.05; bgx.strokeStyle='#ffd98a'; bgx.lineWidth=1;
+  for(let y=0;y<H;y+=3){ bgx.beginPath(); bgx.moveTo(0,y+0.5); bgx.lineTo(W,y+0.5); bgx.stroke(); }
+  bgx.globalAlpha=1;
+  // vignette
+  const vg=bgx.createRadialGradient(CX,CY,RING*0.6, CX,CY,Math.max(W,H)*0.62);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.6)');
+  bgx.fillStyle=vg; bgx.fillRect(0,0,W,H);
+}
+
+//============================================================== easing
+function elasticOut(t){ if(t<=0)return 0; if(t>=1)return 1;
+  const p=0.32; return Math.pow(2,-10*t)*Math.sin((t-p/4)*TAU/p)+1; }
+
+//============================================================== rendering
+function render(now){
+  ctx2d.clearRect(0,0,W,H);
+  ctx2d.save();
+  if(shake>0.3){ const a=Math.random()*TAU; ctx2d.translate(Math.cos(a)*shake, Math.sin(a)*shake); }
+
+  drawArcMeter(now);
+  drawUnclaimed();
+  drawThreats(now);
+  drawClaimed(now);
+  drawSparks();
+  drawStuds(now);
+  drawRubberBand(now);
+  drawParts();
+
+  ctx2d.restore();
+  if(flashAmt>0.01){ ctx2d.fillStyle=hexA(flashCol, flashAmt*0.28); ctx2d.fillRect(0,0,W,H); }
+}
+
+function hexA(hex,a){ const h=hex.replace('#',''); const n=parseInt(h.length===3?h.split('').map(c=>c+c).join(''):h,16);
+  return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')'; }
+
+function drawArcMeter(now){
+  if(!ctx) return;
+  let claimed=0; for(let e=0;e<15;e++) if(ctx.edgeColor[e]!==0) claimed++;
+  const frac = claimed/15;
+  const r = RING + STUDR + 16;
+  ctx2d.save();
+  ctx2d.lineWidth=3; ctx2d.lineCap='round';
+  // track
+  ctx2d.strokeStyle='rgba(217,164,65,0.12)';
+  ctx2d.beginPath(); ctx2d.arc(CX,CY,r,0,TAU); ctx2d.stroke();
+  // filled arc, brass→hot
+  const a0=-Math.PI/2, a1=a0+frac*TAU;
+  const hot = frac; // 0 brass → 1 hot red
+  const col = mixHex(BRASS, ROSE, Math.min(1,hot*1.15));
+  ctx2d.strokeStyle=col; ctx2d.shadowBlur=10+hot*14; ctx2d.shadowColor=col;
+  ctx2d.beginPath(); ctx2d.arc(CX,CY,r,a0,a1); ctx2d.stroke();
+  ctx2d.restore();
+}
+function mixHex(h1,h2,t){ const p=(h)=>{ const s=h.replace('#',''); const n=parseInt(s,16); return [(n>>16)&255,(n>>8)&255,n&255]; };
+  const a=p(h1),b=p(h2); const m=a.map((v,i)=>Math.round(v+(b[i]-v)*t));
+  return 'rgb('+m[0]+','+m[1]+','+m[2]+')'; }
+
+function drawUnclaimed(){
+  if(!ctx) return;
+  ctx2d.save(); ctx2d.lineWidth=1.4; ctx2d.strokeStyle='rgba(217,164,65,0.14)';
+  for(let e=0;e<15;e++){
+    if(ctx.edgeColor[e]!==0) continue;
+    const[p,q]=edgeEndpoints(e);
+    ctx2d.beginPath(); ctx2d.moveTo(p.x,p.y); ctx2d.lineTo(q.x,q.y); ctx2d.stroke();
+  }
+  ctx2d.restore();
+}
+
+// near-triangle poison: ghost-triangle fill + brightened owned legs, for whoever
+// is to move. shimmers amber→red.
+function drawThreats(now){
+  if(!ctx || mode!=='playing') return;
+  const th = threats(ctx, GAME.players[ctx.turn]);
+  if(!th.poison.length) return;
+  const isHuman = (ctx.turn===humanSeat);
+  const baseCol = isHuman ? WARN : ROSE;
+  const sh = 0.5+0.5*Math.sin(now/220);
+  ctx2d.save();
+  for(const pz of th.poison){
+    // ghost triangle fill (the poison chord + its two legs)
+    const studs = triangleStuds(pz.tri).map(v=>studPos[v]);
+    ctx2d.beginPath(); ctx2d.moveTo(studs[0].x,studs[0].y);
+    ctx2d.lineTo(studs[1].x,studs[1].y); ctx2d.lineTo(studs[2].x,studs[2].y); ctx2d.closePath();
+    ctx2d.fillStyle = hexA(mixHex(WARN,ROSE,sh), 0.05+0.06*sh); ctx2d.fill();
+    // the poison chord itself, shimmering
+    const[p,q]=edgeEndpoints(pz.edge);
+    ctx2d.lineWidth=2; ctx2d.setLineDash([5,5]); ctx2d.lineDashOffset=-now/60;
+    ctx2d.strokeStyle=hexA(mixHex(WARN,ROSE,sh), 0.35+0.35*sh); ctx2d.shadowBlur=8; ctx2d.shadowColor=baseCol;
+    ctx2d.beginPath(); ctx2d.moveTo(p.x,p.y); ctx2d.lineTo(q.x,q.y); ctx2d.stroke();
+    ctx2d.setLineDash([]);
+    // brighten the two owned legs
+    for(const leg of pz.legs){
+      const[a,b]=edgeEndpoints(leg);
+      ctx2d.lineWidth=3.4; ctx2d.strokeStyle=hexA(displayColor(ctx.edgeColor[leg]), 0.5+0.3*sh);
+      ctx2d.shadowBlur=10; ctx2d.shadowColor=displayColor(ctx.edgeColor[leg]);
+      ctx2d.beginPath(); ctx2d.moveTo(a.x,a.y); ctx2d.lineTo(b.x,b.y); ctx2d.stroke();
+    }
+  }
+  ctx2d.restore();
+}
+
+function drawClaimed(now){
+  if(!ctx) return;
+  const revealTri = (ctx.reveal && ctx.reveal.fired) ? ctx.reveal.triangle : null;
+  for(let e=0;e<15;e++){
+    const col=ctx.edgeColor[e]; if(col===0) continue;
+    const disp=displayColor(col);
+    const[p,q]=edgeEndpoints(e);
+    const an=claimAnim[e];
+    let k=1;                                  // 0..1 settle
+    if(an){ k = clamp((now-an.t0)/560, 0, 1); }
+    const eo = elasticOut(k);
+    // sag perpendicular, settling to 0 (snap taut)
+    const mx=(p.x+q.x)/2, my=(p.y+q.y)/2;
+    let dx=q.x-p.x, dy=q.y-p.y; const len=Math.hypot(dx,dy)||1; const nx=-dy/len, ny=dx/len;
+    const sag=(1-eo)*Math.sin(k*TAU*1.2)* (an? -14:0);
+    const isPulse = revealTri && revealTri.indexOf(e)>=0;
+    const pulse = isPulse ? (0.55+0.45*Math.sin(now/90)) : 1;
+    ctx2d.save();
+    ctx2d.lineCap='round';
+    ctx2d.lineWidth = (2.2 + 2.0*(1-eo)) * (isPulse?1.5:1);
+    ctx2d.strokeStyle = disp;
+    ctx2d.shadowBlur = (10 + 14*(1-eo)) * (isPulse?(1.4+pulse):1);
+    ctx2d.shadowColor = disp;
+    ctx2d.globalAlpha = isPulse ? pulse : 1;
+    ctx2d.beginPath(); ctx2d.moveTo(p.x,p.y);
+    ctx2d.quadraticCurveTo(mx+nx*sag, my+ny*sag, q.x,q.y); ctx2d.stroke();
+    ctx2d.restore();
+  }
+}
+
+function drawSparks(){
+  ctx2d.save();
+  for(const s of sparks){
+    ctx2d.globalAlpha=clamp(s.life,0,1); ctx2d.fillStyle=s.col; ctx2d.shadowBlur=12; ctx2d.shadowColor=s.col;
+    ctx2d.beginPath(); ctx2d.arc(s.x,s.y,s.r,0,TAU); ctx2d.fill();
+  }
+  ctx2d.globalAlpha=1; ctx2d.restore();
+}
+
+function drawStuds(now){
+  const revealTri = (ctx && ctx.reveal && ctx.reveal.fired) ? ctx.reveal.triangle : null;
+  const glowStuds = revealTri ? triangleStuds(revealTri) : [];
+  const validTargets = new Set();
+  if(ui==='armed' && armedStud>=0){
+    for(let v=0;v<6;v++){ if(v===armedStud) continue; const e=edgeBetween(armedStud,v); if(e>=0 && ctx.edgeColor[e]===0) validTargets.add(v); }
+  }
+  for(let v=0;v<6;v++){
+    const s=studPos[v];
+    const breathe=0.5+0.5*Math.sin(now/700 + v);
+    const flaring = glowStuds.indexOf(v)>=0;
+    const isArmed = (v===armedStud);
+    const isTarget = validTargets.has(v);
+    let r=STUDR, glow=6+breathe*4, capCol=BRASS;
+    if(flaring){ const f=0.5+0.5*Math.sin(now/80); glow=20+f*18; r=STUDR*(1.06+f*0.12);
+      capCol = ctx.reveal ? displayColor(ctx.reveal.losingColor) : ROSE; }
+    else if(isArmed){ glow=18; r=STUDR*1.12; capCol='#ffe6a6'; }
+    else if(isTarget){ const f=0.5+0.5*Math.sin(now/180); glow=12+f*8; r=STUDR*(1.0+f*0.08); }
+    ctx2d.save();
+    const grd=ctx2d.createRadialGradient(s.x-r*0.3,s.y-r*0.3,r*0.15, s.x,s.y,r);
+    grd.addColorStop(0,'#fff6df'); grd.addColorStop(0.4,capCol); grd.addColorStop(1,'#5a4418');
+    ctx2d.fillStyle=grd; ctx2d.shadowBlur=glow; ctx2d.shadowColor=flaring?capCol:(isTarget?CYAN:BRASS);
+    ctx2d.beginPath(); ctx2d.arc(s.x,s.y,r,0,TAU); ctx2d.fill();
+    ctx2d.lineWidth=1.4; ctx2d.strokeStyle='rgba(255,246,223,0.5)';
+    ctx2d.beginPath(); ctx2d.arc(s.x,s.y,r,0,TAU); ctx2d.stroke();
+    ctx2d.restore();
+  }
+}
+
+function drawRubberBand(now){
+  if(ui!=='armed' || armedStud<0) return;
+  const s=studPos[armedStud];
+  const tx = pointer.on? pointer.x : s.x, ty = pointer.on? pointer.y : s.y;
+  ctx2d.save();
+  ctx2d.lineWidth=2; ctx2d.setLineDash([4,6]); ctx2d.lineDashOffset=-now/40;
+  ctx2d.strokeStyle=hexA(CYAN,0.7); ctx2d.shadowBlur=10; ctx2d.shadowColor=CYAN;
+  ctx2d.beginPath(); ctx2d.moveTo(s.x,s.y); ctx2d.lineTo(tx,ty); ctx2d.stroke();
+  ctx2d.restore();
+}
+
+function drawParts(){
+  ctx2d.save();
+  for(const p of parts){
+    ctx2d.globalAlpha=clamp(p.life/p.max,0,1)*0.9; ctx2d.fillStyle=p.col; ctx2d.shadowBlur=8; ctx2d.shadowColor=p.col;
+    ctx2d.beginPath(); ctx2d.arc(p.x,p.y,p.r,0,TAU); ctx2d.fill();
+  }
+  ctx2d.globalAlpha=1; ctx2d.restore();
+}
+
+//============================================================== helpers
+function edgeBetween(a,b){ if(a===b) return -1; const i=Math.min(a,b), j=Math.max(a,b);
+  for(let e=0;e<15;e++){ const uv=EDGES[e]; if(uv[0]===i&&uv[1]===j) return e; } return -1; }
+function nearestStud(px,py){
+  let best=-1, bd=1e9; const R=STUDR*1.9;
+  for(let v=0;v<6;v++){ const s=studPos[v]; const d=Math.hypot(px-s.x,py-s.y); if(d<bd){ bd=d; best=v; } }
+  return bd<=R? best : -1;
+}
+function studHasOpen(v){ for(let w=0;w<6;w++){ const e=edgeBetween(v,w); if(e>=0 && ctx.edgeColor[e]===0) return true; } return false; }
+
+//============================================================== commit + turn flow
+function doCommit(e){
+  const mover=ctx.turn;
+  const cls=chordClass(e);
+  const ok=commitMove(ctx, e);
+  if(!ok) return false;
+  // page-side snap animation + riding spark
+  claimAnim[e]={ t0:performance.now(), cls };
+  spawnSpark(e, displayColor(GAME.players[mover]));
+  Audio_.pluck(cls, mover===humanSeat);
+  armedStud=-1; pressArmed=false;
+  if(ctx.state==='over'){ onGameOver(); }
+  else if(ctx.turn===machineSeat){ scheduleMachine(); }
+  else { ui='idle'; }
+  updateHud();
+  return true;
+}
+function spawnSpark(e,col){
+  const[p,q]=edgeEndpoints(e);
+  sparks.push({ p,q, x:p.x,y:p.y, col, life:1, r:3.2, t0:performance.now() });
+}
+function scheduleMachine(){
+  ui='busy'; armedStud=-1; updateHud();
+  if(machineTimer) clearTimeout(machineTimer);
+  machineTimer=setTimeout(()=>{
+    if(mode!=='playing' || !SOL) return;
+    Audio_.coldTick();
+    const mv=machineMove(ctx, SOL);
+    if(mv) doCommit(mv.edge); else ui='idle';
+  }, 420);
+}
+function humanTap(px,py){
+  if(mode!=='playing' || ui==='busy' || ctx.turn!==humanSeat) return;
+  const v=nearestStud(px,py);
+  if(ui==='idle'){
+    if(v>=0 && studHasOpen(v)){ armedStud=v; ui='armed'; pressArmed=true; Audio_.arm(); }
+    return;
+  }
+  if(ui==='armed'){
+    if(v>=0 && v!==armedStud){ const e=edgeBetween(armedStud,v); if(e>=0 && ctx.edgeColor[e]===0){ doCommit(e); return; } }
+    // tap on armed stud or empty → disarm
+    armedStud=-1; ui='idle';
+  }
+}
+
+//============================================================== reveal / end
+function onGameOver(){
+  mode='over'; ui='idle';
+  const r=ctx.reveal;
+  const lossCol = displayColor(r.losingColor);
+  addShake(20); flash(0.5, lossCol);
+  // flood the losing colour through the closed triangle studs
+  const studs=triangleStuds(r.triangle);
+  for(const v of studs){ const s=studPos[v]; burstAt(s.x,s.y, lossCol, 22); }
+  if(r.outcome==='WIN') Audio_.win(); else Audio_.loss();
+  showEnd(ctx);
+}
+function showEnd(c){
+  const r=c.reveal;
+  const kick=document.getElementById('endKick');
+  const vt=document.getElementById('endVerdict');
+  const humanClosed = (r.outcome==='LOSS');
+  if(humanClosed){ kick.textContent='your web closed'; vt.textContent='YOUR TRIANGLE'; vt.className='verdict loss'; }
+  else { kick.textContent='the machine slipped'; vt.textContent='YOU WIN'; vt.className='verdict win'; }
+  document.getElementById('endScreen').classList.add('show');
+}
+function hideEnd(){ document.getElementById('endScreen').classList.remove('show'); }
+
+//============================================================== particles
+function burstAt(x,y,col,n){
+  for(let i=0;i<n;i++){ const a=Math.random()*TAU, sp=40+Math.random()*170;
+    parts.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:0.4+Math.random()*0.4,max:0.8,r:1.4+Math.random()*2.2,col});
+    if(parts.length>420) parts.shift(); }
+}
+
+//============================================================== HUD
+function updateHud(){
+  const th=document.getElementById('turnHud');
+  const tl=document.getElementById('turnLine');
+  const sl=document.getElementById('safeLine');
+  const mh=document.getElementById('meterHud');
+  if(mode==='playing'){ th.style.display='block'; mh.style.display='block'; }
+  else if(mode==='over'){ th.style.display='none'; mh.style.display='block'; }
+  else { th.style.display='none'; mh.style.display='none'; }
+  if(ctx){
+    let claimed=0; for(let e=0;e<15;e++) if(ctx.edgeColor[e]!==0) claimed++;
+    document.getElementById('claimN').textContent=claimed;
+    if(mode==='playing'){
+      const yourTurn = (ctx.turn===humanSeat && ui!=='busy');
+      tl.textContent = yourTurn? 'YOUR MOVE' : 'MACHINE…';
+      tl.className = 'turn-line '+(yourTurn?'you':'machine');
+      const th2=threats(ctx, humanColorStr());
+      sl.innerHTML='SAFE <b>'+th2.safe+'</b>';
+      sl.className='safe-line'+(th2.safe<=3?' danger':'');
+      sl.style.visibility = yourTurn? 'visible':'hidden';
+    }
+  }
+}
+
+//============================================================== state transitions
+function startGame(){
+  if(!READY) return;
+  humanSeat = seatChoice; machineSeat = humanSeat^1;
+  ctx = createCtx({ humanSeat });
+  mode='playing'; ui='idle'; armedStud=-1; pressArmed=false;
+  for(const k in claimAnim) delete claimAnim[k];
+  sparks.length=0; parts.length=0; shake=0; flashAmt=0;
+  document.body.className='playing';
+  document.getElementById('titleScreen').classList.remove('show');
+  hideEnd();
+  document.getElementById('drawer').classList.add('game-open');
+  document.getElementById('drawer').removeAttribute('open');
+  Audio_.init(); if(!Audio_.muted) Audio_.resume();
+  updateHud();
+  if(ctx.turn===machineSeat) scheduleMachine(); else ui='idle';
+}
+function backToTitle(){
+  mode='title'; ui='idle'; document.body.className='title';
+  document.getElementById('titleScreen').classList.add('show');
+  hideEnd(); document.getElementById('drawer').classList.remove('game-open');
+  updateHud();
+}
+
+//============================================================== input
+let seatChoice=1;   // 1 = P2 = Blue (go second, winning seat) · 0 = P1 = Red (go first, doomed)
+const seatBtn=document.getElementById('seatToggle');
+function syncSeatBtn(){
+  seatBtn.innerHTML = seatChoice===1
+    ? '<span class="arm">▸</span> dare to go first'
+    : '<span class="arm">◂</span> going first · <span style="color:var(--rose)">the doomed seat</span>';
+}
+seatBtn.addEventListener('click', (e)=>{ e.stopPropagation(); seatChoice = seatChoice===1?0:1; syncSeatBtn(); });
+
+canvas.addEventListener('pointerdown', (e)=>{
+  e.preventDefault();
+  Audio_.init(); if(!Audio_.muted) Audio_.resume();
+  pointer.x=e.clientX; pointer.y=e.clientY; pointer.on=true;
+  if(mode==='playing') humanTap(e.clientX,e.clientY);
+}, {passive:false});
+canvas.addEventListener('pointermove', (e)=>{ pointer.x=e.clientX; pointer.y=e.clientY; pointer.on=true; }, {passive:true});
+canvas.addEventListener('pointerup', (e)=>{
+  // drag-to-commit: if we armed on this very press and released on a valid target
+  if(pressArmed && ui==='armed' && armedStud>=0){
+    const v=nearestStud(e.clientX,e.clientY);
+    if(v>=0 && v!==armedStud){ const ed=edgeBetween(armedStud,v); if(ed>=0 && ctx.edgeColor[ed]===0){ doCommit(ed); } }
+  }
+  pressArmed=false;
+}, {passive:true});
+
+// title / end: tap anywhere (outside the buttons) to start / restart
+document.getElementById('titleScreen').addEventListener('pointerdown',(e)=>{
+  if(e.target.closest('.seat-toggle')) return;
+  Audio_.init(); if(!Audio_.muted) Audio_.resume(); startGame();
+});
+document.getElementById('endScreen').addEventListener('pointerdown',(e)=>{
+  if(e.target.closest('.why-link')) return; startGame();
+});
+document.getElementById('whyLink').addEventListener('click',(e)=>{
+  e.stopPropagation();
+  const d=document.getElementById('drawer'); d.classList.remove('game-open'); d.setAttribute('open','');
+  d.scrollIntoView({behavior:'smooth', block:'nearest'});
+});
+
+window.addEventListener('keydown',(e)=>{
+  const k=e.key.toLowerCase();
+  if(k==='enter'){ if(mode==='title') startGame(); else if(mode==='over') startGame(); return; }
+  if(k==='r'){ if(mode==='playing'||mode==='over') startGame(); return; }
+  if(k==='escape'){ if(mode==='playing'||mode==='over') backToTitle(); return; }
+  if(k==='m'){ Audio_.init(); WS.setMuted(!Audio_.muted); if(!Audio_.muted) Audio_.resume(); return; }
+});
+
+//============================================================== main loop
+let last=performance.now();
+function frame(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  // sparks ride along their chord then fade
+  for(let i=sparks.length-1;i>=0;i--){ const s=sparks[i]; const t=(now-s.t0)/200;
+    if(t>=1){ s.life-=dt*4; if(s.life<=0){ sparks.splice(i,1); continue; } }
+    else { s.x=s.p.x+(s.q.x-s.p.x)*t; s.y=s.p.y+(s.q.y-s.p.y)*t; } }
+  for(let i=parts.length-1;i>=0;i--){ const p=parts[i]; p.life-=dt; if(p.life<=0){ parts.splice(i,1); continue; }
+    p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=0.94; p.vy*=0.94; }
+  shake*=Math.pow(0.04,dt); flashAmt*=Math.pow(0.02,dt);
+  render(now);
+  requestAnimationFrame(frame);
+}
+
+//============================================================== boot + proof
+function boot(){
+  resize(); syncMuteTag(); syncSeatBtn();
+  requestAnimationFrame(frame);
+  try{ WS.seen && WS.seen('sim'); localStorage.setItem('ws:seen:sim','1'); }catch(e){}
+  // solve is heavy (~2.6s): defer so the title paints first, chip shows PROVING…
+  const chip=document.getElementById('selftest');
+  chip.classList.add('show','proving'); chip.textContent='⋯ proving…';
+  setTimeout(runProof, 40);
+}
+function runProof(){
+  let pass=true, checks=[];
+  try{
+    SOL = Adversary.solve(GAME);
+    const st = Adversary.runSelfTest([GAME]);       // solve + battery + structural (NOT the 500-game sweep)
+    for(const c of st.checks){ checks.push(c); if(!c.pass) pass=false; }
+    // write the drawer's numbers from the LIVE battery counts (text can't drift)
+    const V={WIN:'WIN',LOSS:'LOSS',DRAW:'DRAW'};
+    const bat=GAME.literatureBattery(Adversary.solve, V);
+    if(bat.counts){
+      document.getElementById('dK6total').textContent=bat.counts.k6.total.toLocaleString();
+      document.getElementById('dK6free').textContent=bat.counts.k6.drawFree;
+      document.getElementById('dK5total').textContent=bat.counts.k5.total.toLocaleString();
+      document.getElementById('dK5free').textContent=bat.counts.k5.drawFree;
+    }
+    // the payoff-liveness twin (headless commitMove → reveal → banner)
+    const lv=livenessTwin();
+    checks.push({name:'payoff-liveness twin', pass:lv.pass, detail:lv.detail});
+    if(!lv.pass) pass=false;
+  }catch(err){ pass=false; checks.push({name:'proof threw', pass:false, detail:String(err)}); }
+  READY=true;
+  const chip=document.getElementById('selftest');
+  const n=checks.length, np=checks.filter(c=>c.pass).length;
+  for(const c of checks) console.log((c.pass?'PASS':'FAIL')+' — '+c.name+(c.detail?'  ('+c.detail+')':''));
+  chip.classList.remove('proving');
+  if(pass){ chip.textContent='✓ self-test '+np+'/'+n; console.log('SIM SELF-TEST: ALL PASS ('+n+' checks)'); }
+  else { chip.classList.add('fail'); chip.textContent='✗ self-test '+np+'/'+n; console.error('SIM SELF-TEST: FAILURES'); }
+  window.__simSelfTest = pass;
+  // title prompt: proving → ready
+  document.getElementById('titlePrompt').textContent = pass ? 'click or press ENTER to begin' : 'self-test failed — see console';
+}
+
+//============================================================== the liveness twin (in-page)
+// Drives commitMove on a FRESH headless ctx through a forced-end script (RED walks
+// into its own triangle {0,1,2}), asserting the observable payoff STATE changed —
+// the SAME entry a real stud-tap ends at — AND that the DOM banner is reachable.
+// NEVER a synthetic canvas pointer event.
+const FORCED=[0,3,1,12,5];
+function livenessTwin(activeSeat){
+  const seat = (activeSeat===0||activeSeat===1)? activeSeat : humanSeat;
+  const c=createHeadlessCtx({ humanSeat:seat });
+  let allCommitted=true;
+  for(const e of FORCED){ if(!commitMove(c,e)) allCommitted=false; }
+  const r=c.reveal, tri=r.triangle||[];
+  const studs = tri.length? triangleStuds(tri):[];
+  const cols = tri.map(e=>c.edgeColor[e]);
+  const monoc = cols.length===3 && cols[0]!==0 && cols[0]===cols[1] && cols[1]===cols[2];
+  const expectOutcome = (r.losingColor===GAME.players[seat])?'LOSS':'WIN';
+  // DOM banner reachability: show the end overlay from the headless ctx, then restore.
+  const es=document.getElementById('endScreen');
+  const wasShown=es.classList.contains('show');
+  showEnd(c); const bannerShows=es.classList.contains('show');
+  if(!wasShown) es.classList.remove('show');
+  const rootOK = SOL && SOL.value==='LOSS';
+  const conds=[
+    allCommitted, c.state==='over', r.fired===true,
+    tri.length===3, studs.length===3, monoc,
+    r.losingColor==='R'||r.losingColor==='B',
+    tri.every(e=>c.edgeFx[e].pulsing===true),
+    studs.every(v=>c.studFx[v].glow===true),
+    r.outcome===expectOutcome, bannerShows, rootOK
+  ];
+  const pass=conds.every(Boolean);
+  return { pass, detail:'seat='+seat+' outcome='+r.outcome+' losing='+r.losingColor+' banner='+bannerShows+' root='+(SOL&&SOL.value) };
+}
+
+//============================================================== __SIM__ verification hook
+window.__SIM__ = {
+  get selftest(){ return window.__simSelfTest===true; },
+  get ready(){ return READY; },
+  get mode(){ return mode; },
+  get ui(){ return ui; },
+  get humanSeat(){ return ctx?ctx.humanSeat:seatChoice; },
+  get ctx(){ return ctx; },
+  get sol(){ return SOL; },
+  livenessTwin,
+  _start(seat){ if(seat===0||seat===1){ seatChoice=seat; syncSeatBtn(); } startGame(); },
+  _commit(e){ return doCommit(e); },
+  _machineMove(){ return SOL?machineMove(ctx,SOL):null; }
+};
+
+boot();
+})();
+</script>
+</body>
+</html>
