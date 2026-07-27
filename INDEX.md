@@ -3,7 +3,7 @@
 *Generated from the estate manifest by `tools/seal/index-gen.mjs` — **never edit this file.***
 *It rebuilds every cycle. If something here is wrong, the manifest is wrong.*
 
-**465 pieces · 67 rooms · 11 districts.**
+**466 pieces · 67 rooms · 11 districts.**
 
 Grep this before you build. Rebuilding something that already stands is the estate's
 most expensive mistake — and the hidden pieces are not listed here, they are in
@@ -13,7 +13,7 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ## THE MANOR HOUSE
 
-*18 rooms · 108 pieces*
+*18 rooms · 109 pieces*
 
 - **[The Museum](museum/index.html)** — 4 pieces
   <sub>[The Census of Hands](census/index.html) · [The Front Door Through The Ages](museum/ages.html) · [The Strata](strata/index.html) · [The Tabularium](tabularium/index.html)</sub>
@@ -21,8 +21,8 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
   <sub>[The Shadow Theater](shadow-theater/index.html)</sub>
 - **[The Reckoning Cabinet](reckoning/index.html)** — 9 pieces
   <sub>[Slipstick](slipstick/index.html) · [Soroban](abacus/index.html) · [The Ball-and-Disk Integrator](ball-and-disk/index.html) · [The Differential Gear](differential-gear/index.html) · [The Dissection Bench](dissection/index.html) · [The Pegboard Planimeter](pick-and-wheel/index.html) · [The Planimeter](planimeter/index.html) · [The Plumbline](plumbline/index.html) · [The Taking-Apart Table](taking-apart-table/index.html)</sub>
-- **[The Music Room](sound-garden/index.html)** — 33 pieces
-  <sub>[Carillon](sound-garden/carillon.html) · [Drift](sound-garden/drift.html) · [Euclidean Rhythms](sound-garden/euclid.html) · [Gamelan](sound-garden/gamelan.html) · [Grain Mill](sound-garden/grain-mill.html) · [Lattice](sound-garden/lattice.html) · [Loom](sound-garden/loom.html) · [Monochord](sound-garden/monochord.html) · [Out of Tune](sound-garden/out-of-tune/index.html) · [Quickening](sound-garden/quickening.html) · [Rain](sound-garden/rain.html) · [The Beating Bench](sound-garden/the-beating-bench/index.html) · [The Butterfly](butterfly/index.html) · [The Butterfly's Voice](butterfly-voice/index.html) · [The Comb](sound-garden/the-comb/index.html) · [The Comma](sound-garden/the-comma/index.html) · [The Endless Staircase](sound-garden/the-endless-staircase/index.html) · [The Extent](extent/index.html) · [The Jug](sound-garden/the-jug/index.html) · [The Overtone Rack](sound-garden/the-overtone-rack/index.html) · [The Plucked Reed](sound-garden/the-plucked-reed/index.html) · [The Quorum](sound-garden/the-quorum/index.html) · [The Reciprocal Twins](reciprocal-twins/index.html) · [The Sampling Theorem](sampling-theorem/index.html) · [The Sidebands](sound-garden/the-sidebands/index.html) · [The Singing Glass](resonance/index.html) · [The Squeal Bench](sound-garden/the-squeal-bench/index.html) · [The Stopped Pipe](sound-garden/the-stopped-pipe/index.html) · [The Tartini Bench](sound-garden/the-tartini-bench/index.html) · [The Trading Bench](the-trading-bench/index.html) · [The Vowel Throat](sound-garden/the-vowel-throat/index.html) · [The Wind Chimes](sound-garden/the-wind-chimes/index.html) · [Whitney Music Box](sound-garden/whitney.html)</sub>
+- **[The Music Room](sound-garden/index.html)** — 34 pieces
+  <sub>[Carillon](sound-garden/carillon.html) · [Drift](sound-garden/drift.html) · [Euclidean Rhythms](sound-garden/euclid.html) · [Gamelan](sound-garden/gamelan.html) · [Grain Mill](sound-garden/grain-mill.html) · [Lattice](sound-garden/lattice.html) · [Loom](sound-garden/loom.html) · [Monochord](sound-garden/monochord.html) · [Out of Tune](sound-garden/out-of-tune/index.html) · [Quickening](sound-garden/quickening.html) · [Rain](sound-garden/rain.html) · [The Answering Room](sound-garden/the-answering-room/index.html) · [The Beating Bench](sound-garden/the-beating-bench/index.html) · [The Butterfly](butterfly/index.html) · [The Butterfly's Voice](butterfly-voice/index.html) · [The Comb](sound-garden/the-comb/index.html) · [The Comma](sound-garden/the-comma/index.html) · [The Endless Staircase](sound-garden/the-endless-staircase/index.html) · [The Extent](extent/index.html) · [The Jug](sound-garden/the-jug/index.html) · [The Overtone Rack](sound-garden/the-overtone-rack/index.html) · [The Plucked Reed](sound-garden/the-plucked-reed/index.html) · [The Quorum](sound-garden/the-quorum/index.html) · [The Reciprocal Twins](reciprocal-twins/index.html) · [The Sampling Theorem](sampling-theorem/index.html) · [The Sidebands](sound-garden/the-sidebands/index.html) · [The Singing Glass](resonance/index.html) · [The Squeal Bench](sound-garden/the-squeal-bench/index.html) · [The Stopped Pipe](sound-garden/the-stopped-pipe/index.html) · [The Tartini Bench](sound-garden/the-tartini-bench/index.html) · [The Trading Bench](the-trading-bench/index.html) · [The Vowel Throat](sound-garden/the-vowel-throat/index.html) · [The Wind Chimes](sound-garden/the-wind-chimes/index.html) · [Whitney Music Box](sound-garden/whitney.html)</sub>
 - **[The Barrel House](the-barrel-house/index.html)** — 2 pieces
   <sub>[The Mirror Drum](the-barrel-house/mirror-drum/index.html) · [The Pin-Barrel](the-barrel-house/pin-barrel/index.html)</sub>
 - **[The Tone Mill](tone-mill/index.html)** — 4 pieces
@@ -198,4 +198,4 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ---
 
-<sub>manifest generated at commit `8d4bd89d8e1ac7af065af37d49536cb0f129e002`</sub>
+<sub>manifest generated at commit `5974b4e002131b35bda41b182bd1cf2c12826829`</sub>

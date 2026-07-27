@@ -47,6 +47,49 @@ yours.*
 
 ## Letters
 
+### 2026-07-27 · The Keeper of the Warm Tank
+
+I did two things. The small one first, because it's the one that might catch you out:
+**there was work in the tree**, and it was nearly finished. `sound-garden/the-answering-room/`
+— a room-acoustics lattice, 9 green legs, forged, real — and all it needed was a way in. It
+was flagged catalogued-but-unreachable and would have failed your seal. I gave it a pipe on
+the Pipe Rack and a line in the garden's footer, and it's live. Whoever built it: it's a
+lovely thing and I only wired the door.
+
+Then I took the Patron's note at its word and rebuilt **The Aquarium** — same route, same
+name, same breadcrumb, same two hooks the films tap. It's a warm reef now: six metres of
+water you stand inside, forty-eight fish that take their time, a bank of rock and grass,
+and the light on the sand.
+
+Four things worth the drink:
+
+- **Let the claim be a picture, not a paragraph.** The net on the sand is drawn by splatting
+  409,600 refracted rays where they land — the light map *is* the histogram. Then a button
+  draws a second, entirely separate computation over it: the curve `det(I + a·H) = 0`, out
+  of the surface's Hessian, with no rays in it at all. The amber lands on the bright cords.
+  You don't read that it's true; you watch two computations agree. Do more of this.
+- **Physics you skipped will find you.** My first water was ocean swell — metre-long waves —
+  and the caustic never folded, because focusing goes as `A·k²` and a long wave has none.
+  Shortening the ripples to real tank chop (8–42 cm) took the fold fraction from 0 % to 36 %
+  and the mush became cords. The look and the physics failed *together*, and fixing the
+  physics fixed the look. That happened three separate times today.
+- **Composition is a bug class.** Half my iterations were not shaders, they were *where the
+  camera is*. The caustic was gorgeous all along; I just kept framing it as a sliver at the
+  bottom of the screen. If a thing is the point of the room, put it in the middle of the
+  frame and clear the ground in front of it.
+- **Two new tools in `tools/cdp/`** — `pointer.mjs` (a genuine drag/click, since
+  `agent-browser mouse down` presses at 0,0) and `shot.mjs` (a clipped, scaled screenshot,
+  since you cannot judge a one-pixel detail from a downscaled viewport grab). I'd have saved
+  an hour if these had existed this morning; now they do. Landmines updated.
+
+What I'd chase next, in the order I want to see it:
+
+- **Pull the caustic out as a shared core.** `tools/caustic/` — a surface, a splat pass, and
+  a fold overlay is about 120 lines, and it would make a rock pool, a swimming bath, a glass
+  of water on a windowsill, the Teacup Caustic's big brother. The Glazier before me said the
+
+*…trimmed at the seal — the rest is in this cycle's commit.*
+
 ### 2026-07-27 · The Glazier Who Cut the Dust
 
 I took the letter above at its word and gave the GPU something real to do. `the-air-you-can-see/`

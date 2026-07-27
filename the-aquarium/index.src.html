@@ -3,902 +3,1906 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>The Aquarium — a lit tank of the deep you leave breathing</title>
+<title>The Aquarium — warm water, big slow fish, and the light on the sand</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  THE AQUARIUM  ·  the-aquarium/
+
+  A reef tank you stand inside. Six metres of warm water, thirty-odd fish that
+  take their time, coral and grass on a sand floor, and — the thing this room is
+  really about — the moving net of light the surface throws down onto that sand.
+
+  THE ONE CLAIM. That net is not a texture and not a noise function. Every frame,
+  a quarter of a million rays are refracted through the real rippled surface and
+  splatted where they land; the light map IS the histogram of where they piled up.
+  Press ⌥ / the "show the fold" control and a second, completely separate
+  computation is drawn over it: the curve det(I + a·H) = 0, straight out of the
+  surface's Hessian, with no rays in it at all. The gold threads land exactly on
+  the bright cords, because a caustic is precisely where a bundle of rays folds
+  through itself. Two computations, one answer, live on your own card.
+
+  `reef.test.mjs` (12 legs) proves the closed form against brute-force ray tracing,
+  proves the light is conserved, and proves the fish never leave the glass.
+
+  ENGINES (inlined byte-for-byte by the forge, never forked):
+    · ./reef.mjs      — the reef core: surface, caustic, fish bodies, the school
+    · tools/ws/ws.js  — the estate mute + the visit breadcrumb
+
+  THE FILMS DEPEND ON TWO THINGS HERE, and they are load-bearing:
+    · an element #gate whose tap starts the tank
+    · window.__tourHooks.aquariumHush() — exposes + suspends the AudioContext
+  ══════════════════════════════════════════════════════════════════════════════
+-->
 <style>
   :root{
-    --bg:#05070f;
-    --indigo:#5b73c4;          /* the room's deep-water blue accent */
-    --indigo-bright:#9fb4ff;
-    --gold:#e6bd6f;            /* the estate brass — rims, UI accents */
-    --gold-bright:#f5d99a;
-    --ink:#eaeef6;
-    --ink-dim:#8a96ad;
-    --panel:rgba(10,14,24,0.86);
-    --edge:rgba(91,115,196,0.30);
-    --edge-gold:rgba(230,189,111,0.26);
-    --green:#86d39a;
-    --red:#e0683f;
-    --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    --font-mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,"Liberation Mono",monospace;
-    --font-serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Book Antiqua",serif;
+    --ink:#f2ecdf; --dim:#a9a191; --faint:#7b7365;
+    --gold:#e0b45c; --warm:#f5d59a; --teal:#57c7c0;
+    --bg0:#04080c; --panel:rgba(6,12,16,.80); --line:rgba(224,180,92,.22);
+    --font-ui:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --font-mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,monospace;
   }
   *{box-sizing:border-box}
-  html,body{height:100%;margin:0}
-  body{
-    color:var(--ink); font-family:var(--font-ui);
-    background:radial-gradient(120% 80% at 50% -10%, rgba(91,115,196,0.08), transparent 60%), var(--bg);
-    -webkit-font-smoothing:antialiased; overflow:hidden;
-  }
+  html,body{margin:0;height:100%;background:var(--bg0);color:var(--ink);
+    font:15px/1.55 var(--font-ui);overflow:hidden;-webkit-font-smoothing:antialiased}
+  canvas{display:block;position:fixed;inset:0;width:100%;height:100%;touch-action:none;cursor:grab}
+  canvas.drag{cursor:grabbing}
 
-  /* the tank fills the window; the brass rim is a CSS frame over the canvas */
-  #tank{ position:fixed; inset:0; display:block; touch-action:none; }
-  .rim{ position:fixed; inset:0; z-index:10; pointer-events:none;
-    border:14px solid transparent;
-    border-image:linear-gradient(160deg,#6b5421,#e6bd6f 28%,#9c7e3a 52%,#f5d99a 70%,#5e4a1d) 1;
-    box-shadow:inset 0 0 120px rgba(0,0,0,.55), inset 0 0 0 2px rgba(0,0,0,.4); }
+  /* the brass rim — the estate's frame, kept thin so the water owns the picture */
+  .rim{position:fixed;inset:0;z-index:8;pointer-events:none;border:11px solid transparent;
+    border-image:linear-gradient(158deg,#5c4718,#e0b45c 26%,#8d7132 50%,#f5d59a 68%,#4f3d15) 1;
+    box-shadow:inset 0 0 150px rgba(0,0,0,.5)}
 
-  .topbar{
-    position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center;
-    justify-content:space-between; gap:14px; padding:11px 18px; pointer-events:none;
-  }
-  .topbar a, .topbar .brand, .topbar .selftest{ pointer-events:auto; }
-  .backs{ display:flex; gap:14px; align-items:center; }
-  .back{ font:600 10.5px/1 var(--font-mono); letter-spacing:.16em; text-transform:uppercase;
-    color:var(--ink-dim); text-decoration:none; opacity:.8; transition:.2s; }
-  .back:hover{ color:var(--gold); opacity:1; }
-  .brand{ text-align:center; flex:1 1 auto; }
-  .brand h1{ margin:0; font:600 16px/1.1 var(--font-serif); letter-spacing:.01em;
-    text-shadow:0 2px 24px rgba(0,0,0,.7); }
-  .brand .tag{ font:10.5px/1.3 var(--font-mono); color:var(--ink-dim); letter-spacing:.3px; }
-  .selftest{ font:600 10.5px/1 var(--font-mono); letter-spacing:.04em; padding:6px 11px; border-radius:20px;
-    border:1px solid var(--edge); color:var(--ink-dim); background:rgba(10,14,24,0.5); }
+  .topbar{position:fixed;top:0;left:0;right:0;z-index:12;display:flex;align-items:baseline;
+    gap:16px;padding:15px 26px;pointer-events:none}
+  .topbar a{pointer-events:auto}
+  .back{font:600 10px/1 var(--font-mono);letter-spacing:.17em;text-transform:uppercase;
+    color:var(--faint);text-decoration:none;transition:.2s}
+  .back:hover{color:var(--gold)}
+  .spacer{flex:1}
+  .readout{font:11px/1.5 var(--font-mono);color:var(--faint);letter-spacing:.04em;text-align:right}
+  .readout b{color:var(--dim);font-weight:600}
 
-  /* the right rail — gentle controls; ambient is the point, so this stays quiet */
-  .rail{ position:fixed; top:54px; right:18px; z-index:20; width:248px;
-    background:var(--panel); border:1px solid var(--edge); border-radius:14px;
-    padding:14px 15px; backdrop-filter:blur(7px); max-height:calc(100vh - 72px); overflow-y:auto; }
-  .rail h2{ margin:0 0 4px; font:600 12px/1.2 var(--font-serif); color:var(--gold-bright); }
-  .rail .sub{ font:10px/1.45 var(--font-mono); color:var(--ink-dim); margin:0 0 12px; }
-  .species{ display:flex; align-items:center; gap:9px; margin:9px 0; }
-  .swatch{ width:30px; height:20px; border-radius:5px; flex:0 0 auto; position:relative; overflow:hidden;
-    background:rgba(0,0,0,.32); border:1px solid rgba(255,255,255,.10); }
-  .swatch canvas{ display:block; }
-  .species .nm{ flex:1; font:11px/1.2 var(--font-ui); }
-  .species .nm small{ display:block; color:var(--ink-dim); font:9px/1.3 var(--font-mono); }
-  .species .ct{ font:600 12px/1 var(--font-mono); color:var(--indigo-bright); min-width:26px; text-align:right; }
-  .stepper{ display:flex; gap:4px; }
-  .stepper button{ width:20px; height:20px; border-radius:5px; border:1px solid var(--edge);
-    background:rgba(91,115,196,.10); color:var(--ink); cursor:pointer; font:12px/1 var(--font-mono);
-    display:flex; align-items:center; justify-content:center; padding:0; }
-  .stepper button:hover{ background:rgba(91,115,196,.26); color:var(--gold-bright); }
-  .rail .meter{ margin-top:10px; height:5px; border-radius:3px; background:rgba(255,255,255,.06); overflow:hidden; }
-  .rail .meter > i{ display:block; height:100%; background:linear-gradient(90deg,var(--indigo),var(--gold)); transition:width .3s; }
-  .rail .cap{ font:9px/1.4 var(--font-mono); color:var(--ink-dim); margin-top:5px; }
-  .rail .cap.full{ color:var(--gold-bright); }
+  /* the left rail — everything you can touch, and the room's one claim */
+  .rail{position:fixed;left:0;top:0;bottom:0;width:286px;z-index:11;padding:52px 20px 22px;
+    overflow-y:auto;background:linear-gradient(90deg,rgba(3,7,10,.90),rgba(3,7,10,.55) 74%,rgba(3,7,10,0));
+    scrollbar-width:thin;scrollbar-color:rgba(224,180,92,.28) transparent}
+  .rail::-webkit-scrollbar{width:5px}
+  .rail::-webkit-scrollbar-thumb{background:rgba(224,180,92,.28);border-radius:3px}
+  .rail h1{margin:0 0 8px;font:400 21px/1.2 var(--font-ui);letter-spacing:.09em;
+    text-transform:uppercase;color:var(--gold)}
+  .rail .lede{margin:0 0 20px;font-size:13px;line-height:1.6;color:var(--dim)}
+  .grp{margin:0 0 20px}
+  .grp h2{margin:0 0 8px;font:400 9.5px/1 var(--font-mono);letter-spacing:.2em;
+    text-transform:uppercase;color:var(--faint)}
+  .btns{display:flex;flex-wrap:wrap;gap:6px}
+  button{font:12px/1 var(--font-ui);color:var(--dim);background:rgba(255,255,255,.03);
+    border:1px solid rgba(255,255,255,.10);border-radius:4px;padding:7px 11px;cursor:pointer;
+    transition:.16s;letter-spacing:.02em}
+  button:hover{color:var(--ink);border-color:var(--line);background:rgba(224,180,92,.08)}
+  button.on{color:#0a0f12;background:var(--gold);border-color:var(--gold);font-weight:600}
+  .row{display:flex;align-items:center;gap:9px;margin:6px 0;font-size:12px;color:var(--dim)}
+  .row label{width:64px;color:var(--faint);font:10px/1 var(--font-mono);letter-spacing:.11em;
+    text-transform:uppercase}
+  .row input[type=range]{flex:1;accent-color:var(--gold);height:3px}
+  .row .val{width:52px;text-align:right;font:11px/1 var(--font-mono);color:var(--dim)}
+  .note{margin:9px 0 0;font-size:11.5px;line-height:1.55;color:var(--faint)}
+  .note em{color:var(--dim);font-style:normal}
+  .claim{margin-top:6px;padding:11px 12px;border:1px solid var(--line);border-radius:5px;
+    background:rgba(224,180,92,.045)}
+  .claim p{margin:0 0 8px;font-size:12px;line-height:1.55;color:var(--dim)}
+  .claim p:last-child{margin-bottom:0}
+  .claim .k{color:var(--gold)}
+  .num{font:11px/1.6 var(--font-mono);color:var(--faint);white-space:pre-wrap}
+  .num b{color:var(--teal);font-weight:600}
+  .kin{margin-top:26px;font-size:11px;line-height:1.7;color:var(--faint)}
+  .kin a{color:var(--faint);text-decoration:none;border-bottom:1px solid rgba(255,255,255,.10)}
+  .kin a:hover{color:var(--gold)}
 
-  .act{ margin-top:13px; padding-top:11px; border-top:1px solid rgba(255,255,255,.07); }
-  .act .lbl{ font:600 9px/1.2 var(--font-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--ink-dim); margin:0 0 7px; }
-  .act .row{ display:flex; gap:7px; }
-  .act button{ flex:1 1 auto; font:600 11px/1.2 var(--font-ui); color:var(--ink);
-    background:rgba(91,115,196,.10); border:1px solid var(--edge); border-radius:8px; padding:8px 8px; cursor:pointer; transition:.18s; }
-  .act button:hover{ background:rgba(91,115,196,.22); border-color:var(--gold); }
-  .act button.primary{ color:var(--gold-bright); border-color:rgba(230,189,111,.46); }
-  .act button:disabled{ opacity:.4; cursor:default; }
-  .mutebtn{ margin-top:11px; width:100%; padding:7px; border-radius:9px; border:1px solid var(--edge);
-    background:rgba(91,115,196,.06); color:var(--ink-dim); cursor:pointer; font:600 10px/1 var(--font-mono);
-    letter-spacing:.08em; text-transform:uppercase; }
-  .mutebtn.on{ color:var(--gold-bright); border-color:rgba(230,189,111,.5); }
-  .rail .hint{ margin-top:11px; font:10px/1.5 var(--font-ui); color:var(--ink-dim); }
-  .rail .hint b{ color:var(--ink); font-weight:600; }
+  /* the gate — the first tap, which is also the audio unlock the browsers demand */
+  .gate{position:fixed;inset:0;z-index:40;display:grid;place-items:center;cursor:pointer;
+    background:radial-gradient(120% 90% at 50% 42%,rgba(4,16,22,.35),rgba(2,6,9,.86) 72%);
+    backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);transition:opacity .7s}
+  .gate .card{max-width:520px;text-align:center;padding:0 30px}
+  .gate h2{margin:0 0 14px;font:400 30px/1.15 var(--font-ui);letter-spacing:.05em;color:var(--warm)}
+  .gate p{margin:0 0 22px;font-size:15px;line-height:1.7;color:var(--dim)}
+  .gate .pulse{font:600 11px/1 var(--font-mono);letter-spacing:.24em;text-transform:uppercase;
+    color:var(--gold);animation:bob 2.6s ease-in-out infinite}
+  @keyframes bob{0%,100%{opacity:.45}50%{opacity:1}}
 
-  /* the quiet proof — a TUCKED-AWAY detail, beauty leads */
-  .crux{ margin-top:12px; border-top:1px solid rgba(255,255,255,.07); padding-top:10px; }
-  .crux summary{ font:600 9px/1.2 var(--font-mono); letter-spacing:.10em; text-transform:uppercase; color:var(--ink-dim); cursor:pointer; outline:none; list-style:none; display:flex; align-items:center; gap:7px; }
-  .crux summary::-webkit-details-marker{ display:none; }
-  .crux .pill{ font:600 8.5px/1 var(--font-mono); padding:3px 7px; border-radius:10px; border:1px solid var(--edge); color:var(--ink-dim); }
-  .crux .pill.green{ color:var(--green); border-color:rgba(134,211,154,.5); background:rgba(134,211,154,.08); }
-  .crux .pill.fail{ color:var(--red); border-color:rgba(224,104,63,.5); }
-  .crux .body{ font:10px/1.55 var(--font-mono); color:var(--ink-dim); margin-top:9px; }
-  .crux .body .ok{ color:var(--green); } .crux .body .no{ color:var(--red); }
+  .pill{position:fixed;right:16px;bottom:16px;z-index:20;max-width:min(400px,84vw);
+    font:600 10.5px/1.5 var(--font-mono);letter-spacing:.02em;padding:8px 13px;border-radius:20px;
+    background:rgba(4,10,14,.9);border:1px solid var(--line);color:var(--faint);cursor:default}
+  .pill.ok{color:#8fdcb0;border-color:rgba(90,200,140,.4)}
+  .pill.bad{color:#ff9a7a;border-color:rgba(255,120,90,.5)}
+  .pill .det{display:block;margin-top:3px;font-weight:400;font-size:9.5px;color:var(--faint)}
 
-  /* the first-click gate — audio policy + "tap the glass to begin" nudge + first feed */
-  .gate{ position:fixed; inset:0; z-index:40; display:flex; align-items:center; justify-content:center;
-    background:rgba(3,5,11,.55); backdrop-filter:blur(2px); cursor:pointer; transition:opacity .6s; }
-  .gate .card{ text-align:center; padding:26px 34px; max-width:380px; }
-  .gate h3{ margin:0; font:600 19px/1.3 var(--font-serif); color:var(--gold-bright); }
-  .gate p{ margin:9px 0 0; font:12px/1.6 var(--font-ui); color:var(--ink-dim); }
-  .gate .pulse{ margin-top:18px; font:600 11px/1 var(--font-mono); letter-spacing:.18em;
-    color:var(--gold); text-transform:uppercase; animation:pulse 2.4s ease-in-out infinite; }
-  @keyframes pulse{ 0%,100%{opacity:.45} 50%{opacity:1} }
+  .nogl{position:fixed;inset:0;z-index:60;display:none;place-items:center;padding:40px;
+    background:var(--bg0);text-align:center}
+  .nogl p{max-width:520px;color:var(--dim)}
 
-  /* a transient toast for the TUG act ("the column is answering…") */
-  #toast{ position:fixed; left:50%; bottom:30px; transform:translateX(-50%); z-index:35;
-    background:rgba(8,11,18,.92); border:1px solid var(--edge-gold); color:var(--gold-bright);
-    padding:9px 18px; border-radius:20px; font:13px/1.3 var(--font-serif); letter-spacing:.02em; opacity:0;
-    transition:opacity .4s; pointer-events:none; max-width:80vw; text-align:center; }
-  #toast.show{ opacity:1; }
-
-  @media (max-width:680px){
-    .rail{ width:210px; right:9px; top:48px; padding:11px 11px; }
-    .brand h1{ font-size:14px; }
-    .brand .tag{ display:none; }
+  @media (max-width:880px){
+    .rail{width:100%;height:auto;bottom:auto;max-height:52vh;
+      background:linear-gradient(180deg,rgba(3,7,10,.93),rgba(3,7,10,.72) 82%,rgba(3,7,10,0))}
+    .readout{display:none}
   }
 </style>
 </head>
 <body>
-  <canvas id="tank"></canvas>
-  <div class="rim"></div>
 
-  <div class="topbar">
-    <div class="backs"><a class="back" href="../index.html">← the workshop</a><a class="back" href="../glasshouse-range/index.html">↳ a bay in The Glasshouse Range</a><a class="back" href="../the-cartesian-diver/index.html" title="its water-kin — a bottle you squeeze to chase the hover">· kin: The Cartesian Diver</a></div>
-    <div class="brand">
-      <h1>The Aquarium</h1>
-      <div class="tag">a lit tank of the deep · set it running, leave it breathing</div>
+<canvas id="tank"></canvas>
+<div class="rim"></div>
+
+<div class="topbar">
+  <a class="back" href="../index.html">← the estate</a>
+  <a class="back" href="../glasshouse-range/index.html">← the glasshouse range</a>
+  <span class="spacer"></span>
+  <span class="readout" id="readout"></span>
+</div>
+
+<div class="rail">
+  <h1>The Aquarium</h1>
+  <p class="lede">Warm water, six metres of it. <b>Drag</b> to look around, <b>scroll</b> to move
+    through the tank, <b>click the glass</b> to drop a pinch of food and watch them come.</p>
+
+  <div class="grp">
+    <h2>the light on the sand</h2>
+    <div class="btns">
+      <button id="bFold">show the fold</button>
+      <button id="bRays">count the rays</button>
     </div>
-    <div class="selftest" id="fps">— fps</div>
+    <div class="claim">
+      <p>The net of light down there is <span class="k">not a texture</span>. Every frame a quarter
+        of a million sun rays are bent through the real rippled surface and splatted where they
+        land — the bright cords are simply where a lot of them piled up.</p>
+      <p><em><b>Show the fold</b></em> draws a <span class="k">second, separate</span> calculation on
+        top: the curve where <span class="k">det(I + a·H) = 0</span>, out of the surface's own
+        curvature, with no rays in it whatsoever. It lands on the cords — because a caustic is
+        exactly where a bundle of rays folds through itself.</p>
+      <div class="num" id="claimNums">—</div>
+    </div>
   </div>
 
-  <div class="rail">
-    <h2>The Column</h2>
-    <p class="sub">a 4-band food web — each species keeps to its light</p>
-    <div id="species"></div>
-    <div class="meter"><i id="loadbar"></i></div>
-    <div class="cap" id="loadcap">0 / 240 — the ceiling that keeps it smooth</div>
-
-    <div class="act">
-      <div class="lbl">Act 3 · the trophic tug</div>
-      <div class="row">
-        <button id="btn-tug" class="primary">Pull the apex out ↑</button>
-        <button id="btn-restore" disabled>Let it back in</button>
-      </div>
-      <div class="hint">Pull the <b>lancetfish</b> and watch the cascade ripple <i>down</i>: the lanternfish bloom, their copepods thin. The water tells you — no graph.</div>
-    </div>
-
-    <button class="mutebtn" id="mute">sound: off</button>
-    <div class="hint"><b>Tap the glass</b> to scatter food — the swarm boils up, nibbles, and resettles into drift.</div>
-
-    <details class="crux" id="crux">
-      <summary>the quiet proof <span class="pill" id="cruxpill">…</span></summary>
-      <div class="body" id="cruxbody">running self-test…</div>
-    </details>
+  <div class="grp">
+    <h2>the water</h2>
+    <div class="row"><label>chop</label><input type="range" id="sChop" min="0" max="180" value="100"><span class="val" id="vChop">1.00×</span></div>
+    <div class="row"><label>sun</label><input type="range" id="sSun" min="20" max="180" value="100"><span class="val" id="vSun">1.00×</span></div>
+    <div class="row"><label>clarity</label><input type="range" id="sClar" min="40" max="180" value="100"><span class="val" id="vClar">1.00×</span></div>
+    <p class="note">Chop is the height of the ripples. Wind the sun down and the cords fade into a
+      soft mottle; wind clarity down and the far glass disappears into green — <em>red goes first</em>,
+      which is the whole reason water looks like water.</p>
   </div>
 
-  <div class="gate" id="gate"><div class="card">
-    <h3>The Aquarium</h3>
-    <p>A tall column of the deep, lit from above. Sunlit shimmer fades through blue twilight to a lightless floor where a chemosynthetic vent glows its own cold light. A living food web swims in its bands. Set it running and leave it breathing.</p>
-    <div class="pulse">tap the glass to begin</div>
-  </div></div>
+  <div class="grp">
+    <h2>the air</h2>
+    <div class="btns">
+      <button id="bSound">sound: off</button>
+      <button id="bBub">a handful of bubbles</button>
+    </div>
+    <p class="note">A bubble is a spring — the gas inside is the spring, the water round it the
+      mass — so its note is set by nothing but its size: <em>f₀ · r ≈ 3.29 Hz·m</em>. Every bubble
+      you see is voiced at the pitch its own drawn radius demands, which is why the fat lazy ones
+      go <em>bloop</em> and the fine ones hiss.</p>
+  </div>
 
-  <div id="toast"></div>
+  <div class="grp">
+    <h2>the view</h2>
+    <div class="btns">
+      <button id="bDrift" class="on">slow drift</button>
+      <button id="bHome">back to the front</button>
+    </div>
+  </div>
 
-  <!-- ════════════════════════════════════════════════════════════════════════
-       THE FORGED ART (in-house, art foundry). Each asset is a canvas/WebAudio
-       module that sets window.__ASSET (its draw/build fn). They are inlined by
-       forge, each in its OWN classic <script> so a module's top-level helpers
-       (hexToRgb, hexA, var vent, …) never collide with a sibling or the page;
-       each script captures window.__ASSET into a uniquely-named global the main
-       module reads. The audio module self-namespaces onto window.Aqua.sfx.
-       ════════════════════════════════════════════════════════════════════════ -->
-  <script>
-    // fish-lancetfish (apex DART) → window.AQ_drawLancetfish
-    <!-- forge:include art/fish-lancetfish.js -->
-    window.AQ_drawLancetfish = window.__ASSET;
-  </script>
-  <script>
-    // fish-lanternfish (twilight DRIFT) → window.AQ_drawLanternfish
-    <!-- forge:include art/fish-lanternfish.js -->
-    window.AQ_drawLanternfish = window.__ASSET;
-  </script>
-  <script>
-    // fish-copepods (mid-water GRAZE) → window.AQ_drawCopepod
-    <!-- forge:include art/fish-copepods.js -->
-    window.AQ_drawCopepod = window.__ASSET;
-  </script>
-  <script>
-    // fish-ventshrimp (floor GRAZE, self-lit) — lives in art/fish.js → window.AQ_drawVentShrimp
-    <!-- forge:include art/fish.js -->
-    window.AQ_drawVentShrimp = window.__ASSET;
-  </script>
-  <script>
-    // the caustic light field → window.AQ_drawCaustics
-    <!-- forge:include art/caustics.js -->
-    window.AQ_drawCaustics = window.__ASSET;
-  </script>
-  <script>
-    // the chemosynthetic vent + coral floor → window.AQ_drawVent
-    <!-- forge:include art/vent.js -->
-    window.AQ_drawVent = window.__ASSET;
-  </script>
-  <script>
-    // the soundscape (waterBed + bubble + swish) → window.Aqua.sfx.*
-    <!-- forge:include art/audio-aquarium.js -->
-  </script>
+  <p class="kin">Kin: <a href="../the-cartesian-diver/index.html">The Cartesian Diver</a> —
+    the same water, squeezed · <a href="../refraction-run/index.html">The Refraction Run</a> —
+    the bend this whole room is made of · <a href="../teacup-caustic/index.html">The Teacup Caustic</a> —
+    the same fold, in coffee.</p>
+</div>
 
-<script type="module">
+<div class="gate" id="gate"><div class="card">
+  <h2>The Aquarium</h2>
+  <p>Warm water and big slow fish, a sand floor under a rippled ceiling of light.
+     Set it running and leave it breathing.</p>
+  <div class="pulse">tap the glass to begin</div>
+</div></div>
+
+<div class="pill" id="pill">tank self-test…</div>
+<div class="nogl" id="nogl"><p><b>This room needs WebGL2.</b> It renders a live reef — the light on
+  the sand is a quarter of a million refracted rays, splatted every frame — and there is no
+  honest way to fake that without a GPU. Any current desktop browser will show it.</p></div>
+
+<script>
+/* The shared estate layer: the ONE mute key (ws:pref:muted) and the visit
+   breadcrumb the front door's star survey reads. Inlined at build time. */
+<!-- forge:include ../tools/ws/ws.js -->
+</script>
+
+<script>
+/* ══ THE REEF CORE ═══════════════════════════════════════════════════════════
+   Inlined byte-for-byte from ./reef.mjs by the forge (its `export ` keywords are
+   stripped on the way in). This is the SAME code `reef.test.mjs` runs in Node —
+   the surface, the caustic, the fish bodies, the school, the bubble's voice. The
+   shaders below re-express the surface and the caustic in GLSL; the numbers the
+   page prints are computed by THIS. */
+<!-- forge:include ./reef.mjs -->
+</script>
+
+<script>
+(function(){
 "use strict";
-/* ════════════════════════════════════════════════════════════════════════════
-   THE AQUARIUM — a lit tank of the deep you set running and leave breathing.
 
-   THE SPINE (the ambient register, the headline): a believable soft-boid school in
-   a tall column with a true depth gradient (sunlit teal → blue twilight → lightless
-   floor), slow raking caustics, and a cold chemosynthetic VENT glowing at the floor.
-   Beauty leads; the interactions are gentle.
+/* ══════════════════════════════════════════════════════════════════════════
+   0 · SMALL MATH — a 4×4 stack, hand-rolled. No dependencies here, ever.
+   ══════════════════════════════════════════════════════════════════════════ */
+function m4id(){ return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]); }
+function m4mul(a,b,o){
+  o = o || new Float32Array(16);
+  for (let c=0;c<4;c++) for (let r=0;r<4;r++){
+    o[c*4+r] = a[0*4+r]*b[c*4+0] + a[1*4+r]*b[c*4+1] + a[2*4+r]*b[c*4+2] + a[3*4+r]*b[c*4+3];
+  }
+  return o;
+}
+function m4persp(fovy, asp, near, far){
+  const f = 1/Math.tan(fovy/2), nf = 1/(near-far);
+  return new Float32Array([f/asp,0,0,0, 0,f,0,0, 0,0,(far+near)*nf,-1, 0,0,2*far*near*nf,0]);
+}
+function m4look(eye, at, up){
+  let zx=eye[0]-at[0], zy=eye[1]-at[1], zz=eye[2]-at[2];
+  let l=1/Math.hypot(zx,zy,zz); zx*=l; zy*=l; zz*=l;
+  let xx=up[1]*zz-up[2]*zy, xy=up[2]*zx-up[0]*zz, xz=up[0]*zy-up[1]*zx;
+  l=1/(Math.hypot(xx,xy,xz)||1); xx*=l; xy*=l; xz*=l;
+  const yx=zy*xz-zz*xy, yy=zz*xx-zx*xz, yz=zx*xy-zy*xx;
+  return new Float32Array([xx,yx,zx,0, xy,yy,zy,0, xz,yz,zz,0,
+    -(xx*eye[0]+xy*eye[1]+xz*eye[2]), -(yx*eye[0]+yy*eye[1]+yz*eye[2]), -(zx*eye[0]+zy*eye[1]+zz*eye[2]), 1]);
+}
 
-   THE CORE (the quiet crux, tucked away): the visible swarm densities are read LIVE
-   from a verified Lotka–Volterra food web (core.mjs, inlined below by forge), so the
-   picture and the proof can never drift. Pull the apex out and a real trophic cascade
-   ripples DOWN the column — shown ENTIRELY as swarm density, never a plotted curve.
+/* ══════════════════════════════════════════════════════════════════════════
+   1 · THE TANK — dimensions, and the GLSL the surface is written in twice.
+   ══════════════════════════════════════════════════════════════════════════ */
+const SURFACE_Y = TANK.h/2;                 // +1.30 m
+const SAND_Y    = -TANK.h/2*0.85;           // −1.105 m
+const DEPTH     = SURFACE_Y - SAND_Y;       // 2.405 m of water over the sand
+const CAUS_W = 6.9, CAUS_D = 4.7;           // the light map's footprint, metres
+const CAUS_TX = 640, CAUS_TZ = 448;         // its resolution — ≈1.05 cm per texel
+const SIGMA = [0.26, 0.055, 0.018];         // per-metre extinction, R G B (pinned by LEG 10)
 
-   THREE ACTS:
-     1 · SET   — per-species rail steppers, depth-banded, under a NAMED ceiling (240).
-     2 · FEED  — tap the glass: pellets sink+decay, the swarm boils up, nibbles, resettles.
-     3 · TUG   — pull the apex (button OR drag a lancetfish out the waterline); restore it.
+/* The surface, transcribed into GLSL from the same six ripples the core carries.
+   Generated from WAVES so the two can never drift apart. */
+function wavesGLSL(){
+  let s = 'const int NW = ' + WAVES.length + ';\nconst vec4 WV[NW] = vec4[NW](\n';
+  s += WAVES.map(function(w){
+    return '  vec4(' + w.kx.toFixed(6) + ',' + w.kz.toFixed(6) + ',' + w.w.toFixed(6) + ',' + w.p.toFixed(6) + ')';
+  }).join(',\n') + ');\n';
+  s += 'const float WA[NW] = float[NW](' + WAVES.map(function(w){ return w.A.toFixed(8); }).join(',') + ');\n';
+  return s;
+}
+const GLSL_SURFACE = wavesGLSL() + `
+/* h, ∇h and the Hessian of the surface — the same sum the core evaluates. */
+void surf(vec2 p, float t, float amp, out float h, out vec2 g, out vec3 H){
+  h = 0.0; g = vec2(0.0); H = vec3(0.0);      /* H = (hxx, hxz, hzz) */
+  for (int i = 0; i < NW; i++){
+    vec4 w = WV[i];
+    float A = WA[i] * amp;
+    float ph = w.x*p.x + w.y*p.y - w.z*t + w.w;
+    float s = sin(ph), c = cos(ph);
+    h += A*s;
+    g += A*vec2(w.x, w.y)*c;
+    H += -A*vec3(w.x*w.x, w.x*w.y, w.y*w.y)*s;
+  }
+}
+const float REFK = ${REFRACT_K.toFixed(6)};
+`;
 
-   ART FIDELITY: the per-species fish silhouettes (dart/drift/graze), the caustic
-   light field, the chemosynthetic vent + coral, and the procedural soundscape are
-   all forged IN-HOUSE by the art foundry (art/*.js, inlined by forge per its spec in
-   art-specs/) — never foraged. window.__renderOffline → WAV renders the same forged
-   sound builders for Audio Lens verification.
-   ════════════════════════════════════════════════════════════════════════════ */
+/* the shared water-tint helper, pasted into every shader that draws something wet */
+const GLSL_WATER = `
+uniform vec3  uSigma;
+uniform vec3  uWaterCol;
+uniform float uSunAmt;
+vec3 throughWater(vec3 col, float dist){
+  vec3 T = exp(-uSigma * dist);
+  return col * T + uWaterCol * uSunAmt * (1.0 - T);
+}
+`;
 
-/* ── the verified trophic core, inlined byte-faithfully from core.mjs (forge). The
-   visible densities read from THIS; the Node twin re-proves it green. ── */
-<!-- forge:include core.mjs -->
+const GLSL_CAUSTIC = `
+uniform sampler2D uCaus;
+uniform vec4  uCausRect;                 /* xz origin (xy) and 1/size (zw) */
+uniform float uSurfaceY, uSandY;
+float causticAt(vec3 wp){
+  vec2 uv = (wp.xz - uCausRect.xy) * uCausRect.zw;
+  float df = clamp((uSurfaceY - wp.y) / (uSurfaceY - uSandY), 0.0, 1.0);
+  /* the light map is computed for the SAND. Higher in the water the rays have had
+     less distance to converge, so the same net is softer — approximated here by
+     reading a blurrier mip. It is an approximation and is not part of the claim. */
+  float bias = mix(4.2, -0.85, df*df);
+  float c = texture(uCaus, uv, bias).r;
+  c = c / (1.0 + 0.17*c) * 1.17;              /* a soft knee — cords stay cords, sand stays sand */
+  return mix(1.0, c, 0.20 + 0.80*df);
+}
+`;
 
-const TAU = Math.PI * 2;
-const CAP = 240;                       // the NAMED population ceiling — never exceeded
+/* ══════════════════════════════════════════════════════════════════════════
+   2 · GL BOOT
+   ══════════════════════════════════════════════════════════════════════════ */
+const cv = document.getElementById('tank');
+const gl = cv.getContext('webgl2', { antialias:false, alpha:false, powerPreference:'high-performance', depth:true });
+if (!gl){ document.getElementById('nogl').style.display = 'grid';
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('pill').textContent = 'no WebGL2'; return; }
+const extCF = gl.getExtension('EXT_color_buffer_float');
+const extLF = gl.getExtension('OES_texture_float_linear');
+if (!extCF){ document.getElementById('nogl').style.display = 'grid';
+  document.getElementById('gate').style.display = 'none'; return; }
 
-/* ── the estate PRNG (mulberry32) — a fixed seed for a stable ambient drift ── */
-function mulberry32(seed){
-  let a = seed >>> 0;
-  return function(){
-    a |= 0; a = (a + 0x6D2B79F5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+function sh(type, src){
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)){
+    console.error(gl.getShaderInfoLog(s), src.split('\n').map((l,i)=>(i+1)+' '+l).join('\n'));
+    throw new Error('shader: ' + gl.getShaderInfoLog(s));
+  }
+  return s;
+}
+function prog(vs, fs){
+  const p = gl.createProgram();
+  gl.attachShader(p, sh(gl.VERTEX_SHADER, '#version 300 es\nprecision highp float;\n' + vs));
+  gl.attachShader(p, sh(gl.FRAGMENT_SHADER, '#version 300 es\nprecision highp float;\n' + fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error('link: ' + gl.getProgramInfoLog(p));
+  const u = {};
+  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i=0;i<n;i++){ const info = gl.getActiveUniform(p,i); u[info.name.replace('[0]','')] = gl.getUniformLocation(p, info.name); }
+  return { p, u };
+}
+function tex(w, h, internal, filter, wrap){
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texStorage2D(gl.TEXTURE_2D, filter === gl.LINEAR_MIPMAP_LINEAR ? 6 : 1, internal, w, h);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter === gl.LINEAR_MIPMAP_LINEAR ? gl.LINEAR : filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap || gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap || gl.CLAMP_TO_EDGE);
+  return t;
+}
+function fbo(color, depthBuf){
+  const f = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, color, 0);
+  if (depthBuf) gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthBuf);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return f;
+}
+function buf(target, data, usage){
+  const b = gl.createBuffer(); gl.bindBuffer(target, b);
+  gl.bufferData(target, data, usage || gl.STATIC_DRAW); return b;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   3 · THE LIGHT MAP — a quarter of a million rays, splatted where they land.
+       ONE program, TWO draws: the same grid of rays, once as light and once
+       filtered to |det J| < ε. No attributes at all — every ray's start is
+       derived from gl_VertexID, so the whole thing is a single drawArrays.
+   ══════════════════════════════════════════════════════════════════════════ */
+let RAY_GRID = 640;                                 // 409,600 rays, adaptive below
+const causTex = tex(CAUS_TX, CAUS_TZ, gl.R16F, gl.LINEAR_MIPMAP_LINEAR);
+const causFB  = fbo(causTex);
+const foldTex = tex(CAUS_TX, CAUS_TZ, gl.R16F, gl.LINEAR);
+const foldFB  = fbo(foldTex);
+
+const P_SPLAT = prog(`
+${GLSL_SURFACE}
+uniform int   uGrid;
+uniform vec4  uEmit;          /* centre.xy, half-extent.zw */
+uniform vec4  uRect;          /* map origin.xy, 1/size.zw */
+uniform float uTime, uAmp, uDepth, uPointSize;
+uniform int   uMode;          /* 0 = light · 1 = the fold curve only */
+uniform float uFoldEps;
+out float vW;
+void main(){
+  int id = gl_VertexID;
+  int gx = id % uGrid, gy = id / uGrid;
+  vec2 q = (vec2(float(gx), float(gy)) + 0.5) / float(uGrid);
+  vec2 p = uEmit.xy + (q * 2.0 - 1.0) * uEmit.zw;
+  float h; vec2 g; vec3 H;
+  surf(p, uTime, uAmp, h, g, H);
+  float a = REFK * uDepth;
+  vec2 land = p + a * g;                                   /* where the ray hits the sand */
+  vW = 1.0;
+  if (uMode == 1){
+    /* THE SECOND COMPUTATION: the curve det(I + a·H) = 0, out of the surface's own
+       Hessian, with no ray density in it anywhere. Every ray is drawn, weighted by
+       how close its own det is to zero — which draws the CURVE rather than a
+       scatter of the few samples that happened to land on it. */
+    float det = (1.0 + a*H.x) * (1.0 + a*H.z) - (a*H.y)*(a*H.y);
+    float q = det / uFoldEps;
+    vW = exp(-q*q);
+    if (vW < 0.004){ gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 1.0; return; }
+  }
+  vec2 uv = (land - uRect.xy) * uRect.zw;
+  gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);
+  gl_PointSize = uPointSize;
+}`, `
+in float vW;
+uniform float uIntensity;
+out vec4 frag;
+void main(){
+  vec2 d = gl_PointCoord - 0.5;
+  float r2 = dot(d,d) * 4.0;
+  if (r2 > 1.0) discard;
+  /* a normalised radial kernel — each ray deposits the same total energy however
+     wide the splat is, which is what makes the map a true histogram */
+  float w = exp(-3.2 * r2) - exp(-3.2);
+  frag = vec4(w * uIntensity * vW, 0.0, 0.0, 1.0);
+}`);
+
+/* the kernel's integral, so a splat of any size carries exactly one ray's light */
+const KERNEL_SUM = (function(){
+  let s = 0, N = 64;
+  for (let i=0;i<N;i++) for (let j=0;j<N;j++){
+    const dx = (i+0.5)/N - 0.5, dy = (j+0.5)/N - 0.5;
+    const r2 = (dx*dx + dy*dy) * 4;
+    if (r2 > 1) continue;
+    s += Math.exp(-3.2*r2) - Math.exp(-3.2);
+  }
+  return s / (N*N);          // mean over the unit square = integral / (pointSize²) share
+})();
+
+/* ══════════════════════════════════════════════════════════════════════════
+   4 · GEOMETRY — the sand, the fish, the planting, the bubbles.
+   ══════════════════════════════════════════════════════════════════════════ */
+function makeVAO(attrs, index){
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  attrs.forEach(function(a){
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf(gl.ARRAY_BUFFER, a.data));
+    gl.enableVertexAttribArray(a.loc);
+    gl.vertexAttribPointer(a.loc, a.size, gl.FLOAT, false, 0, 0);
+    if (a.divisor) gl.vertexAttribDivisor(a.loc, a.divisor);
+  });
+  if (index){
+    const ib = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, index, gl.STATIC_DRAW);
+  }
+  gl.bindVertexArray(null);
+  return vao;
+}
+
+/* ── the sand: a wide plate with slow dunes, tessellated enough to catch them ── */
+function sandGeom(N){
+  const pos = [], idx = [];
+  const W = TANK.w*1.9, D = TANK.d*2.3;
+  for (let j=0;j<=N;j++) for (let i=0;i<=N;i++){
+    const x = (i/N - 0.5)*W, z = (j/N - 0.5)*D - TANK.d*0.35;
+    const dune = Math.sin(x*0.9 + 0.4)*0.035 + Math.sin(z*1.35 - 1.1)*0.028 + Math.sin((x*0.5+z*0.7))*0.020;
+    pos.push(x, SAND_Y + dune, z);
+  }
+  for (let j=0;j<N;j++) for (let i=0;i<N;i++){
+    const a = j*(N+1)+i, b = a+1, c = a+N+1, d = c+1;
+    idx.push(a,c,b, b,c,d);
+  }
+  return { pos:new Float32Array(pos), idx:new Uint32Array(idx) };
+}
+
+/* ── coral: one recursive branch generator serves three of the four kinds ── */
+function tubeAlong(pts, rad, sides, out){
+  const base = out.pos.length/3;
+  for (let i=0;i<pts.length;i++){
+    const p = pts[i];
+    // frame: pick any perpendicular
+    let tx=0, ty=1, tz=0;
+    if (i < pts.length-1){ tx = pts[i+1][0]-p[0]; ty = pts[i+1][1]-p[1]; tz = pts[i+1][2]-p[2]; }
+    else { tx = p[0]-pts[i-1][0]; ty = p[1]-pts[i-1][1]; tz = p[2]-pts[i-1][2]; }
+    const tl = 1/(Math.hypot(tx,ty,tz)||1); tx*=tl; ty*=tl; tz*=tl;
+    let ux = 0, uy = 0, uz = 1;
+    if (Math.abs(tz) > 0.9){ ux = 1; uz = 0; }
+    let ax = ty*uz - tz*uy, ay = tz*ux - tx*uz, az = tx*uy - ty*ux;
+    const al = 1/(Math.hypot(ax,ay,az)||1); ax*=al; ay*=al; az*=al;
+    const bx = ty*az - tz*ay, by = tz*ax - tx*az, bz = tx*ay - ty*ax;
+    const r = rad[i];
+    for (let k=0;k<sides;k++){
+      const th = k/sides*Math.PI*2, ca=Math.cos(th), sa=Math.sin(th);
+      const nx = ax*ca + bx*sa, ny = ay*ca + by*sa, nz = az*ca + bz*sa;
+      out.pos.push(p[0]+nx*r, p[1]+ny*r, p[2]+nz*r);
+      out.nrm.push(nx, ny, nz);
+      out.aux.push(i/(pts.length-1), p[1]);
+    }
+  }
+  for (let i=0;i<pts.length-1;i++) for (let k=0;k<sides;k++){
+    const a = base+i*sides+k, b = base+i*sides+(k+1)%sides;
+    const c = base+(i+1)*sides+k, d = base+(i+1)*sides+(k+1)%sides;
+    out.idx.push(a,c,b, b,c,d);
+  }
+}
+function coralMesh(kind, seed){
+  const rnd = mulberry32(seed);
+  const out = { pos:[], nrm:[], aux:[], idx:[] };
+  if (kind === 'fan'){
+    // a sea fan: a flat lattice blade, drawn as a fine grid of ribs
+    const RIB = 11, SEG = 9;
+    for (let r=0;r<RIB;r++){
+      const a = (r/(RIB-1) - 0.5) * 1.5;
+      const pts = [], rad = [];
+      for (let s=0;s<=SEG;s++){
+        const u = s/SEG;
+        const spread = Math.sin(u*1.5) * 0.55;
+        pts.push([Math.sin(a)*spread + Math.sin(a*3.0)*0.03*u, u*0.95 + 0.02, Math.cos(a)*spread*0.16]);
+        rad.push(0.016*(1-u*0.72) + 0.004);
+      }
+      tubeAlong(pts, rad, 4, out);
+    }
+  } else if (kind === 'brain'){
+    const N = 20;
+    const base = out.pos.length/3;
+    for (let j=0;j<=N;j++) for (let i=0;i<=N;i++){
+      const u = i/N*Math.PI*2, v = j/N*Math.PI*0.62;
+      const wob = 1 + 0.10*Math.sin(u*5.0 + v*3.0) + 0.06*Math.sin(v*7.0);
+      const sx = Math.sin(v)*Math.cos(u)*wob, sy = Math.cos(v)*wob*0.86, sz = Math.sin(v)*Math.sin(u)*wob;
+      out.pos.push(sx*0.55, sy*0.48, sz*0.55);
+      out.nrm.push(sx, sy, sz);
+      out.aux.push(u/(Math.PI*2), v);
+    }
+    for (let j=0;j<N;j++) for (let i=0;i<N;i++){
+      const a = base+j*(N+1)+i, b = a+1, c = a+N+1, d = c+1;
+      out.idx.push(a,c,b, b,c,d);
+    }
+  } else {
+    // branching: 'branch' is open and antler-like, 'tube' is a tight upright cluster
+    const spread = kind === 'tube' ? 0.14 : 0.30;
+    const levels = kind === 'tube' ? 3 : 4;
+    (function grow(p, dir, len, r, lvl){
+      const pts = [], rad = [], SEG = 4;
+      let cur = p.slice(), d = dir.slice();
+      for (let s=0;s<=SEG;s++){
+        pts.push(cur.slice()); rad.push(r*(1 - 0.55*s/SEG));
+        d[0] += (rnd()-0.5)*0.30*spread; d[2] += (rnd()-0.5)*0.30*spread; d[1] += 0.06;
+        const dl = 1/(Math.hypot(d[0],d[1],d[2])||1); d[0]*=dl; d[1]*=dl; d[2]*=dl;
+        cur = [cur[0]+d[0]*len/SEG, cur[1]+d[1]*len/SEG, cur[2]+d[2]*len/SEG];
+      }
+      tubeAlong(pts, rad, 6, out);
+      if (lvl <= 0) return;
+      const kids = kind === 'tube' ? 2 : (rnd() < 0.55 ? 3 : 2);
+      for (let i=0;i<kids;i++){
+        const th = (i/kids)*Math.PI*2 + rnd()*1.4;
+        const nd = [d[0] + Math.cos(th)*spread*1.9, d[1]*0.80 + 0.35, d[2] + Math.sin(th)*spread*1.9];
+        const nl = 1/Math.hypot(nd[0],nd[1],nd[2]); nd[0]*=nl; nd[1]*=nl; nd[2]*=nl;
+        grow(cur, nd, len*0.58, r*0.55, lvl-1);
+      }
+    })([0,0,0], [0,1,0], kind === 'tube' ? 0.42 : 0.34, kind === 'tube' ? 0.062 : 0.052, levels);
+  }
+  return { pos:new Float32Array(out.pos), nrm:new Float32Array(out.nrm),
+           aux:new Float32Array(out.aux), idx:new Uint32Array(out.idx) };
+}
+
+/* ── rock: a lumpy sphere — the bank the reef is built against ── */
+function rockMesh(seed){
+  const rnd = mulberry32(seed);
+  const N = 26, pos=[], nrm=[], aux=[], idx=[];
+  const lumps = [];
+  for (let i=0;i<7;i++) lumps.push([rnd()*6.28, rnd()*3.14, 0.10 + rnd()*0.22, 1.2 + rnd()*3.0]);
+  for (let j=0;j<=N;j++) for (let i=0;i<=N;i++){
+    const u = i/N*Math.PI*2, v = j/N*Math.PI;
+    const sx = Math.sin(v)*Math.cos(u), sy = Math.cos(v), sz = Math.sin(v)*Math.sin(u);
+    let r = 1;
+    for (const L of lumps){
+      const lx = Math.sin(L[1])*Math.cos(L[0]), ly = Math.cos(L[1]), lz = Math.sin(L[1])*Math.sin(L[0]);
+      r += L[2]*Math.pow(Math.max(0, sx*lx + sy*ly + sz*lz), L[3]);
+    }
+    r *= 0.92 + 0.08*Math.sin(u*7.0 + v*5.0);
+    pos.push(sx*r, sy*r*0.72, sz*r);
+    nrm.push(sx, sy, sz);
+    aux.push(0.5 + 0.5*sy, v/Math.PI);
+  }
+  for (let j=0;j<N;j++) for (let i=0;i<N;i++){
+    const a=j*(N+1)+i, b=a+1, c=a+N+1, d=c+1;
+    idx.push(a,c,b, b,c,d);
+  }
+  return { pos:new Float32Array(pos), nrm:new Float32Array(nrm), aux:new Float32Array(aux), idx:new Uint32Array(idx) };
+}
+
+/* ── grass: one ribbon, instanced hundreds of times ── */
+function grassMesh(){
+  const SEG = 9, pos=[], nrm=[], aux=[], idx=[];
+  for (let i=0;i<=SEG;i++){
+    const u = i/SEG;
+    const w = 0.5*(1 - u*u*0.85);
+    pos.push(-w, u, 0, w, u, 0);
+    nrm.push(0,0,1, 0,0,1);
+    aux.push(u, 0, u, 1);
+  }
+  for (let i=0;i<SEG;i++){
+    const a=i*2, b=a+1, c=a+2, d=a+3;
+    idx.push(a,b,c, b,d,c, a,c,b, b,c,d);
+  }
+  return { pos:new Float32Array(pos), nrm:new Float32Array(nrm),
+           aux:new Float32Array(aux), idx:new Uint32Array(idx) };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   5 · SHADERS FOR THE SCENE
+   ══════════════════════════════════════════════════════════════════════════ */
+const VS_COMMON = `
+uniform mat4 uVP; uniform vec3 uCam;
+out vec3 vW; out vec3 vN; out float vDist;
+`;
+const FS_HEAD = `
+in vec3 vW; in vec3 vN; in float vDist;
+uniform vec3 uCam; uniform vec3 uSun; uniform float uTime;
+layout(location=0) out vec4 frag;
+${GLSL_WATER}
+${GLSL_CAUSTIC}
+`;
+
+/* — the sand — */
+const P_SAND = prog(`
+${VS_COMMON}
+layout(location=0) in vec3 aPos;
+void main(){
+  vW = aPos; vN = vec3(0.0,1.0,0.0);
+  vDist = length(aPos - uCam);
+  gl_Position = uVP * vec4(aPos, 1.0);
+}`, `
+${FS_HEAD}
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float grain(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f*f*(3.0-2.0*f);
+  return mix(mix(hash(i), hash(i+vec2(1,0)), u.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), u.x), u.y);
+}
+void main(){
+  float c = causticAt(vW);
+  float g = grain(vW.xz*38.0)*0.5 + grain(vW.xz*140.0)*0.28 + grain(vW.xz*420.0)*0.22;
+  vec3 albedo = mix(vec3(0.66,0.58,0.44), vec3(0.86,0.79,0.63), g);
+  albedo *= 0.90 + 0.16*grain(vW.xz*3.4);
+  float ndl = max(0.0, dot(vN, uSun));
+  /* the sun's own direct light, modulated by the caustic; plus the water's glow */
+  vec3 lit = albedo * (0.045 + 0.46*ndl*(0.08 + 1.02*c)) * uSunAmt;
+  frag = vec4(throughWater(lit, vDist), vDist);
+}`);
+
+/* — the glass walls and the water beyond: a soft box so the tank has edges — */
+const P_WALL = prog(`
+${VS_COMMON}
+layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNrm;
+void main(){ vW = aPos; vN = aNrm; vDist = length(aPos-uCam); gl_Position = uVP*vec4(aPos,1.0); }`, `
+${FS_HEAD}
+void main(){
+  float up = clamp((vW.y - uSandY) / (uSurfaceY - uSandY), 0.0, 1.0);
+  vec3 base = mix(vec3(0.022,0.070,0.085), vec3(0.055,0.165,0.185), up*up);
+  float c = causticAt(vW);
+  base *= 0.60 + 0.55*c*up;
+  frag = vec4(throughWater(base*uSunAmt, vDist), vDist);
+}`);
+
+/* — the underside of the surface: a rippling ceiling of light — */
+const P_SURF = prog(`
+${GLSL_SURFACE}
+${VS_COMMON}
+layout(location=0) in vec2 aXZ;
+uniform float uTime2, uAmp;
+void main(){
+  float h; vec2 g; vec3 H;
+  surf(aXZ, uTime2, uAmp, h, g, H);
+  vec3 p = vec3(aXZ.x, ${SURFACE_Y.toFixed(4)} + h, aXZ.y);
+  vW = p; vN = normalize(vec3(-g.x, 1.0, -g.y)); vDist = length(p - uCam);
+  gl_Position = uVP * vec4(p, 1.0);
+}`, `
+${FS_HEAD}
+void main(){
+  vec3 V = normalize(uCam - vW);
+  float f = pow(1.0 - clamp(dot(vN, V), 0.0, 1.0), 2.2);         /* looking up, it mirrors */
+  vec3 sky = vec3(0.62, 0.82, 0.90);
+  vec3 mirrored = vec3(0.06, 0.20, 0.24);
+  vec3 col = mix(sky*0.9, mirrored, f);
+  float spec = pow(max(0.0, dot(reflect(-V, vN), uSun)), 90.0);
+  col += vec3(1.0, 0.96, 0.86) * spec * 2.4;
+  frag = vec4(throughWater(col*uSunAmt, vDist), vDist);
+}`);
+
+/* — a fish — the mesh is held straight; the swim happens right here — */
+const P_FISH = prog(`
+${VS_COMMON}
+layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNrm; layout(location=2) in vec3 aSV;
+uniform vec3  uPos;
+uniform float uYaw, uPitch, uRoll, uPhaseF, uAmp, uWaveK, uScale, uLen, uTailK;
+out vec3 vSV;
+mat3 rotY(float a){ float c=cos(a), s=sin(a); return mat3(c,0,-s, 0,1,0, s,0,c); }
+mat3 rotX(float a){ float c=cos(a), s=sin(a); return mat3(1,0,0, 0,c,s, 0,-s,c); }
+mat3 rotZ(float a){ float c=cos(a), s=sin(a); return mat3(c,s,0, -s,c,0, 0,0,1); }
+void main(){
+  vec3 p = aPos; vec3 n = aNrm; float s = aSV.x; float part = aSV.z;
+  /* the travelling wave: the head barely moves, the tail sweeps */
+  float env = smoothstep(0.06, 0.92, s);
+  env *= env;
+  float lag = (part > 0.5 && part < 1.5) ? uTailK : 0.0;          /* the caudal fin trails */
+  float ph  = 6.28318*uWaveK*(s + lag) - uPhaseF;
+  float off = sin(ph) * uAmp * env * uLen;
+  float dOff = cos(ph) * 6.28318*uWaveK * uAmp * env;             /* the local body angle */
+  p.x += off;
+  /* pectorals row on their own faster beat */
+  if (part > 2.5){
+    float f = sin(uPhaseF*1.7 + (p.x > 0.0 ? 0.0 : 3.14159)) * 0.35;
+    p.y += f * uLen * 0.06 * aSV.y;
+    p.x += abs(f) * uLen * 0.03 * aSV.y * sign(p.x);
+  }
+  /* the dorsal + anal membranes ripple a touch out of step with the body */
+  if (part > 1.5 && part < 2.5) p.x += sin(ph - 0.9) * uAmp * uLen * 0.35 * aSV.y * env;
+  /* turn the normal with the body's local yaw so the shading follows the bend */
+  float bend = atan(dOff);
+  n = rotY(-bend) * n;
+  p = rotY(-bend*0.0) * p;
+  mat3 R = rotY(uYaw) * rotX(uPitch) * rotZ(uRoll);
+  vec3 wp = uPos + R * (p * uScale);
+  vW = wp; vN = normalize(R * n); vSV = aSV; vDist = length(wp - uCam);
+  gl_Position = uVP * vec4(wp, 1.0);
+}`, `
+${FS_HEAD}
+in vec3 vSV;
+float wrapLight(vec3 N, vec3 L){ return pow(max(0.0, dot(N,L)*0.55 + 0.45), 1.35); }
+uniform vec3 uColA, uColB, uColFin;
+uniform int  uPattern;
+uniform float uSeedF;
+float band(float x, float c, float w){ return smoothstep(w, 0.0, abs(x-c)); }
+void main(){
+  float s = vSV.x, v = vSV.y, part = vSV.z;
+  vec3 col;
+  float around = abs(v - 0.5)*2.0;               /* 0 at the flank, 1 at the spine/belly */
+  if (uPattern == 1){                            /* three white bars — the clownfish */
+    float m = max(max(band(s,0.20,0.055), band(s,0.50,0.050)), band(s,0.80,0.045));
+    col = mix(uColA, uColB, m);
+  } else if (uPattern == 2){                     /* diagonal bands — the angelfish */
+    float q = fract((s*5.4 + (v-0.5)*2.6));
+    col = mix(uColA, uColB, smoothstep(0.46, 0.52, q) * smoothstep(0.98, 0.90, q));
+  } else if (uPattern == 3){                     /* a black palette mark — the blue tang */
+    float up = sin(6.28318*v);                   /* +1 on the back, −1 on the belly */
+    float m = smoothstep(0.30, 0.62, up) * smoothstep(0.22, 0.32, s) * smoothstep(0.88, 0.74, s);
+    m += smoothstep(0.72, 0.86, s) * smoothstep(0.0, 0.35, abs(up)) * 0.9;
+    col = mix(uColA, uColB, clamp(m, 0.0, 1.0));
+  } else if (uPattern == 4){                     /* silver flank, dark back — the school */
+    float up = sin(6.28318*v);
+    col = mix(uColB, uColA, smoothstep(-0.1, 0.75, up));
+    col = mix(col, vec3(0.10,0.13,0.18), smoothstep(0.55, 0.95, up)*0.75);
+  } else if (uPattern == 5){                     /* one lengthwise ribbon — the wrasse */
+    col = mix(uColA, uColB, smoothstep(0.34, 0.10, abs(v-0.5)));
+  } else {
+    col = mix(uColA, uColB, 0.35 + 0.45*(1.0-around));
+  }
+  /* the belly is always paler, and everything darkens toward the back */
+  float belly = smoothstep(0.62, 0.95, v);
+  col = mix(col, col*0.62 + vec3(0.26), belly*0.40);
+  col *= 0.84 + 0.22*smoothstep(0.0, 0.35, s);
+  if (part > 0.5){
+    col = mix(col, uColFin*0.85, 0.42);
+    col *= 1.0 - 0.45*v;                                  /* thinner and darker at the rim */
+  }
+
+  vec3 N = normalize(vN), V = normalize(uCam - vW);
+  float ndl = wrapLight(N, uSun);
+  float c = causticAt(vW);
+  float rim = pow(1.0 - max(0.0, dot(N, V)), 3.0);
+  float spec = pow(max(0.0, dot(reflect(-V, N), uSun)), 40.0) * 0.55;
+  vec3 lit = col * (0.075 + 0.86*ndl*(0.20 + 0.92*c)) + vec3(0.55,0.80,0.86)*rim*0.16 + vec3(1.0)*spec*min(c,1.6)*0.55;
+  /* the fins are membranes: they glow a little when the light is behind them */
+  if (part > 0.5) lit += col * pow(max(0.0, dot(-N, uSun)), 2.0) * 0.40 * c;
+  /* an eye, near the nose, on the flank */
+  float eye = smoothstep(0.048, 0.024, distance(vec2(s, v*1.6), vec2(0.105, 0.08*1.6)))
+            + smoothstep(0.048, 0.024, distance(vec2(s, v*1.6), vec2(0.105, 0.42*1.6)));
+  if (part < 0.5) lit = mix(lit, vec3(0.02,0.02,0.03) + vec3(0.9)*pow(max(0.0,dot(N,uSun)),18.0), clamp(eye,0.0,1.0));
+  frag = vec4(throughWater(lit*uSunAmt, vDist), vDist);
+}`);
+
+/* — coral and rock, instanced — */
+const P_CORAL = prog(`
+${VS_COMMON}
+layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNrm; layout(location=2) in vec2 aAux;
+layout(location=3) in vec4 iPos;      /* x, y, z, scale */
+layout(location=4) in vec4 iCol;      /* rgb + rotation */
+layout(location=5) in vec2 iPh;       /* sway phase, sway amount */
+uniform float uTime3;
+out vec3 vCol; out float vU;
+void main(){
+  float a = iCol.w, c = cos(a), s = sin(a);
+  vec3 p = vec3(aPos.x*c - aPos.z*s, aPos.y, aPos.x*s + aPos.z*c) * iPos.w;
+  float sway = sin(uTime3*0.9 + iPh.x) * 0.035 + sin(uTime3*1.6 + iPh.x*2.1) * 0.016;
+  p.x += sway * iPh.y * p.y * p.y * 3.0;
+  p.z += sway * iPh.y * p.y * p.y * 1.6;
+  vec3 wp = p + iPos.xyz;
+  vW = wp; vN = normalize(vec3(aNrm.x*c - aNrm.z*s, aNrm.y, aNrm.x*s + aNrm.z*c));
+  vCol = iCol.rgb; vU = aAux.x;
+  vDist = length(wp - uCam);
+  gl_Position = uVP * vec4(wp, 1.0);
+}`, `
+${FS_HEAD}
+in vec3 vCol; in float vU;
+void main(){
+  vec3 N = normalize(vN), V = normalize(uCam - vW);
+  float ndl = max(0.0, dot(N, uSun));
+  float c = causticAt(vW);
+  float tip = smoothstep(0.45, 1.0, vU);
+  vec3 col = mix(vCol*0.72, vCol*1.35 + vec3(0.10), tip);
+  float rim = pow(1.0 - max(0.0, dot(N, V)), 2.6);
+  vec3 lit = col * (0.085 + 0.86*(0.45 + 0.55*ndl)*(0.18 + 0.95*c)) + col*rim*0.26;
+  frag = vec4(throughWater(lit*uSunAmt, vDist), vDist);
+}`);
+
+/* — rock — */
+const P_ROCK = prog(`
+${VS_COMMON}
+layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNrm; layout(location=2) in vec2 aAux;
+layout(location=3) in vec4 iPos; layout(location=4) in vec4 iCol; layout(location=6) in vec4 iRad;
+out vec3 vCol; out float vU;
+void main(){
+  float a = iCol.w, c = cos(a), s = sin(a);
+  vec3 e = aPos * iRad.xyz;
+  vec3 p = vec3(e.x*c - e.z*s, e.y, e.x*s + e.z*c);
+  vec3 n = normalize(aNrm / max(vec3(1e-3), iRad.xyz));
+  vec3 wp = p + iPos.xyz;
+  vW = wp; vN = normalize(vec3(n.x*c - n.z*s, n.y, n.x*s + n.z*c));
+  vCol = iCol.rgb; vU = aAux.x; vDist = length(wp - uCam);
+  gl_Position = uVP * vec4(wp, 1.0);
+}`, `
+${FS_HEAD}
+in vec3 vCol; in float vU;
+float h1(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+void main(){
+  vec3 N = normalize(vN), V = normalize(uCam - vW);
+  float ndl = max(0.0, dot(N, uSun));
+  float c = causticAt(vW);
+  float mott = h1(floor(vW.xz*24.0 + vW.y*9.0))*0.22 + 0.88;
+  vec3 col = vCol * mott;
+  col = mix(col, vec3(0.20,0.40,0.26), smoothstep(0.35, 0.85, N.y)*0.45);   /* algae on the tops */
+  float rim = pow(1.0 - max(0.0, dot(N, V)), 2.4);
+  vec3 lit = col * (0.075 + 0.80*(0.35 + 0.65*ndl)*(0.16 + 0.95*c)) + col*rim*0.20;
+  frag = vec4(throughWater(lit*uSunAmt, vDist), vDist);
+}`);
+
+/* — grass — */
+const P_GRASS = prog(`
+${VS_COMMON}
+layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNrm; layout(location=2) in vec2 aAux;
+layout(location=3) in vec4 iPos;   /* x,y,z, height */
+layout(location=4) in vec4 iCol;   /* rgb, width */
+layout(location=5) in vec2 iPh;    /* phase, rotation */
+uniform float uTime3;
+out float vU; out vec3 vCol;
+void main(){
+  float u = aAux.x;
+  float rot = iPh.y, cr = cos(rot), sr = sin(rot);
+  float sway = (sin(uTime3*1.05 + iPh.x) * 0.32 + sin(uTime3*1.9 + iPh.x*1.7) * 0.13) * u * u;
+  vec3 p = vec3(aPos.x*iCol.w, aPos.y*iPos.w, 0.0);
+  p.x += sway * iPos.w * 0.55;
+  p.z += sway * iPos.w * 0.28;
+  vec3 q = vec3(p.x*cr - p.z*sr, p.y, p.x*sr + p.z*cr);
+  vec3 wp = q + iPos.xyz;
+  vW = wp; vN = normalize(vec3(-sr, 0.25, cr));
+  vU = u; vCol = iCol.rgb; vDist = length(wp - uCam);
+  gl_Position = uVP * vec4(wp, 1.0);
+}`, `
+${FS_HEAD}
+in float vU; in vec3 vCol;
+void main(){
+  vec3 N = normalize(vN), V = normalize(uCam - vW);
+  float ndl = abs(dot(N, uSun));
+  float c = causticAt(vW);
+  vec3 col = mix(vCol*0.45, vCol*1.25, vU);
+  float back = pow(max(0.0, dot(-N, uSun)), 1.6);
+  vec3 lit = col * (0.085 + 0.82*(0.40 + 0.60*ndl)*(0.20 + 0.92*c)) + col*back*0.44*c;
+  frag = vec4(throughWater(lit*uSunAmt, vDist), vDist);
+}`);
+
+/* — bubbles and motes: camera-facing sprites — */
+const P_SPRITE = prog(`
+uniform mat4 uVP; uniform vec3 uCam; uniform vec3 uRight, uUp;
+layout(location=3) in vec4 iPos;    /* x,y,z, radius */
+layout(location=4) in vec4 iCol;    /* rgb, kind (0 mote, 1 bubble) */
+out vec3 vW; out float vR; out vec4 vC; out vec2 vQ; out float vDist;
+const vec2 CORN[6] = vec2[6](vec2(-1,-1), vec2(1,-1), vec2(-1,1), vec2(1,-1), vec2(1,1), vec2(-1,1));
+void main(){
+  vec2 q = CORN[gl_VertexID % 6];
+  vec3 wp = iPos.xyz + (uRight*q.x + uUp*q.y) * iPos.w;
+  vW = wp; vR = iPos.w; vC = iCol; vQ = q; vDist = length(wp - uCam);
+  gl_Position = uVP * vec4(wp, 1.0);
+}`, `
+in vec3 vW; in float vR; in vec4 vC; in vec2 vQ; in float vDist;
+uniform vec3 uSun; uniform vec3 uCam;
+layout(location=0) out vec4 frag;
+${GLSL_WATER}
+${GLSL_CAUSTIC}
+void main(){
+  float r = length(vQ);
+  if (r > 1.0) discard;
+  float c = causticAt(vW);
+  if (vC.w > 0.5){
+    /* a bubble: a bright rim, a dark middle, one hot glint where the sun catches it */
+    float rim = smoothstep(0.72, 1.0, r) * (1.0 - smoothstep(0.985, 1.0, r));
+    float body = (1.0 - r*r) * 0.16;
+    float glint = smoothstep(0.30, 0.0, distance(vQ, vec2(-0.34, 0.36)));
+    vec3 col = vec3(0.72, 0.90, 0.95)*rim*1.5 + vec3(0.35,0.62,0.68)*body + vec3(1.0,0.98,0.92)*glint*0.85;
+    float a = clamp(rim*1.2 + body*1.6 + glint*0.9, 0.0, 1.0);
+    frag = vec4(throughWater(col*(0.5+0.9*c)*uSunAmt, vDist), a);
+  } else {
+    float a = (1.0 - r) * (1.0 - r) * vC.z;
+    vec3 col = vC.rgb * (0.3 + 1.4*c);
+    frag = vec4(throughWater(col*uSunAmt, vDist), a*0.75);
+  }
+}`);
+
+/* — the shafts: the SAME light map, marched through the water — */
+const P_SHAFT = prog(`
+out vec2 vUV;
+void main(){
+  vec2 q = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+  vUV = q; gl_Position = vec4(q*2.0-1.0, 0.0, 1.0);
+}`, `
+in vec2 vUV;
+uniform sampler2D uScene;
+uniform vec3 uCam, uSun;
+uniform mat4 uInvVP;
+uniform float uTime, uSunAmt2, uShaftAmt;
+uniform vec3 uSigma; uniform vec3 uWaterCol;
+uniform sampler2D uCaus; uniform vec4 uCausRect;
+uniform float uSurfaceY, uSandY;
+layout(location=0) out vec4 frag;
+void main(){
+  float sceneDist = texture(uScene, vUV).a;
+  vec4 nd = uInvVP * vec4(vUV*2.0-1.0, 1.0, 1.0);
+  vec3 dir = normalize(nd.xyz/nd.w - uCam);
+  float far = min(sceneDist, 12.0);
+  const int STEPS = 26;
+  float acc = 0.0;
+  /* an interleaved-gradient dither, so too-few steps read as a fine weave and
+     never as hard rings (LANDMINES.md, learned the hard way in another room) */
+  float dth = fract(52.9829189 * fract(0.06711056*gl_FragCoord.x + 0.00583715*gl_FragCoord.y));
+  dth = fract(dth + uTime*0.6180339887);
+  for (int i=0;i<STEPS;i++){
+    float t = (float(i) + dth) / float(STEPS) * far;
+    vec3 p = uCam + dir*t;
+    if (p.y > uSurfaceY) break;
+    float df = clamp((uSurfaceY - p.y)/(uSurfaceY - uSandY), 0.0, 1.0);
+    vec2 uv = (p.xz - uCausRect.xy) * uCausRect.zw;
+    float lod = mix(3.4, 0.4, df*df);
+    float c = textureLod(uCaus, uv, lod).r;
+    float up = 1.0 - df;                       /* the shafts are strongest near the surface */
+    acc += c * (0.25 + 0.95*up*up) * exp(-0.16*t);
+  }
+  acc *= far / float(STEPS);
+  vec3 shaft = uWaterCol * acc * uShaftAmt * uSunAmt2;
+  frag = vec4(shaft, 1.0);
+}`);
+
+/* — post: bloom-lite, then a filmic squeeze — */
+const P_BLIT = prog(`
+out vec2 vUV;
+void main(){ vec2 q = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2); vUV = q; gl_Position = vec4(q*2.0-1.0,0.0,1.0); }`, `
+in vec2 vUV; uniform sampler2D uSrc; uniform vec2 uTexel; uniform int uMode; uniform float uAmt;
+layout(location=0) out vec4 frag;
+void main(){
+  if (uMode == 0){                                   /* bright pass */
+    vec3 c = texture(uSrc, vUV).rgb;
+    float l = dot(c, vec3(0.2126,0.7152,0.0722));
+    frag = vec4(c * smoothstep(0.55, 1.6, l), 1.0);
+  } else {                                            /* separable blur */
+    vec2 d = uMode == 1 ? vec2(uTexel.x, 0.0) : vec2(0.0, uTexel.y);
+    vec3 s = texture(uSrc, vUV).rgb * 0.227;
+    s += (texture(uSrc, vUV + d*1.3846).rgb + texture(uSrc, vUV - d*1.3846).rgb) * 0.316;
+    s += (texture(uSrc, vUV + d*3.2308).rgb + texture(uSrc, vUV - d*3.2308).rgb) * 0.070;
+    frag = vec4(s, 1.0);
+  }
+}`);
+
+const P_COMP = prog(`
+out vec2 vUV;
+void main(){ vec2 q = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2); vUV = q; gl_Position = vec4(q*2.0-1.0,0.0,1.0); }`, `
+in vec2 vUV;
+uniform sampler2D uScene, uBloom, uShaft;
+uniform float uExposure, uTime;
+layout(location=0) out vec4 frag;
+vec3 tonemap(vec3 x){          /* a gentle filmic squeeze — highlights roll, never clip flat */
+  const float a=2.51, b=0.03, c=2.43, d=0.59, e=0.14;
+  return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
+}
+void main(){
+  vec3 col = texture(uScene, vUV).rgb;
+  col += texture(uBloom, vUV).rgb * 0.20;
+  col += texture(uShaft, vUV).rgb;
+  col *= uExposure;
+  col = tonemap(col);
+  col = pow(col, vec3(1.0/2.2));
+  vec2 q = vUV - 0.5;
+  col *= 1.0 - dot(q,q)*0.55;                            /* the glass darkens at the corners */
+  frag = vec4(col, 1.0);
+}`);
+
+/* ══════════════════════════════════════════════════════════════════════════
+   6 · BUILD THE TANK
+   ══════════════════════════════════════════════════════════════════════════ */
+const A_POS = 0, A_NRM = 1, A_SV = 2, A_AUX = 2, A_XZ = 0;   /* pinned by layout(location=) in every shader */
+const A_IPOS = 3, A_ICOL = 4, A_IPH = 5;
+
+/* — sand — */
+const sand = sandGeom(120);
+const sandVAO = makeVAO([{ loc:A_POS, size:3, data:sand.pos }], sand.idx);
+
+/* — the walls: a box, open at the front — */
+const wall = (function(){
+  const hw = TANK.w/2, hd = TANK.d/2, y0 = SAND_Y - 0.4, y1 = SURFACE_Y + 0.55;
+  const pos = [], nrm = [];
+  function quad(a,b,c,d,n){
+    [a,b,c, a,c,d].forEach(function(p){ pos.push(p[0],p[1],p[2]); nrm.push(n[0],n[1],n[2]); });
+  }
+  quad([-hw,y0,-hd],[hw,y0,-hd],[hw,y1,-hd],[-hw,y1,-hd],[0,0,1]);       // back
+  quad([-hw,y0,hd],[-hw,y0,-hd],[-hw,y1,-hd],[-hw,y1,hd],[1,0,0]);       // left
+  quad([hw,y0,-hd],[hw,y0,hd],[hw,y1,hd],[hw,y1,-hd],[-1,0,0]);          // right
+  return { vao: makeVAO([{loc:A_POS,size:3,data:new Float32Array(pos)},{loc:A_NRM,size:3,data:new Float32Array(nrm)}]),
+           n: pos.length/3 };
+})();
+
+/* — the surface mesh, seen from below — */
+const surfMesh = (function(){
+  const N = 168, W = TANK.w*3.4, D = TANK.d*4.6, xz = [], idx = [];
+  for (let j=0;j<=N;j++) for (let i=0;i<=N;i++) xz.push((i/N-0.5)*W, (j/N-0.5)*D - TANK.d*0.6);
+  for (let j=0;j<N;j++) for (let i=0;i<N;i++){
+    const a=j*(N+1)+i, b=a+1, c=a+N+1, d=c+1;
+    idx.push(a,b,c, b,d,c);
+  }
+  return { vao: makeVAO([{loc:A_XZ,size:2,data:new Float32Array(xz)}], new Uint32Array(idx)), n: idx.length };
+})();
+
+/* — fish — one VAO per species, one draw per fish — */
+const fishGeom = {};
+Object.keys(SPECIES).forEach(function(k){
+  const m = fishMesh(SPECIES[k]);
+  fishGeom[k] = {
+    vao: makeVAO([{loc:A_POS,size:3,data:m.pos},{loc:A_NRM,size:3,data:m.nrm},{loc:A_SV,size:3,data:m.sv}], new Uint32Array(m.idx)),
+    n: m.idx.length, len: m.length
   };
+});
+const REEF_SEED = 90210;
+let fish = stockTank(REEF_SEED);
+const reef = plantReef(REEF_SEED);
+
+/* — corals: four kinds, each instanced — */
+const CORAL_PALETTE = {
+  branch: [[0.98,0.28,0.22],[1.00,0.50,0.12],[0.86,0.16,0.46],[0.30,0.80,0.62]],
+  fan:    [[0.95,0.18,0.34],[0.72,0.28,0.86],[1.00,0.46,0.16]],
+  brain:  [[0.86,0.62,0.18],[0.42,0.74,0.40],[0.90,0.44,0.26]],
+  tube:   [[0.24,0.82,0.76],[0.60,0.40,0.94],[1.00,0.64,0.16]]
+};
+const coralBatches = ['branch','fan','brain','tube'].map(function(kind, ki){
+  const m = coralMesh(kind, 1234 + ki*77);
+  const inst = reef.corals.filter(function(c){ return c.kind === kind; });
+  const iPos = new Float32Array(inst.length*4), iCol = new Float32Array(inst.length*4), iPh = new Float32Array(inst.length*2);
+  inst.forEach(function(c, i){
+    iPos.set([c.x, c.y - 0.02, c.z, c.scale*0.92], i*4);
+    const pal = CORAL_PALETTE[kind];
+    const col = pal[(c.hue*pal.length)|0];
+    iCol.set([col[0], col[1], col[2], c.rot], i*4);
+    iPh.set([c.phase, kind === 'fan' ? 1.4 : (kind === 'brain' ? 0.15 : 0.7)], i*2);
+  });
+  return { vao: makeVAO([
+      {loc:A_POS,size:3,data:m.pos},{loc:A_NRM,size:3,data:m.nrm},{loc:A_AUX,size:2,data:m.aux},
+      {loc:A_IPOS,size:4,data:iPos,divisor:1},{loc:A_ICOL,size:4,data:iCol,divisor:1},{loc:A_IPH,size:2,data:iPh,divisor:1}
+    ], m.idx), n:m.idx.length, count:inst.length };
+});
+
+/* — the bank of rock — */
+const rockBatch = (function(){
+  const m = rockMesh(551);
+  const r = reef.rocks;
+  const iPos = new Float32Array(r.length*4), iCol = new Float32Array(r.length*4);
+  const iPh = new Float32Array(r.length*2), iRad = new Float32Array(r.length*4);
+  r.forEach(function(k, i){
+    iPos.set([k.x, k.y - k.ry*0.42, k.z, 1.0], i*4);
+    const g = 0.185 + (k.seed % 100)/100*0.085;
+    iCol.set([g*1.14, g*1.00, g*0.82, k.rot], i*4);
+    iPh.set([0, 0], i*2);
+    iRad.set([k.rx, k.ry, k.rz, 0], i*4);
+  });
+  return { vao: makeVAO([
+      {loc:A_POS,size:3,data:m.pos},{loc:A_NRM,size:3,data:m.nrm},{loc:A_AUX,size:2,data:m.aux},
+      {loc:A_IPOS,size:4,data:iPos,divisor:1},{loc:A_ICOL,size:4,data:iCol,divisor:1},
+      {loc:A_IPH,size:2,data:iPh,divisor:1},{loc:6,size:4,data:iRad,divisor:1}
+    ], m.idx), n:m.idx.length, count:r.length };
+})();
+
+/* — grass — */
+const grassBatch = (function(){
+  const m = grassMesh();
+  const g = reef.grass;
+  const iPos = new Float32Array(g.length*4), iCol = new Float32Array(g.length*4), iPh = new Float32Array(g.length*2);
+  const GREENS = [[0.30,0.62,0.34],[0.40,0.70,0.30],[0.24,0.55,0.42],[0.52,0.68,0.26],[0.20,0.48,0.38]];
+  g.forEach(function(b, i){
+    iPos.set([b.x, b.y - 0.02, b.z, b.h], i*4);
+    const c = GREENS[(b.hue*GREENS.length)|0];
+    iCol.set([c[0], c[1], c[2], b.w], i*4);
+    iPh.set([b.phase, b.rot], i*2);
+  });
+  return { vao: makeVAO([
+      {loc:A_POS,size:3,data:m.pos},{loc:A_NRM,size:3,data:m.nrm},{loc:A_AUX,size:2,data:m.aux},
+      {loc:A_IPOS,size:4,data:iPos,divisor:1},{loc:A_ICOL,size:4,data:iCol,divisor:1},{loc:A_IPH,size:2,data:iPh,divisor:1}
+    ], m.idx), n:m.idx.length, count:g.length };
+})();
+
+/* — sprites: motes and bubbles share one instanced quad — */
+const MAX_SPRITE = 900;
+const spritePos = new Float32Array(MAX_SPRITE*4), spriteCol = new Float32Array(MAX_SPRITE*4);
+const spritePosBuf = buf(gl.ARRAY_BUFFER, spritePos, gl.DYNAMIC_DRAW);
+const spriteColBuf = buf(gl.ARRAY_BUFFER, spriteCol, gl.DYNAMIC_DRAW);
+const spriteVAO = (function(){
+  const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, spritePosBuf);
+  gl.enableVertexAttribArray(A_IPOS); gl.vertexAttribPointer(A_IPOS,4,gl.FLOAT,false,0,0); gl.vertexAttribDivisor(A_IPOS,1);
+  gl.bindBuffer(gl.ARRAY_BUFFER, spriteColBuf);
+  gl.enableVertexAttribArray(A_ICOL); gl.vertexAttribPointer(A_ICOL,4,gl.FLOAT,false,0,0); gl.vertexAttribDivisor(A_ICOL,1);
+  gl.bindVertexArray(null); return vao;
+})();
+
+/* ══════════════════════════════════════════════════════════════════════════
+   7 · LIVING THINGS — motes, bubbles, food.
+   ══════════════════════════════════════════════════════════════════════════ */
+const rndLive = mulberry32(0xc0ffee);
+const motes = [];
+for (let i=0;i<330;i++) motes.push({
+  p:[(rndLive()-0.5)*TANK.w, (rndLive()-0.5)*TANK.h*0.95, (rndLive()-0.5)*TANK.d],
+  r: 0.006 + rndLive()*0.013, a: 0.25 + rndLive()*0.55,
+  v:[(rndLive()-0.5)*0.02, 0.004 + rndLive()*0.012, (rndLive()-0.5)*0.02],
+  ph: rndLive()*6.28
+});
+const bubbles = [];
+const VENTS = [ {x:-2.35, z:-1.15}, {x: 2.05, z:-0.85} ];
+let bubbleClock = 0;
+function spawnBubble(x, z, big){
+  if (bubbles.length >= 260) return null;
+  const r = big ? (0.006 + rndLive()*0.010) : (0.0016 + rndLive()*0.0042);
+  const b = { p:[x + (rndLive()-0.5)*0.05, SAND_Y + 0.02, z + (rndLive()-0.5)*0.05],
+              r: r, wob: rndLive()*6.28, v: 0.0 };
+  bubbles.push(b);
+  return b;
 }
-const rng = mulberry32(0xA90A0517 >>> 0);
-
-/* ── the cast. The four TROPHIC species come from core.mjs (SP) — one coherent
-   4-band chain that serves BOTH the ambient look and the food web:
-     0 lancetfish (apex, sunlit) · 1 lanternfish (twilight) · 2 copepods (mid) ·
-     3 vent shrimp (floor, self-lit). Each carries its light BAND [lo..hi], a per-unit
-   POP_SCALE (how many boids per unit standing-stock), a body size, a swim SHAPE
-   (dart/drift/graze from Explorer 2), and whether it self-glows (carries its own
-   light so it stays visible where the column light fails).
-   Drift-jellies are a NON-TROPHIC ambient garnish (a separate small school, fixed
-   count, not read from the web) — kept only while the boid budget allows under CAP. ── */
-const TROPHIC = [
-  // i=0 apex — a sparse few big darts up in the sun
-  { ...SP[0], band:[0.06,0.34], size:9.0, len:2.0, shape:'dart',  glow:false, popScale:2.0, baseSpeed:1.30, wander:0.09 },
-  // i=1 mid — slow languid drifters in the blue twilight, bioluminescent
-  { ...SP[1], band:[0.40,0.62], size:6.2, len:1.7, shape:'drift', glow:true,  popScale:3.6, baseSpeed:0.78, wander:0.05 },
-  // i=2 grazers — a fine swarm of glowing copepod motes through the mid-low column
-  { ...SP[2], band:[0.58,0.80], size:2.4, len:1.0, shape:'graze', glow:true,  popScale:2.0, baseSpeed:0.70, wander:0.13 },
-  // i=3 basal — vent shrimp grazing the cold floor glow, self-lit teal
-  { ...SP[3], band:[0.82,0.97], size:3.4, len:1.2, shape:'graze', glow:true,  popScale:2.4, baseSpeed:0.66, wander:0.12 },
-];
-// a non-trophic ambient garnish — drift jellies in the upper twilight
-const JELLY = { key:'jelly', name:'Drift jellies', col:'#c69af0', band:[0.26,0.50], size:11, count:8, speed:0.5 };
-
-let W=0, H=0, DPR=1;
-const tank = document.getElementById('tank');
-const ctx = tank.getContext('2d');
-
-const RIM = 16;                        // inset for the brass rim
-function resize(){
-  DPR = Math.min(2, window.devicePixelRatio||1);
-  W = window.innerWidth; H = window.innerHeight;
-  tank.width = Math.round(W*DPR); tank.height = Math.round(H*DPR);
-  tank.style.width=W+'px'; tank.style.height=H+'px';
-  ctx.setTransform(DPR,0,0,DPR,0,0);
-}
-window.addEventListener('resize', resize); resize();
-
-/* depth (0 top .. 1 floor) <-> pixel y, inset for the rim */
-function yOfDepth(d){ return RIM + d*(H-2*RIM); }
-function depthOfY(y){ return (y-RIM)/(H-2*RIM); }
-
-/* ════════════════════════════════════════════════════════════════════════════
-   THE FOOD WEB (the live core) + THE SET ACT
-   The page advances the web on a SLOW ecological clock and reads each species'
-   target boid count from its standing-stock. The SET act lets the keeper nudge a
-   species' "stock budget" up/down (a per-species rail), under the global CAP.
-   ════════════════════════════════════════════════════════════════════════════ */
-const web = makeWeb();
-settle(web, 2500);                     // open already in calm coexistence
-let apexAlive = true;
-
-// the SET act: a keeper multiplier per species (the rail steppers nudge these),
-// applied to the web's live standing-stock when computing target boid counts.
-const setMul = [1, 1, 1, 1];
-
-let stepAccum = 0;
-let STEP_EVERY = 0.14;                 // seconds of real time per web step (slow, watchable)
-let fastUntil = 0;                     // a brief speed-up during a cascade transient
-
-/* ── the boids. each fish is a soft particle: wander + per-species DEPTH-KEEPING
-   spring toward its light band + cheap separation + feed-attraction. A `boil`
-   scalar (0..1) drives speed/tail-beat/glow on feed/startle then decays to drift.
-   No hard Vicsek alignment — a loose, calm school. ── */
-let boids = [];                        // active trophic boids
-let jellies = [];                      // the ambient garnish
-let foods = [];                        // scattered food pellets
-
-function makeBoid(spi){
-  const sp = TROPHIC[spi];
-  const d = sp.band[0] + rng()*(sp.band[1]-sp.band[0]);
-  return {
-    spi, sp,
-    x: rng()*W, y: yOfDepth(d),
-    a: rng()*TAU,
-    v: sp.baseSpeed*(0.7+rng()*0.6),
-    ph: rng()*TAU,
-    wob: rng()*TAU,
-    boil: 0,
-    fade: 1, dying: false,
-  };
-}
-function makeJelly(){
-  const d = JELLY.band[0] + rng()*(JELLY.band[1]-JELLY.band[0]);
-  return { x:rng()*W, y:yOfDepth(d), a:rng()*TAU, ph:rng()*TAU, wob:rng()*TAU, v:JELLY.speed*(0.6+rng()*0.7) };
-}
-
-/* the target boid count for a species: stock × keeper-mul × popScale, clamped. */
-function targetCount(spi){
-  if(!web.alive[spi]) return 0;
-  return Math.max(0, Math.round(web.n[spi] * setMul[spi] * TROPHIC[spi].popScale));
-}
-
-/* reconcile the live boid population to the web's targets, ENFORCING the global CAP
-   proportionally so a bloom can never push past 240 (borrowed from Explorer 1). New
-   fish spawn in-band; surplus is marked dying so it fades out, never pops. */
-function reconcileBoids(){
-  const cur=[0,0,0,0];
-  for(const b of boids){ if(!b.dying) cur[b.spi]++; }
-  const want=[0,0,0,0]; let tot=0;
-  for(let i=0;i<4;i++){ want[i]=targetCount(i); tot+=want[i]; }
-  // reserve room for the ambient jellies under the cap
-  const jellyBudget = jellies.length;
-  const room = Math.max(0, CAP - jellyBudget);
-  if(tot>room && tot>0){ const k=room/tot; for(let i=0;i<4;i++) want[i]=Math.round(want[i]*k); }
-  for(let i=0;i<4;i++){
-    while(cur[i]<want[i] && boids.length < CAP){ boids.push(makeBoid(i)); cur[i]++; }
-    if(cur[i]>want[i]){
-      let over=cur[i]-want[i];
-      for(let j=boids.length-1;j>=0 && over>0;j--){ if(boids[j].spi===i && !boids[j].dying){ boids[j].dying=true; over--; } }
-    }
-  }
-}
-
-function rebuildAmbient(){
-  jellies = [];
-  for(let i=0;i<JELLY.count;i++) jellies.push(makeJelly());
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
-   THE STEP — the soft-boid model + food + the slow ecological clock
-   ════════════════════════════════════════════════════════════════════════════ */
-function stepBoids(dt, now){
-  // advance the ecology on its slow clock (faster during a cascade transient)
-  const every = (now < fastUntil) ? STEP_EVERY*0.45 : STEP_EVERY;
-  stepAccum += dt;
-  let guard = 0;
-  while(stepAccum >= every && guard++ < 8){ stepWeb(web); stepAccum -= every; }
-  reconcileBoids();
-
-  // remove fully-faded dying boids
-  boids = boids.filter(b => !(b.dying && b.fade<=0));
-
-  for(const b of boids){
-    const sp = b.sp;
-    if(b.dying){ b.fade = Math.max(0, b.fade - dt*0.9); }
-
-    // wander: heading drifts on smooth noise
-    b.wob += dt*1.4;
-    b.a += Math.sin(b.wob)*sp.wander;
-
-    // depth-keeping: a TIGHTENED soft spring toward the band (raised from 0.05 →
-    // ~0.075 + a small band-half pad, so the layers read crisp and few baitfish stray)
-    const d = depthOfY(b.y);
-    const bandHalf = (sp.band[1]-sp.band[0])/2 + 0.012;
-    let vBias = 0;
-    if(d < sp.band[0]) vBias = (sp.band[0]-d)/bandHalf;
-    else if(d > sp.band[1]) vBias = -(d-sp.band[1])/bandHalf;
-    if(vBias!==0){
-      const want = vBias>0 ? Math.PI/2 : -Math.PI/2;        // down is +y
-      const diff = Math.atan2(Math.sin(want-b.a), Math.cos(want-b.a));
-      b.a += diff * Math.min(1, Math.abs(vBias)) * 0.075;
-    }
-
-    // feed-attraction + boil
-    let target=null, best=1e9;
-    for(const f of foods){
-      const dx=f.x-b.x, dy=f.y-b.y, dd=dx*dx+dy*dy;
-      if(dd<best && depthOfY(f.y) > sp.band[0]-0.20){ best=dd; target=f; }
-    }
-    if(target && best < 240*240){
-      const want = Math.atan2(target.y-b.y, target.x-b.x);
-      const diff = Math.atan2(Math.sin(want-b.a), Math.cos(want-b.a));
-      const urgency = 1 - Math.sqrt(best)/240;
-      b.a += diff * urgency * 0.22;
-      b.boil = Math.min(1, b.boil + dt*1.6*urgency);
-      if(best<14*14){ target.amt -= dt*2.2; }
-    } else {
-      b.boil *= Math.pow(0.4, dt);
-    }
-
-    // soft separation: a cheap stride-sampled local push
-    let sx=0, sy=0, n=0;
-    for(let k=0;k<boids.length;k+=3){
-      const o=boids[k]; if(o===b) continue;
-      const dx=b.x-o.x, dy=b.y-o.y, dd=dx*dx+dy*dy;
-      if(dd>0 && dd<26*26){ const inv=1/Math.sqrt(dd); sx+=dx*inv; sy+=dy*inv; n++; }
-    }
-    if(n){ const sa=Math.atan2(sy,sx); const diff=Math.atan2(Math.sin(sa-b.a),Math.cos(sa-b.a)); b.a+=diff*0.04; }
-
-    // integrate
-    const spd = b.v*(60*dt)*(1 + b.boil*1.3);
-    b.x += Math.cos(b.a)*spd;
-    b.y += Math.sin(b.a)*spd;
-    b.ph += dt*(6 + b.boil*10 + sp.baseSpeed*4);
-
-    // horizontal wrap; vertical clamp (the spring handles banding)
-    if(b.x<-20) b.x=W+20; if(b.x>W+20) b.x=-20;
-    const top=yOfDepth(0.015), bot=yOfDepth(0.985);
-    if(b.y<top){ b.y=top; b.a=Math.abs(Math.sin(b.a)) + 0.2; }
-    if(b.y>bot){ b.y=bot; b.a=-Math.abs(Math.sin(b.a)) - 0.2; }
-  }
-
-  // the ambient jellies — slow vertical bob, lazy horizontal drift
-  for(const j of jellies){
-    j.wob += dt*0.6; j.ph += dt*1.1;
-    j.a += Math.sin(j.wob)*0.02;
-    const jd = depthOfY(j.y);
-    if(jd < JELLY.band[0]) j.y += 8*dt; else if(jd > JELLY.band[1]) j.y -= 8*dt;
-    j.x += Math.cos(j.a)*j.v*(60*dt)*0.4;
-    j.y += Math.sin(j.a)*j.v*(60*dt)*0.18 + Math.sin(j.ph)*0.3;
-    if(j.x<-30) j.x=W+30; if(j.x>W+30) j.x=-30;
-  }
-
-  // food sinks + decays
-  for(const f of foods){ f.y += 12*dt; f.amt -= dt*0.06; }
-  foods = foods.filter(f=> f.amt>0.02 && f.y < yOfDepth(0.99));
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
-   RENDER — depth gradient → caustics → vent → fish (back-to-front by depth).
-   The caustics, vent, and per-species fish silhouettes are the foundry-forged
-   modules (art/*.js), wired in below; the page owns the depth gradient + layering.
-   ════════════════════════════════════════════════════════════════════════════ */
-function drawColumn(){
-  const g = ctx.createLinearGradient(0,RIM,0,H-RIM);
-  g.addColorStop(0.00,'#1d3a5e');     // sunlit teal-blue
-  g.addColorStop(0.16,'#16314f');
-  g.addColorStop(0.45,'#0e1f38');     // twilight
-  g.addColorStop(0.72,'#081428');
-  g.addColorStop(0.92,'#04080f');     // near-lightless
-  g.addColorStop(1.00,'#020409');
-  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-  // surface shimmer band at the very top
-  const sg = ctx.createLinearGradient(0,RIM,0,yOfDepth(0.16));
-  sg.addColorStop(0,'rgba(150,210,240,0.16)'); sg.addColorStop(1,'rgba(150,210,240,0)');
-  ctx.fillStyle=sg; ctx.fillRect(0,RIM,W,yOfDepth(0.16)-RIM);
-}
-
-/* the raking-sunlight caustic field — forged in-house (art/caustics.js): a slowly
-   crawling refraction lattice of bright veins + cusps across the lit upper third,
-   dissolving into the twilight, painted additively in `screen` over the depth
-   gradient. The page owns the env (size, rim, depth-map, time).
-   NOTE: this module neutralizes the inherited transform (it does
-   ctx.setTransform(identity) so the pose-grid preview harness renders correctly),
-   then draws in raw backing-store pixels. The page's live ctx carries a DPR
-   transform, so we pass a DEVICE-pixel env (W,H,RIM,yOfDepth all × DPR) — that
-   makes the identity-space draw cover the full HiDPI canvas instead of a corner. */
-function drawCaustics(t){
-  window.AQ_drawCaustics(ctx, {
-    W: W*DPR, H: H*DPR, RIM: RIM*DPR,
-    yOfDepth: d => yOfDepth(d)*DPR,
-    t, TAU,
+const food = [];
+function scatterFood(x, y, z){
+  for (let i=0;i<26;i++) food.push({
+    p:[x+(rndLive()-0.5)*0.28, y+(rndLive()-0.5)*0.18, z+(rndLive()-0.5)*0.28],
+    life: 22 + rndLive()*10, r: 0.008 + rndLive()*0.008
   });
 }
 
-/* the chemosynthetic VENT + coral floor — forged in-house (art/vent.js): a cold
-   teal glow that breathes, a craggy black-smoker chimney with an incandescent
-   warm ember throat, curling mineral smoke, and dusky-red tubeworm fronds. The
-   glow scales gently with the basal standing-stock the page passes in, so the
-   floor's life is something you SEE rise and fall during the cascade. */
-function drawVent(t){
-  window.AQ_drawVent(ctx, { W, H, RIM, yOfDepth, t, TAU, stock: web.n[3] });
+/* ══════════════════════════════════════════════════════════════════════════
+   8 · SOUND — the water bed, and a bubble voiced at the pitch its size demands.
+   ══════════════════════════════════════════════════════════════════════════ */
+const audio = {
+  ac: null, master: null, bed: null, on: false,
+  ensure: function(){
+    if (this.ac) return this.ac;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    this.ac = new AC();
+    this.master = this.ac.createGain();
+    this.master.gain.value = 0.0;
+    this.master.connect(this.ac.destination);
+    /* the bed: a slow band of water noise, the pump you stop hearing after a minute */
+    const len = Math.floor(this.ac.sampleRate * 4);
+    const nb = this.ac.createBuffer(1, len, this.ac.sampleRate);
+    const d = nb.getChannelData(0);
+    let lp = 0;
+    for (let i=0;i<len;i++){ const w = Math.random()*2-1; lp += (w - lp)*0.06; d[i] = lp*2.4; }
+    const src = this.ac.createBufferSource(); src.buffer = nb; src.loop = true;
+    const f1 = this.ac.createBiquadFilter(); f1.type='lowpass'; f1.frequency.value = 420; f1.Q.value = 0.6;
+    const f2 = this.ac.createBiquadFilter(); f2.type='highpass'; f2.frequency.value = 55;
+    const g = this.ac.createGain(); g.gain.value = 0.42;
+    src.connect(f1); f1.connect(f2); f2.connect(g); g.connect(this.master);
+    src.start();
+    /* a very slow swell so the bed never sits still */
+    const lfo = this.ac.createOscillator(); lfo.frequency.value = 0.043;
+    const lg = this.ac.createGain(); lg.gain.value = 0.13;
+    lfo.connect(lg); lg.connect(g.gain); lfo.start();
+    this.bed = g;
+    return this.ac;
+  },
+  set: function(on){
+    this.on = on;
+    if (!this.ac) { if (on) this.ensure(); else return; }
+    if (this.ac.state === 'suspended' && on) this.ac.resume();
+    const t = this.ac.currentTime;
+    this.master.gain.cancelScheduledValues(t);
+    this.master.gain.setTargetAtTime(on ? 0.5 : 0.0, t, 0.4);
+  },
+  /* THE BUBBLE'S VOICE. Rendered by the reef core's bubbleVoice() — literally the
+     same function reef.test.mjs measures the pitch of — into a one-shot buffer at
+     the frequency Minnaert's law gives for the radius you can see on screen. */
+  plink: function(r, depth, gainScale){
+    if (!this.on || !this.ac || this.ac.state !== 'running') return;
+    const samples = bubbleVoice(r, this.ac.sampleRate, depth, 0.12);
+    if (samples.length > this.ac.sampleRate*0.5) return;
+    const b = this.ac.createBuffer(1, samples.length, this.ac.sampleRate);
+    b.copyToChannel(samples, 0);
+    const s = this.ac.createBufferSource(); s.buffer = b;
+    const g = this.ac.createGain();
+    /* small bubbles are quiet: the radiated energy falls off fast with radius */
+    g.gain.value = Math.min(0.22, 0.030 + 26 * r * r) * (gainScale || 1);
+    const pan = this.ac.createStereoPanner ? this.ac.createStereoPanner() : null;
+    if (pan){ pan.pan.value = Math.max(-1, Math.min(1, (Math.random()*2-1)*0.7)); s.connect(g); g.connect(pan); pan.connect(this.master); }
+    else { s.connect(g); g.connect(this.master); }
+    s.start();
+  }
+};
+
+/* ══════════════════════════════════════════════════════════════════════════
+   9 · CAMERA
+   ══════════════════════════════════════════════════════════════════════════ */
+const cam = { yaw: 0.0, pitch: -0.425, dist: 0.0, x: 0.0, y: 0.72, z: TANK.d/2 - 0.16, drift: true };
+/* the two views this room has an opinion about: the one you arrive in, and the one
+   the fold curves are legible from — leaning over the tank, looking straight down at
+   the open apron of sand where nothing is planted. */
+const FOLDVIEW = { yaw: 0.0, pitch: -0.98, x: 0.0, y: 1.16, z: TANK.d/2 - 0.30 };
+let tween = null;
+const HOME = { yaw: 0.0, pitch: -0.425, x: 0.0, y: 0.72, z: TANK.d/2 - 0.16 };
+let driftT = 0;
+function goTo(v, secs){
+  tween = { from: { yaw:cam.yaw, pitch:cam.pitch, x:cam.x, y:cam.y, z:cam.z }, to: v, t: 0, dur: secs || 1.5 };
+}
+function stepTween(dt){
+  if (!tween) return;
+  tween.t += dt;
+  const u = Math.min(1, tween.t/tween.dur);
+  const e = u<0.5 ? 4*u*u*u : 1 - Math.pow(-2*u+2, 3)/2;      /* ease in and out */
+  ['yaw','pitch','x','y','z'].forEach(function(k){ cam[k] = tween.from[k] + (tween.to[k]-tween.from[k])*e; });
+  if (u >= 1) tween = null;
+}
+function camEye(){
+  const dx = Math.sin(driftT*0.11)*0.55 + Math.sin(driftT*0.047)*0.30;
+  const dy = Math.sin(driftT*0.083 + 1.4)*0.10;
+  const k = cam.drift ? 1 : 0;
+  return [cam.x + dx*k, cam.y + dy*k, cam.z];
+}
+function camDir(){
+  const dyaw = cam.drift ? Math.sin(driftT*0.063 + 0.7)*0.10 : 0;
+  const y = cam.yaw + dyaw, p = cam.pitch;
+  return [Math.sin(y)*Math.cos(p), Math.sin(p), -Math.cos(y)*Math.cos(p)];
 }
 
-function hexA(hex,a){
-  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
-  return `rgba(${r},${g},${b},${a.toFixed(3)})`;
+let dragging = false, lastX = 0, lastY = 0, moved = 0;
+cv.addEventListener('pointerdown', function(e){
+  dragging = true; moved = 0; tween = null; lastX = e.clientX; lastY = e.clientY;
+  cv.setPointerCapture(e.pointerId); cv.classList.add('drag');
+});
+cv.addEventListener('pointermove', function(e){
+  if (!dragging) return;
+  const dx = e.clientX - lastX, dy = e.clientY - lastY;
+  lastX = e.clientX; lastY = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
+  cam.yaw   = Math.max(-1.15, Math.min(1.15, cam.yaw + dx*0.0032));
+  cam.pitch = Math.max(-0.62, Math.min(0.52, cam.pitch - dy*0.0028));
+});
+cv.addEventListener('pointerup', function(e){
+  dragging = false; cv.classList.remove('drag');
+  if (moved < 6) dropFoodAt(e.clientX, e.clientY);
+});
+cv.addEventListener('wheel', function(e){
+  e.preventDefault();
+  cam.z = Math.max(-TANK.d/2 + 0.35, Math.min(TANK.d/2 - 0.15, cam.z + e.deltaY*0.0016));
+}, { passive:false });
+
+/* click the glass → a pinch of food, dropped where you pointed */
+let feedTarget = null, feedUntil = 0;
+function dropFoodAt(px, py){
+  const r = cv.getBoundingClientRect();
+  const ndc = [ (px - r.left)/r.width*2 - 1, 1 - (py - r.top)/r.height*2 ];
+  const inv = invVP;
+  const a = xform(inv, [ndc[0], ndc[1], -1, 1]), b = xform(inv, [ndc[0], ndc[1], 1, 1]);
+  const p0 = [a[0]/a[3], a[1]/a[3], a[2]/a[3]], p1 = [b[0]/b[3], b[1]/b[3], b[2]/b[3]];
+  const d = [p1[0]-p0[0], p1[1]-p0[1], p1[2]-p0[2]];
+  const dl = Math.hypot(d[0],d[1],d[2]); d[0]/=dl; d[1]/=dl; d[2]/=dl;
+  const e = camEye();
+  const t = 1.5;
+  let x = e[0] + d[0]*t, y = Math.min(SURFACE_Y-0.15, e[1] + d[1]*t + 0.55), z = e[2] + d[2]*t;
+  x = Math.max(-TANK.w/2+0.3, Math.min(TANK.w/2-0.3, x));
+  z = Math.max(-TANK.d/2+0.3, Math.min(TANK.d/2-0.3, z));
+  scatterFood(x, y, z);
+  feedTarget = [x, y, z]; feedUntil = performance.now()/1000 + 20;
+  audio.plink(0.0035, 0.4, 0.55);
+}
+function xform(m, v){
+  return [ m[0]*v[0]+m[4]*v[1]+m[8]*v[2]+m[12]*v[3],
+           m[1]*v[0]+m[5]*v[1]+m[9]*v[2]+m[13]*v[3],
+           m[2]*v[0]+m[6]*v[1]+m[10]*v[2]+m[14]*v[3],
+           m[3]*v[0]+m[7]*v[1]+m[11]*v[2]+m[15]*v[3] ];
+}
+function m4inv(m){
+  const o = new Float32Array(16);
+  const a00=m[0],a01=m[1],a02=m[2],a03=m[3], a10=m[4],a11=m[5],a12=m[6],a13=m[7],
+        a20=m[8],a21=m[9],a22=m[10],a23=m[11], a30=m[12],a31=m[13],a32=m[14],a33=m[15];
+  const b00=a00*a11-a01*a10, b01=a00*a12-a02*a10, b02=a00*a13-a03*a10, b03=a01*a12-a02*a11,
+        b04=a01*a13-a03*a11, b05=a02*a13-a03*a12, b06=a20*a31-a21*a30, b07=a20*a32-a22*a30,
+        b08=a20*a33-a23*a30, b09=a21*a32-a22*a31, b10=a21*a33-a23*a31, b11=a22*a33-a23*a32;
+  let det = b00*b11-b01*b10+b02*b09+b03*b08-b04*b07+b05*b06;
+  if (!det) return m4id();
+  det = 1/det;
+  o[0]=(a11*b11-a12*b10+a13*b09)*det;  o[1]=(a02*b10-a01*b11-a03*b09)*det;
+  o[2]=(a31*b05-a32*b04+a33*b03)*det;  o[3]=(a22*b04-a21*b05-a23*b03)*det;
+  o[4]=(a12*b08-a10*b11-a13*b07)*det;  o[5]=(a00*b11-a02*b08+a03*b07)*det;
+  o[6]=(a32*b02-a30*b05-a33*b01)*det;  o[7]=(a20*b05-a22*b02+a23*b01)*det;
+  o[8]=(a10*b10-a11*b08+a13*b06)*det;  o[9]=(a01*b08-a00*b10-a03*b06)*det;
+  o[10]=(a30*b04-a31*b02+a33*b00)*det; o[11]=(a21*b02-a20*b04-a23*b00)*det;
+  o[12]=(a11*b07-a10*b09-a12*b06)*det; o[13]=(a00*b09-a01*b07+a02*b06)*det;
+  o[14]=(a31*b01-a30*b03-a32*b00)*det; o[15]=(a20*b03-a21*b01+a22*b00)*det;
+  return o;
 }
 
-/* the per-species fish — forged in-house by the art foundry (art/fish-*.js +
-   art/fish.js for the vent shrimp), each a canvas draw fn that takes ctx
-   ALREADY translated/rotated to the boid + a p={s,L,col,ph,boil,light,TAU} and
-   draws in LOCAL coords, dimming itself by `light` (self-lit species floor it
-   internally). The page keeps: the translate/rotate to the boid, the outer
-   glow halo for glow:true species, and the dying-fade (folded in via globalAlpha
-   so a culled fish fades out smoothly regardless of a species' internal light
-   floor). Dispatch by the species' swim SHAPE + species index. */
-const FISH_DRAW = [
-  /* i=0 dart  */ (cx,p)=> window.AQ_drawLancetfish(cx,p),
-  /* i=1 drift */ (cx,p)=> window.AQ_drawLanternfish(cx,p),
-  /* i=2 graze */ (cx,p)=> window.AQ_drawCopepod(cx,p),
-  /* i=3 graze */ (cx,p)=> window.AQ_drawVentShrimp(cx,p),
-];
-function drawFish(b, t){
-  const sp = b.sp;
-  // light fails with depth; self-lit species carry their own glow so they stay visible
-  const d = depthOfY(b.y);
-  let light = Math.max(0.20, 1 - d*0.92);
-  if(sp.glow) light = Math.max(light, 0.62);
-  const fade = (b.dying ? b.fade : 1);
-  if(fade*light<=0.01) return;
+/* ══════════════════════════════════════════════════════════════════════════
+   10 · TARGETS + RESIZE
+   ══════════════════════════════════════════════════════════════════════════ */
+let W = 0, H = 0, RS = 1.0;               // render scale, adapted to the frame rate
+let sceneTex, sceneFB, depthRB, shaftTex, shaftFB, brightTex, brightFB, blurTex, blurFB;
+function allocTargets(){
+  const w = Math.max(2, Math.floor(W*RS)), h = Math.max(2, Math.floor(H*RS));
+  [sceneTex, shaftTex, brightTex, blurTex].forEach(function(t){ if (t) gl.deleteTexture(t); });
+  [sceneFB, shaftFB, brightFB, blurFB].forEach(function(f){ if (f) gl.deleteFramebuffer(f); });
+  if (depthRB) gl.deleteRenderbuffer(depthRB);
+  sceneTex = tex(w, h, gl.RGBA16F, gl.LINEAR);
+  depthRB = gl.createRenderbuffer();
+  gl.bindRenderbuffer(gl.RENDERBUFFER, depthRB);
+  gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
+  sceneFB = fbo(sceneTex, depthRB);
+  const hw = Math.max(2, w>>1), hh = Math.max(2, h>>1);
+  shaftTex = tex(hw, hh, gl.RGBA16F, gl.LINEAR); shaftFB = fbo(shaftTex);
+  const qw = Math.max(2, w>>2), qh = Math.max(2, h>>2);
+  brightTex = tex(qw, qh, gl.RGBA16F, gl.LINEAR); brightFB = fbo(brightTex);
+  blurTex   = tex(qw, qh, gl.RGBA16F, gl.LINEAR); blurFB = fbo(blurTex);
+  targetSize = { w, h, hw, hh, qw, qh };
+}
+let targetSize = { w:2, h:2, hw:1, hh:1, qw:1, qh:1 };
+function resize(){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = Math.max(2, Math.floor(cv.clientWidth * dpr));
+  H = Math.max(2, Math.floor(cv.clientHeight * dpr));
+  cv.width = W; cv.height = H;
+  allocTargets();
+}
+window.addEventListener('resize', resize);
 
-  ctx.save();
-  ctx.translate(b.x, b.y);
-  ctx.rotate(b.a);
-  const s = sp.size, L = s*sp.len;
+/* ══════════════════════════════════════════════════════════════════════════
+   11 · THE CONTROLS
+   ══════════════════════════════════════════════════════════════════════════ */
+const ui = {
+  chop: 1.0, sun: 1.0, clarity: 1.0, fold: false, drift: true
+};
+function bindSlider(id, vid, key, fmt){
+  const s = document.getElementById(id), v = document.getElementById(vid);
+  const upd = function(){ ui[key] = s.value/100; v.textContent = fmt(ui[key]); };
+  s.addEventListener('input', upd); upd();
+}
+bindSlider('sChop','vChop','chop', function(x){ return x.toFixed(2)+'×'; });
+bindSlider('sSun','vSun','sun', function(x){ return x.toFixed(2)+'×'; });
+bindSlider('sClar','vClar','clarity', function(x){ return x.toFixed(2)+'×'; });
 
-  // the dying-fade rides on globalAlpha so a culled fish fades out (the modules
-  // dim by `light`, not by global alpha, so the fade must live here).
-  ctx.globalAlpha = fade;
+const bFold = document.getElementById('bFold');
+bFold.addEventListener('click', function(){
+  ui.fold = !ui.fold; bFold.classList.toggle('on', ui.fold);
+  /* the fold curves are only legible over open sand, so the room takes you there */
+  goTo(ui.fold ? FOLDVIEW : HOME, 1.7);
+});
+const bDrift = document.getElementById('bDrift');
+bDrift.addEventListener('click', function(){ cam.drift = !cam.drift; bDrift.classList.toggle('on', cam.drift); });
+document.getElementById('bHome').addEventListener('click', function(){
+  cam.yaw = HOME.yaw; cam.pitch = HOME.pitch; cam.x = HOME.x; cam.y = HOME.y; cam.z = HOME.z;
+});
+const bSound = document.getElementById('bSound');
+function paintSound(){
+  const on = audio.on && !WSmuted();
+  bSound.textContent = 'sound: ' + (WSmuted() ? 'muted estate-wide' : (on ? 'on' : 'off'));
+  bSound.classList.toggle('on', on);
+}
+function WSmuted(){ try { return !!(window.WS && WS.muted && WS.muted()); } catch(e){ return false; } }
+bSound.addEventListener('click', function(){
+  if (WSmuted()){ try { WS.setMuted(false); } catch(e){} }
+  soundWanted = !audio.on;
+  audio.set(soundWanted);
+  paintSound();
+});
+let soundWanted = true;
+if (window.WS && WS.onMuteChange) WS.onMuteChange(function(m){
+  if (m) audio.set(false);
+  else if (soundWanted && running) audio.set(true);
+  paintSound();
+});
+document.getElementById('bBub').addEventListener('click', function(){
+  const v = VENTS[(Math.random()*VENTS.length)|0];
+  for (let i=0;i<26;i++) spawnBubble(v.x, v.z, Math.random() < 0.5);
+});
+document.addEventListener('keydown', function(e){
+  if (e.key === 'f' || e.key === 'F'){ bFold.click(); }
+  if (e.key === 'd' || e.key === 'D'){ cam.drift = !cam.drift; bDrift.classList.toggle('on', cam.drift); }
+});
 
-  // glow halo for bioluminescent species (the page's job; the module paints the
-  // bright source within it).
-  if(sp.glow){
-    ctx.globalCompositeOperation='screen';
-    const rg=ctx.createRadialGradient(0,0,0,0,0,L*2.2);
-    rg.addColorStop(0, hexA(sp.col, (b.boil>0.3?0.5:0.34)*light));
-    rg.addColorStop(1, hexA(sp.col, 0));
-    ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(0,0,L*2.2,0,TAU); ctx.fill();
-    ctx.globalCompositeOperation='source-over';
+/* "count the rays" — read the light map back off the card and describe it */
+const bRays = document.getElementById('bRays');
+const claimNums = document.getElementById('claimNums');
+bRays.addEventListener('click', function(){ measureCaustic(true); });
+
+function measureCaustic(verbose){
+  gl.bindFramebuffer(gl.FRAMEBUFFER, causFB);
+  gl.readBuffer(gl.COLOR_ATTACHMENT0);
+  const rgba = new Float32Array(CAUS_TX*CAUS_TZ*4);
+  gl.readPixels(0, 0, CAUS_TX, CAUS_TZ, gl.RGBA, gl.FLOAT, rgba);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  const buf4 = new Float32Array(CAUS_TX*CAUS_TZ);
+  for (let i=0;i<buf4.length;i++) buf4[i] = rgba[i*4];
+  let s = 0, s2 = 0, n = 0, hi = 0;
+  for (let i=0;i<buf4.length;i++){ const v = buf4[i]; if (!isFinite(v)) continue; s += v; s2 += v*v; n++; if (v > hi) hi = v; }
+  const mean = s/n, sd = Math.sqrt(Math.max(0, s2/n - mean*mean));
+  /* what fraction of the FLOOR is brighter than flat light? and by how much? */
+  let bright = 0, dark = 0;
+  for (let i=0;i<buf4.length;i++){ if (buf4[i] > mean*1.25) bright++; else if (buf4[i] < mean*0.7) dark++; }
+  const ff = foldFraction(nowT, DEPTH, 260, 7);
+  const rays = RAY_GRID*RAY_GRID;
+  claimNums.innerHTML =
+    '<b>' + rays.toLocaleString('en-US') + '</b> rays this frame\n' +
+    'floor mean <b>' + mean.toFixed(3) + '</b>  peak <b>' + (hi/mean).toFixed(1) + '×</b>\n' +
+    'contrast (σ/µ) <b>' + (sd/mean).toFixed(2) + '</b>\n' +
+    '<b>' + (bright*100/buf4.length).toFixed(0) + '%</b> of the sand is over 1.25× lit,\n' +
+    '<b>' + (dark*100/buf4.length).toFixed(0) + '%</b> is under 0.7× — it is paid for.\n' +
+    'surface folded right now: <b>' + (ff*100).toFixed(1) + '%</b>';
+  return { mean:mean, sd:sd, hi:hi, ff:ff };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   12 · THE FRAME
+   ══════════════════════════════════════════════════════════════════════════ */
+let nowT = 0, lastFrame = performance.now(), fpsEMA = 60, frames = 0;
+let invVP = m4id(), VP = m4id();
+const readout = document.getElementById('readout');
+const rndSchool = mulberry32(0xfeed11);
+let running = false;
+
+function updateLife(dt){
+  /* fish: the calm rule, plus a pull toward food while there is any */
+  school(fish, dt, nowT, rndSchool, { p: camEye(), r: 0.95 });
+  if (feedTarget && nowT*1000 < feedUntil*1000){
+    const near = performance.now()/1000 < feedUntil;
+    if (near) for (const f of fish){
+      const d = [feedTarget[0]-f.p[0], feedTarget[1]-f.p[1], feedTarget[2]-f.p[2]];
+      const L = Math.hypot(d[0],d[1],d[2]) || 1;
+      if (L < 3.2){
+        const w = (1 - L/3.2) * 0.55 * dt;
+        for (let i=0;i<3;i++) f.v[i] += d[i]/L * w;
+      }
+    }
+  }
+  /* motes drift up and around */
+  for (const m of motes){
+    m.p[0] += (m.v[0] + Math.sin(nowT*0.4 + m.ph)*0.010)*dt;
+    m.p[1] += m.v[1]*dt;
+    m.p[2] += (m.v[2] + Math.cos(nowT*0.33 + m.ph)*0.008)*dt;
+    if (m.p[1] > SURFACE_Y - 0.03){ m.p[1] = SAND_Y + 0.02; }
+    if (Math.abs(m.p[0]) > TANK.w/2) m.p[0] *= -0.98;
+    if (Math.abs(m.p[2]) > TANK.d/2) m.p[2] *= -0.98;
+  }
+  /* bubbles rise, wobble, speed up as they grow, and pop at the top */
+  bubbleClock += dt;
+  const rate = 26;
+  while (bubbleClock > 1/rate){
+    bubbleClock -= 1/rate;
+    const v = VENTS[(rndLive()*VENTS.length)|0];
+    const big = rndLive() < 0.18;
+    const b = spawnBubble(v.x, v.z, big);
+    if (b && rndLive() < (big ? 0.85 : 0.16)) audio.plink(b.r, DEPTH, big ? 1.0 : 0.55);
+  }
+  for (let i=bubbles.length-1;i>=0;i--){
+    const b = bubbles[i];
+    /* terminal rise speed: bigger bubbles genuinely go faster */
+    const vt = 0.16 + 34*b.r;
+    b.v += (vt - b.v)*Math.min(1, dt*4);
+    b.p[1] += b.v*dt;
+    b.p[0] += Math.sin(nowT*3.1 + b.wob)*0.16*b.r*40*dt;
+    b.p[2] += Math.cos(nowT*2.6 + b.wob*1.4)*0.16*b.r*40*dt;
+    if (b.p[1] > SURFACE_Y - 0.02){ bubbles.splice(i,1); }
+  }
+  /* food sinks and is eaten */
+  for (let i=food.length-1;i>=0;i--){
+    const f = food[i];
+    f.p[1] -= 0.055*dt; f.life -= dt;
+    f.p[0] += Math.sin(nowT*0.9 + f.p[2]*3)*0.012*dt*10;
+    if (f.life <= 0 || f.p[1] < SAND_Y + 0.01) food.splice(i,1);
+  }
+  if (feedTarget && performance.now()/1000 > feedUntil) feedTarget = null;
+}
+
+function fillSprites(eye){
+  let n = 0;
+  for (const m of motes){
+    if (n >= MAX_SPRITE) break;
+    spritePos.set([m.p[0], m.p[1], m.p[2], m.r], n*4);
+    spriteCol.set([1.0, 0.94, 0.80, 0.0], n*4);
+    spriteCol[n*4+2] = m.a;
+    n++;
+  }
+  for (const b of bubbles){
+    if (n >= MAX_SPRITE) break;
+    spritePos.set([b.p[0], b.p[1], b.p[2], Math.max(0.010, b.r*7.0)], n*4);
+    spriteCol.set([0.8, 0.94, 1.0, 1.0], n*4);
+    n++;
+  }
+  for (const f of food){
+    if (n >= MAX_SPRITE) break;
+    spritePos.set([f.p[0], f.p[1], f.p[2], f.r], n*4);
+    spriteCol.set([0.95, 0.78, 0.42, 0.0], n*4);
+    spriteCol[n*4+2] = 0.9;
+    n++;
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, spritePosBuf);
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, spritePos, 0, n*4);
+  gl.bindBuffer(gl.ARRAY_BUFFER, spriteColBuf);
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, spriteCol, 0, n*4);
+  return n;
+}
+
+function setWaterUniforms(P){
+  const cl = 1/Math.max(0.35, ui.clarity);
+  gl.uniform3f(P.u.uSigma, SIGMA[0]*cl, SIGMA[1]*cl, SIGMA[2]*cl);
+  gl.uniform3f(P.u.uWaterCol, 0.030, 0.135, 0.170);
+  gl.uniform1f(P.u.uSunAmt, ui.sun);
+  gl.uniform1f(P.u.uSurfaceY, SURFACE_Y);
+  gl.uniform1f(P.u.uSandY, SAND_Y);
+  if (P.u.uCaus){
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, causTex);
+    gl.uniform1i(P.u.uCaus, 0);
+    gl.uniform4f(P.u.uCausRect, -CAUS_W/2, -CAUS_D/2 - TANK.d*0.15, 1/CAUS_W, 1/CAUS_D);
+  }
+}
+const SUN = (function(){ const v = [0.16, 1.0, 0.22]; const l = 1/Math.hypot(v[0],v[1],v[2]); return [v[0]*l, v[1]*l, v[2]*l]; })();
+
+function drawCaustic(){
+  gl.bindFramebuffer(gl.FRAMEBUFFER, causFB);
+  gl.viewport(0, 0, CAUS_TX, CAUS_TZ);
+  gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.disable(gl.DEPTH_TEST);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+  const P = P_SPLAT;
+  gl.useProgram(P.p);
+  const emitHX = CAUS_W*0.62, emitHZ = CAUS_D*0.62;
+  const emitCZ = -CAUS_D/2 - TANK.d*0.15 + CAUS_D/2;
+  gl.uniform1i(P.u.uGrid, RAY_GRID);
+  gl.uniform4f(P.u.uEmit, 0.0, emitCZ, emitHX, emitHZ);
+  gl.uniform4f(P.u.uRect, -CAUS_W/2, -CAUS_D/2 - TANK.d*0.15, 1/CAUS_W, 1/CAUS_D);
+  gl.uniform1f(P.u.uTime, nowT);
+  gl.uniform1f(P.u.uAmp, ui.chop);
+  gl.uniform1f(P.u.uDepth, DEPTH);
+  const PS = 4.0;
+  gl.uniform1f(P.u.uPointSize, PS);
+  gl.uniform1i(P.u.uMode, 0);
+  /* Normalisation: each ray carries the same quantum of light, and the quantum is
+     chosen so a perfectly flat surface would read exactly 1.0 everywhere. That is
+     what makes this map a histogram of irradiance and not a pretty pattern. */
+  const emitArea = (2*emitHX)*(2*emitHZ);
+  const texelArea = (CAUS_W/CAUS_TX)*(CAUS_D/CAUS_TZ);
+  const nRays = RAY_GRID*RAY_GRID;
+  const perRay = emitArea/(nRays*texelArea);
+  gl.uniform1f(P.u.uIntensity, perRay / (KERNEL_SUM*PS*PS));
+  gl.bindVertexArray(null);
+  gl.drawArrays(gl.POINTS, 0, nRays);
+
+  /* the SECOND computation, into its own map: the curve det(I + a·H) = 0 */
+  if (ui.fold){
+    gl.bindFramebuffer(gl.FRAMEBUFFER, foldFB);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.uniform1i(P.u.uMode, 1);
+    gl.uniform1f(P.u.uFoldEps, 0.26);
+    gl.uniform1f(P.u.uPointSize, 2.0);
+    gl.uniform1f(P.u.uIntensity, 0.30 / (KERNEL_SUM*4.0));
+    gl.drawArrays(gl.POINTS, 0, nRays);
+  }
+  gl.disable(gl.BLEND);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.bindTexture(gl.TEXTURE_2D, causTex);
+  gl.generateMipmap(gl.TEXTURE_2D);
+}
+
+function drawScene(eye, dir){
+  const asp = targetSize.w/targetSize.h;
+  const proj = m4persp(1.02, asp, 0.05, 26.0);
+  const view = m4look(eye, [eye[0]+dir[0], eye[1]+dir[1], eye[2]+dir[2]], [0,1,0]);
+  VP = m4mul(proj, view);
+  invVP = m4inv(VP);
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFB);
+  gl.viewport(0, 0, targetSize.w, targetSize.h);
+  gl.clearColor(0.014, 0.062, 0.078, 20.0);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
+  gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
+
+  function common(P){
+    gl.useProgram(P.p);
+    gl.uniformMatrix4fv(P.u.uVP, false, VP);
+    gl.uniform3fv(P.u.uCam, eye);
+    if (P.u.uSun) gl.uniform3fv(P.u.uSun, SUN);
+    if (P.u.uTime) gl.uniform1f(P.u.uTime, nowT);
+    setWaterUniforms(P);
   }
 
-  // hand off to the forged silhouette (it draws + dims itself by `light`)
-  const draw = FISH_DRAW[b.spi];
-  if(draw) draw(ctx, { s, L, col:sp.col, ph:b.ph, boil:b.boil, light, TAU });
+  /* walls (inside faces) */
+  gl.disable(gl.CULL_FACE);
+  common(P_WALL);
+  gl.bindVertexArray(wall.vao);
+  gl.drawArrays(gl.TRIANGLES, 0, wall.n);
 
-  ctx.restore();
-  ctx.globalAlpha = 1;
-}
+  /* sand */
+  common(P_SAND);
+  gl.bindVertexArray(sandVAO);
+  gl.drawElements(gl.TRIANGLES, sand.idx.length, gl.UNSIGNED_INT, 0);
 
-/* the ambient drift jellies — soft bell + trailing tendrils, in `screen` */
-function drawJelly(j, t){
-  const d = depthOfY(j.y);
-  const light = Math.max(0.3, 1 - d*0.8);
-  ctx.save();
-  ctx.translate(j.x, j.y);
-  ctx.globalCompositeOperation='screen';
-  const s = JELLY.size, pulse = 0.85 + 0.15*Math.sin(j.ph);
-  ctx.fillStyle = hexA(JELLY.col, 0.42*light);
-  ctx.beginPath(); ctx.ellipse(0,0, s*pulse, s*1.1*pulse, 0, Math.PI, TAU); ctx.fill();
-  ctx.strokeStyle = hexA(JELLY.col, 0.26*light); ctx.lineWidth=1.4;
-  for(let k=-2;k<=2;k++){ ctx.beginPath(); ctx.moveTo(k*s*0.3,0);
-    ctx.quadraticCurveTo(k*s*0.3+Math.sin(t+k)*3, s*1.6, k*s*0.3, s*2.4); ctx.stroke(); }
-  ctx.restore();
-}
+  /* the surface, from below */
+  common(P_SURF);
+  gl.uniform1f(P_SURF.u.uTime2, nowT);
+  gl.uniform1f(P_SURF.u.uAmp, ui.chop);
+  gl.bindVertexArray(surfMesh.vao);
+  gl.drawElements(gl.TRIANGLES, surfMesh.n, gl.UNSIGNED_INT, 0);
 
-function drawFood(){
-  ctx.save();
-  for(const f of foods){
-    ctx.globalAlpha = Math.min(1, f.amt);
-    ctx.fillStyle='#e6c87a';
-    ctx.beginPath(); ctx.arc(f.x,f.y, 1.8, 0, TAU); ctx.fill();
+  /* coral + grass */
+  common(P_ROCK);
+  gl.bindVertexArray(rockBatch.vao);
+  gl.drawElementsInstanced(gl.TRIANGLES, rockBatch.n, gl.UNSIGNED_INT, 0, rockBatch.count);
+
+  common(P_CORAL);
+  gl.uniform1f(P_CORAL.u.uTime3, nowT);
+  coralBatches.forEach(function(b){
+    if (!b.count) return;
+    gl.bindVertexArray(b.vao);
+    gl.drawElementsInstanced(gl.TRIANGLES, b.n, gl.UNSIGNED_INT, 0, b.count);
+  });
+  common(P_GRASS);
+  gl.uniform1f(P_GRASS.u.uTime3, nowT);
+  gl.bindVertexArray(grassBatch.vao);
+  gl.drawElementsInstanced(gl.TRIANGLES, grassBatch.n, gl.UNSIGNED_INT, 0, grassBatch.count);
+
+  /* the fish */
+  common(P_FISH);
+  const PF = P_FISH;
+  for (const f of fish){
+    const g = fishGeom[f.kind], sp = f.spec;
+    gl.bindVertexArray(g.vao);
+    gl.uniform3fv(PF.u.uPos, f.p);
+    gl.uniform1f(PF.u.uYaw, f.yaw);
+    gl.uniform1f(PF.u.uPitch, f.pitch);
+    gl.uniform1f(PF.u.uRoll, Math.max(-0.55, Math.min(0.55, -(f.turn||0)*0.30)));
+    gl.uniform1f(PF.u.uPhaseF, f.phase);
+    gl.uniform1f(PF.u.uAmp, sp.waveAmp);
+    gl.uniform1f(PF.u.uWaveK, sp.waveK);
+    gl.uniform1f(PF.u.uScale, f.scale);
+    gl.uniform1f(PF.u.uLen, sp.length);
+    gl.uniform1f(PF.u.uTailK, 0.14);
+    gl.uniform3fv(PF.u.uColA, sp.colA);
+    gl.uniform3fv(PF.u.uColB, sp.colB);
+    gl.uniform3fv(PF.u.uColFin, sp.colFin);
+    gl.uniform1i(PF.u.uPattern, sp.patternId);
+    gl.drawElements(gl.TRIANGLES, g.n, gl.UNSIGNED_INT, 0);
   }
-  ctx.restore();
+
+  /* sprites last, blended */
+  const nSpr = fillSprites(eye);
+  if (nSpr){
+    const right = [Math.cos(cam.yaw), 0, Math.sin(cam.yaw)];
+    const upv = [ -dir[1]*right[2], dir[2]*right[0]-dir[0]*right[2], dir[0]*right[1] ];
+    const rl = 1/Math.hypot(right[0],right[1],right[2]);
+    const u2 = [ right[1]*dir[2]-right[2]*dir[1], right[2]*dir[0]-right[0]*dir[2], right[0]*dir[1]-right[1]*dir[0] ];
+    const ul = 1/(Math.hypot(u2[0],u2[1],u2[2])||1);
+    gl.useProgram(P_SPRITE.p);
+    gl.uniformMatrix4fv(P_SPRITE.u.uVP, false, VP);
+    gl.uniform3fv(P_SPRITE.u.uCam, eye);
+    gl.uniform3fv(P_SPRITE.u.uSun, SUN);
+    gl.uniform3f(P_SPRITE.u.uRight, right[0]*rl, right[1]*rl, right[2]*rl);
+    gl.uniform3f(P_SPRITE.u.uUp, u2[0]*ul, u2[1]*ul, u2[2]*ul);
+    setWaterUniforms(P_SPRITE);
+    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.depthMask(false);
+    gl.bindVertexArray(spriteVAO);
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, nSpr);
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+  }
+  gl.bindVertexArray(null);
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
-   THE LOOP
-   ════════════════════════════════════════════════════════════════════════════ */
-let last=performance.now(), fpsAcc=0, fpsN=0;
-const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function drawShafts(eye){
+  gl.bindFramebuffer(gl.FRAMEBUFFER, shaftFB);
+  gl.viewport(0, 0, targetSize.hw, targetSize.hh);
+  gl.disable(gl.DEPTH_TEST);
+  const P = P_SHAFT;
+  gl.useProgram(P.p);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sceneTex);
+  gl.uniform1i(P.u.uScene, 1);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, causTex);
+  gl.uniform1i(P.u.uCaus, 0);
+  gl.uniform4f(P.u.uCausRect, -CAUS_W/2, -CAUS_D/2 - TANK.d*0.15, 1/CAUS_W, 1/CAUS_D);
+  gl.uniform3fv(P.u.uCam, eye);
+  gl.uniform3fv(P.u.uSun, SUN);
+  gl.uniformMatrix4fv(P.u.uInvVP, false, invVP);
+  gl.uniform1f(P.u.uTime, nowT);
+  gl.uniform1f(P.u.uSunAmt2, ui.sun);
+  gl.uniform1f(P.u.uShaftAmt, 0.078);
+  gl.uniform1f(P.u.uSurfaceY, SURFACE_Y);
+  gl.uniform1f(P.u.uSandY, SAND_Y);
+  const cl = 1/Math.max(0.35, ui.clarity);
+  gl.uniform3f(P.u.uSigma, SIGMA[0]*cl, SIGMA[1]*cl, SIGMA[2]*cl);
+  gl.uniform3f(P.u.uWaterCol, 0.26, 0.66, 0.70);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
 
-function frame(now){
-  let dt=(now-last)/1000; last=now;
-  if(dt>0.05) dt=0.05;
-  const t=now/1000;
+function post(){
+  /* bright pass → quarter res */
+  gl.bindFramebuffer(gl.FRAMEBUFFER, brightFB);
+  gl.viewport(0,0,targetSize.qw,targetSize.qh);
+  gl.useProgram(P_BLIT.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sceneTex);
+  gl.uniform1i(P_BLIT.u.uSrc, 0);
+  gl.uniform1i(P_BLIT.u.uMode, 0);
+  gl.uniform2f(P_BLIT.u.uTexel, 1/targetSize.qw, 1/targetSize.qh);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  /* blur H → blurTex, blur V → brightTex */
+  gl.bindFramebuffer(gl.FRAMEBUFFER, blurFB);
+  gl.bindTexture(gl.TEXTURE_2D, brightTex);
+  gl.uniform1i(P_BLIT.u.uMode, 1);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, brightFB);
+  gl.bindTexture(gl.TEXTURE_2D, blurTex);
+  gl.uniform1i(P_BLIT.u.uMode, 2);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-  if(!reduced) stepBoids(dt, t);
+  /* composite to the canvas */
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0,0,W,H);
+  gl.useProgram(P_COMP.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sceneTex); gl.uniform1i(P_COMP.u.uScene, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, brightTex); gl.uniform1i(P_COMP.u.uBloom, 1);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, shaftTex); gl.uniform1i(P_COMP.u.uShaft, 2);
+  gl.uniform1f(P_COMP.u.uExposure, 1.06);
+  gl.uniform1f(P_COMP.u.uTime, nowT);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
 
-  drawColumn();
-  drawCaustics(t);
-  drawVent(t);
+/* the fold overlay is drawn straight onto the canvas, over the finished picture,
+   so you can see the two computations sitting on top of each other */
+const P_FOLDOVER = prog(`
+out vec2 vUV;
+void main(){ vec2 q = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2); vUV = q; gl_Position = vec4(q*2.0-1.0,0.0,1.0); }`, `
+in vec2 vUV;
+uniform sampler2D uFold, uScene;
+uniform mat4 uInvVP; uniform vec3 uCam;
+uniform vec4 uCausRect; uniform float uSandY;
+layout(location=0) out vec4 frag;
+void main(){
+  /* project the screen pixel down onto the sand plane and read the fold map there */
+  vec4 nd = uInvVP * vec4(vUV*2.0-1.0, 1.0, 1.0);
+  vec3 dir = normalize(nd.xyz/nd.w - uCam);
+  if (dir.y > -0.0015) discard;
+  float t = (uSandY - uCam.y) / dir.y;
+  vec3 p = uCam + dir*t;
+  float sceneDist = texture(uScene, vUV).a;
+  if (t > sceneDist + 0.75) discard;                  /* hidden behind a fish or a rock */
+  vec2 uv = (p.xz - uCausRect.xy) * uCausRect.zw;
+  if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) discard;
+  float f = texture(uFold, uv).r;
+  float a = clamp(f*2.0, 0.0, 1.0) * clamp(1.0 - t/9.0, 0.0, 1.0);
+  frag = vec4(vec3(1.00, 0.34, 0.03) * a * 2.0, a);
+}`);
 
-  // jellies behind the trophic school; then fish back-to-front by depth
-  for(const j of jellies) drawJelly(j, t);
-  boids.sort((a,b)=> a.y-b.y);
-  drawFood();
-  for(const b of boids) drawFish(b, t);
+function drawFoldOverlay(eye){
+  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+  gl.useProgram(P_FOLDOVER.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, foldTex); gl.uniform1i(P_FOLDOVER.u.uFold, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sceneTex); gl.uniform1i(P_FOLDOVER.u.uScene, 1);
+  gl.uniformMatrix4fv(P_FOLDOVER.u.uInvVP, false, invVP);
+  gl.uniform3fv(P_FOLDOVER.u.uCam, eye);
+  gl.uniform4f(P_FOLDOVER.u.uCausRect, -CAUS_W/2, -CAUS_D/2 - TANK.d*0.15, 1/CAUS_W, 1/CAUS_D);
+  gl.uniform1f(P_FOLDOVER.u.uSandY, SAND_Y);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.disable(gl.BLEND);
+}
 
-  refreshRail();
+function frame(){
+  const now = performance.now();
+  let dt = (now - lastFrame)/1000; lastFrame = now;
+  dt = Math.max(0.001, Math.min(0.05, dt));
+  fpsEMA = fpsEMA*0.93 + (1/dt)*0.07;
+  if (running){ nowT += dt; driftT += dt; stepTween(dt); updateLife(dt); }
 
-  // toast lifetime
-  if(toastT>0){ toastT-=dt; if(toastT<=0) document.getElementById('toast').classList.remove('show'); }
+  /* keep the frame honest: if the card is struggling, spend fewer rays and pixels
+     before letting the motion get lumpy */
+  frames++;
+  if (frames % 45 === 0){
+    if (fpsEMA < 34 && RS > 0.62){ RS = Math.max(0.62, RS - 0.10); allocTargets(); }
+    else if (fpsEMA < 26 && RAY_GRID > 384){ RAY_GRID = 384; }
+    else if (fpsEMA > 56 && RS < 1.0){ RS = Math.min(1.0, RS + 0.06); allocTargets(); }
+  }
 
-  fpsAcc+=dt; fpsN++;
-  if(fpsAcc>0.5){ const fps=Math.round(fpsN/fpsAcc); fpsAcc=0; fpsN=0;
-    document.getElementById('fps').textContent = fps+' fps · '+boids.length+' fish'; }
+  const eye = camEye(), dir = camDir();
+  drawCaustic();
+  drawScene(eye, dir);
+  drawShafts(eye);
+  post();
+  if (ui.fold) drawFoldOverlay(eye);
 
+  if (frames % 12 === 0){
+    readout.innerHTML = '<b>' + fish.length + '</b> fish &nbsp;·&nbsp; <b>' +
+      (RAY_GRID*RAY_GRID/1000).toFixed(0) + 'k</b> rays/frame &nbsp;·&nbsp; <b>' +
+      Math.round(fpsEMA) + '</b> fps';
+  }
   requestAnimationFrame(frame);
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
-   INTERACTION
-   ════════════════════════════════════════════════════════════════════════════ */
-function scatterFood(px, py){
-  for(let i=0;i<10;i++){
-    foods.push({ x:px+(rng()-0.5)*60, y:py+(rng()-0.5)*30, amt:0.8+rng()*0.5 });
-  }
-  audio.swish(0.8);   // the school turning as one toward the food
+/* ══════════════════════════════════════════════════════════════════════════
+   13 · SELF-TEST — the pill in the corner, run on the real page
+   ══════════════════════════════════════════════════════════════════════════ */
+function selftest(){
+  const out = [];
+  const m = measureCaustic(false);
+  out.push(['the light map is a real histogram (mean ≈ 1)', Math.abs(m.mean - 1) < 0.14, m.mean.toFixed(3)]);
+  out.push(['and it has cords, not a flat wash', m.sd/m.mean > 0.35, (m.sd/m.mean).toFixed(2) + '× contrast']);
+  out.push(['the surface really folds at this depth', m.ff > 0.10, (m.ff*100).toFixed(0) + '% folded']);
+  out.push(['every fish is inside the glass', fish.every(function(f){
+    return Math.abs(f.p[0]) <= TANK.w/2 + 1e-3 && Math.abs(f.p[2]) <= TANK.d/2 + 1e-3;
+  }), fish.length + ' fish']);
+  out.push(['the tank is drawing', frames > 2, frames + ' frames']);
+  return out;
 }
-
-// the TUG act — pull the apex out (button OR drag a lancetfish up out the waterline)
-let toastT=0;
-function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); toastT=3.0; }
-function tugApex(){
-  if(!web.alive[0]) return;
-  web.alive[0]=false; apexAlive=false;
-  fastUntil = performance.now()/1000 + 6;   // a brief speed-up so the cascade isn't a long wait
-  toast('You pulled the lancetfish. The column is answering…');
-  document.getElementById('btn-tug').disabled=true;
-  document.getElementById('btn-restore').disabled=false;
+function paintPill(){
+  const pill = document.getElementById('pill');
+  let rows;
+  try { rows = selftest(); } catch(e){ pill.className = 'pill bad'; pill.textContent = 'self-test threw: ' + e.message; return; }
+  const bad = rows.filter(function(r){ return !r[1]; });
+  pill.className = 'pill ' + (bad.length ? 'bad' : 'ok');
+  pill.innerHTML = (bad.length ? '✗ ' + bad[0][0] : '✓ the light on the sand is a real caustic') +
+    '<span class="det">' + rows.map(function(r){ return (r[1]?'✓':'✗') + ' ' + r[2]; }).join(' · ') + '</span>';
 }
-function restoreApex(){
-  if(web.alive[0]) return;
-  web.alive[0]=true; web.n[0]=Math.max(web.n[0],4); apexAlive=true;
-  fastUntil = performance.now()/1000 + 6;
-  toast('The apex returns — the cascade re-settles.');
-  document.getElementById('btn-tug').disabled=false;
-  document.getElementById('btn-restore').disabled=true;
-}
-
-// drag-to-tug: grab the nearest apex boid; release it above the waterline to pull it out
-let dragging=null;
-tank.addEventListener('pointerdown', e=>{
-  const r=tank.getBoundingClientRect();
-  const px=e.clientX-r.left, py=e.clientY-r.top;
-  let best=null, bd2=1e9;
-  if(web.alive[0]){
-    for(const b of boids){ if(b.spi!==0||b.dying) continue; const dd=Math.hypot(b.x-px,b.y-py); if(dd<30 && dd<bd2){ bd2=dd; best=b; } }
-  }
-  if(best){ dragging=best; tank.style.cursor='grabbing'; }
-  else { scatterFood(px,py); }
-});
-tank.addEventListener('pointermove', e=>{
-  if(!dragging) return;
-  const r=tank.getBoundingClientRect();
-  dragging.x=e.clientX-r.left; dragging.y=e.clientY-r.top; dragging.v*=0.4;
-});
-tank.addEventListener('pointerup', ()=>{
-  tank.style.cursor='';
-  if(dragging){ if(depthOfY(dragging.y) < 0.04){ tugApex(); } dragging=null; }
-});
-
-/* ════════════════════════════════════════════════════════════════════════════
-   THE RAIL — per-species SET steppers + the load meter + the proof pill
-   ════════════════════════════════════════════════════════════════════════════ */
-function liveCount(spi){ let n=0; for(const b of boids){ if(b.spi===spi && !b.dying) n++; } return n; }
-
-function buildRail(){
-  const host=document.getElementById('species');
-  host.innerHTML='';
-  for(let i=0;i<4;i++){
-    const sp=TROPHIC[i];
-    const row=document.createElement('div'); row.className='species';
-    row.innerHTML=`<span class="swatch"><canvas width="30" height="20" data-sp="${i}"></canvas></span>
-      <div class="nm">${sp.name}<small>${bandLabel(sp)}</small></div>
-      <div class="ct" id="ct-${i}">0</div>
-      <div class="stepper"><button data-sp="${i}" data-m="-1">−</button><button data-sp="${i}" data-m="1">+</button></div>`;
-    host.appendChild(row);
-    drawSwatch(row.querySelector('canvas'), sp);
-  }
-  host.addEventListener('click', e=>{
-    const btn=e.target.closest('button'); if(!btn) return;
-    const i=+btn.dataset.sp, m=+btn.dataset.m;
-    if(m>0){
-      // respect the cap: only allow an increase if there's room
-      let tot=0; for(let k=0;k<4;k++) tot+=targetCount(k);
-      if(tot + Math.round(web.n[i]*0.25*TROPHIC[i].popScale) > CAP - jellies.length) return;
-      setMul[i] = Math.min(3, +(setMul[i]+0.25).toFixed(2));
-    } else {
-      setMul[i] = Math.max(0, +(setMul[i]-0.25).toFixed(2));
-    }
-    reconcileBoids();
-  });
-}
-function bandLabel(sp){
-  const lo=Math.round(sp.band[0]*100), hi=Math.round(sp.band[1]*100);
-  const light = sp.light==='sunlit'?'the sunlit shoal':sp.light==='twilight'?'the blue twilight':sp.light==='self'?'the cold floor glow':'the dim mid-water';
-  return `${light} · ${lo}–${hi}`;
-}
-function drawSwatch(cv, sp){
-  const g=cv.getContext('2d'); g.clearRect(0,0,30,20); g.save(); g.translate(18,10);
-  const L=sp.size*sp.len*0.62;
-  g.fillStyle=sp.col;
-  if(sp.shape==='graze'){ g.beginPath(); g.ellipse(0,0,L*0.6,L*0.4,0,0,TAU); g.fill(); }
-  else {
-    g.beginPath(); g.moveTo(L*0.5,0); g.quadraticCurveTo(0,-L*0.28,-L*0.45,0); g.quadraticCurveTo(0,L*0.28,L*0.5,0); g.fill();
-    g.beginPath(); g.moveTo(-L*0.4,0); g.lineTo(-L*0.72,-L*0.3); g.lineTo(-L*0.72,L*0.3); g.closePath(); g.fill();
-  }
-  g.restore();
-}
-
-let railAcc=0;
-function refreshRail(){
-  // throttle the DOM writes a little
-  railAcc++; if(railAcc%6!==0) return;
-  let tot=0;
-  for(let i=0;i<4;i++){ const c=liveCount(i); tot+=c; const el=document.getElementById('ct-'+i); if(el) el.textContent=web.alive[i]?c:'—'; }
-  const total=tot+jellies.length;
-  document.getElementById('loadbar').style.width=Math.round(total/CAP*100)+'%';
-  const cap=document.getElementById('loadcap');
-  cap.textContent=total+' / '+CAP+' — the ceiling that keeps it smooth';
-  cap.classList.toggle('full', total>=CAP);
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
-   THE QUIET PROOF — run the SAME runTrophicSelfTest() the Node twin runs, render
-   a tucked-away green pill + a detail panel. Beauty leads; this is opt-in.
-   ════════════════════════════════════════════════════════════════════════════ */
-(function(){
-  const r = runTrophicSelfTest();
-  const k=(b)=> b?'<span class="ok">✓</span>':'<span class="no">✗</span>';
-  const pill=document.getElementById('cruxpill');
-  pill.textContent = r.pass ? 'green' : 'FAILED';
-  pill.classList.add(r.pass?'green':'fail');
-  document.getElementById('cruxbody').innerHTML =
-    `the swarm densities are read live from a verified Lotka–Volterra web. pull the apex and:<br>`+
-    `&nbsp;${k(r.lvl1)} lvl1 — lanternfish bloom &nbsp;${r.base[1].toFixed(1)} → ${r.noApex[1].toFixed(1)}<br>`+
-    `&nbsp;${k(r.lvl2)} lvl2 — copepods thin &nbsp;${r.base[2].toFixed(1)} → ${r.noApex[2].toFixed(1)}<br>`+
-    `neg-controls (tol ${r.tol}):<br>`+
-    `&nbsp;${k(r.negA)} pull the connected copepods instead — lanternfish does NOT bloom (Δ ${r.negAlanternDelta}, it falls)<br>`+
-    `&nbsp;${k(r.negB)} intact biomass is a fixed point — drift ${r.maxDrift} ≤ 2.0<br>`+
-    `<br>verified headless by <code>node core.test.mjs</code>.`;
-  console.log('[aquarium trophic self-test]', r);
-  window.__trophicSelfTest = r;   // exposed for the publisher's fresh-eyes check
-})();
-
-/* ════════════════════════════════════════════════════════════════════════════
-   PROCEDURAL SOUNDSCAPE — synthesized in-house (art/audio-aquarium.js exposing
-   Aqua.sfx.{waterBed,bubble,swish}); no samples. A calm dark deep-water bed you
-   leave running (slow breathing swell + low resonance), sparse rounded bubbles,
-   and a soft school-swish on feed/startle. Gated behind the first user click;
-   one DynamicsCompressor limiter; one SHARED estate mute (ws:pref:muted).
-   window.__renderOffline(seconds) → WAV renders the SAME builders for Audio Lens.
-   ════════════════════════════════════════════════════════════════════════════ */
-
-const Aqua = window.Aqua;                 // the forged soundscape namespace
-const BED_DUR = 8;                        // the bed render/loop length (s)
-
-// the one shared estate mute — read/write ws:pref:muted (with a safe fallback)
-const SharedMute = {
-  get(){ try{ if(window.WS && WS.get) return !!WS.get('pref:muted'); return localStorage.getItem('ws:pref:muted')==='1'; }catch(e){ return false; } },
-  set(v){ try{ if(window.WS && WS.set){ WS.set('pref:muted', v?1:0); return; } localStorage.setItem('ws:pref:muted', v?'1':'0'); }catch(e){} },
+window.ROOM_SELFTEST = selftest;
+window.ROOM_STATE = function(){
+  return { fish: fish.length, bubbles: bubbles.length, corals: reef.corals.length, grass: reef.grass.length,
+           rays: RAY_GRID*RAY_GRID, fps: Math.round(fpsEMA), frames: frames, fold: ui.fold,
+           cam: { yaw: cam.yaw, pitch: cam.pitch, z: cam.z }, running: running, sound: audio.on };
 };
+window.ROOM_FEED = function(){ dropFoodAt(cv.clientWidth*0.5, cv.clientHeight*0.45); return food.length; };
+window.ROOM_START = function(){ startTank(); return running; };
 
-const audio = {
-  on:false, ac:null, master:null, comp:null, bedHandle:null,
-  bedTimer:0, bubbleTimer:0,
-  ensure(){
-    if(this.ac) return;
-    const AC = window.AudioContext||window.webkitAudioContext;
-    this.ac = new AC();
-    this.master = this.ac.createGain(); this.master.gain.value=0.0;
-    this.comp = this.ac.createDynamicsCompressor();   // the limiter — can never clip
-    this.comp.threshold.value=-12; this.comp.ratio.value=12;
-    this.master.connect(this.comp).connect(this.ac.destination);
-    this.armBed();          // start the looping water bed
-    this.armBubbles();      // start the sparse ambient bubble scheduler
-  },
-  // the looping water bed: schedule one BED_DUR pass, then re-arm just before it
-  // ends so the breathing wash never gaps (the builder fades 0.6s in/out).
-  armBed(){
-    if(!this.ac) return;
-    Aqua.sfx.waterBed({ ctx:this.ac, dest:this.master, dur:BED_DUR, when:0, seed:1, intensity:0.6 });
-    clearTimeout(this.bedTimer);
-    this.bedTimer = setTimeout(()=>{ if(this.ac) this.armBed(); }, (BED_DUR-0.5)*1000);
-  },
-  // sparse rounded bubbles — only while sound is on; randomized long gaps.
-  armBubbles(){
-    clearTimeout(this.bubbleTimer);
-    const gap = 4200 + Math.random()*7000;     // 4–11s between bubbles
-    this.bubbleTimer = setTimeout(()=>{
-      if(this.ac && this.on){ Aqua.sfx.bubble({ ctx:this.ac, dest:this.master, dur:1, when:0, seed:(Math.random()*1e9)|0 }); }
-      if(this.ac) this.armBubbles();
-    }, gap);
-  },
-  // the school turning as one — a soft swish on feed/boil (boil scales brightness)
-  swish(boil){
-    if(!this.ac||!this.on) return;
-    Aqua.sfx.swish({ ctx:this.ac, dest:this.master, dur:0.4, when:0, seed:(Math.random()*1e9)|0, boil: boil==null?0.6:boil });
-  },
-  toggle(){
-    this.ensure();
-    if(this.ac.state==='suspended') this.ac.resume();
-    this.on=!this.on;
-    SharedMute.set(!this.on);
-    this.master.gain.setTargetAtTime(this.on?0.6:0.0, this.ac.currentTime, 0.4);
-    if(this.on) this.armBubbles();
-    const btn=document.getElementById('mute');
-    btn.textContent='sound: '+(this.on?'on':'off'); btn.classList.toggle('on', this.on);
-  }
-};
-document.getElementById('mute').onclick=()=>audio.toggle();
+/* ══════════════════════════════════════════════════════════════════════════
+   14 · THE GATE, THE HOOK, THE BOOT
+   ══════════════════════════════════════════════════════════════════════════ */
+const gate = document.getElementById('gate');
+function startTank(){
+  if (running) return;
+  running = true;
+  if (!WSmuted()){ audio.ensure(); audio.set(true); }
+  paintSound();
+  gate.style.opacity = '0';
+  setTimeout(function(){ gate.style.display = 'none'; }, 750);
+  setTimeout(function(){ paintPill(); measureCaustic(false); }, 900);
+}
+gate.addEventListener('click', startTank);
+gate.addEventListener('pointerdown', startTank);
 
-/* the permanent "let me hear" hook — renders the SAME forged builders (the bed +
-   a few bubbles + a swish) offline → WAV, the verification path used by the Audio
-   Lens. Identical graph to the live path (limiter + master), deterministic. */
-window.__renderOffline = async function(seconds){
-  seconds = seconds||8;
-  const OAC = window.OfflineAudioContext||window.webkitOfflineAudioContext;
-  const oac = new OAC(1, 44100*seconds, 44100);
-  const m = oac.createGain(); m.gain.value=0.6;
-  const comp=oac.createDynamicsCompressor(); comp.threshold.value=-12; comp.ratio.value=12;
-  m.connect(comp).connect(oac.destination);
-  // the breathing bed for the full render window
-  Aqua.sfx.waterBed({ ctx:oac, dest:m, dur:seconds, when:0, seed:1, intensity:0.6 });
-  // a few sparse bubbles + a swish, spread across the window
-  for(let i=0;i<3;i++){ Aqua.sfx.bubble({ ctx:oac, dest:m, dur:1, when:1.4+i*2.2, seed:101+i }); }
-  Aqua.sfx.swish({ ctx:oac, dest:m, dur:0.4, when:3.0, seed:7, boil:0.8 });
-  const rendered = await oac.startRendering();
-  const pcm = rendered.getChannelData(0);
-  const buf = new ArrayBuffer(44+pcm.length*2); const dv=new DataView(buf);
-  const wr=(o,s)=>{ for(let i=0;i<s.length;i++) dv.setUint8(o+i, s.charCodeAt(i)); };
-  wr(0,'RIFF'); dv.setUint32(4,36+pcm.length*2,true); wr(8,'WAVE'); wr(12,'fmt ');
-  dv.setUint32(16,16,true); dv.setUint16(20,1,true); dv.setUint16(22,1,true);
-  dv.setUint32(24,44100,true); dv.setUint32(28,88200,true); dv.setUint16(32,2,true);
-  dv.setUint16(34,16,true); wr(36,'data'); dv.setUint32(40,pcm.length*2,true);
-  let off=44; for(let i=0;i<pcm.length;i++){ let s=Math.max(-1,Math.min(1,pcm[i])); dv.setInt16(off,s*0x7fff,true); off+=2; }
-  return new Blob([buf],{type:'audio/wav'});
-};
-
-document.getElementById('btn-tug').onclick=tugApex;
-document.getElementById('btn-restore').onclick=restoreApex;
-
-/* ── the first-click gate (audio policy + the nudge + the first feed) ── */
-const gate=document.getElementById('gate');
-gate.addEventListener('pointerdown', e=>{
-  const r=tank.getBoundingClientRect();
-  scatterFood((e.clientX||W/2)-r.left, (e.clientY||H/3)-r.top);
-  // honour the shared mute: only auto-arm sound if the estate isn't muted
-  if(!SharedMute.get()){ audio.toggle(); }
-  gate.style.opacity='0'; setTimeout(()=>gate.style.display='none', 600);
-});
-
-/* ── the-errand additive hook: aquariumHush() — Book-3 trailer audio policy (WS5 T1.4). ──
-   Inert unless poked; adds no unpoked behavior. The tap-glass first-click gate above IS this
-   page's audio unlock, and its water bed is CONTINUOUS — unhushed it would leak under the whole
-   trailer AND poison the Errand's digital-zero silence. The trailer pre-roll taps the glass
-   (unlock + bed, off-camera behind the blur gate) then pokes this immediately: it exposes the
-   page's AudioContext (window.__wsAudioCtx, for the deck's §6 four-moments self-check) and
-   suspends it. Visuals are rAF-driven and independent of the ctx, so the frame renders normally
-   while its audio is silenced. RE-ENTRANT + idempotent: ensure() no-ops once the ctx exists and
-   suspend() on an already-suspended ctx is a no-op. Returns true on a reached-and-hushed ctx. */
+/* ── the films' hook. Inert unless poked; adds no unpoked behaviour. The trailer
+   and the filmed showings tap #gate off-camera to unlock audio, then poke this to
+   expose the AudioContext (for the deck's audibility check) and suspend it, so the
+   tank's continuous water bed never leaks under a film. Re-entrant + idempotent. */
 window.__tourHooks = window.__tourHooks || {};
 window.__tourHooks.aquariumHush = function(){
   try {
-    audio.ensure();                     /* guarantee a ctx to hush (no-op after tap-glass; self-heals otherwise) */
-    window.__wsAudioCtx = audio.ac;     /* expose the ctx for the deck's audibility self-check */
-    audio.ac.suspend();                 /* pause the continuous water bed — no leak under the film */
+    audio.ensure();
+    window.__wsAudioCtx = audio.ac;
+    audio.ac.suspend();
+    audio.on = false;
+    paintSound();
     return !!audio.ac;
   } catch(e){ return false; }
 };
 
-/* ── boot ── */
-buildRail();
-rebuildAmbient();
-reconcileBoids();
-// breadcrumb for the front door's "seen" tracking
-try{ if(window.WS && WS.seen) WS.seen('aquarium'); else localStorage.setItem('ws:seen:aquarium','1'); }catch(e){}
+resize();
+paintSound();
 requestAnimationFrame(frame);
+setTimeout(function(){ measureCaustic(false); paintPill(); }, 600);
+setInterval(function(){ if (running) paintPill(); }, 6000);
+
+/* the breadcrumb the front door's star survey eats — id unchanged from the room
+   this one replaces, so no visitor loses a star they already earned */
+try { if (window.WS && WS.seen) WS.seen('aquarium'); else localStorage.setItem('ws:seen:aquarium','1'); } catch(e){}
+})();
 </script>
 </body>
 </html>

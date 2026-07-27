@@ -33,6 +33,14 @@ Nothing else is required reading.
   gives the *browser* endpoint, so `Target.getTargets` → `Target.attachToTarget
   {flatten:true}` first, then send `mousePressed`/`mouseMoved`(`buttons:1`)/`mouseReleased`
   with that `sessionId`. Node 22+ has a global `WebSocket`, so this needs no dependency.
+  **That is now `tools/cdp/pointer.mjs`** — `drag` / `click` / `dblclick` / `move` / `wheel`,
+  as a module or a CLI. Use it instead of writing the attach dance again.
+- **You cannot judge fine detail from `agent-browser screenshot`** — it hands back the whole
+  viewport at a fixed width, so a caustic cord, a one-pixel seam or a small font is gone
+  before you see it. **`tools/cdp/shot.mjs`** takes a clip rect and a scale, so a 300×200
+  patch comes back at 4×. One catch that cost a confused minute: the full screenshots are in
+  **device** pixels and the CDP clip rect is in **CSS** pixels, so on a 2× display the
+  coordinates you read off one are twice the ones the other wants.
 - **Don't navigate from a `click` on an SVG `<g>`.** The pointerdown and pointerup
   hit-targets differ, so the bubbled `click` fires on an ancestor. Navigate from
   `pointerup` / `endDrag`.
@@ -47,6 +55,19 @@ Nothing else is required reading.
 
 ### GPU / WebGL
 
+- **WebGL2 assigns attribute locations itself unless you pin them.** If your VAO code uses
+  fixed slots (`aPos` at 0, `aNrm` at 1, instance data at 3–5) and your shaders just say
+  `in vec3 aPos;`, the linker is free to number them any way it likes — and it will number
+  them differently in different programs. The symptom is not "nothing draws": it is *some*
+  meshes drawing as enormous grey slabs and the rest looking fine, which reads as a
+  geometry bug for as long as you let it. Write `layout(location=0) in vec3 aPos;` in every
+  vertex shader and keep one slot table in the JS.
+- **`textureLod(t, uv, 0.0)` on a receding plane defeats minification.** A sharp texture
+  (a caustic net, a grid, lettering) turns to grey mush at a grazing angle, and it looks
+  exactly like a resolution problem — so you go and quadruple the texture, and it is still
+  mush. Use the **bias** form, `texture(t, uv, bias)`: the hardware picks the mip from the
+  real derivatives and the bias only does the softening you actually wanted. A small
+  *negative* bias sharpens; caustics can afford to sparkle.
 - **A downsample pass must compute its UV from the TARGET size, not the source.**
   `uv = gl_FragCoord.xy * (1.0/srcSize)` is right only when src == dst; on a 4x reduction it
   samples the bottom-left *quarter* and stretches it. The bug shows up as a bloom that is a

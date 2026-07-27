@@ -369,8 +369,6 @@ export const DENY = {
     'meta: dev-only SFX render bench (the page titles itself "dev only") — a maker tool, not a visitor page',
   'museum/archive/':
     'meta: frozen point-in-time snapshots of other exhibits (trailer/talk props) — archival duplicates, never catalogue twice',
-  'the-aquarium/art-specs/':
-    'meta: ART FOUNDRY spec-preview pages (maker-side scaffolding for the room art)',
   'the-value-of-a-cut/art-specs/':
     'meta: ART FOUNDRY spec-preview pages (maker-side scaffolding for the room art)',
   'ten-fold/art-specs/':
