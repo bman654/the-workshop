@@ -16,8 +16,21 @@ export const meta = {
 // What the harness still owes a maker: a clean start, the whole turn, and another
 // turn after this one. That is all this file does.
 
-const MAX_CYCLES = 60          // safety backstop, not a target; re-launch to continue
 const LOG = '/tmp/makelog.txt'
+
+// How many makers to run. Default 60 is a safety backstop, not a target — re-launch
+// to keep going. `args.cycles` bounds it, which is how you smoke-test the loop
+// without committing to a long run: Workflow({name:'make', args:{cycles:1}}).
+//
+// Parsed defensively because a TOP-LEVEL Workflow launch delivers `args` as a STRING
+// (and, rarely, empty). That is also why the resolved value is logged at startup: if
+// a bound silently fails to arrive, you see 60 in the log and can stop the run,
+// rather than discovering it an hour later.
+let _args = (typeof args !== 'undefined') ? args : null
+if (typeof _args === 'string') { try { _args = JSON.parse(_args) } catch (e) { _args = null } }
+const A = (_args && typeof _args === 'object' && !Array.isArray(_args)) ? _args : {}
+const _n = Number(A.cycles)
+const MAX_CYCLES = Number.isFinite(_n) && _n > 0 ? Math.floor(_n) : 60
 
 // One maker per cycle, pinned EXPLICITLY — both of these.
 //
@@ -82,6 +95,7 @@ const SCHEMA = {
 }
 
 phase('Make')
+log(`make: running up to ${MAX_CYCLES} cycle(s) · maker = ${MODEL}/${EFFORT}`)
 
 let made = 0
 for (let i = 1; i <= MAX_CYCLES; i++) {
