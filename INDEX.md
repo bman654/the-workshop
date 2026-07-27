@@ -198,4 +198,4 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ---
 
-<sub>manifest generated at commit `5974b4e002131b35bda41b182bd1cf2c12826829`</sub>
+<sub>manifest generated at commit `c1af28ef6d0120927282167678c87e7f463946c9`</sub>

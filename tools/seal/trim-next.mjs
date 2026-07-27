@@ -34,11 +34,13 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(HERE, '../..')
 
 const DEFAULT_KEEP = 5
-// Per letter, body included. Generous on purpose: this bound exists to stop a handoff
-// note becoming a worklog entry, NOT to cut a maker off mid-thought. The first draft
-// used 24 and truncated a genuine letter mid-sentence — a bound that mangles honest
-// work teaches makers to route around it.
-const MAX_LINES = 40
+// Per letter, body included. VERY generous on purpose — this is a runaway guard, not
+// an editor. It has now bitten two genuine letters (at 24, then at 40), and each time
+// it severed a real thought mid-sentence. That is pure loss: the trim runs BEFORE the
+// commit, so truncated text is never recorded anywhere. A bound that destroys honest
+// work is worse than no bound, so this is set where no sincere handoff letter will
+// reach it, and the cut lands on a paragraph break rather than a random line.
+const MAX_LINES = 80
 
 const B = '<!-- letters:begin -->'
 const E = '<!-- letters:end -->'
@@ -68,7 +70,16 @@ export function trim(src, keep = DEFAULT_KEEP) {
     const lines = lt.split('\n')
     if (lines.length <= MAX_LINES) return lt
     capped++
-    return [...lines.slice(0, MAX_LINES), '', '*…trimmed at the seal — the rest is in this cycle\'s commit.*'].join('\n')
+    // Cut on a paragraph break, never mid-sentence. Walk back from the ceiling to the
+    // nearest blank line (but not past half the letter, or a bullet-dense letter would
+    // lose most of itself to one early break).
+    let cut = MAX_LINES
+    for (let k = MAX_LINES; k > Math.floor(MAX_LINES / 2); k--) {
+      if ((lines[k] ?? '').trim() === '') { cut = k; break }
+    }
+    // NOT "the rest is in this cycle's commit" — it is not. trim-next runs at seal
+    // step 4 and the commit is step 5, so the removed lines were never recorded.
+    return [...lines.slice(0, cut), '', '*…this letter ran past the ring and was cut here.*'].join('\n')
   })
 
   const kept = bounded.slice(0, keep)
@@ -118,10 +129,25 @@ if (process.argv.includes('--selftest')) {
   ok(!/\n{3,}/.test(t1), 'no blank-line drift accumulates')
 
   // per-letter line cap
-  const long = `# Next\n\n${B}\n\n### d · m\n${Array.from({ length: 60 }, (_, k) => 'line ' + k).join('\n')}\n\n${E}\n`
+  // must exceed MAX_LINES — derived from it, so raising the ceiling can't silently
+  // turn this case into a no-op again (it did, when MAX_LINES went 40 → 80).
+  const long = `# Next\n\n${B}\n\n### d · m\n${Array.from({ length: MAX_LINES + 40 }, (_, k) => 'line ' + k).join('\n')}\n\n${E}\n`
   r = trim(long, 5)
   ok(r.capped === 1, 'over-long letter is capped')
-  ok(r.text.split('\n').filter((l) => /^line /.test(l)).length === MAX_LINES - 1, 'cap holds at MAX_LINES')
+  ok(r.text.split('\n').filter((l) => /^line /.test(l)).length <= MAX_LINES, 'cap holds at MAX_LINES')
+  ok(!/the rest is in this cycle/.test(r.text), 'no false promise that the cut text was committed')
+
+  // REGRESSION: the cut must land on a paragraph break, not mid-sentence. Both letters
+  // this bound has ever touched were severed mid-thought; that is the bug being fixed.
+  const paras = []
+  for (let k = 0; k < 40; k++) paras.push(`sentence ${k} part one`, `sentence ${k} part two`, '')
+  const para = `# Next\n\n${B}\n\n### d · m\n${paras.join('\n')}\n\n${E}\n`
+  const pr = trim(para, 5)
+  ok(pr.capped === 1, 'paragraph letter is capped')
+  const kept = pr.text.split('\n')
+  const marker = kept.findIndex((l) => /ran past the ring/.test(l))
+  ok(marker > 0, 'cut marker present')
+  ok((kept[marker - 1] ?? '').trim() === '', 'the line before the marker is blank — cut on a paragraph break')
 
   // missing markers must be a safe no-op, never a wipe
   r = trim('# Next\n\nno markers here\n', 5)
