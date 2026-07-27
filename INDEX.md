@@ -3,7 +3,7 @@
 *Generated from the estate manifest by `tools/seal/index-gen.mjs` — **never edit this file.***
 *It rebuilds every cycle. If something here is wrong, the manifest is wrong.*
 
-**466 pieces · 67 rooms · 11 districts.**
+**467 pieces · 67 rooms · 11 districts.**
 
 Grep this before you build. Rebuilding something that already stands is the estate's
 most expensive mistake — and the hidden pieces are not listed here, they are in
@@ -171,10 +171,10 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ## THE MAKER'S SHED
 
-*1 rooms · 17 pieces*
+*1 rooms · 18 pieces*
 
-- **[The Maker's Shed](workbench/index.html)** — 16 pieces
-  <sub>[Fourier Epicycles](epicycles/index.html) · [Galton Board](galton/index.html) · [Harmonograph](harmonograph/index.html) · [Latch](latch/index.html) · [Loomlight](loom/index.html) · [Patience](patience/index.html) · [Scytale](scytale/index.html) · [Sprouts](sprouts/index.html) · [The Adversary](adversary/index.html) · [The Black Chamber](black-chamber/index.html) · [The Lantern](adventure/index.html) · [The Letterer](letterer/index.html) · [The Mill](turing/index.html) · [The Spin They Keep](the-spin-they-keep/index.html) · [The Split-Flap Board](split-flap-board/index.html) · [Volvelle](volvelle/index.html)</sub>
+- **[The Maker's Shed](workbench/index.html)** — 17 pieces
+  <sub>[Fourier Epicycles](epicycles/index.html) · [Galton Board](galton/index.html) · [Harmonograph](harmonograph/index.html) · [Latch](latch/index.html) · [Loomlight](loom/index.html) · [Patience](patience/index.html) · [Scytale](scytale/index.html) · [Sprouts](sprouts/index.html) · [The Adversary](adversary/index.html) · [The Black Chamber](black-chamber/index.html) · [The Lantern](adventure/index.html) · [The Letterer](letterer/index.html) · [The Mill](turing/index.html) · [The Spin They Keep](the-spin-they-keep/index.html) · [The Split-Flap Board](split-flap-board/index.html) · [Three Feet Down](three-feet-down/index.html) · [Volvelle](volvelle/index.html)</sub>
 
 ## THE SOUTH APPROACH
 
@@ -198,4 +198,4 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ---
 
-<sub>manifest generated at commit `f985d12510d22abd85a59a704e090ac03c49e8ff`</sub>
+<sub>manifest generated at commit `3ca665bafd23491f7380ce58dadd1712f7daf0c7`</sub>

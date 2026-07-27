@@ -1,0 +1,1696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Three Feet Down — a walking creature, and the triangle it stands on</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  THREE FEET DOWN  ·  three-feet-down/
+
+  A beast walks a hillside in the late sun.  Give it two legs or eight, choose
+  its gait, sculpt the ground under it, send it somewhere, shove it — and then
+  press STOP and watch what standing still costs.
+
+  WHAT IS ACTUALLY RUNNING
+    · a gait is a duty factor and one phase offset per leg, nothing more.  A
+      planted foot is FIXED TO THE WORLD — the body slides over it — which is
+      the whole difference between walking and skating;
+    · every swinging foot is aimed at where the body is about to be
+      (hip + v·beta·T/2), plus a term proportional to how far the velocity has
+      strayed from what was wanted.  That second term is the entire balance
+      controller: shove the animal and it steps into the shove and catches
+      itself, because that is what stepping is for;
+    · each leg is solved by exact two-link inverse kinematics; the trunk rides
+      the least-squares plane through whichever feet are currently planted, so
+      it leans up a hill instead of ploughing through it;
+    · the centre of mass is summed from the very capsules that get drawn — there
+      is no second, tidier model of the animal anywhere in this room.
+
+  THE CLAIM, AND WHAT HAPPENS IF IT IS FALSE
+    Statically stable = the plumb line through the centre of mass falls inside
+    the convex hull of the planted feet.  Press STOP: if it is stable the beast
+    simply stands there, and if it is not, it topples about the exact hull edge
+    the mass has crossed.  Nothing decides which of those happens except the
+    sign of the margin.
+    Two numbers the room predicts by COUNTING and then measures by WALKING:
+      · a metachronal wave needs beta >= 1/2 + 1/N (more feet down than one
+        flank has legs) — 3/4 on four legs, 2/3 on six, 5/8 on eight;
+      · an alternating gait needs beta >= 1/2, and on SIX legs that is exactly
+        3/N, the floor below which no gait of any kind can be stable.  The
+        insect tripod is optimal, and that is why a beetle can stop dead.
+    MEASURE IT sweeps the duty factor, simulating a full settled cycle at each
+    step, and draws the curve against the predicted line.
+
+  ENGINES (inlined byte-for-byte by the forge, never forked):
+    · ./core.mjs        the beast — plan, gait, IK, plane, hull, margin, sweep
+    · tools/ws/ws.js    the estate-wide mute
+  Node twin: `node three-feet-down/core.test.mjs` — 53 checks, and the thresholds
+  above are bisected out of the same class the page animates.
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root{
+    --ink:#f4ecdd; --dim:#b6ab97; --faint:#8b8070;
+    --gold:#e5bf72; --warm:#f8dfab; --green:#8fd07a; --red:#ef8f7a;
+    --bg0:#0d1013; --panel:rgba(11,13,15,.92); --line:rgba(229,191,114,.24);
+    --font-ui:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --font-mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg0);color:var(--ink);
+    font:15px/1.55 var(--font-ui);overflow:hidden;-webkit-font-smoothing:antialiased}
+  canvas#gl{display:block;position:fixed;inset:0;width:100%;height:100%;
+    touch-action:none;cursor:grab}
+  canvas#gl.drag{cursor:grabbing}
+  canvas#gl.sculpt{cursor:cell}
+
+  .scrim{position:fixed;top:0;left:0;width:min(46vw,560px);height:250px;z-index:4;pointer-events:none;
+    background:radial-gradient(120% 100% at 0% 0%, rgba(6,8,10,.72), rgba(6,8,10,0) 72%)}
+  .topleft{position:fixed;top:15px;left:20px;z-index:5;pointer-events:none;max-width:26em}
+  .topleft a{pointer-events:auto}
+  .back{display:inline-block;font:600 10px/1 var(--font-mono);letter-spacing:.22em;
+    text-transform:uppercase;color:var(--dim);text-decoration:none;opacity:.75}
+  .back:hover{color:var(--gold);opacity:1}
+  h1{font:400 clamp(20px,2.6vw,29px)/1.12 var(--font-ui);margin:.42em 0 .1em;
+    text-shadow:0 2px 20px rgba(0,0,0,.75)}
+  .say{color:var(--dim);font-size:13.5px;margin:.35em 0 0;text-shadow:0 1px 14px rgba(0,0,0,.85)}
+  .say b{color:var(--warm);font-weight:600}
+
+  /* ── the verdict card, top right: the whole claim in four lines ─────────── */
+  .verdict{position:fixed;top:15px;right:18px;z-index:6;width:238px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:11px 13px 12px;box-shadow:0 8px 34px rgba(0,0,0,.55)}
+  .vhead{font:600 9.5px/1 var(--font-mono);letter-spacing:.2em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:7px}
+  .vstate{font:400 17px/1.15 var(--font-ui);letter-spacing:.01em}
+  .vstate.good{color:var(--green)} .vstate.bad{color:var(--red)}
+  .vsub{font:11.5px/1.4 var(--font-mono);color:var(--dim);margin-top:3px}
+  .bar{position:relative;height:7px;margin:9px 0 3px;border-radius:4px;
+    background:rgba(255,255,255,.07);overflow:hidden}
+  .bar i{position:absolute;top:0;bottom:0;left:50%;width:1px;background:rgba(255,255,255,.3)}
+  .bar u{position:absolute;top:0;bottom:0;border-radius:4px;transition:none}
+  .barlbl{display:flex;justify-content:space-between;font:9px/1 var(--font-mono);
+    color:var(--faint);letter-spacing:.08em}
+  canvas#diag{width:100%;height:74px;display:block;margin-top:10px;border-radius:6px;
+    background:rgba(0,0,0,.3)}
+  .dlbl{font:9px/1.3 var(--font-mono);color:var(--faint);letter-spacing:.1em;
+    text-transform:uppercase;margin-top:5px;display:flex;justify-content:space-between}
+
+  /* ── the console ─────────────────────────────────────────────────────────── */
+  .console{position:fixed;left:50%;transform:translateX(-50%);bottom:15px;z-index:6;
+    display:flex;gap:13px;align-items:center;flex-wrap:wrap;justify-content:center;
+    background:var(--panel);border:1px solid var(--line);border-radius:13px;
+    padding:9px 14px;max-width:min(96vw,1020px);box-shadow:0 6px 30px rgba(0,0,0,.55)}
+  .grp{display:flex;align-items:center;gap:8px}
+  .sep{width:1px;height:24px;background:var(--line)}
+  .lbl{font:600 9.5px/1 var(--font-mono);letter-spacing:.16em;text-transform:uppercase;
+    color:var(--faint);white-space:nowrap}
+  .val{font:12px/1 var(--font-mono);color:var(--warm);min-width:3.6em;white-space:nowrap}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:3px;border-radius:2px;
+    background:linear-gradient(90deg,rgba(229,191,114,.75),rgba(229,191,114,.2));
+    outline:none;width:104px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;
+    border-radius:50%;background:#f6dfae;border:1px solid #7d5f26;cursor:pointer;
+    box-shadow:0 1px 5px rgba(0,0,0,.6)}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;
+    background:#f6dfae;border:1px solid #7d5f26;cursor:pointer}
+  button,select{font:600 10px/1 var(--font-mono);letter-spacing:.13em;text-transform:uppercase;
+    color:var(--ink);background:rgba(229,191,114,.13);border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;cursor:pointer;transition:background .15s,color .15s}
+  select{text-transform:none;letter-spacing:.02em;font-family:var(--font-ui);font-size:12.5px;
+    padding:6px 8px}
+  button:hover,select:hover{background:rgba(229,191,114,.27);color:#fff}
+  button.on{background:rgba(229,191,114,.44);color:#1a1408;border-color:#e5bf72}
+  button.stop.on{background:rgba(239,143,122,.5);border-color:var(--red);color:#20100c}
+  .segs{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .segs button{border:none;border-radius:0;padding:8px 9px}
+  .segs button + button{border-left:1px solid var(--line)}
+
+  /* ── the bench drawer ────────────────────────────────────────────────────── */
+  .bench{position:fixed;right:18px;top:250px;z-index:7;width:min(94vw,466px);max-height:calc(100vh - 400px);overflow-y:auto;
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:13px 15px 14px;display:none;box-shadow:0 8px 36px rgba(0,0,0,.6)}
+  .bench.open{display:block}
+  .bench h2{font:500 15.5px/1.25 var(--font-ui);margin:0 0 6px}
+  .bench p{margin:.42em 0;font-size:12.6px;color:var(--dim);line-height:1.52}
+  .bench b{color:var(--ink);font-weight:600}
+  .bench .num{font-family:var(--font-mono);color:var(--warm)}
+  #chart{width:100%;height:184px;display:block;margin:8px 0 4px;border-radius:7px;
+    background:rgba(0,0,0,.33)}
+  .closex{float:right;font:600 11px/1 var(--font-mono);color:var(--faint);cursor:pointer;
+    background:none;border:none;padding:2px 4px;letter-spacing:.1em}
+  .closex:hover{color:var(--ink);background:none}
+
+  .gate{position:fixed;inset:0;z-index:20;display:flex;align-items:center;
+    justify-content:center;background:rgba(9,11,13,.62);cursor:pointer;transition:opacity .6s}
+  .gate div{text-align:center}
+  .gate .big{font:400 clamp(25px,4.4vw,42px)/1.2 var(--font-ui);margin-bottom:.45em}
+  .gate .small{font:500 10.5px/1 var(--font-mono);letter-spacing:.24em;
+    text-transform:uppercase;color:var(--gold)}
+  .gate.gone{opacity:0;pointer-events:none}
+
+  .fps{position:fixed;left:20px;bottom:16px;z-index:5;font:10px/1 var(--font-mono);
+    color:var(--faint);letter-spacing:.1em;pointer-events:none;opacity:.6}
+
+  @media (max-width:900px){
+    .say{display:none}
+    .console .lbl{display:none}
+    .console .sep{display:none}
+    .console button,.console select{padding:7px 8px;font-size:9.5px}
+    .console{gap:7px;padding:7px 8px;bottom:8px;border-radius:11px}
+    .verdict{width:190px;top:10px;right:10px;padding:9px 10px}
+    canvas#diag{height:56px}
+    input[type=range]{width:66px}
+    .fps{display:none}
+    .bench{right:8px;left:8px;width:auto;top:auto;bottom:104px;max-height:54vh}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+<div class="scrim"></div>
+
+<div class="topleft">
+  <a class="back" href="../workbench/index.html">&larr; the maker&rsquo;s shed</a>
+  <h1>Three Feet Down</h1>
+  <p class="say">A polygon needs three corners to have an inside. Click the hill to send it
+  somewhere, raise ground in its way, shove it and watch it step into the shove. Then press
+  <b>stop</b>, and find out whether standing still was ever an option.</p>
+</div>
+
+<div class="verdict">
+  <div class="vhead">standing on</div>
+  <div class="vstate" id="vstate">&mdash;</div>
+  <div class="vsub" id="vsub">&nbsp;</div>
+  <div class="bar"><i></i><u id="barfill"></u></div>
+  <div class="barlbl"><span>&minus;40 cm</span><span>margin</span><span>+40 cm</span></div>
+  <canvas id="diag"></canvas>
+  <div class="dlbl"><span id="dlblL">stance</span><span id="dlblR">one cycle</span></div>
+</div>
+
+<div class="console">
+  <div class="grp">
+    <span class="lbl">Legs</span>
+    <div class="segs" id="legsegs">
+      <button data-legs="2">2</button><button data-legs="4">4</button>
+      <button data-legs="6">6</button><button data-legs="8">8</button>
+    </div>
+  </div>
+  <div class="grp">
+    <select id="gait" aria-label="gait"></select>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <span class="lbl">Duty &beta;</span>
+    <input id="duty" type="range" min="0.2" max="0.95" step="0.005" value="0.5">
+    <span class="val" id="dutyVal">0.50</span>
+  </div>
+  <div class="grp">
+    <span class="lbl">Speed</span>
+    <input id="speed" type="range" min="0" max="1.9" step="0.02" value="0.85">
+    <span class="val" id="speedVal">0.85</span>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <button id="stop" class="stop" title="Freeze it mid-stride. If the plumb line is outside the polygon it goes over the edge it crossed.">Stop</button>
+    <button id="shove" title="A sideways kick. Watch it step INTO the shove — that is the whole balance controller.">Shove</button>
+    <button id="lean" class="on" title="Shift the trunk over the legs that are carrying it, the way a slow-walking horse does. Never allowed to leave the polygon it is standing in.">Lean</button>
+    <button id="showpoly" class="on" title="Draw the convex hull of the planted feet, and the plumb line through the centre of mass.">Triangle</button>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <span class="lbl">Ground</span>
+    <div class="segs">
+      <button id="raise" title="Then drag on the hill.">Raise</button><button id="dig" title="Then drag on the hill.">Dig</button><button id="flat" title="Back to open ground.">Level</button>
+    </div>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <button id="measure" title="Walk this beast a settled cycle at 60 duty factors and compare the answer with what counting feet predicts.">Measure it</button>
+    <button id="hush">Hush</button>
+  </div>
+</div>
+
+<div class="bench" id="bench">
+  <button class="closex" id="benchClose">close</button>
+  <h2>The duty a body needs</h2>
+  <p>Count feet and you get a number with no simulation in it. A polygon needs three
+  corners, so <b>&beta; &ge; 3/N</b> for any gait at all. A <b>wave</b> lifts a whole flank in
+  turn, so it needs more feet down than one flank has legs: <b>&beta; &ge; &frac12; + 1/N</b>.
+  An <b>alternating</b> gait splits the legs in two, so it needs <b>&beta; &ge; &frac12;</b>
+  &mdash; and on six legs that <i>is</i> 3/N, which is why the insect tripod cannot be beaten.</p>
+  <canvas id="chart"></canvas>
+  <p id="bverdict" class="num">Press <b>measure it</b>: the page walks this exact beast a
+  full settled cycle at each of 60 duty factors and asks, 480 times per cycle, whether the
+  plumb line falls inside the polygon. The dashed line is the prediction. Nothing is fitted.</p>
+</div>
+
+<div class="gate" id="gate"><div>
+  <div class="big">Three Feet Down</div>
+  <div class="small">click to walk out onto the hill</div>
+</div></div>
+
+<div class="fps" id="fps"></div>
+
+<script type="module">
+<!-- forge:include ../tools/ws/ws.js -->
+<!-- forge:include ./core.mjs -->
+
+addEventListener('error', (e)=>{ window.__err = (e.message||'') + ' @' + (e.lineno||'?') + ':' + (e.colno||'?'); });
+
+/* ════════════════════════════════════════════════════════════════════════════
+   0 · SMALL MATRIX MATH
+   ═══════════════════════════════════════════════════════════════════════════ */
+function mIdent(){ return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]); }
+function mMul(a,b){
+  const o = new Float32Array(16);
+  for (let c=0;c<4;c++) for (let r=0;r<4;r++){
+    let s=0; for (let k=0;k<4;k++) s += a[k*4+r]*b[c*4+k];
+    o[c*4+r]=s;
+  }
+  return o;
+}
+function mPersp(fovy, asp, n, f){
+  const t = 1/Math.tan(fovy/2), o = new Float32Array(16);
+  o[0]=t/asp; o[5]=t; o[10]=(f+n)/(n-f); o[11]=-1; o[14]=2*f*n/(n-f);
+  return o;
+}
+function mOrtho(l,r,b,t,n,f){
+  const o = mIdent();
+  o[0]=2/(r-l); o[5]=2/(t-b); o[10]=-2/(f-n);
+  o[12]=-(r+l)/(r-l); o[13]=-(t+b)/(t-b); o[14]=-(f+n)/(f-n);
+  return o;
+}
+function mLook(eye, at, upv){
+  const z = norm(sub(eye,at)); const x = norm(cross(upv,z)); const y = cross(z,x);
+  const o = new Float32Array(16);
+  o[0]=x[0]; o[1]=y[0]; o[2]=z[0];
+  o[4]=x[1]; o[5]=y[1]; o[6]=z[1];
+  o[8]=x[2]; o[9]=y[2]; o[10]=z[2];
+  o[12]=-dot(x,eye); o[13]=-dot(y,eye); o[14]=-dot(z,eye); o[15]=1;
+  return o;
+}
+function mInv(m){
+  const inv = new Float32Array(16), a = m;
+  inv[0]=a[5]*a[10]*a[15]-a[5]*a[11]*a[14]-a[9]*a[6]*a[15]+a[9]*a[7]*a[14]+a[13]*a[6]*a[11]-a[13]*a[7]*a[10];
+  inv[4]=-a[4]*a[10]*a[15]+a[4]*a[11]*a[14]+a[8]*a[6]*a[15]-a[8]*a[7]*a[14]-a[12]*a[6]*a[11]+a[12]*a[7]*a[10];
+  inv[8]=a[4]*a[9]*a[15]-a[4]*a[11]*a[13]-a[8]*a[5]*a[15]+a[8]*a[7]*a[13]+a[12]*a[5]*a[11]-a[12]*a[7]*a[9];
+  inv[12]=-a[4]*a[9]*a[14]+a[4]*a[10]*a[13]+a[8]*a[5]*a[14]-a[8]*a[6]*a[13]-a[12]*a[5]*a[10]+a[12]*a[6]*a[9];
+  inv[1]=-a[1]*a[10]*a[15]+a[1]*a[11]*a[14]+a[9]*a[2]*a[15]-a[9]*a[3]*a[14]-a[13]*a[2]*a[11]+a[13]*a[3]*a[10];
+  inv[5]=a[0]*a[10]*a[15]-a[0]*a[11]*a[14]-a[8]*a[2]*a[15]+a[8]*a[3]*a[14]+a[12]*a[2]*a[11]-a[12]*a[3]*a[10];
+  inv[9]=-a[0]*a[9]*a[15]+a[0]*a[11]*a[13]+a[8]*a[1]*a[15]-a[8]*a[3]*a[13]-a[12]*a[1]*a[11]+a[12]*a[3]*a[9];
+  inv[13]=a[0]*a[9]*a[14]-a[0]*a[10]*a[13]-a[8]*a[1]*a[14]+a[8]*a[2]*a[13]+a[12]*a[1]*a[10]-a[12]*a[2]*a[9];
+  inv[2]=a[1]*a[6]*a[15]-a[1]*a[7]*a[14]-a[5]*a[2]*a[15]+a[5]*a[3]*a[14]+a[13]*a[2]*a[7]-a[13]*a[3]*a[6];
+  inv[6]=-a[0]*a[6]*a[15]+a[0]*a[7]*a[14]+a[4]*a[2]*a[15]-a[4]*a[3]*a[14]-a[12]*a[2]*a[7]+a[12]*a[3]*a[6];
+  inv[10]=a[0]*a[5]*a[15]-a[0]*a[7]*a[13]-a[4]*a[1]*a[15]+a[4]*a[3]*a[13]+a[12]*a[1]*a[7]-a[12]*a[3]*a[5];
+  inv[14]=-a[0]*a[5]*a[14]+a[0]*a[6]*a[13]+a[4]*a[1]*a[14]-a[4]*a[2]*a[13]-a[12]*a[1]*a[6]+a[12]*a[2]*a[5];
+  inv[3]=-a[1]*a[6]*a[11]+a[1]*a[7]*a[10]+a[5]*a[2]*a[11]-a[5]*a[3]*a[10]-a[9]*a[2]*a[7]+a[9]*a[3]*a[6];
+  inv[7]=a[0]*a[6]*a[11]-a[0]*a[7]*a[10]-a[4]*a[2]*a[11]+a[4]*a[3]*a[10]+a[8]*a[2]*a[7]-a[8]*a[3]*a[6];
+  inv[11]=-a[0]*a[5]*a[11]+a[0]*a[7]*a[9]+a[4]*a[1]*a[11]-a[4]*a[3]*a[9]-a[8]*a[1]*a[7]+a[8]*a[3]*a[5];
+  inv[15]=a[0]*a[5]*a[10]-a[0]*a[6]*a[9]-a[4]*a[1]*a[10]+a[4]*a[2]*a[9]+a[8]*a[1]*a[6]-a[8]*a[2]*a[5];
+  let det = a[0]*inv[0]+a[1]*inv[4]+a[2]*inv[8]+a[3]*inv[12];
+  if (!det) return mIdent();
+  det = 1/det;
+  for (let i=0;i<16;i++) inv[i]*=det;
+  return inv;
+}
+/* rotate p about the line through o with unit direction d, by angle t */
+function rotAbout(p, o, d, t){
+  const v = sub(p,o), c = Math.cos(t), s = Math.sin(t);
+  const r = add(add(mul(v,c), mul(cross(d,v), s)), mul(d, dot(d,v)*(1-c)));
+  return add(o, r);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   1 · THE GROUND — a heightfield you can push around
+   ═══════════════════════════════════════════════════════════════════════════ */
+const GN = 208;                 /* cells per side */
+const GHALF = 34;               /* metres from centre to edge */
+const GSTEP = (2*GHALF)/GN;
+const H = new Float32Array((GN+1)*(GN+1));
+
+function hash2(x,y){ let h = Math.sin(x*127.1 + y*311.7)*43758.5453; return h - Math.floor(h); }
+function vnoise(x,y){
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x-xi, yf = y-yi;
+  const u = xf*xf*(3-2*xf), v = yf*yf*(3-2*yf);
+  const a = hash2(xi,yi), b = hash2(xi+1,yi), c = hash2(xi,yi+1), d = hash2(xi+1,yi+1);
+  return (a*(1-u)+b*u)*(1-v) + (c*(1-u)+d*u)*v;
+}
+function seedGround(){
+  for (let j=0;j<=GN;j++) for (let i=0;i<=GN;i++){
+    const x = -GHALF + i*GSTEP, z = -GHALF + j*GSTEP;
+    let h = 0;
+    h += 2.60*vnoise(x*0.041+11.3, z*0.041+4.7);
+    h += 1.05*vnoise(x*0.105+3.1,  z*0.105+9.4);
+    h += 0.34*vnoise(x*0.31+21.0,  z*0.31+2.2);
+    h += 0.11*vnoise(x*0.83+7.0,   z*0.83+15.5);
+    /* a ridge of further hills at the rim, so the horizon is land and not an edge */
+    const r = Math.hypot(x,z)/GHALF;
+    const rim = Math.max(0, (r-0.52)/0.48);
+    h += 5.2*rim*rim;
+    /* the ground the beast starts on is walkable — smoothstep, or the seam of
+       the blend reads as a crop circle round the origin */
+    const q = clamp(Math.hypot(x,z)/13.0, 0, 1);
+    h *= 0.34 + 0.66*(q*q*(3-2*q));
+    H[j*(GN+1)+i] = h;
+  }
+}
+seedGround();
+
+function groundAt(x,z){
+  const fx = (x + GHALF)/GSTEP, fz = (z + GHALF)/GSTEP;
+  let i = Math.floor(fx), j = Math.floor(fz);
+  i = clamp(i, 0, GN-1); j = clamp(j, 0, GN-1);
+  const tx = clamp(fx - i, 0, 1), tz = clamp(fz - j, 0, 1);
+  const s = GN+1;
+  const h00 = H[j*s+i], h10 = H[j*s+i+1], h01 = H[(j+1)*s+i], h11 = H[(j+1)*s+i+1];
+  return lerp(lerp(h00,h10,tx), lerp(h01,h11,tx), tz);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   2 · THE BEAST
+   ═══════════════════════════════════════════════════════════════════════════ */
+const beast = new Beast({ ground: groundAt, legs: 6, gait: 'tripod', duty: 0.5, speed: 0.85, period: 1.05, lean: 1 });
+beast.pos = [0, groundAt(0,0)+beast.plan.stand, 0];
+beast.setLegs(6, true);
+
+/* ════════════════════════════════════════════════════════════════════════════
+   3 · WEBGL
+   ═══════════════════════════════════════════════════════════════════════════ */
+const cv = document.getElementById('gl');
+const gl = cv.getContext('webgl2', { antialias: true, alpha: false, powerPreference: 'high-performance' });
+if (!gl) { document.getElementById('vstate').textContent = 'no WebGL2'; }
+
+const GLLOG = [];
+function sh(type, src){
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { GLLOG.push(gl.getShaderInfoLog(s)); console.error(gl.getShaderInfoLog(s), src); }
+  return s;
+}
+function prog(vs, fs){
+  const p = gl.createProgram();
+  gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) { GLLOG.push(gl.getProgramInfoLog(p)); console.error(gl.getProgramInfoLog(p)); }
+  const u = new Proxy({}, { get: (c,k)=> (k in c ? c[k] : (c[k] = gl.getUniformLocation(p, k))) });
+  return { p, u };
+}
+
+/* ── shared GLSL ─────────────────────────────────────────────────────────── */
+const GLSL_COMMON = `
+precision highp float;
+uniform vec3 uSunDir, uSunCol, uSkyCol, uGndCol, uFogCol, uCam;
+uniform sampler2D uShadow;
+uniform float uShadowTexel;
+float shadowAt(vec4 lp, float ndl){
+  vec3 q = lp.xyz / lp.w * 0.5 + 0.5;
+  if (q.x < 0.002 || q.x > 0.998 || q.y < 0.002 || q.y > 0.998 || q.z > 1.0) return 1.0;
+  /* normalised depth over the light's ~40 m range, so 0.00022 is about 9 mm */
+  float bias = 0.00022 + 0.0011 * (1.0 - ndl);
+  float s = 0.0;
+  for (int j = -1; j <= 1; j++)
+    for (int i = -1; i <= 1; i++){
+      float d = texture(uShadow, q.xy + vec2(float(i), float(j)) * uShadowTexel).r;
+      s += (q.z - bias <= d) ? 1.0 : 0.0;
+    }
+  return s / 9.0;
+}
+/* one tap is enough for a blade of grass */
+float shadow1(vec4 lp, float ndl){
+  vec3 q = lp.xyz / lp.w * 0.5 + 0.5;
+  if (q.x < 0.002 || q.x > 0.998 || q.y < 0.002 || q.y > 0.998 || q.z > 1.0) return 1.0;
+  return (q.z - (0.00030 + 0.0016 * (1.0 - ndl)) <= texture(uShadow, q.xy).r) ? 1.0 : 0.0;
+}
+vec3 skyAt(vec3 d){
+  float h = clamp(d.y, -1.0, 1.0);
+  vec3 zen = vec3(0.062, 0.128, 0.300);
+  vec3 hor = vec3(0.400, 0.372, 0.352);
+  vec3 c = mix(hor, zen, pow(clamp(h, 0.0, 1.0), 0.55));
+  c = mix(vec3(0.175, 0.160, 0.150), c, smoothstep(-0.16, 0.05, h));
+  float sd = max(dot(normalize(d), uSunDir), 0.0);
+  c += uSunCol * (pow(sd, 700.0) * 2.4 + pow(sd, 26.0) * 0.13 + pow(sd, 4.0) * 0.030);
+  return c;
+}
+vec3 tone(vec3 c){
+  c *= 1.02;
+  c = (c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14);
+  return pow(clamp(c, 0.0, 1.0), vec3(1.0/2.2));
+}
+`;
+
+/* ── sky ─────────────────────────────────────────────────────────────────── */
+const skyProg = prog(`#version 300 es
+layout(location=0) in vec2 aXY;
+uniform mat4 uInvVP;
+out vec3 vDir;
+void main(){
+  vec4 n = uInvVP * vec4(aXY, 1.0, 1.0);
+  vec4 f = uInvVP * vec4(aXY, -1.0, 1.0);
+  vDir = normalize(n.xyz/n.w - f.xyz/f.w);
+  gl_Position = vec4(aXY, 1.0, 1.0);
+}`, `#version 300 es
+${GLSL_COMMON}
+in vec3 vDir; out vec4 o;
+void main(){ o = vec4(tone(skyAt(normalize(vDir))), 1.0); }`);
+
+/* ── terrain ─────────────────────────────────────────────────────────────── */
+const terrProg = prog(`#version 300 es
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNrm;
+uniform mat4 uVP, uLightVP;
+out vec3 vP, vN; out vec4 vL;
+void main(){ vP = aPos; vN = aNrm; vL = uLightVP * vec4(aPos,1.0); gl_Position = uVP * vec4(aPos,1.0); }`,
+`#version 300 es
+${GLSL_COMMON}
+#define NPRINT 26
+uniform vec4 uPrints[NPRINT];      /* xz = where, z-> age 0..1, w = radius */
+uniform int uNPrints;
+uniform int uDepthOnly;
+in vec3 vP, vN; in vec4 vL; out vec4 o;
+
+float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float vn(vec2 p){
+  vec2 i = floor(p), f = fract(p); vec2 u = f*f*(3.0-2.0*f);
+  return mix(mix(h21(i), h21(i+vec2(1,0)), u.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), u.x), u.y);
+}
+float fbm(vec2 p){ return 0.5*vn(p) + 0.26*vn(p*2.13+3.1) + 0.14*vn(p*4.7+9.4) + 0.07*vn(p*9.3); }
+
+void main(){
+  if (uDepthOnly == 1) { o = vec4(1.0); return; }
+  vec3 n = normalize(vN);
+  float dcam = length(uCam - vP);
+  /* rough up the normal at close range so the ground has a surface, not a sheet */
+  {
+    float e = 0.035;
+    float f0 = fbm(vP.xz * 9.0);
+    float fx = fbm((vP.xz + vec2(e,0.0)) * 9.0);
+    float fz = fbm((vP.xz + vec2(0.0,e)) * 9.0);
+    float amp = 1.0 - smoothstep(3.0, 15.0, dcam);
+    n = normalize(n + vec3(-(fx-f0)/e, 0.0, -(fz-f0)/e) * amp * 0.055);
+  }
+  float slope = 1.0 - n.y;
+  float m = fbm(vP.xz * 1.35);
+  float fine = fbm(vP.xz * 7.5) * 0.6 + vn(vP.xz * 46.0) * 0.4;
+  vec3 grassA = vec3(0.042, 0.058, 0.026);
+  vec3 grassB = vec3(0.155, 0.178, 0.068);
+  vec3 alb = mix(grassA, grassB, clamp(m*0.80 + fine*0.22, 0.0, 1.0));
+  alb = mix(alb, vec3(0.145, 0.115, 0.078), smoothstep(0.30, 0.66, slope));
+  alb = mix(alb, vec3(0.205, 0.190, 0.128), smoothstep(2.4, 8.5, vP.y) * 0.40);
+
+  /* the tread it has left behind */
+  float tread = 0.0;
+  for (int i = 0; i < NPRINT; i++){
+    if (i >= uNPrints) break;
+    vec4 pr = uPrints[i];
+    float d = length(vP.xz - pr.xy);
+    tread = max(tread, smoothstep(pr.w, pr.w*0.15, d) * pr.z);
+  }
+  alb = mix(alb, vec3(0.185, 0.145, 0.098), tread * 0.72);
+
+  float ndl = max(dot(n, uSunDir), 0.0);
+  float sh = shadowAt(vL, ndl);
+  vec3 lit = alb * (uSunCol * ndl * sh + mix(uGndCol, uSkyCol, 0.5 + 0.5*n.y) * 0.62);
+  /* the low sun catching the grass tips */
+  vec3 V = normalize(uCam - vP);
+  float sheen = pow(max(dot(normalize(uSunDir + V), n), 0.0), 22.0) * 0.28 * sh;
+  lit += uSunCol * sheen * (0.4 + 0.6*m);
+
+  vec3 fogged = mix(lit, skyAt(normalize(vP - uCam)) * 0.62, smoothstep(20.0, 76.0, dcam));
+  o = vec4(tone(fogged), 1.0);
+}`);
+
+/* ── the beast: instanced tapered capsules ───────────────────────────────── */
+const segProg = prog(`#version 300 es
+layout(location=0) in vec2 aRing;     /* x = angle, y = param v in [-1,2] */
+layout(location=3) in vec3 iA;
+layout(location=4) in vec3 iB;
+layout(location=5) in vec2 iR;        /* r0, r1 */
+layout(location=6) in float iTint;
+uniform mat4 uVP, uLightVP;
+out vec3 vP, vN; out vec4 vL; out float vT; out float vAxial;
+void main(){
+  vec3 ab = iB - iA;
+  float L = max(length(ab), 1e-5);
+  vec3 ax = ab / L;
+  vec3 ref = abs(ax.y) < 0.88 ? vec3(0.0,1.0,0.0) : vec3(1.0,0.0,0.0);
+  vec3 e1 = normalize(cross(ax, ref));
+  vec3 e2 = cross(ax, e1);
+  float ang = aRing.x, v = aRing.y;
+  vec3 rad = e1*cos(ang) + e2*sin(ang);
+  vec3 P, N;
+  if (v < 0.0){
+    float ph = (-v) * 1.5707963;
+    P = iA + rad*(iR.x*cos(ph)) - ax*(iR.x*sin(ph));
+    N = rad*cos(ph) - ax*sin(ph);
+  } else if (v > 1.0){
+    float ph = (v - 1.0) * 1.5707963;
+    P = iB + rad*(iR.y*cos(ph)) + ax*(iR.y*sin(ph));
+    N = rad*cos(ph) + ax*sin(ph);
+  } else {
+    float r = mix(iR.x, iR.y, v);
+    P = iA + ax*(v*L) + rad*r;
+    N = normalize(rad - ax*((iR.y - iR.x)/L));
+  }
+  vP = P; vN = N; vT = iTint; vAxial = clamp(v, 0.0, 1.0);
+  vL = uLightVP * vec4(P, 1.0);
+  gl_Position = uVP * vec4(P, 1.0);
+}`,
+`#version 300 es
+${GLSL_COMMON}
+uniform int uDepthOnly;
+in vec3 vP, vN; in vec4 vL; in float vT; in float vAxial; out vec4 o;
+void main(){
+  if (uDepthOnly == 1) { o = vec4(1.0); return; }
+  vec3 n = normalize(vN);
+  /* 0 = trunk, 1 = leg, 2 = swinging leg, 3 = foot on the ground */
+  vec3 alb =
+      vT < 0.5 ? mix(vec3(0.105,0.066,0.041), vec3(0.176,0.108,0.055), vAxial)
+    : vT < 1.5 ? vec3(0.112,0.072,0.045)
+    : vT < 2.5 ? vec3(0.150,0.104,0.066)
+    :            vec3(0.30,0.22,0.10);
+  float ndl = max(dot(n, uSunDir), 0.0);
+  float sh = shadowAt(vL, ndl);
+  vec3 V = normalize(uCam - vP);
+  vec3 Hh = normalize(uSunDir + V);
+  float spec = pow(max(dot(n, Hh), 0.0), 26.0) * (vT < 0.5 ? 0.11 : 0.17) * sh;
+  float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0);
+  vec3 lit = alb * (uSunCol * ndl * sh + mix(uGndCol, uSkyCol, 0.5 + 0.5*n.y) * 1.05)
+           + uSunCol * spec
+           + uSkyCol * rim * 0.30;
+  if (vT > 1.5 && vT < 2.5) lit += vec3(0.030,0.021,0.008);  /* a swinging leg reads lighter */
+  float d = length(uCam - vP);
+  vec3 fogged = mix(lit, skyAt(normalize(vP - uCam)) * 0.62, smoothstep(20.0, 76.0, d));
+  o = vec4(tone(fogged), 1.0);
+}`);
+
+/* ── the grass: instanced blades that wrap around wherever you are ──────── */
+const grassProg = prog(`#version 300 es
+layout(location=0) in vec2 aVert;    /* x = across the blade, y = up it */
+layout(location=3) in vec4 aInst;    /* xz = seat in the tile, z/w = two randoms */
+uniform mat4 uVP, uLightVP;
+uniform sampler2D uHeight;
+uniform vec2 uCamXZ;
+uniform float uTile, uFar, uTime, uGHalf, uBlade, uWide, uCell, uGrid;
+out vec3 vP, vN; out vec4 vL; out float vT, vJ;
+void main(){
+  vec2 p = aInst.xy;
+  p += floor((uCamXZ - p + uTile*0.5) / uTile) * uTile;   /* the nearest copy of this blade */
+  float d = distance(p, uCamXZ);
+  float fade = 1.0 - smoothstep(uFar*0.70, uFar, d);
+  vec2 g = (p + uGHalf) / uCell;                  /* in grid cells */
+  vec2 gi = floor(g), gf = g - gi;
+  ivec2 c = ivec2(clamp(gi, vec2(0.0), vec2(uGrid - 1.0)));
+  float h00 = texelFetch(uHeight, c, 0).r;
+  float h10 = texelFetch(uHeight, c + ivec2(1,0), 0).r;
+  float h01 = texelFetch(uHeight, c + ivec2(0,1), 0).r;
+  float h11 = texelFetch(uHeight, c + ivec2(1,1), 0).r;
+  float y0 = mix(mix(h00,h10,gf.x), mix(h01,h11,gf.x), gf.y);
+  float hgt = uBlade * (0.55 + 0.85*aInst.z) * fade;
+  float ang = aInst.w * 6.2831853;
+  vec2 dir = vec2(cos(ang), sin(ang));
+  float t = aVert.y;
+  float gust = sin(uTime*1.45 + p.x*0.62 + p.y*0.41) * 0.5 + 0.5;
+  gust = gust*gust;
+  vec2 wind = normalize(vec2(0.82, -0.57)) * (0.13 + 0.42*gust) * t*t * hgt;
+  vec3 P = vec3(p.x + dir.x*aVert.x*uWide*fade + wind.x,
+                y0 + t*hgt*(1.0 - 0.22*t),
+                p.y + dir.y*aVert.x*uWide*fade + wind.y);
+  vec3 face = normalize(vec3(-dir.y, 0.0, dir.x));
+  vN = normalize(face * 0.80 + vec3(0.0, 0.62, 0.0));
+  vP = P; vT = t; vJ = aInst.z;
+  vL = uLightVP * vec4(P, 1.0);
+  gl_Position = uVP * vec4(P, 1.0);
+}`,
+`#version 300 es
+${GLSL_COMMON}
+in vec3 vP, vN; in vec4 vL; in float vT, vJ; out vec4 o;
+void main(){
+  vec3 n = normalize(vN);
+  vec3 base = vec3(0.046, 0.060, 0.024);
+  vec3 tipc = vec3(0.300, 0.325, 0.112);
+  vec3 alb = mix(base, tipc, vT*vT*(0.55 + 0.75*vJ));
+  float ndl = abs(dot(n, uSunDir));
+  float sh = shadow1(vL, ndl);
+  vec3 V = normalize(uCam - vP);
+  /* the thing that makes grass glow at this hour: light coming THROUGH it */
+  float thru = pow(max(dot(-V, uSunDir), 0.0), 3.2) * vT * 1.30;
+  vec3 lit = alb * (uSunCol * ndl * sh + mix(uGndCol, uSkyCol, 0.35 + 0.4*vT) * 0.70)
+           + uSunCol * alb * thru * sh * 2.6;
+  float d = length(uCam - vP);
+  vec3 fogged = mix(lit, skyAt(normalize(vP - uCam)) * 0.62, smoothstep(20.0, 76.0, d));
+  o = vec4(tone(fogged), 1.0);
+}`);
+
+const GRASS_N = +(new URLSearchParams(location.search).get('g') || 96000), GRASS_TILE = 18.5, GRASS_FAR = 10.2;
+const grassVAO = gl.createVertexArray(); gl.bindVertexArray(grassVAO);
+{
+  const V = new Float32Array([-1,0,  1,0,  -0.46,0.56,  0.46,0.56,  0.0,1.0]);
+  const I = new Uint16Array([0,1,2, 2,1,3, 2,3,4]);
+  const gvb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, gvb);
+  gl.bufferData(gl.ARRAY_BUFFER, V, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+  const gib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gib);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, I, gl.STATIC_DRAW);
+  const inst = new Float32Array(GRASS_N*4);
+  let sd = 20260727;
+  const rnd = ()=>{ sd = (sd*1664525 + 1013904223) >>> 0; return sd/4294967296; };
+  for (let i=0;i<GRASS_N;i++){
+    inst[i*4]   = (rnd()-0.5)*GRASS_TILE;
+    inst[i*4+1] = (rnd()-0.5)*GRASS_TILE;
+    inst[i*4+2] = rnd();
+    inst[i*4+3] = rnd();
+  }
+  const gnb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, gnb);
+  gl.bufferData(gl.ARRAY_BUFFER, inst, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3,4,gl.FLOAT,false,0,0); gl.vertexAttribDivisor(3,1);
+}
+
+/* ── the overlay: polygon, plumb line, foot marks ────────────────────────── */
+const ovProg = prog(`#version 300 es
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec4 aCol;
+uniform mat4 uVP;
+out vec4 vC;
+void main(){ vC = aCol; gl_Position = uVP * vec4(aPos,1.0); }`,
+`#version 300 es
+precision highp float; in vec4 vC; out vec4 o;
+void main(){ o = vC; }`);
+
+/* ── dust ────────────────────────────────────────────────────────────────── */
+const dustProg = prog(`#version 300 es
+layout(location=0) in vec4 aP;      /* xyz + size */
+layout(location=1) in vec4 aC;
+uniform mat4 uVP; uniform float uPx;
+out vec4 vC;
+void main(){
+  vC = aC;
+  vec4 c = uVP * vec4(aP.xyz, 1.0);
+  gl_Position = c;
+  gl_PointSize = max(2.0, aP.w * uPx / max(c.w, 0.1));
+}`,
+`#version 300 es
+precision highp float; in vec4 vC; out vec4 o;
+void main(){
+  float d = length(gl_PointCoord - 0.5);
+  float a = smoothstep(0.5, 0.06, d);
+  o = vec4(vC.rgb, vC.a * a);
+}`);
+
+/* ── buffers ─────────────────────────────────────────────────────────────── */
+/* sky */
+const quadVAO = gl.createVertexArray();
+gl.bindVertexArray(quadVAO);
+const qb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, qb);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+/* terrain */
+const NV = (GN+1)*(GN+1);
+const terrPos = new Float32Array(NV*3);
+const terrNrm = new Float32Array(NV*3);
+const terrIdx = new Uint32Array(GN*GN*6);
+{
+  let k = 0;
+  for (let j=0;j<GN;j++) for (let i=0;i<GN;i++){
+    const a = j*(GN+1)+i, b = a+1, c = a+GN+1, d = c+1;
+    terrIdx[k++]=a; terrIdx[k++]=c; terrIdx[k++]=b;
+    terrIdx[k++]=b; terrIdx[k++]=c; terrIdx[k++]=d;
+  }
+}
+function rebuildTerrain(){
+  const s = GN+1;
+  for (let j=0;j<=GN;j++) for (let i=0;i<=GN;i++){
+    const o = (j*s+i)*3;
+    terrPos[o]   = -GHALF + i*GSTEP;
+    terrPos[o+1] = H[j*s+i];
+    terrPos[o+2] = -GHALF + j*GSTEP;
+    const hl = H[j*s + Math.max(0,i-1)], hr = H[j*s + Math.min(GN,i+1)];
+    const hd = H[Math.max(0,j-1)*s + i], hu = H[Math.min(GN,j+1)*s + i];
+    const dx = (hr-hl) / (GSTEP * (Math.min(GN,i+1) - Math.max(0,i-1)));
+    const dz = (hu-hd) / (GSTEP * (Math.min(GN,j+1) - Math.max(0,j-1)));
+    const n = norm([-dx, 1, -dz]);
+    terrNrm[o]=n[0]; terrNrm[o+1]=n[1]; terrNrm[o+2]=n[2];
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, terrPB); gl.bufferData(gl.ARRAY_BUFFER, terrPos, gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, terrNB); gl.bufferData(gl.ARRAY_BUFFER, terrNrm, gl.DYNAMIC_DRAW);
+  if (typeof uploadHeight === 'function') uploadHeight();
+}
+const terrVAO = gl.createVertexArray(); gl.bindVertexArray(terrVAO);
+const terrPB = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, terrPB);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);
+const terrNB = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, terrNB);
+gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1,3,gl.FLOAT,false,0,0);
+const terrIB = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, terrIB);
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, terrIdx, gl.STATIC_DRAW);
+
+/* the same heights, as a texture, so the grass blades can find the ground */
+const hTex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, hTex);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, GN+1, GN+1, 0, gl.RED, gl.FLOAT, null);
+/* NEAREST, always: R32F + LINEAR needs OES_texture_float_linear, which is not
+   guaranteed — the blades do their own bilinear with texelFetch instead. */
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+function uploadHeight(){
+  gl.bindTexture(gl.TEXTURE_2D, hTex);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, GN+1, GN+1, gl.RED, gl.FLOAT, H);
+}
+rebuildTerrain();
+
+/* capsule mesh: rings of (angle, v) */
+const NA = 18;
+const VS = [-1,-0.62,-0.31,0, 0.34,0.67, 1, 1.31, 1.62, 2];
+const capVerts = [], capIdx = [];
+for (let r=0;r<VS.length;r++) for (let a=0;a<=NA;a++) capVerts.push((a/NA)*Math.PI*2, VS[r]);
+for (let r=0;r<VS.length-1;r++) for (let a=0;a<NA;a++){
+  const i0 = r*(NA+1)+a, i1 = i0+1, i2 = i0+NA+1, i3 = i2+1;
+  capIdx.push(i0,i2,i1, i1,i2,i3);
+}
+const MAXSEG = 64;
+const segInst = new Float32Array(MAXSEG*9);
+const segVAO = gl.createVertexArray(); gl.bindVertexArray(segVAO);
+const cvb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, cvb);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(capVerts), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+const cib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cib);
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(capIdx), gl.STATIC_DRAW);
+const sib = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, sib);
+gl.bufferData(gl.ARRAY_BUFFER, segInst, gl.DYNAMIC_DRAW);
+const ST = 9*4;
+gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3,3,gl.FLOAT,false,ST,0);  gl.vertexAttribDivisor(3,1);
+gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4,3,gl.FLOAT,false,ST,12); gl.vertexAttribDivisor(4,1);
+gl.enableVertexAttribArray(5); gl.vertexAttribPointer(5,2,gl.FLOAT,false,ST,24); gl.vertexAttribDivisor(5,1);
+gl.enableVertexAttribArray(6); gl.vertexAttribPointer(6,1,gl.FLOAT,false,ST,32); gl.vertexAttribDivisor(6,1);
+
+/* overlay */
+const OVMAX = 4096;
+const ovData = new Float32Array(OVMAX*7);
+const ovVAO = gl.createVertexArray(); gl.bindVertexArray(ovVAO);
+const ovb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, ovb);
+gl.bufferData(gl.ARRAY_BUFFER, ovData, gl.DYNAMIC_DRAW);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,3,gl.FLOAT,false,28,0);
+gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1,4,gl.FLOAT,false,28,12);
+
+/* dust */
+const DMAX = 420;
+const dustP = new Float32Array(DMAX*4), dustC = new Float32Array(DMAX*4);
+const dustVAO = gl.createVertexArray(); gl.bindVertexArray(dustVAO);
+const dpb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, dpb);
+gl.bufferData(gl.ARRAY_BUFFER, dustP, gl.DYNAMIC_DRAW);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,4,gl.FLOAT,false,0,0);
+const dcb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, dcb);
+gl.bufferData(gl.ARRAY_BUFFER, dustC, gl.DYNAMIC_DRAW);
+gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1,4,gl.FLOAT,false,0,0);
+gl.bindVertexArray(null);
+
+/* shadow map */
+const SHMAP = 1536;
+const shTex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, shTex);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, SHMAP, SHMAP, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+const shFBO = gl.createFramebuffer();
+gl.bindFramebuffer(gl.FRAMEBUFFER, shFBO);
+gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, shTex, 0);
+gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE);
+gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+/* ════════════════════════════════════════════════════════════════════════════
+   4 · LIGHT AND CAMERA
+   ═══════════════════════════════════════════════════════════════════════════ */
+const SUN = norm([-0.60, 0.318, -0.735]);       /* 18 degrees up: long shadows, warm */
+const SUNCOL = [3.05, 2.02, 1.14];
+const SKYCOL = [0.098, 0.148, 0.268];
+const GNDCOL = [0.052, 0.047, 0.031];
+
+const cam = { az: 2.30, el: 0.245, dist: 4.9, tgt: [0, 0, 0] };
+let camTgt = [0, 0, 0];
+
+let camPull = 1;                    /* eases back when the beast goes over */
+function camEye(){
+  const t = camTgt, D = cam.dist * camPull;
+  return [
+    t[0] + D*Math.cos(cam.el)*Math.sin(cam.az),
+    t[1] + D*Math.sin(cam.el),
+    t[2] + D*Math.cos(cam.el)*Math.cos(cam.az),
+  ];
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   5 · THE FALL
+
+   Static analysis makes exactly one prediction about a stopped animal, and this
+   is where the room cashes it: if the plumb line is outside the polygon, the
+   body rotates about the hull edge it has crossed, at g·sin(phi)/rho.
+   ═══════════════════════════════════════════════════════════════════════════ */
+let topple = null;        /* {o, d, ang, om, rho} */
+let stoppedAt = null;     /* the frozen support snapshot */
+
+function beginTopple(sup){
+  const c = sup.com;
+  const h = sup.hull;
+  let o, d;
+  if (h.length >= 2){
+    /* the edge the mass has crossed: the most-violated one */
+    let worst = Infinity, ai = 0;
+    for (let i=0;i<h.length;i++){
+      const a = h[i], b = h[(i+1) % h.length];
+      const crs = (b[0]-a[0])*(c[2]-a[1]) - (b[1]-a[1])*(c[0]-a[0]);
+      const L = Math.hypot(b[0]-a[0], b[1]-a[1]) || 1;
+      const sd = crs / L;
+      if (h.length === 2 && i === 1) continue;
+      if (sd < worst){ worst = sd; ai = i; }
+    }
+    const a = h[ai], b = h[(ai+1) % h.length];
+    const ay = groundAt(a[0], a[1]), by = groundAt(b[0], b[1]);
+    o = [a[0], ay, a[1]];
+    d = norm([b[0]-a[0], by-ay, b[1]-a[1]]);
+    /* it must fall the way the mass leans */
+    const toC = sub(c, o);
+    const perp = sub(toC, mul(d, dot(toC,d)));
+    if (cross(d, perp)[1] > 0) d = mul(d, -1);
+  } else {
+    o = [beast.pos[0], groundAt(beast.pos[0], beast.pos[2]), beast.pos[2]];
+    const f = beast.frame();
+    d = norm([f.fwd[0], 0, f.fwd[2]]);
+  }
+  const toC = sub(c, o);
+  const rho = Math.max(0.25, len(sub(toC, mul(d, dot(toC,d)))));
+  topple = { o, d, ang: 0, om: 0, rho, rest: false };
+}
+
+/* Has the trunk met the hill?  Asked of the bones themselves, so it lands on
+   whatever ground happens to be under it — including ground you just raised. */
+function trunkClearance(){
+  let lowest = Infinity;
+  for (const sg of beast.segments()){
+    if (sg.kind !== 'trunk' && sg.kind !== 'head') continue;
+    for (const q0 of [sg.a, sg.b]){
+      const q = applyTopple(q0);
+      lowest = Math.min(lowest, q[1] - 0.85*sg.r0 - groundAt(q[0], q[2]));
+    }
+  }
+  return lowest;
+}
+
+function stepTopple(dt){
+  if (!topple) return;
+  if (topple.rising){
+    topple.ang = Math.max(0, topple.ang - dt * 2.6);
+    if (topple.ang <= 0){ topple = null; beast.freeze = false; }
+    return;
+  }
+  if (topple.rest) return;
+  /* a body toppling about an edge: theta'' = g·sin(phi)/rho, with the mass
+     treated as a point at rho */
+  const g = 9.81;
+  const phi = Math.min(topple.ang, 1.45);
+  topple.om += (g/topple.rho) * Math.sin(0.10 + phi*0.95) * dt;
+  topple.ang += topple.om * dt;
+  /* … until its side is on the grass, and then it stays there */
+  if (trunkClearance() < 0){
+    let lo = topple.ang - topple.om*dt, hi = topple.ang;
+    for (let i=0;i<14;i++){ const m=(lo+hi)/2; topple.ang=m; if (trunkClearance() < 0) hi=m; else lo=m; }
+    topple.ang = lo;
+    topple.om *= -0.22;
+    if (Math.abs(topple.om) < 0.55){ topple.om = 0; topple.rest = true; thump(); }
+  }
+  if (topple.ang > 1.75){ topple.ang = 1.75; topple.om = 0; topple.rest = true; }
+}
+function applyTopple(p){ return topple ? rotAbout(p, topple.o, topple.d, topple.ang) : p; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   6 · SOUND — a footfall is filtered noise with a fast envelope
+   ═══════════════════════════════════════════════════════════════════════════ */
+let actx = null, master = null, windGain = null, noiseBuf = null;
+function startAudio(){
+  if (actx) return;
+  actx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint:'interactive' });
+  master = actx.createGain(); master.gain.value = WS.muted() ? 0 : 0.85; master.connect(actx.destination);
+  const n = actx.sampleRate * 2;
+  noiseBuf = actx.createBuffer(1, n, actx.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  let last = 0;
+  for (let i=0;i<n;i++){ const w = Math.random()*2-1; last = last*0.62 + w*0.38; d[i] = last; }
+  /* the hill's own sound: a slow band of moving air */
+  const wind = actx.createBufferSource(); wind.buffer = noiseBuf; wind.loop = true;
+  const wf = actx.createBiquadFilter(); wf.type='bandpass'; wf.frequency.value=430; wf.Q.value=0.55;
+  windGain = actx.createGain(); windGain.gain.value = 0.055;
+  wind.connect(wf); wf.connect(windGain); windGain.connect(master); wind.start();
+  const lfo = actx.createOscillator(); lfo.frequency.value = 0.077;
+  const lg = actx.createGain(); lg.gain.value = 0.032;
+  lfo.connect(lg); lg.connect(windGain.gain); lfo.start();
+  if (actx.state === 'suspended') actx.resume();
+}
+function footfall(strength, pan){
+  if (!actx || WS.muted()) return;
+  const t = actx.currentTime;
+  const s = clamp(strength, 0.05, 1);
+  const src = actx.createBufferSource(); src.buffer = noiseBuf;
+  src.playbackRate.value = 0.8 + Math.random()*0.5;
+  const bp = actx.createBiquadFilter(); bp.type='bandpass';
+  bp.frequency.value = 210 + Math.random()*150; bp.Q.value = 1.1;
+  const lp = actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value = 1500;
+  const g = actx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.30*s + 0.02, t + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.075 + 0.06*s);
+  const p = actx.createStereoPanner(); p.pan.value = clamp(pan, -1, 1);
+  src.connect(bp); bp.connect(lp); lp.connect(g); g.connect(p); p.connect(master);
+  src.start(t, Math.random()*1.5); src.stop(t + 0.2);
+  /* a low thud under it */
+  const o = actx.createOscillator(); o.type='sine';
+  o.frequency.setValueAtTime(96 + Math.random()*16, t);
+  o.frequency.exponentialRampToValueAtTime(42, t + 0.09);
+  const og = actx.createGain();
+  og.gain.setValueAtTime(0.0001, t);
+  og.gain.exponentialRampToValueAtTime(0.16*s + 0.01, t + 0.008);
+  og.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+  o.connect(og); og.connect(p); o.start(t); o.stop(t + 0.16);
+}
+function thump(){
+  if (!actx || WS.muted()) return;
+  const t = actx.currentTime;
+  const src = actx.createBufferSource(); src.buffer = noiseBuf; src.playbackRate.value = 0.5;
+  const lp = actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value = 340;
+  const g = actx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.5, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
+  src.connect(lp); lp.connect(g); g.connect(master);
+  src.start(t, Math.random()); src.stop(t + 0.5);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   7 · DUST AND TREAD
+   ═══════════════════════════════════════════════════════════════════════════ */
+const dust = [];
+const prints = [];
+function puff(x,y,z,strength){
+  const k = Math.round(2 + 4*strength);
+  for (let i=0;i<k;i++){
+    const a = Math.random()*Math.PI*2, r = Math.random()*0.06;
+    dust.push({ p:[x+Math.cos(a)*r, y+0.02, z+Math.sin(a)*r],
+      v:[Math.cos(a)*(0.10+Math.random()*0.22)*strength, 0.12+Math.random()*0.26*strength, Math.sin(a)*(0.10+Math.random()*0.22)*strength],
+      age:0, life: 0.34+Math.random()*0.36, sz: 7+Math.random()*13 });
+  }
+  if (dust.length > DMAX) dust.splice(0, dust.length-DMAX);
+  prints.push({ x, z, age: 0, r: 0.19 + 0.10*strength });
+  if (prints.length > 26) prints.shift();
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   8 · UI
+   ═══════════════════════════════════════════════════════════════════════════ */
+const $ = (id)=>document.getElementById(id);
+const gaitSel = $('gait'), dutyEl = $('duty'), speedEl = $('speed');
+let showPoly = true, stopped = false, groundMode = null;
+
+function fillGaits(){
+  const list = gaitsFor(beast.plan.nLegs);
+  gaitSel.innerHTML = list.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+  gaitSel.value = beast.gaitId;
+}
+function syncLegs(){
+  document.querySelectorAll('#legsegs button').forEach(b =>
+    b.classList.toggle('on', +b.dataset.legs === beast.plan.nLegs));
+}
+function setDuty(d){ beast.duty = d; dutyEl.value = d; $('dutyVal').textContent = d.toFixed(2); }
+function setSpeed(v){ beast.speed = v; speedEl.value = v; $('speedVal').textContent = v.toFixed(2); }
+
+document.querySelectorAll('#legsegs button').forEach(b => b.addEventListener('click', ()=>{
+  const n = +b.dataset.legs;
+  const keepD = beast.duty;
+  beast.setLegs(n, true);
+  beast.pos = [0, groundAt(0,0)+beast.plan.stand, 0];
+  beast.setLegs(n, true);
+  setDuty(clamp(keepD, 0.2, 0.95));
+  fillGaits(); syncLegs(); unstop(); refreshBench();
+}));
+gaitSel.addEventListener('change', ()=>{ beast.setGait(gaitSel.value); setDuty(beast.duty); unstop(); refreshBench(); });
+dutyEl.addEventListener('input', ()=>{ setDuty(+dutyEl.value); unstop(); });
+speedEl.addEventListener('input', ()=>{ setSpeed(+speedEl.value); });
+$('lean').addEventListener('click', ()=>{
+  beast.lean = beast.lean > 0 ? 0 : 1;
+  $('lean').classList.toggle('on', beast.lean > 0);
+  unstop();
+});
+$('showpoly').addEventListener('click', ()=>{ showPoly = !showPoly; $('showpoly').classList.toggle('on', showPoly); });
+$('shove').addEventListener('click', ()=>{
+  unstop();
+  const f = beast.frame();
+  const s = Math.random() < 0.5 ? -1 : 1;
+  beast.shove(f.right[0]*2.6*s, f.right[2]*2.6*s);
+  thump();
+});
+$('stop').addEventListener('click', ()=>{ stopped ? unstop() : doStop(); });
+function doStop(){
+  stopped = true; beast.freeze = true; $('stop').classList.add('on'); $('stop').textContent = 'Walk on';
+  stoppedAt = beast.support();
+  if (!stoppedAt.stable) { beginTopple(stoppedAt); thump(); }
+}
+function unstop(){
+  if (!stopped) return;
+  stopped = false; stoppedAt = null;
+  $('stop').classList.remove('on'); $('stop').textContent = 'Stop';
+  if (topple && !topple.rising){ topple.rising = true; beast.freeze = true; }   /* it gets back up */
+  else { topple = null; beast.freeze = false; }
+}
+for (const [id, mode] of [['raise','raise'], ['dig','dig']]) {
+  $(id).addEventListener('click', ()=>{
+    groundMode = (groundMode === mode) ? null : mode;
+    $('raise').classList.toggle('on', groundMode === 'raise');
+    $('dig').classList.toggle('on', groundMode === 'dig');
+    cv.classList.toggle('sculpt', !!groundMode);
+  });
+}
+$('flat').addEventListener('click', ()=>{
+  seedFlat(); rebuildTerrain();
+});
+function seedFlat(){
+  const s = GN+1;
+  for (let j=0;j<=GN;j++) for (let i=0;i<=GN;i++){
+    const x = -GHALF + i*GSTEP, z = -GHALF + j*GSTEP;
+    const r = Math.hypot(x,z)/GHALF;
+    const rim = Math.max(0, (r-0.52)/0.48);
+    H[j*s+i] = 5.2*rim*rim;
+  }
+}
+$('hush').addEventListener('click', ()=>{ WS.setMuted(!WS.muted()); syncHush(); });
+function syncHush(){
+  const m = WS.muted();
+  $('hush').textContent = m ? 'Unhush' : 'Hush';
+  $('hush').classList.toggle('on', m);
+  if (master) master.gain.value = m ? 0 : 0.85;
+}
+WS.onMuteChange(syncHush); syncHush();
+
+/* ── pointer: orbit, send, sculpt ────────────────────────────────────────── */
+let ptr = null, moved = 0;
+cv.addEventListener('pointerdown', (e)=>{
+  cv.setPointerCapture(e.pointerId);
+  ptr = { x: e.clientX, y: e.clientY }; moved = 0;
+  cv.classList.add('drag');
+  if (groundMode) sculptAt(e.clientX, e.clientY);
+});
+cv.addEventListener('pointermove', (e)=>{
+  if (!ptr) return;
+  const dx = e.clientX - ptr.x, dy = e.clientY - ptr.y;
+  moved += Math.abs(dx) + Math.abs(dy);
+  ptr = { x: e.clientX, y: e.clientY };
+  if (groundMode) { sculptAt(e.clientX, e.clientY); return; }
+  cam.az -= dx * 0.0055;
+  cam.el = clamp(cam.el + dy * 0.0042, 0.035, 1.24);
+});
+cv.addEventListener('pointerup', (e)=>{
+  cv.classList.remove('drag');
+  if (ptr && moved < 6 && !groundMode) sendTo(e.clientX, e.clientY);
+  ptr = null;
+});
+cv.addEventListener('pointercancel', ()=>{ ptr = null; cv.classList.remove('drag'); });
+cv.addEventListener('wheel', (e)=>{
+  e.preventDefault();
+  cam.dist = clamp(cam.dist * Math.exp(e.deltaY * 0.0011), 2.4, 26);
+}, { passive:false });
+
+/* a ray from the pointer into the heightfield */
+let lastVP = mIdent();
+function pickGround(px, py){
+  const r = cv.getBoundingClientRect();
+  const nx = ((px - r.left)/r.width)*2 - 1, ny = 1 - ((py - r.top)/r.height)*2;
+  const inv = mInv(lastVP);
+  const un = (z)=>{ const v = [inv[0]*nx+inv[4]*ny+inv[8]*z+inv[12], inv[1]*nx+inv[5]*ny+inv[9]*z+inv[13],
+                                inv[2]*nx+inv[6]*ny+inv[10]*z+inv[14], inv[3]*nx+inv[7]*ny+inv[11]*z+inv[15]];
+                     return [v[0]/v[3], v[1]/v[3], v[2]/v[3]]; };
+  const a = un(-1), b = un(1);
+  const d = norm(sub(b,a));
+  let t = 0.1, prev = a[1] - groundAt(a[0], a[2]);
+  for (let i=0;i<420;i++){
+    const p = add(a, mul(d, t));
+    if (Math.abs(p[0]) > GHALF || Math.abs(p[2]) > GHALF) { if (t > 90) return null; }
+    const h = p[1] - groundAt(clamp(p[0],-GHALF,GHALF), clamp(p[2],-GHALF,GHALF));
+    if (h <= 0 && prev > 0){
+      const f = prev / (prev - h);
+      const q = add(a, mul(d, t - 0.24*(1-f)));
+      return [q[0], groundAt(q[0], q[2]), q[2]];
+    }
+    prev = h; t += 0.24;
+    if (t > 120) break;
+  }
+  return null;
+}
+function sendTo(px, py){
+  const g = pickGround(px, py);
+  if (!g) return;
+  unstop();
+  beast.target = g;
+  goal = { p: g, t: 0 };
+}
+let goal = null;
+function sculptAt(px, py){
+  const g = pickGround(px, py);
+  if (!g) return;
+  const sign = groundMode === 'dig' ? -1 : 1;
+  const R = 2.3, amp = 0.115 * sign;
+  const s = GN+1;
+  const i0 = clamp(Math.floor((g[0]-R+GHALF)/GSTEP), 0, GN), i1 = clamp(Math.ceil((g[0]+R+GHALF)/GSTEP), 0, GN);
+  const j0 = clamp(Math.floor((g[2]-R+GHALF)/GSTEP), 0, GN), j1 = clamp(Math.ceil((g[2]+R+GHALF)/GSTEP), 0, GN);
+  for (let j=j0;j<=j1;j++) for (let i=i0;i<=i1;i++){
+    const x = -GHALF+i*GSTEP, z = -GHALF+j*GSTEP;
+    const d = Math.hypot(x-g[0], z-g[2]);
+    if (d > R) continue;
+    const w = Math.cos(Math.PI*0.5*d/R);
+    H[j*s+i] += amp * w * w;
+  }
+  rebuildTerrain();
+}
+
+/* the gate */
+const gate = $('gate');
+function openGate(){
+  gate.classList.add('gone');
+  startAudio();
+  setTimeout(()=>gate.style.display='none', 700);
+}
+gate.addEventListener('click', openGate);
+
+/* ════════════════════════════════════════════════════════════════════════════
+   9 · THE GAIT DIAGRAM AND THE VERDICT CARD
+   ═══════════════════════════════════════════════════════════════════════════ */
+const diag = $('diag'), dctx = diag.getContext('2d');
+function drawDiagram(){
+  const dpr = Math.min(2, devicePixelRatio||1);
+  const w = diag.clientWidth, h = diag.clientHeight;
+  if (diag.width !== w*dpr){ diag.width = w*dpr; diag.height = h*dpr; }
+  dctx.setTransform(dpr,0,0,dpr,0,0);
+  dctx.clearRect(0,0,w,h);
+  const N = beast.plan.nLegs;
+  const padL = 20, padR = 4, padT = 3, padB = 3;
+  const rowH = (h-padT-padB)/N;
+  const W = w-padL-padR;
+  for (let i=0;i<N;i++){
+    const off = beast.offsets[i];
+    const y = padT + i*rowH;
+    dctx.fillStyle = 'rgba(255,255,255,.045)';
+    dctx.fillRect(padL, y+1, W, rowH-2);
+    /* the stance band, wrapped */
+    dctx.fillStyle = beast.feet[i] && beast.feet[i].down ? 'rgba(229,191,114,.92)' : 'rgba(229,191,114,.36)';
+    const s0 = frac(-off), s1 = s0 + beast.duty;
+    const bands = s1 <= 1 ? [[s0,s1]] : [[s0,1],[0,s1-1]];
+    for (const [a,b] of bands) dctx.fillRect(padL + a*W, y+1, (b-a)*W, rowH-2);
+    dctx.fillStyle = 'rgba(180,171,151,.85)';
+    dctx.font = '9px ui-monospace,Menlo,monospace';
+    const h0 = beast.plan.hips[i];
+    dctx.fillText((h0.side<0?'L':'R') + (h0.pair+1), 2, y + rowH*0.72);
+  }
+  /* the playhead */
+  const x = padL + beast.clock*W;
+  dctx.strokeStyle = '#f8dfab'; dctx.lineWidth = 1.4;
+  dctx.beginPath(); dctx.moveTo(x, padT); dctx.lineTo(x, h-padB); dctx.stroke();
+}
+
+let smMargin = 0;
+function updateVerdict(sup){
+  const vs = $('vstate'), sub = $('vsub');
+  const N = sup.nDown;
+  const m = isFinite(sup.margin) ? sup.margin : -1;
+  smMargin = smMargin + (m - smMargin) * 0.25;
+  vs.textContent = N === 0 ? 'nothing' : (N + (N===1 ? ' foot' : ' feet'));
+  vs.className = 'vstate ' + (sup.stable ? 'good' : 'bad');
+  const cm = (m*100);
+  const fallen = topple && topple.rest && !topple.rising;
+  sub.innerHTML = sup.stable
+    ? `stable &middot; ${cm.toFixed(1)} cm inside`
+    : (fallen ? (N >= 3 ? `down &middot; it went over that edge` : `down &middot; two feet make no polygon`)
+      : N >= 3 ? `falling &middot; ${Math.abs(cm).toFixed(1)} cm outside`
+               : `falling &middot; no polygon`);
+  const f = $('barfill');
+  const t = clamp(smMargin/0.40, -1, 1);
+  if (t >= 0){ f.style.left = '50%'; f.style.width = (t*50)+'%'; f.style.background = 'linear-gradient(90deg,#5d8f4e,#8fd07a)'; }
+  else { f.style.left = (50 + t*50)+'%'; f.style.width = (-t*50)+'%'; f.style.background = 'linear-gradient(90deg,#ef8f7a,#a4503c)'; }
+  $('dlblL').textContent = beast.plan.nLegs + ' legs · β ' + beast.duty.toFixed(2);
+  $('dlblR').textContent = 'one cycle · ' + beast.period.toFixed(2) + ' s';
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   10 · THE BENCH — predicted by counting, measured by walking
+   ═══════════════════════════════════════════════════════════════════════════ */
+const chart = $('chart'), cctx = chart.getContext('2d');
+let sweep = null;
+function predictedThreshold(){
+  const p = predictThreshold(beast.plan.nLegs, beast.gaitId);
+  return { v: p.duty, how: p.how, short: p.duty == null ? 'never' : p.how.split(' —')[0] };
+}
+function refreshBench(){
+  sweep = null;
+  drawChart();
+  $('bverdict').innerHTML = 'Press <b>measure it</b>: the page walks this exact beast a full ' +
+    'settled cycle at each of 60 duty factors and asks, 480 times per cycle, whether the plumb ' +
+    'line falls inside the polygon. The dashed line is the prediction. Nothing is fitted.';
+}
+function runSweep(){
+  const cfg = { legs: beast.plan.nLegs, gait: beast.gaitId, speed: Math.max(0.35, beast.speed), period: beast.period, lean: beast.lean };
+  const pts = [];
+  for (let i=0;i<=60;i++){
+    const d = 0.20 + (0.95-0.20)*(i/60);
+    const r = measureStability({ ...cfg, duty: d, samples: 240 });
+    pts.push({ duty: d, f: r.fraction, minDown: r.minDown, margin: r.minMargin });
+  }
+  const th = dutyThreshold({ ...cfg, samples: 300 });
+  sweep = { pts, th, cfg };
+  const pr = predictedThreshold();
+  const bv = $('bverdict');
+  const best = pts.reduce((a,b)=> b.f > a.f ? b : a, pts[0]);
+  if (!th){
+    bv.innerHTML = pr.v == null
+      ? `<b>Predicted: never.</b> ${pr.how[0].toUpperCase()+pr.how.slice(1)}. ` +
+        `<b>Measured: never</b> — the best any duty factor manages is ` +
+        `<span class="num">${(best.f*100).toFixed(0)}%</span> of the cycle, at β = ` +
+        `<span class="num">${best.duty.toFixed(2)}</span>. The counting and the walking agree.`
+      : `Predicted <b>β ≥ ${pr.v.toFixed(4)}</b> (${pr.how}), but measured: <b>never</b>, ` +
+        `up to β = 0.97. Three feet down was necessary, and it was not sufficient.`;
+  } else if (pr.v == null){
+    bv.innerHTML = `Predicted <b>never</b> — ${pr.how} — but measured stable from ` +
+      `<b>β = ${th.duty.toFixed(4)}</b>. The prediction is wrong; trust the walk.`;
+  } else {
+    const d = th.duty - pr.v;
+    bv.innerHTML = `Predicted by counting feet: <b>β ≥ ${pr.v.toFixed(4)}</b> — ${pr.how}. ` +
+      `Measured by walking a settled cycle: <b>β ≥ ${th.duty.toFixed(4)}</b>. ` +
+      (Math.abs(d) < 0.006
+        ? `They agree to <span class="num">${(d*1000).toFixed(1)} milliduty</span>, and nothing was fitted.`
+        : `They differ by <span class="num">${(d*1000).toFixed(0)} milliduty</span>, and here is why. ` +
+          `At β = 3/4 a quadruped always has three feet down — two on one side, one on the other — ` +
+          `so the long edge of its support triangle is a <b>diagonal of its own rectangle</b>, and that ` +
+          `diagonal runs under the middle of the animal. Its worst margin over the cycle is ` +
+          `<span class="num">${(measureStability({...cfg, duty:0.75, lean:0, samples:600}).minMargin*100).toFixed(1)} cm</span> ` +
+          `— no clearance at all, where a hexapod tripod has ` +
+          `<span class="num">${(measureStability({legs:6,gait:'tripod',duty:0.5,lean:0,samples:600}).minMargin*100).toFixed(1)} cm</span>. ` +
+          `That is what <b>lean</b> is for, and it is what a slow-walking horse is doing.`);
+  }
+  drawChart();
+}
+function drawChart(){
+  const dpr = Math.min(2, devicePixelRatio||1);
+  const w = chart.clientWidth, h = chart.clientHeight;
+  if (chart.width !== w*dpr){ chart.width = w*dpr; chart.height = h*dpr; }
+  cctx.setTransform(dpr,0,0,dpr,0,0);
+  cctx.clearRect(0,0,w,h);
+  const L=34, R=8, T=10, B=31, W=w-L-R, Hh=h-T-B;
+  const X = (d)=> L + (d-0.20)/(0.95-0.20)*W;
+  const Y = (f)=> T + (1-f)*Hh;
+  cctx.strokeStyle='rgba(255,255,255,.13)'; cctx.lineWidth=1;
+  cctx.strokeRect(L,T,W,Hh);
+  cctx.font='9px ui-monospace,Menlo,monospace'; cctx.fillStyle='rgba(180,171,151,.75)';
+  for (const f of [0,0.5,1]){ cctx.fillText((f*100).toFixed(0)+'%', 4, Y(f)+3);
+    cctx.strokeStyle='rgba(255,255,255,.07)'; cctx.beginPath(); cctx.moveTo(L,Y(f)); cctx.lineTo(L+W,Y(f)); cctx.stroke(); }
+  for (const d of [0.2,0.4,0.6,0.8,0.95]){ cctx.fillText(d.toFixed(2), X(d)-10, h-18); }
+  cctx.fillStyle='rgba(180,171,151,.6)'; cctx.fillText('duty factor β', L+W/2-28, h-5);
+  const pr = predictedThreshold();
+  if (pr.v != null){
+    cctx.save(); cctx.setLineDash([4,3]); cctx.strokeStyle='#e5bf72'; cctx.lineWidth=1.4;
+    cctx.beginPath(); cctx.moveTo(X(pr.v), T); cctx.lineTo(X(pr.v), T+Hh); cctx.stroke(); cctx.restore();
+    cctx.fillStyle='#e5bf72'; cctx.fillText('predicted ' + pr.short, Math.min(X(pr.v)+4, L+W-104), T+10);
+  } else {
+    cctx.fillStyle='#e5bf72'; cctx.fillText('predicted: never stable', L+6, T+10);
+  }
+  if (!sweep){
+    cctx.fillStyle='rgba(180,171,151,.5)';
+    cctx.font='12px Georgia,serif';
+    cctx.fillText('measure it →', L+W/2-34, T+Hh/2);
+    return;
+  }
+  cctx.strokeStyle='#8fd07a'; cctx.lineWidth=1.8; cctx.beginPath();
+  sweep.pts.forEach((p,i)=>{ const x=X(p.duty), y=Y(p.f); i? cctx.lineTo(x,y) : cctx.moveTo(x,y); });
+  cctx.stroke();
+  if (sweep.th){
+    cctx.fillStyle='#8fd07a';
+    cctx.beginPath(); cctx.arc(X(sweep.th.duty), Y(1), 3.4, 0, 7); cctx.fill();
+    const mx = X(sweep.th.duty);
+    cctx.fillText('measured', Math.max(L+3, mx - 54), Y(1) + 15);
+  }
+  cctx.fillStyle='rgba(143,208,122,.9)'; cctx.font='9px ui-monospace,Menlo,monospace';
+  cctx.fillText('fraction of the cycle statically stable', L+4, T+Hh-5);
+}
+$('measure').addEventListener('click', ()=>{
+  const b = $('bench');
+  b.classList.add('open');
+  $('bverdict').textContent = 'walking 60 beasts…';
+  drawChart();
+  setTimeout(runSweep, 30);
+});
+$('benchClose').addEventListener('click', ()=> $('bench').classList.remove('open'));
+
+/* ════════════════════════════════════════════════════════════════════════════
+   11 · THE FRAME
+   ═══════════════════════════════════════════════════════════════════════════ */
+let W=0, Hh=0, DPR=1;
+function resize(){
+  DPR = Math.min(2, devicePixelRatio||1);
+  W = Math.floor(cv.clientWidth*DPR); Hh = Math.floor(cv.clientHeight*DPR);
+  cv.width = W; cv.height = Hh;
+}
+addEventListener('resize', resize); resize();
+if (innerWidth < 700) { cam.dist = 6.0; cam.el = 0.30; }
+
+function pushOv(arr, p, c){ arr.push(p[0],p[1],p[2], c[0],c[1],c[2],c[3]); }
+function ribbon(arr, a, b, wdt, c){
+  const d = norm([b[0]-a[0], 0, b[2]-a[2]]);
+  const n = [-d[2]*wdt, 0, d[0]*wdt];
+  const p0 = [a[0]+n[0], a[1], a[2]+n[2]], p1 = [a[0]-n[0], a[1], a[2]-n[2]];
+  const p2 = [b[0]+n[0], b[1], b[2]+n[2]], p3 = [b[0]-n[0], b[1], b[2]-n[2]];
+  pushOv(arr,p0,c); pushOv(arr,p2,c); pushOv(arr,p1,c);
+  pushOv(arr,p1,c); pushOv(arr,p2,c); pushOv(arr,p3,c);
+}
+function disc(arr, p, r, c, segs=22){
+  for (let i=0;i<segs;i++){
+    const a0 = i/segs*Math.PI*2, a1 = (i+1)/segs*Math.PI*2;
+    pushOv(arr, p, c);
+    pushOv(arr, [p[0]+Math.cos(a0)*r, p[1], p[2]+Math.sin(a0)*r], c);
+    pushOv(arr, [p[0]+Math.cos(a1)*r, p[1], p[2]+Math.sin(a1)*r], c);
+  }
+}
+
+/* The grass is the only thing here that scales.  If the machine is sharing its
+   GPU with something else, thin the sward rather than drop frames — the beast
+   and its polygon are the piece; the meadow is the room it stands in. */
+let grassDraw = GRASS_N, frameMs = 16;
+function adaptGrass(dt){
+  frameMs += (dt*1000 - frameMs) * 0.06;
+  if (frameMs > 23 && grassDraw > 9000) grassDraw *= 0.965;
+  else if (frameMs < 14.5 && grassDraw < GRASS_N) grassDraw = Math.min(GRASS_N, grassDraw * 1.02);
+}
+
+const GLDBG = new URLSearchParams(location.search).has('gldbg');
+window.__glstage = [];
+function gk(tag){ if(!GLDBG) return; const e = gl.getError(); if (e) window.__glstage.push(tag+':'+e); }
+
+let last = performance.now(), fpsAcc = 0, fpsN = 0, tGlobal = 0;
+function frame(now){
+  let dt = (now - last)/1000; last = now;
+  dt = Math.min(dt, 0.05);
+  tGlobal += dt;
+  adaptGrass(dt);
+
+  /* ── the world advances ──────────────────────────────────────────────── */
+  if (topple) stepTopple(dt);
+  if (!stopped && !topple){
+    const sub = Math.max(1, Math.ceil(dt/0.008));
+    for (let i=0;i<sub;i++) beast.step(dt/sub);
+  }
+
+  /* footfalls → sound, dust, tread */
+  for (const e of beast.events){
+    const f = beast.frame();
+    const rel = sub([e.x,e.y,e.z], beast.pos);
+    puff(e.x, e.y, e.z, clamp(0.28 + e.speed*0.55, 0.15, 1));
+    footfall(0.3 + 0.7*clamp(e.speed/1.4,0,1), clamp(dot(rel, [Math.cos(cam.az),0,-Math.sin(cam.az)]), -1, 1));
+  }
+  beast.events.length = 0;
+
+  for (const p of prints) p.age += dt/26;
+  while (prints.length && prints[0].age > 1) prints.shift();
+  for (let i=dust.length-1;i>=0;i--){
+    const d = dust[i]; d.age += dt;
+    if (d.age > d.life){ dust.splice(i,1); continue; }
+    d.p[0]+=d.v[0]*dt; d.p[1]+=d.v[1]*dt; d.p[2]+=d.v[2]*dt;
+    d.v[0]*=0.965; d.v[2]*=0.965; d.v[1] = d.v[1]*0.96 - 0.16*dt;
+  }
+  if (goal){ goal.t += dt; if (!beast.target) goal = null; }
+
+  /* ── camera follows ──────────────────────────────────────────────────── */
+  const bodyC = applyTopple([beast.pos[0], beast.pos[1], beast.pos[2]]);
+  const want = [bodyC[0], bodyC[1]+0.28, bodyC[2]];
+  const k = 1-Math.exp(-dt*2.6);
+  camTgt = lerp3(camTgt, want, k);
+  camPull += ((topple ? 1.30 : 1.0) - camPull) * (1-Math.exp(-dt*2.2));
+  const eye = camEye();
+  const eyeGround = groundAt(clamp(eye[0],-GHALF,GHALF), clamp(eye[2],-GHALF,GHALF)) + 0.45;
+  const eyeSafe = [eye[0], Math.max(eye[1], eyeGround), eye[2]];
+  const view = mLook(eyeSafe, camTgt, [0,1,0]);
+  const asp = W/Math.max(1,Hh);
+  /* on a tall phone the horizontal field is the binding constraint, so open the
+     vertical one until the whole creature is in the frame */
+  const fovY = asp >= 1.3 ? 0.66 : 0.66 * Math.min(1.85, 1.3/Math.max(asp, 0.25));
+  const proj = mPersp(fovY, asp, 0.09, 190);
+  const VP = mMul(proj, view);
+  lastVP = VP;
+
+  /* light matrix, following the beast */
+  const c = camTgt;
+  const lightEye = add(c, mul(SUN, 21));
+  const lview = mLook(lightEye, c, [0,1,0]);
+  const EXT = 6.6;
+  const lproj = mOrtho(-EXT, EXT, -EXT, EXT, 1, 41);
+  const LVP = mMul(lproj, lview); window.__lvp = LVP;
+
+  /* ── segments → instances ────────────────────────────────────────────── */
+  const segs = beast.segments();
+  let ns = 0;
+  for (const s of segs){
+    if (ns >= MAXSEG) break;
+    const a = applyTopple(s.a), b = applyTopple(s.b);
+    const o = ns*9;
+    segInst[o]=a[0]; segInst[o+1]=a[1]; segInst[o+2]=a[2];
+    segInst[o+3]=b[0]; segInst[o+4]=b[1]; segInst[o+5]=b[2];
+    segInst[o+6]=s.r0; segInst[o+7]=s.r1;
+    segInst[o+8] = (s.kind==='trunk'||s.kind==='head') ? 0 : (s.kind==='foot' ? 3 : (s.down ? 1 : 2));
+    ns++;
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, sib);
+  gk('seginst');
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, segInst, 0, ns*9);
+
+  /* ── the support polygon, from the same numbers the card shows ───────── */
+  const sup = stopped && stoppedAt ? stoppedAt : beast.support();
+  const liveCom = (()=>{ let m=0, cc=[0,0,0];
+    for (const s of segs){ if (s.kind==='joint'||s.kind==='foot') continue;
+      const L = len(sub(s.b,s.a))||1e-4, r = 0.5*(s.r0+s.r1);
+      const rho = (s.kind==='trunk'||s.kind==='head') ? 3 : 1;
+      const w = rho*L*r*r; m += w; cc = add(cc, mul(mul(add(s.a,s.b),0.5), w)); }
+    return applyTopple(mul(cc, 1/(m||1))); })();
+  updateVerdict(stopped && stoppedAt
+    ? { ...stoppedAt, margin: hullMargin(stoppedAt.hull, [liveCom[0], liveCom[2]]),
+        stable: hullMargin(stoppedAt.hull, [liveCom[0], liveCom[2]]) > 0 }
+    : sup);
+
+  const ov = [];
+  if (showPoly){
+    const good = sup.hull.length >= 3 && hullMargin(sup.hull, [liveCom[0], liveCom[2]]) > 0;
+    const col = good ? [0.36,0.92,0.42,0.28] : [1.0,0.36,0.24,0.30];
+    const edge = good ? [0.66,1.0,0.60,0.95] : [1.0,0.55,0.40,0.95];
+    const lift = 0.150;
+    const hp = sup.hull.map(p => [p[0], groundAt(p[0],p[1])+lift, p[1]]);
+    if (hp.length >= 3){
+      for (let i=1;i<hp.length-1;i++){ pushOv(ov,hp[0],col); pushOv(ov,hp[i],col); pushOv(ov,hp[i+1],col); }
+    }
+    for (let i=0;i<hp.length;i++){
+      const a2 = hp[i], b2 = hp[(i+1)%hp.length];
+      if (hp.length === 2 && i === 1) break;
+      ribbon(ov, a2, b2, 0.030, edge);
+    }
+    for (const f2 of sup.feet) disc(ov, [f2[0], groundAt(f2[0],f2[1])+lift+0.004, f2[1]], 0.062, [1.0,0.90,0.58,0.95], 16);
+    /* the plumb line: mass above, and where it lands */
+    const gy = groundAt(liveCom[0], liveCom[2]);
+    const pc = good ? [0.62,0.98,0.56,0.75] : [1.0,0.52,0.38,0.8];
+    const a3 = [liveCom[0], gy+0.012, liveCom[2]];
+    const seg = 26;
+    for (let i=0;i<seg;i+=2){
+      const y0 = lerp(gy+0.01, liveCom[1], i/seg), y1 = lerp(gy+0.01, liveCom[1], (i+1)/seg);
+      const q0=[liveCom[0], y0, liveCom[2]], q1=[liveCom[0], y1, liveCom[2]];
+      const wd = 0.012;
+      pushOv(ov,[q0[0]-wd,q0[1],q0[2]],pc); pushOv(ov,[q0[0]+wd,q0[1],q0[2]],pc); pushOv(ov,[q1[0]-wd,q1[1],q1[2]],pc);
+      pushOv(ov,[q1[0]-wd,q1[1],q1[2]],pc); pushOv(ov,[q0[0]+wd,q0[1],q0[2]],pc); pushOv(ov,[q1[0]+wd,q1[1],q1[2]],pc);
+    }
+    disc(ov, a3, 0.105, pc, 24);
+    disc(ov, a3, 0.045, [1,1,1,0.92], 16);
+  }
+  if (goal && beast.target){
+    const g = beast.target;
+    const gy = groundAt(g[0], g[2]) + 0.03;
+    const r = 0.30 + 0.12*Math.sin(tGlobal*3.4);
+    const c2 = [0.96,0.80,0.42, 0.36+0.2*Math.sin(tGlobal*3.4)];
+    for (let i=0;i<24;i++){
+      const a0=i/24*Math.PI*2, a1=(i+1)/24*Math.PI*2;
+      ribbon(ov, [g[0]+Math.cos(a0)*r, gy, g[2]+Math.sin(a0)*r], [g[0]+Math.cos(a1)*r, gy, g[2]+Math.sin(a1)*r], 0.02, c2);
+    }
+  }
+  const ovN = Math.min(ov.length/7, OVMAX);
+  if (ovN) { gl.bindBuffer(gl.ARRAY_BUFFER, ovb); gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Float32Array(ov), 0, ovN*7); }
+  gk('ovbuf');
+
+  /* dust buffers */
+  let nd = 0;
+  for (const d of dust){
+    if (nd >= DMAX) break;
+    const a = 1 - d.age/d.life;
+    dustP[nd*4]=d.p[0]; dustP[nd*4+1]=d.p[1]; dustP[nd*4+2]=d.p[2]; dustP[nd*4+3]=d.sz*(0.5+0.9*(1-a));
+    dustC[nd*4]=0.62; dustC[nd*4+1]=0.55; dustC[nd*4+2]=0.40; dustC[nd*4+3]=a*a*0.15;
+    nd++;
+  }
+  if (nd){
+    gl.bindBuffer(gl.ARRAY_BUFFER, dpb); gl.bufferSubData(gl.ARRAY_BUFFER, 0, dustP, 0, nd*4);
+    gl.bindBuffer(gl.ARRAY_BUFFER, dcb); gl.bufferSubData(gl.ARRAY_BUFFER, 0, dustC, 0, nd*4);
+  }
+
+  /* ── PASS 1: the shadow map ──────────────────────────────────────────── */
+  gl.bindFramebuffer(gl.FRAMEBUFFER, shFBO);
+  /* The depth texture is the render target now, and it is ALSO still bound to
+     the uShadow sampler from last frame.  WebGL calls that a feedback loop and
+     rejects the whole draw with INVALID_OPERATION — silently, since nothing
+     throws: you simply get an empty shadow map and a world with no shadows in
+     it.  Unbind it first. */
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, null);
+  gl.viewport(0,0,SHMAP,SHMAP);
+  gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.depthFunc(gl.LEQUAL);
+  gl.clear(gl.DEPTH_BUFFER_BIT);
+  gl.disable(gl.BLEND);
+  gl.disable(gl.CULL_FACE);
+  gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(1.6, 3.0);
+
+  gl.useProgram(terrProg.p);
+  gl.uniformMatrix4fv(terrProg.u.uVP, false, LVP);
+  gl.uniformMatrix4fv(terrProg.u.uLightVP, false, LVP);
+  gl.uniform1i(terrProg.u.uDepthOnly, 1);
+  gl.uniform1i(terrProg.u.uNPrints, 0);
+  gl.bindVertexArray(terrVAO);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, terrIB);
+  gl.drawElements(gl.TRIANGLES, terrIdx.length, gl.UNSIGNED_INT, 0);
+  gk('shadow-terr');
+
+  gl.useProgram(segProg.p);
+  gl.uniformMatrix4fv(segProg.u.uVP, false, LVP);
+  gl.uniformMatrix4fv(segProg.u.uLightVP, false, LVP);
+  gl.uniform1i(segProg.u.uDepthOnly, 1);
+  gl.bindVertexArray(segVAO);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cib);
+  gl.drawElementsInstanced(gl.TRIANGLES, capIdx.length, gl.UNSIGNED_SHORT, 0, ns);
+  gk('shadow-seg');
+
+  /* ── PASS 2: the picture ─────────────────────────────────────────────── */
+  gl.disable(gl.POLYGON_OFFSET_FILL);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0,0,W,Hh);
+  gl.clearColor(0.05,0.06,0.08,1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, shTex);
+
+  const setCommon = (P)=>{
+    gl.uniform3fv(P.u.uSunDir, SUN); gl.uniform3fv(P.u.uSunCol, SUNCOL);
+    gl.uniform3fv(P.u.uSkyCol, SKYCOL); gl.uniform3fv(P.u.uGndCol, GNDCOL);
+    gl.uniform3fv(P.u.uCam, eyeSafe);
+    gl.uniform1i(P.u.uShadow, 0);
+    gl.uniform1f(P.u.uShadowTexel, 1/SHMAP);
+    gl.uniformMatrix4fv(P.u.uLightVP, false, LVP);
+  };
+
+  /* sky */
+  gl.depthMask(false); gl.disable(gl.DEPTH_TEST);
+  gl.useProgram(skyProg.p);
+  gl.uniformMatrix4fv(skyProg.u.uInvVP, false, mInv(VP));
+  setCommon(skyProg);
+  gl.bindVertexArray(quadVAO);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gk('sky');
+  gl.enable(gl.DEPTH_TEST); gl.depthMask(true);
+
+  /* terrain */
+  gl.useProgram(terrProg.p);
+  gl.uniformMatrix4fv(terrProg.u.uVP, false, VP);
+  gl.uniform1i(terrProg.u.uDepthOnly, 0);
+  setCommon(terrProg);
+  const pr = new Float32Array(26*4);
+  let np = 0;
+  for (const p of prints){ if (np>=26) break; pr[np*4]=p.x; pr[np*4+1]=p.z; pr[np*4+2]=1-p.age; pr[np*4+3]=p.r; np++; }
+  gl.uniform4fv(terrProg.u.uPrints, pr);
+  gl.uniform1i(terrProg.u.uNPrints, np);
+  gl.bindVertexArray(terrVAO);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, terrIB);
+  gl.drawElements(gl.TRIANGLES, terrIdx.length, gl.UNSIGNED_INT, 0);
+  gk('terrain');
+
+  /* the grass */
+  gl.useProgram(grassProg.p);
+  gl.uniformMatrix4fv(grassProg.u.uVP, false, VP);
+  setCommon(grassProg);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, hTex);
+  gl.uniform1i(grassProg.u.uHeight, 1);
+  gl.uniform2f(grassProg.u.uCamXZ, camTgt[0], camTgt[2]);
+  gl.uniform1f(grassProg.u.uTile, GRASS_TILE);
+  gl.uniform1f(grassProg.u.uFar, GRASS_FAR);
+  gl.uniform1f(grassProg.u.uTime, tGlobal);
+  gl.uniform1f(grassProg.u.uGHalf, GHALF);
+  gl.uniform1f(grassProg.u.uCell, GSTEP);
+  gl.uniform1f(grassProg.u.uGrid, GN);
+  gl.uniform1f(grassProg.u.uBlade, 0.128);
+  gl.uniform1f(grassProg.u.uWide, 0.0128);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindVertexArray(grassVAO);
+  gl.drawElementsInstanced(gl.TRIANGLES, 9, gl.UNSIGNED_SHORT, 0, Math.round(grassDraw));
+  gk('grass');
+
+  /* the beast */
+  gl.useProgram(segProg.p);
+  gl.uniformMatrix4fv(segProg.u.uVP, false, VP);
+  gl.uniform1i(segProg.u.uDepthOnly, 0);
+  setCommon(segProg);
+  gl.bindVertexArray(segVAO);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cib);
+  gl.drawElementsInstanced(gl.TRIANGLES, capIdx.length, gl.UNSIGNED_SHORT, 0, ns);
+  gk('beast');
+
+  /* overlay + dust */
+  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.depthMask(false);
+  if (ovN){
+    gl.useProgram(ovProg.p);
+    gl.uniformMatrix4fv(ovProg.u.uVP, false, VP);
+    gl.bindVertexArray(ovVAO);
+    gl.drawArrays(gl.TRIANGLES, 0, ovN);
+  gk('overlay');
+  }
+  if (nd){
+    gl.useProgram(dustProg.p);
+    gl.uniformMatrix4fv(dustProg.u.uVP, false, VP);
+    gl.uniform1f(dustProg.u.uPx, Hh*0.5);
+    gl.bindVertexArray(dustVAO);
+    gl.drawArrays(gl.POINTS, 0, nd);
+  gk('dust');
+  }
+  gl.depthMask(true); gl.disable(gl.BLEND);
+  gl.bindVertexArray(null);
+
+  drawDiagram();
+
+  fpsAcc += dt; fpsN++;
+  if (fpsAcc > 0.6){
+    $('fps').textContent = (fpsN/fpsAcc).toFixed(0) + ' fps · ' + (grassDraw/1000).toFixed(0) + 'k blades';
+    fpsAcc = 0; fpsN = 0;
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ── boot ────────────────────────────────────────────────────────────────── */
+fillGaits(); syncLegs(); setDuty(0.5); setSpeed(0.85); drawChart();
+beast.target = [4.5, 0, 5.5];
+goal = { p: beast.target, t: 0 };
+requestAnimationFrame(frame);
+
+/* the estate's breadcrumb */
+try { const k='ws:seen:three-feet-down'; if(!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); } catch(e){}
+
+/* let a headless check drive the real thing */
+window.__gllog = GLLOG;
+window.__gl = gl; window.__dbg = { shFBO, shTex, get LVP(){ return window.__lvp; } };
+window.__audio = () => ({ state: actx && actx.state, master });
+window.__beast = { beast, footfall, step: (n,dt)=>{ for(let i=0;i<n;i++) beast.step(dt||1/120); }, support: ()=>beast.support(),
+  stop: doStop, unstop, sweep: runSweep, get topple(){ return topple; }, sculptAt, pickGround, prints, dust };
+</script>
+</body>
+</html>

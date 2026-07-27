@@ -84,6 +84,32 @@ Nothing else is required reading.
   buffer, the H and V passes smear it across a row and a column. `isnan`/`isinf`-guard
   whatever you write into a float target. (`atan(0.0, 0.0)` is undefined and a fine source —
   guard any `atan(q.y, q.x)` whose q can be the origin.)
+- **A depth texture still bound to a sampler while it is the render target kills the
+  whole shadow pass.** If `uShadow` is left pointing at the shadow map from last
+  frame's lighting pass, then binding that map as the FBO's depth attachment makes a
+  feedback loop: WebGL rejects every draw with `INVALID_OPERATION` and *says nothing*
+  — no exception, no console line, headless included. What you see is a world with no
+  shadows in it at all (not even terrain self-shadowing), which reads as a light-matrix
+  bug and will eat an afternoon. `gl.activeTexture(TEXTURE0); gl.bindTexture(TEXTURE_2D,
+  null)` before the shadow pass. Diagnose by calling `gl.getError()` after each draw
+  under a `?gldbg=1` flag — the failing stage names itself instantly.
+- **Shadow bias is in NORMALISED depth, so it scales with the light's near/far range.**
+  A bias of `0.0016` sounds tiny and is 11 cm when the ortho spans 69 m — enough to
+  erase every contact shadow in the scene while the map itself is perfectly correct.
+  Pick the ortho range first (keep it tight around what casts), then size the bias
+  against it: over 40 m, `0.00022` is about 9 mm.
+- **`R32F` + `LINEAR` filtering fetched in a VERTEX shader can wedge the GPU process.**
+  Not "slow" — *wedged*: zero `requestAnimationFrame` callbacks, `eval` still answers,
+  screenshots time out, and the page is unrecoverable. (Sampling a heightfield to plant
+  grass blades is the obvious way to hit it.) `OES_texture_float_linear` reported as
+  present and it made no difference. Use `NEAREST` and do the bilinear yourself from
+  four `texelFetch`es — exact, needs no extension, no hang.
+- **A GPU-heavy page reloaded repeatedly in one `agent-browser` session wedges that
+  session**, and it looks exactly like a bug you just introduced. A *fresh* session name
+  per screenshot is reliable; a reload is not. Script it (open → click → shoot → close)
+  rather than reusing a session, and remember the machine's own Chrome is sharing the
+  same GPU. Prefer a piece that adapts its own load to one that assumes the card.
+
 - **Volumetric marching wants an interleaved-gradient dither**, not an ordered/Bayer one:
   `fract(52.9829189 * fract(0.06711056*x + 0.00583715*y))`, offset per frame by the golden
   ratio. Too-few steps then read as a fine even weave instead of hard rings.
