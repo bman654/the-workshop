@@ -66,7 +66,7 @@ window.INSTRUMENTS = [
   {
     file: "the-wind-chimes/index.html",
     name: "The Wind Chimes",
-    blurb: "five tuned tubes and a clapper on a cord, hung at dusk — give the estate its air and the air becomes the wind that plays them; a soft breeze only tinkles the short bright tubes, and it takes a real gust to reach the long low one",
+    blurb: "six tubes cut so the metal itself decides the note, hung in real air you can raise — tap one anywhere along its length and hear where you hit, then slide the cord and hear twelve seconds of ring fall to two",
     accent: "#c9a24a", timbre: "bell"
   },
   {

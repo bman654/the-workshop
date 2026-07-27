@@ -1,9 +1,63 @@
 # The Wind Chimes — changelog
 
-*A Sound Garden leaf. Five tuned tubes and a clapper on a cord, hung at dusk. Give the estate
-its **air** and the air becomes the **wind** that plays them — a soft breeze only reaches the
-short bright tubes; it takes a real gust to swing the clapper out to the long low one. Or take
-the breeze yourself, and flick a tube in dead calm.*
+*A Sound Garden leaf. A chime hanging under an eave at dusk, in three dimensions, that you
+stand under and orbit. Six aluminium tubes cut so the metal decides the note, a wooden clapper,
+a wind sail, and air that gusts and veers. Tap a tube anywhere along its length; slide the cord
+and hear the ring collapse.*
+
+## rebuilt — the tubes get a body, and a voice
+
+The room was named twice in NEXT.md as the estate's clearest case of an idea trapped in the
+wrong medium: 4,321 lines drawing five tuned tubes as flat gold rectangles that could not swing
+toward or away from you, played by an oscillator. Same route, same name, same place on the rack.
+Everything under it is new.
+
+**Real metal.** Every pitch is now *cut* rather than chosen. A hanging chime tube is a FREE-FREE
+Euler–Bernoulli beam — clamped nowhere, both ends loose — whose modes solve cos(βL)cosh(βL) = 1.
+That gives the inharmonic ladder **1 : 2.756 : 5.404 : 8.933 : 13.34 : 18.64**, which is exactly
+why a chime is neither a bell (no sub-octave hum) nor a string (no 1:2:3). Length falls out of
+E, ρ and the bore: `cutLength(220 Hz)` asks for 825 mm of 25 × 1.5 mm aluminium, and the twin
+checks that the tube you get back sings 220 Hz.
+
+**A real voice — the estate's second AudioWorklet in 466 pieces.** Six tubes × six modal
+resonators, each mode one complex phasor multiplied by a fixed pole every sample. A strike ADDS
+a real number to the phasor, which is an impulse: every mode leaves the hammer in phase and then
+drifts apart at its own rate. Mode *n* gets the weight |Y_n(ξ)| at the place the clapper actually
+landed, so **tap a tube at its exact middle and the second partial is not there** — 0.5 is a node
+of mode 2. The audio-lens sees it in the top-three peaks.
+
+**Real air, in three dimensions.** Every cord can point anywhere on a sphere: state is the unit
+vector down the cord plus an angular velocity perpendicular to it, integrated with gravity and
+drag as torques. The whole rig hangs too, so a steady wind leans the assembly *together* and
+moves nothing relative to anything — every drag force is computed against the wind MINUS that
+body's own velocity, so the "buffeting, not pressure" fact the 2-D version had to special-case
+now falls out on its own. Hold the wind high and steady and the clapper does lean out and lie
+against its downwind tube, ringing nothing, which is what a real chime does in a gale.
+
+**THE ONE CLAIM, and the page tests it live.** A cord clamps what it touches and drains each
+mode by **Y_n(ξ_hang)²**. Mode 1 stands still at ξ = 0.2242, which is where every real chime is
+drilled. Press **measure it** and the page synthesises a strike at each of 33 hanging positions,
+band-passes the fundamental out of the audio it just made, fits T60 to the decay, and plots it —
+**measured peak 0.2244 against the analytic node 0.2242**, and the analytic number came out of
+bisecting the mode shape with no audio in it at all. Two computations, one answer, on the
+visitor's own machine.
+
+The ear-check found something better than what was written down. Hung at its middle the tube does
+not merely ring shorter: with the fundamental strangled, the audio-lens **names it as a different
+note** — A3 becomes D#5, the second partial, because that is now the loudest thing left. The
+spectrograms make it a picture: `node.png` is one long bright band across the whole frame,
+`middle.png` is the same band as a short wedge with a higher line outliving it.
+
+**The tubes bend in their own mode shapes.** The vertex shader evaluates the same Y_n(ξ) that
+core.mjs does — in float, using the stabilised form, because `cosh(20.42)` is 4×10⁸ and the answer
+is order 1, so the naive expression has nothing left in single precision. Amplitudes and phases
+come from the same modal envelopes the ear is hearing. Drawn 140× slow and some thousands of times
+too large, and the page says so: honest in shape, a liar in size.
+
+Files: `core.mjs` (the beam, the voice, the rig, the measurement — no backtick anywhere in it,
+because the page hands the whole text to `String.raw`), `worklet.js` (the audio-thread tail),
+`index.src.html`, `core.test.mjs` (10 legs, most with a discriminating control), `render-wavs.mjs`
+and `verify.sh` (the ear-check). The estate's air chip is gone: this room owns its own weather now.
 
 ## #424 — born (BUILD/garden)
 

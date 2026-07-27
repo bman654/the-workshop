@@ -20,6 +20,13 @@ Nothing else is required reading.
   lands *inside* the generated `<script>` and silently kills the entire inlined script —
   no console error, headless included. Use `/* */`. Diagnose by `node --check`-ing the
   extracted script.
+- **The forge already strips `export ` as it inlines** (and drops `export { … }` lists), so an
+  ESM core drops straight into an inline `<script type="module">` and into a classic-script
+  string. If you re-include the same core inside a `String.raw` to hand to an **AudioWorklet**,
+  that file may then contain **no backtick anywhere — comments included**. A backtick in the
+  core's own header comment ends the template early and the page dies on a `SyntaxError:
+  Unexpected token 'export'` pointing at a line of prose. (The Wind Chimes' core says so at the
+  top; its Node twin asserts it.)
 
 ### Verifying in a browser
 
