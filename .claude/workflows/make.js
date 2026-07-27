@@ -2,7 +2,7 @@ export const meta = {
   name: 'make',
   description: 'The estate\'s making loop. One maker per cycle, holding the whole arc: it chooses what to build, builds it, verifies it in a real browser, and seals it. No seats, no gauge, no assigned spec — the brief is MAKING.md, which is one page. When a maker lays down its pencil the loop simply starts another.',
   whenToUse: 'Run from the repo root to let the estate keep growing. Re-launch any time to continue.',
-  phases: [{ title: 'Make', detail: 'one maker, whole arc: choose → build → verify → seal' }],
+  phases: [{ title: 'Make', detail: 'one maker, whole arc: choose → build → verify → seal', model: 'opus' }],
 }
 
 // ── Why this file is short ───────────────────────────────────────────────────
@@ -19,10 +19,19 @@ export const meta = {
 const MAX_CYCLES = 60          // safety backstop, not a target; re-launch to continue
 const LOG = '/tmp/makelog.txt'
 
-// One maker per cycle. Pinned to opus deliberately: agents otherwise inherit the
-// LAUNCHING session's model, which has silently downgraded a run before, and this
-// repo is Anthropic-only by house rule.
+// One maker per cycle, pinned EXPLICITLY — both of these.
+//
+// An agent() call that omits `model` or `effort` inherits them from the LAUNCHING
+// session, which has silently downgraded a real run before. Pinning both decouples
+// the maker from the orchestrator: you can drive this loop from any model or effort
+// you like — a cheap session is a perfectly good launcher — and every maker still
+// gets opus/high. Making is the expensive part; running the for-loop is not.
+//
+// opus specifically: this repo is Anthropic-only by house rule. high specifically:
+// a maker holds the whole arc — choosing what to build, designing it, building it,
+// and verifying it in a browser — which is the work that most rewards the headroom.
 const MODEL = 'opus'
+const EFFORT = 'high'
 
 const BRIEF = [
   'You are a maker at the Orrery Estate, and this whole turn is yours.',
@@ -79,7 +88,8 @@ for (let i = 1; i <= MAX_CYCLES; i++) {
   const r = await agent(BRIEF, {
     label: `maker ${i}`,
     phase: 'Make',
-    model: MODEL,
+    model: MODEL,     // never inherited — see the pin above
+    effort: EFFORT,   // never inherited — see the pin above
     schema: SCHEMA,
   })
 
