@@ -1,556 +1,755 @@
-// ============================================================================
-//  THE WIND CHIMES — the CHIME CORE: the sole authority for this leaf's motion
-//  and its voice. Pure, dependency-free (DOM-free). This is a DELIGHT-FIRST leaf:
-//  it makes NO math claim and carries no in-page proof pill. The ONE correctness
-//  CONSTRAINT (not a theorem) is the TUNING — every tube's fundamental is a degree
-//  of A-major-pentatonic, single-sourced from ../pitch-core.mjs, so any chord the
-//  wind happens to strike is consonant by construction and cannot sound wrong.
-//
-//    • ONE DRIVEN DAMPED PENDULUM. The clapper puck and the wind-sail below it are
-//      ONE body hanging on a cord of length L. The breeze pushes the sail:
-//          θ'' = −(g/L)·sin θ − c·θ' + a_wind(t)
-//          a_wind(t) = WIND_K · breeze · turbulence(t)
-//      `turbulence` is smooth band-limited noise — a sum of detuned sines at
-//      sub-hertz rates (one of them near the pendulum's own 0.77 Hz, so a real
-//      breeze RESONANTLY pumps the swing the way air actually does) — which is
-//      why gusts feel like air and not like a slider. `c` is REAL damping: with
-//      the wind off, an undriven swing loses energy monotonically and dies to rest.
-//
-//      WHY THE WIND FORCE IS ZERO-MEAN (and θ is measured against the RACK): the
-//      tubes, the top disc and the clapper all hang from the SAME hook. A steady
-//      wind leans the WHOLE assembly together, which moves no tube relative to any
-//      clapper and rings nothing. What actually rings a chime is the FLUCTUATING
-//      part of the air — the buffeting. So the steady push carries no term here (it
-//      would only park the clapper against one side of the rack and silence the
-//      other half), and `breeze` scales the size of the gusting instead. This is
-//      both the truer physics and the reason a strong wind sweeps the WHOLE rack
-//      rather than pinning the clapper to its downwind edge.
-//
-//      Integrated semi-implicit (symplectic) Euler with SUB substeps, and the
-//      clapper is bounded by the RACK'S EDGE it hangs inside — so no wind, however
-//      hard, can send it over the top into a spin (LEG 6 holds that line).
-//
-//    • THE TUBES ARE A GEOMETRY, NOT A RULE. Five tubes hang at FIXED contact
-//      angles φ_i spread around dead centre, NESTED: the highest tube sits nearest
-//      the middle and each lower tube sits further out (|φ| grows as pitch falls),
-//      on alternating sides so the rack hangs balanced. A strike on tube i fires
-//      when the swinging clapper CROSSES φ_i with |θ'| > V_MIN, with a per-tube
-//      REFRACTORY window so one pass rings a tube ONCE (no buzz), and the tube
-//      takes a little of the swing's energy away with it (STRIKE_LOSS).
-//      That geometry IS the wind→notes mapping, and there is no rule to learn:
-//        · a SOFT breeze only reaches the inner tubes → a few bright tinkles;
-//        · a GUST sweeps the clapper across the whole rack → the full pentatonic run.
-//      The lowest note is the one the wind has to work hardest to reach.
-//
-//    • THE VOICE IS A STRUCK FREE-FREE TUBE, not a bell. Each strike is an additive
-//      stack on the INHARMONIC free-free ratios [1, 2.756, 5.404, 8.933], each
-//      partial with its own env(t) = (1 − e^(−t/τ_atk))·e^(−t/τ_dec,n): a ~6 ms
-//      attack to a peak just after onset, then an exponential tail — a genuine
-//      RISE-then-DECAY, with the higher modes dying first (struck metal) and the
-//      longer/lower tubes ringing longer. Harder strikes are BRIGHTER (the upper
-//      partials scale with impact velocity), so the wind's force is audible as
-//      timbre and not just as loudness. A soft master limiter means a five-tube
-//      gust cluster never clips. Because a free-free tube has NO sub-octave hum
-//      partial and its overtones are spread far wider than a bell's, this voice is
-//      audibly DISTINCT from the Sound Garden's Carillon — thinner, airier,
-//      shorter-tailed. (verify.sh measures exactly that, against a carillon render.)
-//
-//    • WIND IS LIGHT. `strikeEnvelope` is the SAME function the ear hears and the
-//      eye sees: the page drives each struck tube's glow + shiver from this very
-//      envelope, so you literally SEE the ring decay. The room is a complete,
-//      playable, luminous sculpture with the sound OFF.
-//
-//  This CHIME CORE is single-sourced here; the page (index.html, forged from
-//  index.src.html) inlines a BYTE-TWIN of the slice between the sentinels below,
-//  char-for-char. The Node twin (core.test.mjs) re-extracts that slice, asserts
-//  char-for-char parity, and drives the SAME createChime()/gust() the page's live
-//  animation drives — so the room the eye+ear play and the room the twin proves
-//  cannot drift.
-//
-//  Note on the byte-twin's shape: the CHIME CORE block is IMPORT-FREE — it receives
-//  the pitch law (`semiToFreqFn`) as a PARAMETER wherever it needs a frequency. That
-//  lets the page inline the slice without forcing a script load order, and keeps the
-//  single-source discipline honest: the equal-temperament anchor is IMPORTED from
-//  ../pitch-core.mjs, never re-typed here.
-//
-//  The leaf lives one level deep (the-wind-chimes → sound-garden → repo root), so
-//  the Node twin's repoRoot is ../.. .
-// ============================================================================
+/* ============================================================================
+ *  THE WIND CHIMES — the core.  Zero-dependency, DOM-free ESM.
+ *
+ *  Written once, run in three places:
+ *    · the page's module script (forge:include ./core.mjs)
+ *    · the AudioWorklet — the same text, with its `export ` keywords stripped,
+ *      because a worklet is a classic script
+ *    · Node — core.test.mjs (the twin) and render-wavs.mjs (the ear-check)
+ *
+ *  So the tube you hear, the tube you watch bending, and the tube the twin
+ *  proves are one object.  DO NOT put a backtick or a dollar-brace in this file:
+ *  the page hands the whole text to the worklet inside a String.raw template.
+ *
+ *  ── WHAT A CHIME TUBE ACTUALLY IS ──────────────────────────────────────────
+ *  A hanging chime tube is a FREE-FREE Euler–Bernoulli beam — clamped nowhere,
+ *  both ends loose.  Its transverse modes solve cos(bL)cosh(bL) = 1, giving
+ *  bL = 4.7300, 7.8532, 10.9956, …  and, because f goes as (bL)^2, the famous
+ *  INHARMONIC ladder
+ *
+ *        1 : 2.756 : 5.404 : 8.933 : 13.34 : 18.64
+ *
+ *  which is why a chime is not a bell and not a string.  Nothing here is fitted:
+ *  every frequency in this room falls out of E, rho, the tube's bore and its
+ *  length.  Cut a tube 1.19x longer and it drops a fourth (f goes as 1/L^2).
+ *
+ *  ── THE ROOM'S ONE CLAIM ───────────────────────────────────────────────────
+ *  Mode 1 of a free-free beam stands still at xi = 0.2242 and 0.7758 of its
+ *  length.  Real chimes are drilled and hung THERE, and the reason is audible:
+ *  a cord clamps whatever it touches and drains each mode in proportion to how
+ *  much that mode moves at the hanging point — Y_n(xi_hang)^2.  Hang the tube
+ *  at its node and mode 1 loses nothing and rings for ten seconds; hang it at
+ *  the middle and the same tube is dead in one.
+ *
+ *  The file computes that curve two independent ways:
+ *    · analytically — modeNodes(0) bisects the roots of the mode shape;
+ *    · by measurement — sustainCurve() SYNTHESISES a strike at each hanging
+ *      position and fits T60 to the decay of the rendered audio.
+ *  The measured minima land on the analytic nodes.  The page draws both.
+ * ========================================================================== */
 
-import { semiToFreq, noteName } from '../pitch-core.mjs';   // the pitch anchor — never re-typed
+/* ---------------------------------------------------------------------------
+ *  1 · THE BEAM
+ * ------------------------------------------------------------------------ */
 
-// ===== CHIME CORE (inlined byte-twin) BEGIN =====
-// IMPORT-FREE: the pendulum, the strike model, the tone, the offline renders and
-// runChimeSelfTest take only plain numbers and a passed-in pitch function — so the
-// page can inline this block verbatim regardless of script load order.
+/* 6061-T6 aluminium — what chime tube stock is actually made of. */
+export const E_AL = 69.0e9;                      /* Young's modulus, Pa */
+export const RHO_AL = 2700.0;                    /* density, kg/m^3     */
+export const C_AL = Math.sqrt(E_AL / RHO_AL);    /* 5055 m/s            */
 
-// ── THE TUNING (the one correctness CONSTRAINT) ──────────────────────────────
-// The five degrees of A-MAJOR-PENTATONIC — A3 B3 C#4 E4 F#4 — as SEMITONE OFFSETS
-// from middle C. This is the estate's own key (the air's prose names it), and it is
-// the reason the room cannot sound wrong: every subset of a pentatonic scale is
-// consonant, so whatever chord the wind happens to strike is musical by construction.
-// The offsets are the only thing typed here; the FREQUENCY comes from the imported
-// pitch law (semiToFreqFn), never from a re-typed Hz literal.
-//   C4 = 0 ⇒ A3 = −3, B3 = −1, C#4 = +1, E4 = +4, F#4 = +6.
-const PENT_SEMIS = [-3, -1, 1, 4, 6];        // low → high (A3 B3 C#4 E4 F#4)
+/* Roots of cos(x)cosh(x) = 1 — the free-free eigenvalues, bL. */
+export const BETA_L = [
+  4.730040745, 7.853204624, 10.99560784,
+  14.13716549, 17.27875960, 20.42035225,
+];
+export const NMODES = BETA_L.length;
 
-// the tube fundamentals, lowest first. `semiToFreqFn` is ../pitch-core.mjs's
-// semiToFreq — passed in so this block stays import-free and the anchor stays single.
-function tubeFreqs(semiToFreqFn){ return PENT_SEMIS.map(semiToFreqFn); }
+/* f_n / f_1 = (bL_n / bL_1)^2 */
+export const MODE_RATIO = BETA_L.map((b) => (b * b) / (BETA_L[0] * BETA_L[0]));
 
-// ── THE RACK'S GEOMETRY (the wind→notes mapping, as a shape) ─────────────────
-// Contact angles φ_i in RADIANS, index-aligned with PENT_SEMIS (so index 0 is the
-// LOWEST tube). |φ| falls as pitch rises — the highest tube hangs nearest dead
-// centre, the lowest hangs furthest out — and the signs alternate so the rack hangs
-// balanced and each swing direction rings a different (still consonant) subset.
-// These five numbers ARE the rule "a breeze tinkles the high tubes, a gust plays
-// them all": nothing else in the code knows about soft-vs-strong wind.
-const TUBE_ANGLES = [0.50, -0.40, 0.29, -0.185, 0.085];   // A3 … F#4, radians
-
-// the tube LENGTHS, as a fraction of the longest. A free-free tube's fundamental
-// goes as 1/L², so L ∝ 1/√f — the eye reads the pitch order off the lengths, and
-// the drawing is not a lie about the physics.
-function tubeLengths(freqs){
-  const fLo = Math.min.apply(null, freqs);
-  return freqs.map(f => Math.sqrt(fLo / f));
+/* Radius of gyration of a hollow round tube: K = sqrt(I/A) = sqrt(od^2+id^2)/4 */
+export function gyration(od, wall) {
+  const id = od - 2 * wall;
+  return Math.sqrt(od * od + id * id) / 4;
 }
 
-// ── THE PENDULUM (the ONE body: clapper puck + wind-sail) ────────────────────
-const G        = 9.81;      // gravity (m/s²)
-const L_CORD   = 0.42;      // cord length (m) ⇒ ω₀ = √(g/L) ≈ 4.83 rad/s ≈ 0.77 Hz
-const DAMP_C   = 0.30;      // real linear damping (1/s) — undriven swings die to rest
-const WIND_K   = 26.0;      // sail coupling: breeze 1.0 gusts the clapper across the rack
-const SUBSTEPS = 8;         // integrator substeps per stepped frame (stability)
-const GUST_KICK  = 2.2;     // rad/s of swing an impulse gust(1) imparts
-const SURGE_TAU  = 1.6;     // s — how fast a gust's breeze surge decays away
-const OMEGA0 = Math.sqrt(G / L_CORD);        // the pendulum's natural rate (rad/s)
-
-// THE RACK'S EDGE — the clapper hangs INSIDE the ring of tubes and cannot swing out
-// past it: at the limit it meets the outermost tube and rebounds. This is a real
-// physical bound, and it is also what keeps the room sane in a storm. A driven
-// pendulum with no bound eventually goes OVER THE TOP and rotates (the #1 hazard
-// here — a spinning clapper is not a chime and rings almost nothing, because every
-// tube falls inside its refractory). THETA_MAX sits just outside the lowest tube's
-// contact angle, so the swing can always reach every tube but never escape the rack.
-const THETA_MAX = 0.62;     // rad — the rack's edge (outermost tube sits at 0.50)
-const BOUNCE    = 0.55;     // how much swing survives a rebound off the rack's edge
-
-// ── THE STRIKE (a crossing, not a schedule) ──────────────────────────────────
-const V_MIN      = 0.25;    // rad/s — below this a crossing is a graze, not a strike
-const V_REF      = 3.00;    // rad/s — the impact speed that reads as a full-force hit
-const REFRACTORY = 0.11;    // s — one pass rings a tube once (no buzz)
-const STRIKE_LOSS = 0.045;  // the swing energy a tube carries off as sound
-
-// ── THE VOICE (a struck free-free tube) ──────────────────────────────────────
-// The inharmonic partial ratios of an ideal FREE-FREE bar/tube. These are what make
-// it a chime and not a bell: no sub-octave hum, and overtones spread far wider than
-// a bell's (1.19/1.5/2.0). The ONE place these live as code.
-const TUBE_RATIOS = [1, 2.756, 5.404, 8.933];
-const TUBE_AMPS   = [1.0, 0.42, 0.18, 0.09];   // base weight per partial
-const TAU_ATK     = 0.006;   // s — the ~6 ms strike attack (rise), shared by all partials
-const TAU_REF     = 3.8;     // s — the fundamental's tail on the LOWEST tube
-const DECAY_FALL  = 1.8;     // higher modes decay faster: τ_n = τ_0 / DECAY_FALL^n
-const BRIGHT_FLOOR = 0.30;   // a feather-light strike keeps this much of its top end
-const LIMIT       = 0.85;    // the soft master limiter's ceiling (overlaps never clip)
-const DEFAULT_SR  = 44100;
-
-// the fundamental's decay time for a tube of frequency f: lower (longer) tubes ring
-// longer, in honest proportion to their pitch. Anchored on the lowest tube.
-function tubeTau(f, fLo){ return TAU_REF * (fLo / f); }
-
-// THE ENVELOPE — the ONE curve the ear and the eye both obey. A fast rise to a peak
-// just after onset, then an exponential tail:
-//     env(t) = (1 − e^(−t/τ_atk)) · e^(−t/τ_dec)
-// It is exactly 0 at t=0, climbs to ≈1 within a few tens of ms, and decays away. The
-// page drives a struck tube's GLOW and SHIVER from this same function, so what you
-// SEE is what you HEAR.
-function env(t, tauAtk, tauDec){
-  if (t < 0) return 0;
-  return (1 - Math.exp(-t / tauAtk)) * Math.exp(-t / tauDec);
+/* Fundamental of a free-free tube of length L:
+ *      f1 = (bL_1)^2 / (2 pi L^2) * sqrt(E/rho) * K                         */
+export function fundamental(L, od, wall) {
+  return (BETA_L[0] * BETA_L[0]) / (2 * Math.PI * L * L) * C_AL * gyration(od, wall);
 }
 
-// the per-partial decay time for partial index n on a tube whose fundamental decays
-// in tau0 — struck metal loses its top end first.
-function partialTau(tau0, n){ return tau0 / Math.pow(DECAY_FALL, n); }
-
-// the per-partial amplitude for an impact velocity vel ∈ [0,1]. The fundamental
-// scales with vel; every partial ABOVE it scales with vel again per rung, so a hard
-// strike is BRIGHTER and not merely louder — the wind's force is audible as timbre.
-function partialAmp(n, vel){
-  const v = Math.max(0, Math.min(1, vel));
-  return TUBE_AMPS[n] * v * Math.pow(BRIGHT_FLOOR + (1 - BRIGHT_FLOOR) * v, n);
+/* Invert it — what length of this stock sings at f1? */
+export function cutLength(f1, od, wall) {
+  return Math.sqrt((BETA_L[0] * BETA_L[0]) * C_AL * gyration(od, wall) / (2 * Math.PI * f1));
 }
 
-// THE STRUCK-TUBE VOICE, as a continuous function of time — the sum the ear hears:
-//   y(t) = Σ_n amp_n(vel) · env(t; τ_atk, τ_n) · sin(2π · f0 · ratio_n · t)
-// One law; renderStrike below just samples it, and strikeEnvelope is its visible face.
-function tubeSample(t, f0, vel, tau0){
-  if (t < 0) return 0;
-  let s = 0;
-  for (let n = 0; n < TUBE_RATIOS.length; n++){
-    const a = partialAmp(n, vel);
-    if (a === 0) continue;
-    s += a * env(t, TAU_ATK, partialTau(tau0, n)) * Math.sin(2 * Math.PI * f0 * TUBE_RATIOS[n] * t);
-  }
-  return s;
+export function modeFreqs(L, od, wall) {
+  const f1 = fundamental(L, od, wall);
+  return MODE_RATIO.map((r) => f1 * r);
 }
 
-// THE VISIBLE FACE of the same voice: the strike's overall loudness envelope at
-// age t, normalised to ≈1 at its peak. The page uses THIS for a struck tube's glow
-// and shiver, so the light and the sound share one curve (and a muted / air-off /
-// can't-listen visitor still SEES the ring decay).
-function strikeEnvelope(t, vel, tau0){
-  return Math.max(0, Math.min(1, vel)) * env(t, TAU_ATK, tau0);
+/* --- the mode SHAPE -------------------------------------------------------
+ *  Y_n(xi) = cosh(b xi) + cos(b xi) - sigma (sinh(b xi) + sin(b xi)),  b = bL_n
+ *  normalised so the ends — always antinodes — are exactly +/- 1.
+ *
+ *  Written naively this is catastrophic cancellation: cosh(20.42) is 4e8 and
+ *  the answer is order 1, so float32 (the vertex shader draws this same curve)
+ *  has nothing left.  So fold sigma into the exponentials analytically,
+ *      cosh z - sigma sinh z = ( (1-sigma) e^z + (1+sigma) e^-z ) / 2
+ *  and get om = 1 - sigma from a difference that never blows up,
+ *      1 - sigma = (cos b - sin b - e^-b) / (sinh b - sin b).
+ *  Now the huge e^z is multiplied by a correspondingly tiny om, the product is
+ *  order 1, and it is exact in double AND in float.                          */
+export function shapeCoefs(n) {
+  const b = BETA_L[n];
+  const om = (Math.cos(b) - Math.sin(b) - Math.exp(-b)) / (Math.sinh(b) - Math.sin(b));
+  return { b: b, om: om, sigma: 1 - om };
 }
 
-// ── THE OFFLINE RENDERS (what verify.sh measures and what the page PLAYS) ────
-// The page plays each strike by rendering it with renderStrike and handing the very
-// same samples to an AudioBuffer — so the live sound, the offline WAV, and the model
-// the twin proves are one thing, not three.
-
-// one strike, rendered to a buffer.
-function renderStrike(f0, vel, seconds, sr, tau0){
-  sr = sr || DEFAULT_SR;
-  const N = Math.max(1, Math.floor(seconds * sr));
-  const out = new Float64Array(N);
-  for (let i = 0; i < N; i++) out[i] = tubeSample(i / sr, f0, vel, tau0);
-  return out;
+export function modeShape(n, xi) {
+  const c = shapeCoefs(n);
+  const z = c.b * xi;
+  const hyp = 0.5 * (c.om * Math.exp(z) + (2 - c.om) * Math.exp(-z));
+  const tri = Math.cos(z) - c.sigma * Math.sin(z);
+  return (hyp + tri) / 2;
 }
 
-// THE SOFT MASTER LIMITER — a smooth tanh knee at LIMIT. Below the knee it is very
-// nearly linear (so a lone tinkle is untouched); above it, it bends rather than
-// clips, so a five-tube gust cluster can never reach full scale.
-function limit(x){ return LIMIT * Math.tanh(x / LIMIT); }
-
-// a LIST of strikes ({tube, t, vel}) mixed into one buffer at their own times, then
-// passed through the limiter. This is the room's actual output.
-function renderStrikes(strikes, seconds, sr, freqs){
-  sr = sr || DEFAULT_SR;
-  const N = Math.max(1, Math.floor(seconds * sr));
-  const out = new Float64Array(N);
-  const fLo = Math.min.apply(null, freqs);
-  for (const s of strikes){
-    const f0 = freqs[s.tube];
-    const tau0 = tubeTau(f0, fLo);
-    const i0 = Math.floor(s.t * sr);
-    if (i0 >= N) continue;
-    for (let i = Math.max(0, i0); i < N; i++){
-      const age = (i - i0) / sr;
-      if (age > tau0 * 6 + 0.05) break;          // past audibility; stop early
-      out[i] += tubeSample(age, f0, s.vel, tau0);
-    }
-  }
-  for (let i = 0; i < N; i++) out[i] = limit(out[i]);
-  return out;
-}
-
-// ── ANALYSIS HELPERS (shared by the self-test, the page, and verify.sh) ──────
-
-function rms(buf, s, e){
-  s = Math.max(0, s | 0); e = Math.min(buf.length, (e ?? buf.length) | 0);
-  if (e <= s) return 0;
-  let acc = 0; for (let i = s; i < e; i++) acc += buf[i] * buf[i];
-  return Math.sqrt(acc / (e - s));
-}
-
-function peak(buf, s, e){
-  s = Math.max(0, s | 0); e = Math.min(buf.length, (e ?? buf.length) | 0);
-  let p = 0; for (let i = s; i < e; i++){ const a = buf[i] < 0 ? -buf[i] : buf[i]; if (a > p) p = a; }
-  return p;
-}
-
-// the MEASURED loudness envelope of a rendered buffer: block RMS over `winMs`
-// windows. This is how the rise-then-decay payoff is asserted on the actual AUDIO
-// (not merely on the analytic env), and it is what "you can see the ring decay" means.
-function rmsEnvelope(buf, sr, winMs = 30){
-  const w = Math.max(1, Math.floor(sr * winMs / 1000));
+/* Where mode n stands still, as fractions of the length.  Bisection on the
+ * shape itself — no table, no remembered constants.  modeNodes(0) is the
+ * chime-maker's 0.2242 / 0.7758, arrived at rather than looked up. */
+export function modeNodes(n, samples = 4000) {
   const out = [];
-  for (let i = 0; i + w <= buf.length; i += w) out.push(rms(buf, i, i + w));
+  let prev = modeShape(n, 0);
+  for (let i = 1; i <= samples; i++) {
+    const x = i / samples;
+    const v = modeShape(n, x);
+    if (prev * v < 0) {
+      let lo = (i - 1) / samples, hi = x, flo = prev;
+      for (let k = 0; k < 60; k++) {
+        const mid = 0.5 * (lo + hi), fm = modeShape(n, mid);
+        if (flo * fm <= 0) hi = mid; else { lo = mid; flo = fm; }
+      }
+      out.push(0.5 * (lo + hi));
+    }
+    prev = v;
+  }
   return out;
 }
 
-// ── THE LIVE ROOM (the SAME simulation the page animates and the twin drives) ──
-// createChime() returns the room's state plus its real entry points. The headless
-// twin drives gust()/step() directly — never a synthetic canvas pointer event — so
-// what the twin proves is the live path, not a stand-in for it.
-function createChime(opts){
-  opts = opts || {};
-  const freqs  = opts.freqs;                       // REQUIRED: from tubeFreqs(semiToFreq)
-  const angles = opts.angles || TUBE_ANGLES;
-  const fLo    = Math.min.apply(null, freqs);
-  const taus   = freqs.map(f => tubeTau(f, fLo));
-  const seed   = opts.seed ?? 1;
+/* ---------------------------------------------------------------------------
+ *  2 · HOW A TUBE LOSES ITS SOUND
+ * ------------------------------------------------------------------------ */
 
-  // the turbulence: a sum of detuned sines at sub-hertz rates. One component sits
-  // near the pendulum's own 0.77 Hz so a real breeze RESONANTLY pumps the swing —
-  // that is why gusts feel like air. Deterministic in `seed`, so a render repeats.
-  const TURB_F = [0.11, 0.27, 0.53, 0.79, 1.31];
-  const TURB_A = [0.38, 0.30, 0.20, 0.26, 0.12];
-  const phases = TURB_F.map((_, i) => (Math.sin((i + 1) * 12.9898 * seed) * 43758.5453) % (2 * Math.PI));
-  let turbNorm = 0; for (const a of TURB_A) turbNorm += a;
-  function turbulence(t){
+/* Amplitude decay rate alpha (1/s): a mode goes as exp(-alpha t).
+ *   ALPHA_INT — internal friction in the metal, near enough flat across modes
+ *   ALPHA_RAD — radiation into the air; a faster mode pushes more air, and
+ *               measured bar damping grows roughly with sqrt(f)
+ * The two are set so the long tube's fundamental rings about twelve seconds,
+ * which is what a 25 x 1.5 mm x 0.83 m aluminium tube does on a porch. */
+export const ALPHA_INT = 0.25;
+export const ALPHA_RAD = 0.0200;
+export function alphaFree(f) { return ALPHA_INT + ALPHA_RAD * Math.sqrt(f); }
+
+/* THE CORD'S TOLL — the whole claim, in one line.  A loop through a drilled
+ * hole clamps the tube where it passes and drains each mode in proportion to
+ * the square of that mode's displacement at the hanging point. */
+export const HANG_KAPPA = 9.0;
+export function alphaHang(n, xiHang) {
+  const y = modeShape(n, xiHang);
+  return HANG_KAPPA * y * y;
+}
+export function alphaTotal(n, f, xiHang) {
+  return alphaFree(f) + alphaHang(n, xiHang);
+}
+
+/* Time to fall 60 dB at an amplitude decay rate alpha. */
+export function t60(alpha) { return Math.log(1000) / alpha; }
+
+/* ---------------------------------------------------------------------------
+ *  3 · THE VOICE — a bank of modal resonators
+ *
+ *  Each mode is ONE complex phasor multiplied by a fixed pole p = r e^{i w}
+ *  every sample; the output is its real part.  A strike ADDS a real number to
+ *  the phasor, which is exactly an impulse: every mode leaves the hammer in
+ *  phase and then drifts apart at its own rate, which is the sound of struck
+ *  metal.  Because strikes add, overlapping hits are correct for free.
+ *
+ *  A strike at xi_s gives mode n the weight |Y_n(xi_s)| — hit a tube on one of
+ *  a mode's nodes and that mode is simply not there.  Finite contact time rolls
+ *  off the top, so a slow touch is a thump and a hard fast one is bright.
+ * ------------------------------------------------------------------------ */
+
+export const CONTACT_HZ_MIN = 900;    /* brightest partial a feather-touch wakes */
+export const CONTACT_HZ_MAX = 5200;   /* … and what a full-force blow wakes      */
+export const V_REF = 0.34;            /* closing speed (m/s) that reads as full  */
+
+export function contactCutoff(vel) {
+  const v = Math.min(1, Math.max(0, vel / V_REF));
+  return CONTACT_HZ_MIN + (CONTACT_HZ_MAX - CONTACT_HZ_MIN) * Math.pow(v, 0.7);
+}
+
+export function strikeAmp(n, f, vel, xiStrike) {
+  const fc = contactCutoff(vel);
+  const roll = 1 / (1 + (f / fc) * (f / fc));
+  return Math.abs(modeShape(n, xiStrike)) * roll;
+}
+
+export function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export class ModalBank {
+  /* freqs: per tube, an array of mode frequencies.  pans: -1..1 per tube. */
+  constructor(freqs, sr, opts) {
+    const o = opts || {};
+    this.sr = sr;
+    this.nT = freqs.length;
+    this.nM = freqs[0].length;
+    this.freqs = freqs;
+    this.pans = o.pans || freqs.map(() => 0);
+    this.gain = o.gain === undefined ? 0.30 : o.gain;
+    this.thudGain = o.thudGain === undefined ? 1 : o.thudGain;
+    const N = this.nT * this.nM;
+    this.re = new Float64Array(N);
+    this.im = new Float64Array(N);
+    this.pr = new Float64Array(N);
+    this.pi = new Float64Array(N);
+    this.amp = new Float64Array(N);    /* the eye's copy of each mode's size */
+    this.alpha = new Float64Array(N);
+    this.setHang(o.xiHang === undefined ? 0.2242 : o.xiHang);
+    this.thuds = [];
+    this.rng = mulberry32(o.seed === undefined ? 20260727 : o.seed);
+    this.nz1 = 0; this.nz2 = 0; this.nzB = 0;
+    this.wind = 0; this.windTarget = 0;
+    this.t = 0;
+  }
+
+  setHang(xi) {
+    this.xiHang = xi;
+    const sr = this.sr;
+    for (let i = 0; i < this.nT; i++) {
+      for (let n = 0; n < this.nM; n++) {
+        const k = i * this.nM + n;
+        const f = this.freqs[i][n];
+        const a = alphaTotal(n, f, xi);
+        this.alpha[k] = a;
+        const r = Math.exp(-a / sr);
+        const w = 2 * Math.PI * f / sr;
+        this.pr[k] = r * Math.cos(w);
+        this.pi[k] = r * Math.sin(w);
+      }
+    }
+  }
+
+  /* vel: closing speed, m/s.  xiStrike: 0..1 along the tube. */
+  strike(tube, vel, xiStrike) {
+    if (tube < 0 || tube >= this.nT) return;
+    const v = Math.max(0, vel);
+    const drive = Math.min(1.4, v / V_REF);
+    for (let n = 0; n < this.nM; n++) {
+      const k = tube * this.nM + n;
+      const a = strikeAmp(n, this.freqs[tube][n], v, xiStrike) * drive;
+      this.re[k] += a;
+      this.amp[k] = Math.sqrt(this.re[k] * this.re[k] + this.im[k] * this.im[k]);
+    }
+    if (this.thudGain > 0) {
+      this.thuds.push({ e: drive * 0.42 * this.thudGain, lp: 0, pan: this.pans[tube] });
+      if (this.thuds.length > 24) this.thuds.shift();
+    }
+  }
+
+  setWind(v) { this.windTarget = v; }
+
+  /* Adds into outL / outR for n samples. */
+  render(outL, outR, n) {
+    const nT = this.nT, nM = this.nM;
+    const re = this.re, im = this.im, pr = this.pr, pi = this.pi;
+    const g = this.gain, sr = this.sr;
+    const slew = Math.exp(-1 / (0.25 * sr));
+    for (let s = 0; s < n; s++) {
+      let l = 0, r = 0;
+      for (let i = 0; i < nT; i++) {
+        let acc = 0;
+        const base = i * nM;
+        for (let m = 0; m < nM; m++) {
+          const k = base + m;
+          const a = re[k], b = im[k];
+          if (a === 0 && b === 0) continue;
+          re[k] = a * pr[k] - b * pi[k];
+          im[k] = a * pi[k] + b * pr[k];
+          acc += re[k];
+        }
+        const p = this.pans[i];
+        l += acc * Math.sqrt(0.5 * (1 - p));
+        r += acc * Math.sqrt(0.5 * (1 + p));
+      }
+      for (let j = 0; j < this.thuds.length; j++) {
+        const th = this.thuds[j];
+        if (th.e < 1e-5) continue;
+        const wn = this.rng() * 2 - 1;
+        th.lp += (wn - th.lp) * 0.11;
+        const v = th.lp * th.e * 1.6;
+        th.e *= 0.99935;
+        l += v * Math.sqrt(0.5 * (1 - th.pan));
+        r += v * Math.sqrt(0.5 * (1 + th.pan));
+      }
+      this.wind = this.windTarget + (this.wind - this.windTarget) * slew;
+      if (this.wind > 1e-4) {
+        const wn = this.rng() * 2 - 1;
+        this.nz1 += (wn - this.nz1) * 0.05;
+        this.nz2 += (this.nz1 - this.nz2) * 0.05;
+        this.nzB += (wn - this.nzB) * 0.40;
+        const w = this.wind;
+        const air = (this.nz2 * 4.2 + this.nzB * 0.07 * w) * w * w * 0.5;
+        l += air * (1 + 0.18 * this.nz1);
+        r += air * (1 - 0.18 * this.nz1);
+      }
+      outL[s] += Math.tanh(l * g * 1.25) * 0.8;
+      outR[s] += Math.tanh(r * g * 1.25) * 0.8;
+    }
+    /* keep the eye's copy of every mode in step with the ear's */
+    for (let k = 0; k < this.amp.length; k++) {
+      if (this.amp[k] > 1e-7) this.amp[k] *= Math.exp(-this.alpha[k] * n / sr);
+    }
+    this.t += n / sr;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ *  4 · THE HANGING RIG — a real chime, in real air
+ *
+ *  Nothing here is an angle in a plane.  Every cord can point anywhere on a
+ *  sphere.  A body is a rigid thing swinging about a pivot: its state is the
+ *  unit vector u down the cord and an angular velocity w perpendicular to it,
+ *        w' = (torque - c w) / I ,      u' = w x u
+ *  with the component of w along u discarded (a cord does not spin a tube) and
+ *  u renormalised.  Gravity is a torque; wind is a drag force at a radius; a
+ *  contact is an impulse shared between clapper and tube.
+ *
+ *  THE WHOLE RIG HANGS TOO.  The eave hook carries the disc, and the disc
+ *  carries the tubes and the clapper — so a steady wind leans the entire
+ *  assembly together and moves nothing relative to anything.  What rings a
+ *  chime is the buffeting, and every body's drag is computed against the wind
+ *  MINUS its own velocity, pivot included, so that comes out on its own.
+ * ------------------------------------------------------------------------ */
+
+export const G = 9.81;
+export const RHO_AIR = 1.2;
+export const CD = 1.15;
+/* below this closing speed a contact is a graze that leans, and makes no sound */
+export const V_STRIKE = 0.045;
+
+export function cross(a, b) {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+}
+export function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+export function scl(a, s) { return [a[0] * s, a[1] * s, a[2] * s]; }
+export function add(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+export function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+export function len(a) { return Math.sqrt(dot(a, a)); }
+export function norm(a) { const l = len(a) || 1; return scl(a, 1 / l); }
+
+/* Rotate v about a unit axis by angle th (Rodrigues). */
+export function rot(v, axis, th) {
+  const c = Math.cos(th), s = Math.sin(th);
+  const k = cross(axis, v);
+  return add(add(scl(v, c), scl(k, s)), scl(axis, dot(axis, v) * (1 - c)));
+}
+
+/* The estate's air as an actual velocity field: a mean drift plus turbulence
+ * built from incommensurate sines, so it never repeats and Node and the browser
+ * get identical wind for an identical clock. */
+export class Wind {
+  constructor(opts) {
+    const o = opts || {};
+    this.speed = o.speed === undefined ? 1.7 : o.speed;
+    this.heading = o.heading === undefined ? 0.7 : o.heading;
+    this.gust = 0;
+    this.t = 0;
+  }
+  puff(strength) { this.gust += strength; }
+  /* The steady part is deliberately a THIRD of the number on the slider and the
+   * fluctuation carries the rest, because a chime is rung by BUFFETING, not by
+   * pressure: a constant wind leans the whole rig and the clapper together and
+   * moves nothing relative to anything.  (Hold the wind high and steady in this
+   * room and the clapper does lean out and lie against its downwind tube,
+   * ringing nothing — which is exactly what a real chime does in a gale.) */
+  at(t) {
+    const s = this.speed;
+    const a = 0.55 * Math.sin(0.61 * t) + 0.30 * Math.sin(1.414 * t + 1.1)
+            + 0.18 * Math.sin(2.718 * t + 2.3) + 0.13 * Math.sin(4.669 * t + 0.4);
+    const b = 3.30 * Math.sin(0.0374 * t + 0.5) + 1.00 * Math.sin(0.181 * t + 2.0)
+            + 0.62 * Math.sin(0.437 * t + 0.3) + 0.34 * Math.sin(0.913 * t + 1.7)
+            + 0.20 * Math.sin(1.618 * t + 0.9);
+    const c = 0.22 * Math.sin(0.87 * t + 1.2) + 0.12 * Math.sin(2.236 * t + 2.9);
+    const mag = Math.max(0, s * (0.34 + 0.92 * a)) + this.gust;
+    const h = this.heading + 0.85 * b;
+    return [mag * Math.cos(h), c * s * 0.30, mag * Math.sin(h)];
+  }
+  step(dt) { this.t += dt; this.gust *= Math.exp(-dt / 1.2); }
+}
+
+/* One rigid thing swinging on a cord about a (possibly moving) pivot. */
+export class Swinger {
+  constructor(pivot, I, cDamp) {
+    this.pivot = pivot;
+    this.pivotVel = [0, 0, 0];
+    this.u = [0, -1, 0];
+    this.w = [0, 0, 0];
+    this.I = I;
+    this.c = cDamp;
+    this.torque = [0, 0, 0];
+  }
+  pointAt(r) { return add(this.pivot, scl(this.u, r)); }
+  velAt(r) { return add(this.pivotVel, cross(this.w, scl(this.u, r))); }
+  applyForce(r, F) { this.torque = add(this.torque, cross(scl(this.u, r), F)); }
+  applyImpulse(r, J) {
+    let w = add(this.w, scl(cross(scl(this.u, r), J), 1 / this.I));
+    this.w = sub(w, scl(this.u, dot(w, this.u)));
+  }
+  integrate(dt) {
+    let wn = add(this.w, scl(sub(this.torque, scl(this.w, this.c)), dt / this.I));
+    wn = sub(wn, scl(this.u, dot(wn, this.u)));
+    const sp = len(wn);
+    if (sp > 1e-9) this.u = norm(rot(this.u, scl(wn, 1 / sp), sp * dt));
+    this.w = wn;
+    this.torque = [0, 0, 0];
+  }
+}
+
+export const DEFAULT_TUBE = { od: 0.025, wall: 0.0015 };
+
+/* A major pentatonic plus its octave, as semitones from middle C — so the
+ * caller can hand us the estate's ONE pitch authority (pitch-core's semiToFreq)
+ * and that decides what the metal gets cut to. */
+export const PENT_SEMIS = [-3, -1, 1, 4, 6, 9];
+
+export class ChimeRig {
+  constructor(opts) {
+    const o = opts || {};
+    const tube = o.tube || DEFAULT_TUBE;
+    this.od = tube.od; this.wall = tube.wall;
+    this.f1 = o.freqs;
+    this.nT = this.f1.length;
+    this.ring = o.ring === undefined ? 0.105 : o.ring;
+    this.cordTop = o.cordTop === undefined ? 0.075 : o.cordTop;
+    this.xiHang = o.xiHang === undefined ? 0.2242 : o.xiHang;
+    this.rClap = o.rClap === undefined ? 0.42 : o.rClap;
+    this.rSail = o.rSail === undefined ? 0.78 : o.rSail;
+    this.rPuck = o.rPuck === undefined ? 0.052 : o.rPuck;
+    this.aSail = o.aSail === undefined ? 0.026 : o.aSail;
+    this.mClap = 0.070; this.mSail = 0.022;
+    this.hookY = o.hookY === undefined ? 0.30 : o.hookY;   /* eave hook height  */
+
+    /* cut the metal */
+    this.L = this.f1.map((f) => cutLength(f, this.od, this.wall));
+    this.freqs = this.L.map((L) => modeFreqs(L, this.od, this.wall));
+    const area = Math.PI * (Math.pow(this.od / 2, 2) - Math.pow(this.od / 2 - this.wall, 2));
+    this.area = area;
+    this.mass = this.L.map((L) => area * L * RHO_AL);
+
+    /* the tubes stand in a ring, longest first */
+    this.az = [];
+    for (let i = 0; i < this.nT; i++) this.az.push((i / this.nT) * Math.PI * 2 + 0.4);
+
+    /* the whole assembly hangs from the eave on its own cord */
+    const mTotal = this.mass.reduce((a, b) => a + b, 0) + this.mClap + this.mSail + 0.12;
+    this.mTotal = mTotal;
+    this.rig = new Swinger([0, this.hookY, 0], mTotal * this.hookY * this.hookY, 0.06 * mTotal);
+
+    const Ic = this.mClap * this.rClap * this.rClap + this.mSail * this.rSail * this.rSail;
+    this.clapper = new Swinger([0, 0, 0], Ic, o.cDamp === undefined ? 0.0060 : o.cDamp);
+    this.tubes = [];
+    this.rebuildTubes();
+
+    this.wind = new Wind(o.wind);
+    this.refract = new Float64Array(this.nT);
+    this.events = [];
+    this.t = 0;
+    this.thetaMax = 0.50;
+  }
+
+  /* Rebuilt whenever the hanging point moves, because the tube really does
+   * slide up and down its own cord when you drill a new hole. */
+  rebuildTubes() {
+    const keep = this.tubes && this.tubes.length === this.nT ? this.tubes : null;
+    this.tubes = [];
+    for (let i = 0; i < this.nT; i++) {
+      const L = this.L[i], m = this.mass[i];
+      const rTop = this.cordTop - this.xiHang * L;   /* pivot -> the tube's TOP */
+      const rCg = rTop + 0.5 * L;
+      const I = m * (L * L / 12 + rCg * rCg);
+      const sw = keep ? keep[i] : new Swinger([0, 0, 0], I, 0);
+      sw.I = I; sw.c = 0.02 * m;
+      sw.L = L; sw.rTop = rTop; sw.rCg = rCg; sw.m = m; sw.idx = i;
+      this.tubes.push(sw);
+    }
+    this.placePivots();
+  }
+
+  /* The disc's position and tilt follow the rig's own cord; every child pivot
+   * rides on the disc. */
+  placePivots() {
+    const u = this.rig.u;
+    const disc = add(this.rig.pivot, scl(u, this.hookY));
+    const dv = this.rig.velAt(this.hookY);
+    this.discPos = disc; this.discUp = scl(u, -1);
+    /* rotation carrying straight-down onto the rig's cord */
+    const down = [0, -1, 0];
+    const ax = cross(down, u);
+    const s = len(ax);
+    const ang = Math.atan2(s, dot(down, u));
+    const axis = s > 1e-9 ? scl(ax, 1 / s) : [1, 0, 0];
+    this.clapper.pivot = disc; this.clapper.pivotVel = dv;
+    for (let i = 0; i < this.nT; i++) {
+      const off = [this.ring * Math.cos(this.az[i]), 0, this.ring * Math.sin(this.az[i])];
+      const r = s > 1e-9 ? rot(off, axis, ang) : off;
+      this.tubes[i].pivot = add(disc, r);
+      this.tubes[i].pivotVel = dv;
+      this.tubes[i].hangWorld = add(disc, r);
+    }
+  }
+
+  setHang(xi) { this.xiHang = xi; this.rebuildTubes(); }
+
+  tubeEnds(i) {
+    const s = this.tubes[i];
+    return [s.pointAt(s.rTop), s.pointAt(s.rTop + s.L)];
+  }
+
+  dragForce(vw, vb, A) {
+    const rel = sub(vw, vb);
+    return scl(rel, 0.5 * RHO_AIR * CD * A * len(rel));
+  }
+
+  step(dt) {
+    this.events.length = 0;
+    const NS = 8, h = dt / NS;
+    for (let s = 0; s < NS; s++) {
+      this.wind.step(h);
+      const vw = this.wind.at(this.wind.t);
+      this.placePivots();
+
+      /* the rig on its eave hook: gravity plus the drag of everything it holds */
+      const rg = this.rig;
+      rg.applyForce(this.hookY, [0, -this.mTotal * G, 0]);
+      let Atot = this.aSail + 0.0035;
+      for (let i = 0; i < this.nT; i++) Atot += this.od * this.L[i] * 0.9;
+      rg.applyForce(this.hookY, this.dragForce(vw, rg.velAt(this.hookY), Atot));
+
+      /* the clapper assembly: gravity, and the wind on its broad sail */
+      const cl = this.clapper;
+      cl.applyForce(this.rClap, [0, -this.mClap * G, 0]);
+      cl.applyForce(this.rSail, [0, -this.mSail * G, 0]);
+      cl.applyForce(this.rSail, this.dragForce(vw, cl.velAt(this.rSail), this.aSail));
+      cl.applyForce(this.rClap, this.dragForce(vw, cl.velAt(this.rClap), 0.0035));
+
+      /* the tubes: heavy, small sail area — they lean, they do not fly */
+      for (let i = 0; i < this.nT; i++) {
+        const tb = this.tubes[i];
+        tb.applyForce(tb.rCg, [0, -tb.m * G, 0]);
+        tb.applyForce(tb.rCg, this.dragForce(vw, tb.velAt(tb.rCg), this.od * tb.L * 0.9));
+      }
+
+      rg.integrate(h);
+      cl.integrate(h);
+      for (let i = 0; i < this.nT; i++) this.tubes[i].integrate(h);
+      this.placePivots();
+
+      /* the clapper hangs INSIDE its ring and cannot leave it */
+      const tilt = Math.acos(Math.max(-1, Math.min(1, -cl.u[1])));
+      if (tilt > this.thetaMax) {
+        const ax = cross([0, -1, 0], cl.u);
+        if (len(ax) > 1e-9) {
+          cl.u = rot([0, -1, 0], norm(ax), this.thetaMax);
+          cl.w = scl(cl.w, -0.35);
+        }
+      }
+
+      for (let i = 0; i < this.nT; i++) {
+        if (this.refract[i] > 0) { this.refract[i] -= h; continue; }
+        const ev = this.contact(i);
+        if (ev) { this.events.push(ev); this.refract[i] = 0.085; }
+      }
+      this.t += h;
+    }
+    return this.events;
+  }
+
+  contact(i) {
+    const cl = this.clapper, tb = this.tubes[i];
+    const P = cl.pointAt(this.rClap);
+    const A = tb.pointAt(tb.rTop), B = tb.pointAt(tb.rTop + tb.L);
+    const AB = sub(B, A), L2 = dot(AB, AB);
+    let s = Math.max(0, Math.min(1, dot(sub(P, A), AB) / L2));
+    const Q = add(A, scl(AB, s));
+    const d = sub(P, Q);
+    const dist = len(d);
+    const touch = this.rPuck + this.od / 2;
+    if (dist > touch || dist < 1e-9) return null;
+
+    const nrm = scl(d, 1 / dist);
+    const rQ = tb.rTop + s * tb.L;
+    const vn = dot(sub(cl.velAt(this.rClap), tb.velAt(rQ)), nrm);
+    if (vn > -V_STRIKE) return null;           /* leaning on it, not arriving */
+
+    const ac = cross(scl(cl.u, this.rClap), nrm);
+    const at = cross(scl(tb.u, rQ), nrm);
+    const kc = dot(ac, ac) / cl.I, kt = dot(at, at) / tb.I;
+    const e = 0.42;
+    const j = -(1 + e) * vn / (kc + kt);
+    cl.applyImpulse(this.rClap, scl(nrm, j));
+    tb.applyImpulse(rQ, scl(nrm, -j));
+
+    /* push apart so the next substep does not re-trigger on the same contact */
+    const dth = (touch - dist) / this.rClap;
+    const ax = cross(nrm, cl.u);
+    if (len(ax) > 1e-6) cl.u = norm(rot(cl.u, norm(ax), -dth * 1.02));
+
+    return {
+      tube: i, vel: -vn, xi: (rQ - tb.rTop) / tb.L,
+      point: Q, normal: nrm,
+      /* the bending plane is the one holding the tube's axis and the blow */
+      bend: norm(sub(nrm, scl(tb.u, dot(nrm, tb.u)))),
+    };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ *  5 · MEASURING THE CLAIM
+ *
+ *  sustainCurve() never consults the formula for its answer.  It SYNTHESISES a
+ *  real strike at each hanging position with the same ModalBank the page plays,
+ *  fits an exponential to the rendered audio's RMS envelope, and reports T60 in
+ *  seconds.  The minima of that curve fall on modeNodes(0).
+ * ------------------------------------------------------------------------ */
+
+/* A two-pole RBJ bandpass — used to ask a decay question about ONE partial.
+ * The tail of a struck tube is a race between six modes; if you want the
+ * FUNDAMENTAL's sustain you have to listen to the fundamental. */
+export function bandpass(buf, sr, f, Q) {
+  const w0 = 2 * Math.PI * f / sr;
+  const al = Math.sin(w0) / (2 * Q), c = Math.cos(w0);
+  const a0 = 1 + al;
+  const b0 = al / a0, b2 = -al / a0, a1 = -2 * c / a0, a2 = (1 - al) / a0;
+  const out = new Float32Array(buf.length);
+  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+  for (let i = 0; i < buf.length; i++) {
+    const x = buf[i];
+    const y = b0 * x + b2 * x2 - a1 * y1 - a2 * y2;
+    x2 = x1; x1 = x; y2 = y1; y1 = y;
+    out[i] = y;
+  }
+  return out;
+}
+
+export function rmsEnvelope(buf, sr, winMs = 40) {
+  const w = Math.max(8, Math.round(sr * winMs / 1000));
+  const out = [];
+  for (let i = 0; i + w <= buf.length; i += w) {
     let s = 0;
-    for (let i = 0; i < TURB_F.length; i++) s += TURB_A[i] * Math.sin(2 * Math.PI * TURB_F[i] * t + phases[i]);
-    return s / turbNorm;                            // ≈ [-1, 1]
+    for (let k = i; k < i + w; k++) s += buf[k] * buf[k];
+    out.push({ t: (i + w / 2) / sr, v: Math.sqrt(s / w) });
   }
-
-  const st = {
-    th: 0, om: 0,            // the clapper's angle (rad) and angular velocity (rad/s)
-    t: 0,                    // the room's own clock (s)
-    breeze: 0,               // the steady wind level (air floor + manual), 0..~1.2
-    surge: 0,                // a decaying gust surge added on top of `breeze`
-    last: angles.map(() => -1e9),   // per-tube last-strike time (the refractory)
-    strikes: [],             // every strike this room has rung: {tube, t, vel}
-  };
-
-  // the wind acting on the sail right now. ZERO-MEAN by construction (see the header):
-  // the steady push leans the whole rack and rings nothing, so `breeze` scales the
-  // size of the GUSTING, which is what actually swings the clapper against its tubes.
-  function windNow(t){
-    const b = Math.max(0, st.breeze + st.surge);
-    return WIND_K * b * turbulence(t);
-  }
-
-  // ONE substep of the driven damped pendulum, semi-implicit (v first, then x), with
-  // the tube-crossing strike test done on the SAME substep so a fast swing cannot
-  // tunnel straight through a tube between frames.
-  function substep(h, fired){
-    const thPrev = st.th;
-    const acc = -(G / L_CORD) * Math.sin(st.th) - DAMP_C * st.om + windNow(st.t);
-    st.om += acc * h;                                // semi-implicit: velocity first …
-    st.th += st.om * h;                              // … then angle, with the new velocity
-    st.t  += h;
-    st.surge *= Math.exp(-h / SURGE_TAU);            // the gust dies away
-    // a strike is a CROSSING of a tube's fixed contact angle, with real speed, once.
-    for (let i = 0; i < angles.length; i++){
-      const a = angles[i];
-      const crossed = (thPrev - a) * (st.th - a) <= 0 && thPrev !== st.th;
-      if (!crossed) continue;
-      if (Math.abs(st.om) < V_MIN) continue;                       // a graze, not a strike
-      if (st.t - st.last[i] < REFRACTORY) continue;                // one pass, one ring
-      st.last[i] = st.t;
-      const vel = Math.max(0, Math.min(1, Math.abs(st.om) / V_REF));
-      const hit = { tube: i, t: st.t, vel };
-      st.strikes.push(hit); fired.push(hit);
-      st.om *= (1 - STRIKE_LOSS);                                  // the tube takes its due
-    }
-    // THE RACK'S EDGE: the clapper cannot swing out of its own ring of tubes. It
-    // meets the edge and rebounds, losing energy — so no wind, however hard, can
-    // send it over the top into a spin.
-    if (st.th > THETA_MAX){ st.th = THETA_MAX; if (st.om > 0) st.om = -st.om * BOUNCE; }
-    else if (st.th < -THETA_MAX){ st.th = -THETA_MAX; if (st.om < 0) st.om = -st.om * BOUNCE; }
-  }
-
-  return {
-    st, freqs, angles, taus,
-    // advance the room by `dt` seconds; returns the strikes that fired in that span.
-    step(dt){
-      const fired = [];
-      const d = Math.max(0, Math.min(0.1, dt));      // clamp a long tab-switch gap
-      const h = d / SUBSTEPS;
-      for (let s = 0; s < SUBSTEPS; s++) substep(h, fired);
-      return fired;
-    },
-    // THE REAL ENTRY FN the twin drives: a gust of the wind. It kicks the sail
-    // (an impulse on the swing) AND raises the breeze for a moment, exactly as a
-    // real gust does — this is what the page's WindField calls, and what the
-    // payoff-liveness twin calls. Never a synthetic pointer event.
-    gust(strength){
-      const s = Math.max(0, strength);
-      st.om += GUST_KICK * s * (st.om >= 0 ? 1 : -1);   // push the way it is already going
-      st.surge += 0.55 * s;
-    },
-    // the steady wind level — the air's floor plus the manual breeze slider.
-    setBreeze(b){ st.breeze = Math.max(0, b); },
-    // DIRECT PLAY: flick the clapper itself (a real pointer velocity → angular velocity).
-    flickClapper(omega){ st.om += omega; },
-    // DIRECT PLAY: flick ONE tube to ring just it, in dead calm.
-    strikeTube(i, vel){
-      if (i < 0 || i >= angles.length) return null;
-      const v = Math.max(0.02, Math.min(1, vel));
-      const hit = { tube: i, t: st.t, vel: v };
-      st.last[i] = st.t; st.strikes.push(hit);
-      return hit;
-    },
-    // the swing's mechanical energy (per unit mass·L²) — the free-decay witness.
-    energy(){ return 0.5 * st.om * st.om + (G / L_CORD) * (1 - Math.cos(st.th)); },
-    // render everything this room has rung so far, as one buffer.
-    render(seconds, sr){ return renderStrikes(st.strikes, seconds, sr, freqs); },
-  };
+  return out;
 }
 
-// ── runChimeSelfTest(semiToFreqFn, sr) — the SOLE ORACLE. This is a delight-first
-// leaf, so this is NOT a theorem: it is the PAYOFF-LIVENESS oracle. It asserts that
-// the room's payoff actually FIRES on the real path, and that the one correctness
-// constraint (the tuning) holds. Same shape as the sibling leaves:
-// { pass, total, lines:[{name, ok, detail}] }. The Node twin calls THIS.
-//   1 THE WIND MOVES IT   — from rest, the REAL gust() swings the clapper.
-//   2 A STRIKE FIRES      — that swing emits a strike with a tube index and vel > 0.
-//   3 RISE THEN DECAY     — the struck tube's MEASURED envelope climbs to a peak
-//                           just after onset and then decays away (the payoff).
-//   4 IN TUNE             — every tube fundamental is a degree of A-pentatonic,
-//                           from the imported pitch law (the one constraint).
-//   5 WELL-FORMEDNESS     — dead calm is digital silence · an undriven swing decays
-//                           monotonically to rest · a five-tube cluster never clips.
-function runChimeSelfTest(semiToFreqFn, sr = DEFAULT_SR){
+/* Least-squares slope of log(rms) over the stretch that is still above the
+ * floor — a T60 a dead tube cannot fake, because a silent tail is excluded
+ * rather than counted as infinite sustain. */
+export function measureT60(buf, sr, opts) {
+  const o = opts || {};
+  const env = rmsEnvelope(buf, sr, o.winMs || 40);
+  let peak = 0, pi = 0;
+  for (let i = 0; i < env.length; i++) if (env[i].v > peak) { peak = env[i].v; pi = i; }
+  if (peak <= 0) return { t60: 0, n: 0, peak: 0 };
+  const floor = peak * Math.pow(10, (o.floorDb === undefined ? -40 : o.floorDb) / 20);
+  const pts = [];
+  for (let i = pi + 1; i < env.length; i++) {
+    if (env[i].v < floor) break;
+    pts.push([env[i].t, Math.log(env[i].v)]);
+  }
+  if (pts.length < 4) return { t60: 0, n: pts.length, peak: peak };
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (const p of pts) { sx += p[0]; sy += p[1]; sxx += p[0] * p[0]; sxy += p[0] * p[1]; }
+  const n = pts.length;
+  const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+  if (slope >= 0) return { t60: 0, n: n, peak: peak };
+  return { t60: Math.log(1000) / -slope, n: n, peak: peak };
+}
+
+/* One tube, struck once, hung at xi.  Mono Float32Array. */
+export function renderStrike(f1, xiHang, opts) {
+  const o = opts || {};
+  const sr = o.sr || 44100;
+  const secs = o.seconds === undefined ? 8 : o.seconds;
+  const od = o.od || DEFAULT_TUBE.od, wall = o.wall || DEFAULT_TUBE.wall;
+  const L = cutLength(f1, od, wall);
+  const bank = new ModalBank([modeFreqs(L, od, wall)], sr, {
+    pans: [0], xiHang: xiHang,
+    gain: o.gain === undefined ? 0.55 : o.gain,
+    thudGain: o.thud ? 1 : 0,
+    seed: o.seed || 7,
+  });
+  bank.strike(0, o.vel === undefined ? 0.9 : o.vel, o.xiStrike === undefined ? 0.5 : o.xiStrike);
+  const n = Math.round(sr * secs);
+  const a = new Float32Array(n), b = new Float32Array(n);
+  bank.render(a, b, n);
+  return a;
+}
+
+/* T60 against hanging position — measured, not derived. */
+export function sustainCurve(f1, opts) {
+  const o = opts || {};
+  const steps = o.steps || 33;
+  const sr = o.sr || 16000;
+  const lo = o.lo === undefined ? 0.02 : o.lo, hi = o.hi === undefined ? 0.50 : o.hi;
+  const out = [];
+  for (let i = 0; i < steps; i++) {
+    const xi = lo + (hi - lo) * (i / (steps - 1));
+    const buf = renderStrike(f1, xi, { sr: sr, seconds: 14, thud: false, xiStrike: 0.42, vel: 0.9 });
+    /* listen to the fundamental alone: its sustain is what the cord decides */
+    const band = bandpass(buf, sr, f1, 14);
+    out.push({ xi: xi, t60: measureT60(band, sr, { winMs: 60, floorDb: -45 }).t60 });
+  }
+  return out;
+}
+
+/* Sub-grid peak of a measured curve: a parabola through the best sample and
+ * its two neighbours.  Without it you can only ever report the grid spacing. */
+export function peakOf(curve) {
+  let bi = 0;
+  for (let i = 1; i < curve.length; i++) if (curve[i].t60 > curve[bi].t60) bi = i;
+  if (bi === 0 || bi === curve.length - 1) return { xi: curve[bi].xi, t60: curve[bi].t60 };
+  const y0 = curve[bi - 1].t60, y1 = curve[bi].t60, y2 = curve[bi + 1].t60;
+  const d = y0 - 2 * y1 + y2;
+  const shift = d === 0 ? 0 : 0.5 * (y0 - y2) / d;
+  const h = curve[bi + 1].xi - curve[bi].xi;
+  return { xi: curve[bi].xi + shift * h, t60: y1 };
+}
+
+/* ---------------------------------------------------------------------------
+ *  6 · THE SELF-TEST THE TWIN RUNS
+ * ------------------------------------------------------------------------ */
+
+export function runChimeSelfTest() {
   const lines = [];
-  const T = (name, ok, detail = '') => lines.push({ name, ok: !!ok, detail });
-  const freqs = tubeFreqs(semiToFreqFn);
+  const ok = function (name, pass, detail) { lines.push({ name: name, ok: !!pass, detail: detail }); };
 
-  // LEG 1 — THE WIND MOVES IT: a room at dead rest, given a real gust() and then
-  //   stepped, swings. The clapper's angular amplitude has to climb well clear of a
-  //   floor — "the wind moved it" is measured, not assumed.
-  {
-    const c = createChime({ freqs, seed: 3 });
-    const rest = Math.abs(c.st.th);
-    c.gust(1.0);
-    let amp = 0;
-    for (let i = 0; i < 240; i++){ c.step(1 / 60); amp = Math.max(amp, Math.abs(c.st.th)); }
-    const ok = rest === 0 && amp > 0.20;
-    T('LEG 1 — the wind moves it: a room at dead rest (θ = 0), given the REAL gust() and stepped for 4 s, swings the clapper to a real amplitude — the payoff\'s first link, driven through the room\'s own entry fn (never a synthetic pointer event)',
-      ok, `at rest θ = ${rest} → peak |θ| = ${amp.toFixed(3)} rad (> 0.20 floor)`);
-  }
+  const want = [1, 2.7565, 5.4039, 8.9330, 13.3443, 18.6379];
+  let worst = 0;
+  for (let i = 0; i < want.length; i++) worst = Math.max(worst, Math.abs(MODE_RATIO[i] - want[i]));
+  ok('free-free ladder 1 : 2.756 : 5.404 : 8.933 : 13.34 : 18.64', worst < 5e-4,
+     'max deviation ' + worst.toExponential(2));
 
-  // LEG 2 — A STRIKE FIRES: that same gust must actually RING something — a strike
-  //   with a real tube index and a nonzero impact velocity. This is the payoff.
-  {
-    const c = createChime({ freqs, seed: 3 });
-    c.gust(1.0);
-    for (let i = 0; i < 240; i++) c.step(1 / 60);
-    const hits = c.st.strikes;
-    const idxOk = hits.every(h => h.tube >= 0 && h.tube < freqs.length);
-    const velOk = hits.every(h => h.vel > 0) && hits.length > 0;
-    const tubesRung = new Set(hits.map(h => h.tube)).size;
-    const ok = hits.length > 0 && idxOk && velOk;
-    T('LEG 2 — a strike FIRES: the gusted swing emits real strike events, each carrying a valid tube index and an impact velocity > 0 — the wind rings the chimes (the payoff, asserted on the live path)',
-      ok, `${hits.length} strikes on ${tubesRung} distinct tubes · all indices valid: ${idxOk} · all vel > 0: ${velOk} · first: tube ${hits.length ? hits[0].tube : '—'} vel ${hits.length ? hits[0].vel.toFixed(3) : '—'}`);
-  }
+  const nd = modeNodes(0);
+  ok('mode 1 stands still at 0.2242 / 0.7758',
+     nd.length === 2 && Math.abs(nd[0] - 0.2242) < 5e-4 && Math.abs(nd[1] - 0.7758) < 5e-4,
+     nd.map(function (x) { return x.toFixed(4); }).join(', '));
 
-  // LEG 3 — RISE THEN DECAY (the literal gain-up-then-down payoff): render a single
-  //   strike and measure its loudness envelope from the AUDIO. It must be silent at
-  //   the instant of onset, climb to a peak just AFTER onset (not at t=0 — that is
-  //   what makes it a struck tube and not a switch), and then fall away, ending far
-  //   below its peak with no rise back. Both the design's literal check
-  //   (env(τ_atk) > env(0), env(late) < env(τ_atk)) and the measured-envelope scan.
-  {
-    const fLo = Math.min.apply(null, freqs);
-    const f0 = freqs[0], tau0 = tubeTau(f0, fLo);
-    // (a) the analytic curve, exactly as the design words it
-    const e0 = env(0, TAU_ATK, tau0);
-    const eAtk = env(TAU_ATK, TAU_ATK, tau0);
-    const eLate = env(2.5, TAU_ATK, tau0);
-    const analytic = e0 === 0 && eAtk > e0 && eLate < eAtk;
-    // (b) the MEASURED envelope of the rendered audio. Rendered over THREE decay
-    //   time-constants of this tube (not a fixed clock), so "it died away" is judged
-    //   against the tail the tube actually has rather than an arbitrary window.
-    const buf = renderStrike(f0, 0.9, tau0 * 3, sr, tau0);
-    const envl = rmsEnvelope(buf, sr, 30);
-    let pi = 0; for (let i = 1; i < envl.length; i++) if (envl[i] > envl[pi]) pi = i;
-    const rose = pi > 0;                              // the peak is NOT at the onset
-    const early = pi * 30 <= 150;                     // and it arrives within ~150 ms
-    // after the peak the envelope only falls (a labeled 5% band absorbs the mild
-    // beating between four inharmonic partials)
-    let mono = true;
-    for (let i = pi + 1; i < envl.length; i++) if (envl[i] > envl[i - 1] * 1.05) mono = false;
-    const died = envl[envl.length - 1] < envl[pi] * 0.10;
-    const ok = analytic && rose && early && mono && died;
-    T('LEG 3 — the strike RISES then DECAYS: the rendered strike is silent at onset, climbs to a peak just after it (~40 ms, never at t=0), then falls monotonically to a whisper — measured off the AUDIO, not merely off the formula. This one curve drives the glow too, so the eye sees the ring decay',
-      ok, `env(0) = ${e0} · env(τ_atk) = ${eAtk.toFixed(3)} · env(2.5 s) = ${eLate.toFixed(3)} (analytic rise-then-decay: ${analytic}) · measured peak at ${(pi * 30)} ms (rose: ${rose}, early: ${early}), post-peak non-increasing to a 5% band: ${mono}, ends at ${(envl[envl.length - 1] / envl[pi] * 100).toFixed(1)}% of peak`);
-  }
+  const Lr = cutLength(440, DEFAULT_TUBE.od, DEFAULT_TUBE.wall);
+  ok('a tube cut for 440 Hz sings 440 Hz',
+     Math.abs(fundamental(Lr, DEFAULT_TUBE.od, DEFAULT_TUBE.wall) - 440) < 1e-9,
+     'L = ' + (Lr * 1000).toFixed(1) + ' mm');
 
-  // LEG 4 — IN TUNE BY CONSTRUCTION (the ONE correctness constraint): every tube's
-  //   fundamental is a degree of A-major-pentatonic, computed from the IMPORTED
-  //   pitch law — never a re-typed Hz literal. Because every subset of a pentatonic
-  //   scale is consonant, no chord the wind can strike is able to sound wrong.
-  {
-    const want = PENT_SEMIS.map(semiToFreqFn);
-    let worst = 0;
-    for (let i = 0; i < freqs.length; i++) worst = Math.max(worst, Math.abs(freqs[i] - want[i]));
-    const rising = freqs.every((f, i) => i === 0 || f > freqs[i - 1]);
-    // the pentatonic's shape, in semitones: A→B→C#→E→F# is 2,2,3,2 (no semitone step,
-    // which is exactly why no two of its degrees can clash).
-    const steps = PENT_SEMIS.slice(1).map((s, i) => s - PENT_SEMIS[i]);
-    const noHalfSteps = steps.every(s => s >= 2);
-    const ok = worst === 0 && rising && noHalfSteps && freqs.length === 5;
-    T('LEG 4 — in tune by construction (the one correctness constraint): all five tube fundamentals are degrees of A-major-pentatonic computed from the IMPORTED pitch law (bit-identical, no re-typed Hz), rising in order, with no half-step anywhere in the set — so every chord the wind can strike is consonant and the room cannot sound wrong',
-      ok, `${freqs.map((f, i) => PENT_SEMIS[i] + ':' + f.toFixed(2) + 'Hz').join(' · ')} · worst Δ vs the pitch law ${worst} · rising ${rising} · steps [${steps.join(',')}] semitones, none < 2: ${noHalfSteps}`);
-  }
+  const f2 = fundamental(2 * Lr, DEFAULT_TUBE.od, DEFAULT_TUBE.wall);
+  ok('twice as long is two octaves down', Math.abs(f2 - 110) < 1e-9, f2.toFixed(4) + ' Hz');
 
-  // LEG 5 — WELL-FORMEDNESS, three ways.
-  //   (a) DEAD CALM IS SILENCE: breeze 0 from rest → no strikes at all, and the
-  //       offline render is digital silence. The room is silent until something
-  //       moves it — nothing hums on its own.
-  //   (b) THE UNDRIVEN SWING DIES: set swinging with the wind OFF, its mechanical
-  //       energy decreases monotonically to rest. `c` is real damping, not decoration.
-  //   (c) NO CLIP: a five-tube gust cluster, all struck hard at once, stays under
-  //       full scale — the soft limiter means an overlap can never clip.
-  {
-    const calm = createChime({ freqs, seed: 5 });
-    calm.setBreeze(0);
-    for (let i = 0; i < 600; i++) calm.step(1 / 60);              // 10 s of dead calm
-    const calmBuf = calm.render(2.0, sr);
-    const calmRms = rms(calmBuf, 0, calmBuf.length);
-    const silent = calm.st.strikes.length === 0 && calmRms === 0;
-
-    const free = createChime({ freqs, seed: 5 });
-    free.setBreeze(0); free.flickClapper(1.6);                    // swung, then left alone
-    const e0free = free.energy();
-    let e = e0free, monoDecay = true, worstRise = 0;
-    for (let i = 0; i < 1800; i++){                                // 30 s, undriven
-      free.step(1 / 60);
-      const e2 = free.energy();
-      if (e2 > e){ monoDecay = false; worstRise = Math.max(worstRise, e2 - e); }
-      e = e2;
-    }
-    // "came to rest" is stated RELATIVE to the energy it started with: after 30 s of
-    // undriven swinging it must retain under a thousandth of it.
-    const cameToRest = e < e0free * 1e-3;
-
-    const cluster = [0, 1, 2, 3, 4].map(i => ({ tube: i, t: 0.0, vel: 1.0 }));
-    const cbuf = renderStrikes(cluster, 4.0, sr, freqs);
-    const cpk = peak(cbuf, 0, cbuf.length);
-    let atFullScale = 0; for (let i = 0; i < cbuf.length; i++) if (Math.abs(cbuf[i]) >= 0.999) atFullScale++;
-    const noClip = cpk < 0.999 && atFullScale === 0;
-
-    const ok = silent && monoDecay && cameToRest && noClip;
-    T('LEG 5 — well-formed three ways: dead calm rings NOTHING and renders digital silence (the room never hums on its own) · an undriven swing loses energy monotonically and comes to rest (the damping is real) · and five tubes struck at full force at the same instant peak below full scale (the soft limiter means an overlap can never clip)',
-      ok, `calm: ${calm.st.strikes.length} strikes, rms ${calmRms} · free swing over 30 s: monotone decay ${monoDecay}${monoDecay ? '' : ' (worst rise ' + worstRise.toExponential(2) + ')'}, energy ${e0free.toExponential(2)} → ${e.toExponential(2)} (${(e / e0free * 100).toExponential(1)}% of start, at rest: ${cameToRest}) · 5-tube cluster peak ${cpk.toFixed(4)} (< 0.999), full-scale samples ${atFullScale}`);
-  }
-
-  // LEG 6 — BOUNDED IN ANY WIND (the build hazard, checked). A driven pendulum with
-  //   no bound eventually goes OVER THE TOP and rotates — and a spinning clapper is
-  //   not a chime: it rings almost nothing, because every tube falls inside its own
-  //   refractory window. So at FOUR TIMES the strongest wind the room can be asked
-  //   for, the clapper must stay finite, stay inside its rack (|θ| ≤ THETA_MAX), and
-  //   still ring every tube. The rack's edge is what makes a storm loud, not broken.
-  {
-    const c = createChime({ freqs, seed: 11 });
-    c.setBreeze(4.0);                                  // 4× the UI's maximum
-    let finite = true, worst = 0;
-    for (let i = 0; i < 3600; i++){
-      c.step(1 / 60);
-      if (!Number.isFinite(c.st.th) || !Number.isFinite(c.st.om)){ finite = false; break; }
-      worst = Math.max(worst, Math.abs(c.st.th));
-    }
-    const inRack = worst <= THETA_MAX + 1e-9;
-    const rung = new Set(c.st.strikes.map(h => h.tube)).size;
-    const ok = finite && inRack && rung === freqs.length;
-    T('LEG 6 — bounded in any wind (the hazard, checked): driven at FOUR TIMES the strongest breeze the room offers, for a minute, the clapper stays finite and stays inside its own rack (|θ| ≤ the rack edge) instead of going over the top into a spin — and it still rings all five tubes. A storm is loud here, never broken',
-      ok, `breeze 4.0 for 60 s → finite ${finite}, peak |θ| ${worst.toFixed(4)} rad ≤ rack edge ${THETA_MAX} (${inRack}), ${c.st.strikes.length} strikes across ${rung}/${freqs.length} tubes`);
-  }
-
-  let pass = 0; for (const l of lines) if (l.ok) pass++;
-  return { pass, total: lines.length, lines };
+  return { lines: lines, pass: lines.filter(function (l) { return l.ok; }).length, total: lines.length };
 }
-// ===== CHIME CORE END =====
-
-export {
-  PENT_SEMIS, TUBE_ANGLES, TUBE_RATIOS, TUBE_AMPS,
-  G, L_CORD, DAMP_C, WIND_K, SUBSTEPS, GUST_KICK, SURGE_TAU, OMEGA0,
-  V_MIN, V_REF, REFRACTORY, STRIKE_LOSS, THETA_MAX, BOUNCE,
-  TAU_ATK, TAU_REF, DECAY_FALL, BRIGHT_FLOOR, LIMIT, DEFAULT_SR,
-  tubeFreqs, tubeLengths, tubeTau, env, partialTau, partialAmp,
-  tubeSample, strikeEnvelope, renderStrike, limit, renderStrikes,
-  rms, peak, rmsEnvelope, createChime, runChimeSelfTest,
-  semiToFreq, noteName,
-};
