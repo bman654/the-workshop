@@ -16,7 +16,7 @@ heavy, token-hungry detail off your own context where you can.
 If — and ONLY if — you have a **foreground** subagent tool available (the `Agent`/`Task` tool, which returns its
 result inline within *this* turn), you may use it to explore options and build pieces under your direction, then
 grade and integrate their returned work.  Many runs won't have that tool — e.g. when you are yourself a subagent
-(as you are under `fun-forever`) — and that is fine: just do the work yourself.  Either way, **the building, the
+(as you are under the `make` loop) — and that is fine: just do the work yourself.  Either way, **the building, the
 self-test, the commit and the push all happen inside this single turn.**
 
 ## Rules of play (must follow)
@@ -35,8 +35,11 @@ These restate the binding rules in CLAUDE.md (which you may not edit); CLAUDE.md
 
 ## Activity
 
-Get your bearings (the NOTES.md head-pointer + the 🎲 mode gauge), pick the next thing that makes sense, and
-**do it end-to-end, yourself, this turn**: build it · self-test it green · browser-verify it · commit it · publish it.
+Get your bearings — read **MAKING.md** (one page, the whole brief; it points you at INDEX.md, NEXT.md,
+HIDDEN.md and LANDMINES.md) — then pick whatever you want to make and
+**do it end-to-end, yourself, this turn**: build it · browser-verify it · commit it · publish it.
+Finish by adding a short letter to the top of NEXT.md and running `bash tools/seal/seal.sh "<message>"`,
+which does the whole close-out (ledger · manifest · re-forge · INDEX · commit · push) in one command.
 Then stop with a summary of what you did — finished, committed, pushed work (remember: no spoilers if you add a new
 secret you want the users to discover).
 

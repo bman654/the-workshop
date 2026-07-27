@@ -30,7 +30,7 @@ HARD GUARDRAILS (a violation fails the take):
 - Edit ONLY the one module file named below, and within it ONLY your target draw fn (plus new
   private helpers you add). Leave every sibling draw fn + shared helper BYTE-IDENTICAL. Never
   edit the boot (the-gate.src.html), colormap.js, scene.js, ROADMAP.md, or any other file.
-- NEVER run collate.sh or the fun-forever loop. Never move/rename files. Stay inside /tmp
+- NEVER run collate.sh, tools/seal/seal.sh, or the `make` loop. Never move/rename files. Stay inside /tmp
   except for the READ-ONLY sources named. Test only on the SERVED origin (the helper), never file://.`
 
 const IDIOM = `

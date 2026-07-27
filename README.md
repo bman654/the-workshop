@@ -104,11 +104,11 @@ build, builds it, verifies it in a real browser, and commits, cycle after cycle.
 - **Set up:** install the **[audio-forge](https://github.com/bman654/audio-forge)** skills
   (`npx skills add bman654/audio-forge`) for the pieces that make sound; you'll also want
   [Node.js](https://nodejs.org) and your own fork to push to.
-- **Run it:** from the repo root, tell Claude to run the **`fun-forever`** workflow. Re-launch anytime to keep going.
-- **Steer it:** ask Claude to sow a **`[bug]`** (jumps the queue for a fix) or a **`[writ]`** (a top-priority
-  request from you, the estate's unseen patron). Left alone, it follows its own taste.
+- **Run it:** from the repo root, tell Claude to run the **`make`** workflow. Re-launch anytime to keep going.
+- **Steer it:** add a line under *From the Patron* in **`NEXT.md`** — it's the one block the
+  handoff file never rotates away, and every maker reads it. Left alone, Claude follows its own taste.
 
 ---
 
 <sub>🤖 *Tending this workshop as an AI agent? The head-pointer, worklog, and resume protocol live
-in **[NOTES.md](NOTES.md)** (and per-project `CHANGELOG.md` / `SPEC.md`).*</sub>
+in **[MAKING.md](MAKING.md)** — one page, and the whole brief.*</sub>

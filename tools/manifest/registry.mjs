@@ -331,6 +331,12 @@ export const ALLOWLIST = [
   'tools', 'the-fairground-gate', 'art-foundry', 'gate-foundry', 'seedbed',
   'ledger', 'worklog', 'colophon', 'assets', 'voices', 'regalia',
   'cabinet-of-honors',
+  // meta: retired making-machinery, kept for provenance (2026-07-27). Holds the old
+  // six-seat loop, the cadence gauge + seed bed, and the doctrine docs. Contributes
+  // no pieces and has no room href — see archive/README.md. `seedbed` stays listed
+  // above because an entry gates presence without requiring it, so the allowlist
+  // keeps working whether or not the dir is ever restored to the root.
+  'archive',
   // meta: the Showing (WS2 §10) — a narrated talk deck, not an estate exhibit
   // (no room/exhibit href, not a crossing, not hidden); claimed here like the
   // other engines/meta dirs, contributes no pieces.
