@@ -3,7 +3,7 @@
 *Generated from the estate manifest by `tools/seal/index-gen.mjs` — **never edit this file.***
 *It rebuilds every cycle. If something here is wrong, the manifest is wrong.*
 
-**468 pieces · 67 rooms · 11 districts.**
+**469 pieces · 68 rooms · 11 districts.**
 
 Grep this before you build. Rebuilding something that already stands is the estate's
 most expensive mistake — and the hidden pieces are not listed here, they are in
@@ -104,7 +104,7 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ## THE PROMENADES
 
-*5 rooms · 14 pieces*
+*6 rooms · 15 pieces*
 
 - **[The Hours](hours/index.html)** — 6 pieces
   <sub>[Astrolabe](astrolabe/index.html) · [The Almanac](hours/almanac.html) · [The Analemma](hours/analemma.html) · [The Escapement](hours/escapement/index.html) · [The Gnomon](sundial/index.html) · [The Water-Clock](hours/water-clock/index.html)</sub>
@@ -113,6 +113,7 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 - **[The Night Shore](night-shore/index.html)** — 0 pieces
 - **[The Powder Sky](powder-sky/index.html)** — 0 pieces
 - **[The Long Way Home](the-long-way-home/index.html)** — 0 pieces
+- **[The Thunderhead](the-thunderhead/index.html)** — 0 pieces
 
 ## THE FAIRGROUND
 
@@ -198,4 +199,4 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ---
 
-<sub>manifest generated at commit `58048511bbe3c0b67b1ba6c9fe0e699e1f892733`</sub>
+<sub>manifest generated at commit `4b5d29e8a9a1a60f6acefc01835bfb0a9c64d6f6`</sub>

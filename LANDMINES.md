@@ -125,9 +125,44 @@ Nothing else is required reading.
   is. Diagnose by printing a row of the field, not by staring at the picture. The
   cure is a little thermal diffusion (which the gas has anyway).
 
+- **A hand-rolled camera basis is a coin flip, and only HALF your frame tells you.**
+  If a full-screen ray-march builds its own `right`/`up` from `fwd` while the
+  rasterised geometry goes through a proper `lookAt`, a sign error in `right`
+  flips and mirrors the *marched* pass and leaves the *rasterised* one alone —
+  so the lightning is right way up and the cloud has fallen to the bottom of the
+  sky, which reads as a lighting or density bug for as long as you let it. Check
+  it against one case by hand: with `fwd = (0,0,-1)` you must get
+  `right = (+1,0,0)` and `up = right × fwd = (0,+1,0)`. (`right = (-fwd.z, 0, fwd.x)`.)
 - **Volumetric marching wants an interleaved-gradient dither**, not an ordered/Bayer one:
   `fract(52.9829189 * fract(0.06711056*x + 0.00583715*y))`, offset per frame by the golden
   ratio. Too-few steps then read as a fine even weave instead of hard rings.
+
+### Sound
+
+- **A truncated LINEAR-PHASE FIR has a stopband floor, and it rings before the
+  sound.** Inverse-FFT a desired magnitude, window it, and you get a filter that
+  (a) cannot go deeper than its length allows — 127 taps leaked **27 dB** of
+  3 kHz through a filter meant to be 90 dB down, and dropped 4 dB it should have
+  passed at 50 Hz — and (b) smears energy *earlier* in time by half its length,
+  which quietly falsifies any claim about when a sound starts. Both symptoms
+  present as "my measurement disagrees with my prediction and I can't see why."
+  The cure is a **minimum-phase** design: real-cepstrum fold (log-magnitude →
+  IFFT → double the causal half → FFT → exponentiate → IFFT). Causal,
+  front-loaded, and the truncation error collapses. `the-thunderhead/core.mjs`
+  has it in 20 lines as `minPhaseFIR`.
+- **An AudioContext that never got a REAL user gesture is suspended, and its
+  clock does not tick.** So anything slaved to `ctx.currentTime` — an animation
+  that follows a playing buffer, a state machine waiting for a sound to arrive —
+  freezes solid, with no error. A `.click()` from `eval` does not grant user
+  activation (`tools/cdp/pointer.mjs click` does). Two consequences: verify with a
+  real click, and give the page a wall-clock fallback so a blocked context
+  degrades to silence instead of to a dead room.
+
+### The DOM
+
+- **A `<canvas>` inside `display:none` has `clientWidth === 0` and draws
+  nothing, silently.** Reveal the panel FIRST, then plot into it. There is no
+  error, no warning, and the canvas is the right size the moment you go looking.
 
 ### Estate-wide conventions
 

@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Thunderhead — the sound of a shape</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  THE THUNDERHEAD  ·  the-thunderhead/
+
+  Stand on a dark plain under a storm and pull the flash out of it.  Then wait,
+  and count, and listen to the shape of what you saw.
+
+  WHAT IS ACTUALLY RUNNING
+    · a DIELECTRIC BREAKDOWN MODEL.  Laplace's equation is relaxed on a lattice
+      with the growing channel pinned at one potential and the ground at
+      another; a cell next to the channel joins it with probability going as
+      the local field to a power eta.  Nobody drew a zig-zag.  Turn eta up and
+      the bolt straightens; the box-counting dimension of the set falls with
+      it, live, on the card.
+    · a SECOND discharge on a horizontal lattice inside the cloud — the
+      kilometres of channel a real flash lays down where you cannot see it.
+    · ISO 9613-1 ATMOSPHERIC ABSORPTION, the real closed form with the oxygen
+      and nitrogen relaxation frequencies.  core.test.mjs checks it against the
+      published table in the standard — 48 numbers, six atmospheres.
+    · THE THUNDER, built by hand: every one of some thousands of segments
+      radiates an N-wave when the return stroke passes it, summed at your ear
+      with its own travel time and its own air.  The filter is minimum-phase,
+      so nothing can ring before it arrives.
+
+  THE CLAIM, AND HOW TO FALSIFY IT
+    THUNDER IS THE SHAPE OF THE BOLT, PLAYED BACK IN TIME.
+    From the geometry alone — no audio in it anywhere — the page predicts when
+    the first bang lands (nearest channel / 343 m/s), when the roll ends
+    (farthest channel / 343), and the whole loudness curve in between (the
+    channel's distance histogram).  Then it MEASURES all three off the
+    waveform it rendered and prints both.  Press PROVE IT.
+    A second, separate check: the spectrum.  One computation synthesises
+    thousands of shock waves in the time domain; another sums their energy in
+    the frequency domain through the absorption law.  They are compared in
+    third-octave bands over sixty decibels.
+
+    And the thing worth knowing: mute the hidden sheet and the same flash
+    CLAPS for a second and a half instead of rolling for eight.  The roll is
+    the channel inside the cloud, not echoes off the hills.
+
+  HONEST ABOUT THE MODEL — the page says all of this on its own card:
+    the N-wave stretching law is fitted, not derived; spreading is taken as
+    1/r; the sharp CRACK of a strike a few hundred metres off is a near-field
+    shock that is not modelled; and the SMALL-SPEAKER LIFT is a playback EQ,
+    not physics — the measurement always runs on the unlifted buffer.
+
+  ENGINES (inlined byte-for-byte by the forge, never forked):
+    · tools/ws/ws.js        the estate-wide mute and the visit breadcrumb
+    · ./core.mjs            the discharge, the air, the sound
+    · ./render.js           WebGL2: volumetric storm, HDR channel, bloom
+  Node twin: `node the-thunderhead/core.test.mjs`  (110 checks)
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root{
+    --ink:#e8eef7; --dim:#9aa7b8; --faint:#6f7c8e;
+    --blue:#8fb6ff; --pale:#cfe0ff; --green:#8fd07a; --red:#ef8f7a; --amber:#e7bd6c;
+    --bg0:#04060b; --panel:rgba(9,13,20,.90); --line:rgba(143,182,255,.20);
+    --font-ui:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --font-mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg0);color:var(--ink);
+    font:15px/1.55 var(--font-ui);overflow:hidden;-webkit-font-smoothing:antialiased}
+  canvas#gl{display:block;position:fixed;inset:0;width:100%;height:100%;
+    touch-action:none;cursor:grab}
+  canvas#gl.grabbing{cursor:grabbing}
+
+  .scrim{position:fixed;top:0;left:0;width:min(58vw,700px);height:300px;z-index:2;pointer-events:none;
+    background:radial-gradient(120% 100% at 0% 0%, rgba(2,4,8,.86), rgba(2,4,8,0) 74%)}
+  .topleft{position:fixed;top:15px;left:20px;z-index:5;pointer-events:none;max-width:29em}
+  .topleft a{pointer-events:auto}
+  .back{display:inline-block;font:600 10px/1 var(--font-mono);letter-spacing:.22em;
+    text-transform:uppercase;color:var(--dim);text-decoration:none;opacity:.85}
+  .back:hover{color:var(--blue);opacity:1}
+  h1{font:400 clamp(22px,2.9vw,33px)/1.1 var(--font-ui);margin:.4em 0 .1em;
+    text-shadow:0 2px 26px rgba(0,0,0,.9)}
+  .say{color:var(--dim);font-size:13.5px;margin:.35em 0 0;text-shadow:0 1px 18px rgba(0,0,0,.95)}
+  .say b{color:var(--pale);font-weight:600}
+
+  /* ── the counting readout, centre stage ────────────────────────────────── */
+  .count{position:fixed;left:24px;bottom:104px;z-index:4;
+    text-align:left;pointer-events:none;opacity:0;transition:opacity .25s}
+  .count.on{opacity:1}
+  .count .big{font:300 clamp(34px,5.6vw,72px)/1 var(--font-ui);color:var(--pale);
+    text-shadow:0 0 40px rgba(120,160,255,.35),0 2px 30px rgba(0,0,0,.9);letter-spacing:.02em}
+  .count .sub{font:600 10px/1.5 var(--font-mono);letter-spacing:.2em;text-transform:uppercase;
+    color:var(--faint);margin-top:.45em;max-width:22em}
+  .count.rolling .big{color:#ffd9a8;text-shadow:0 0 44px rgba(255,180,90,.32),0 2px 30px rgba(0,0,0,.9)}
+
+  /* ── the card ──────────────────────────────────────────────────────────── */
+  .card{position:fixed;top:15px;right:16px;z-index:6;width:296px;max-height:calc(100vh - 130px);
+    overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:12px 14px 13px;box-shadow:0 10px 44px rgba(0,0,0,.7);backdrop-filter:blur(3px)}
+  .chead{font:600 9.5px/1 var(--font-mono);letter-spacing:.2em;text-transform:uppercase;
+    color:var(--faint);margin:0 0 8px}
+  .claim{font:400 14.5px/1.45 var(--font-ui);color:var(--pale);margin:0 0 10px}
+  .rows{font:11.5px/1.6 var(--font-mono);color:var(--dim)}
+  .row{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dotted rgba(143,182,255,.13);padding:1px 0}
+  .row span:last-child{color:var(--ink);white-space:nowrap}
+  .row.hl span:last-child{color:var(--amber)}
+  .sect{font:600 9px/1 var(--font-mono);letter-spacing:.18em;text-transform:uppercase;
+    color:var(--faint);margin:11px 0 5px}
+  .note{font:10.5px/1.5 var(--font-mono);color:var(--faint);margin-top:9px}
+  .note b{color:var(--dim);font-weight:600}
+  canvas.plot{width:100%;height:74px;display:block;border-radius:5px;background:rgba(0,0,0,.45);
+    border:1px solid rgba(143,182,255,.13);margin-top:4px}
+  .legend{display:flex;gap:11px;font:9.5px/1.4 var(--font-mono);color:var(--faint);margin-top:3px;flex-wrap:wrap}
+  .legend i{display:inline-block;width:16px;height:2px;vertical-align:middle;margin-right:4px}
+  .verdict{margin-top:9px;font:11px/1.5 var(--font-mono);color:var(--dim);
+    border-top:1px solid var(--line);padding-top:8px}
+  .verdict .good{color:var(--green)} .verdict .bad{color:var(--red)}
+  .fold{display:none} .fold.on{display:block}
+
+  /* ── the console ───────────────────────────────────────────────────────── */
+  .console{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:6;
+    display:flex;gap:11px;align-items:center;flex-wrap:wrap;justify-content:center;
+    background:var(--panel);border:1px solid var(--line);border-radius:13px;
+    padding:9px 14px;max-width:min(96vw,1120px);box-shadow:0 8px 34px rgba(0,0,0,.7)}
+  .grp{display:flex;align-items:center;gap:8px}
+  .sep{width:1px;height:24px;background:var(--line)}
+  .lbl{font:600 9.5px/1 var(--font-mono);letter-spacing:.15em;text-transform:uppercase;
+    color:var(--faint);white-space:nowrap}
+  .val{font:12px/1 var(--font-mono);color:var(--pale);min-width:3.4em;white-space:nowrap}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:3px;border-radius:2px;
+    background:linear-gradient(90deg,rgba(143,182,255,.8),rgba(143,182,255,.18));
+    outline:none;width:104px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;
+    border-radius:50%;background:#dbe7ff;border:1px solid #40587f;cursor:pointer;
+    box-shadow:0 1px 5px rgba(0,0,0,.7)}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;
+    background:#dbe7ff;border:1px solid #40587f;cursor:pointer}
+  button{font:600 10px/1 var(--font-mono);letter-spacing:.13em;text-transform:uppercase;
+    color:var(--ink);background:rgba(143,182,255,.12);border:1px solid var(--line);
+    border-radius:8px;padding:9px 11px;cursor:pointer;transition:background .15s,color .15s}
+  button:hover{background:rgba(143,182,255,.25)}
+  button:active{background:rgba(200,225,255,.42);color:#04060b}
+  button.hot{color:#dceaff;border-color:rgba(160,200,255,.5);background:rgba(90,140,255,.22)}
+  button.on{background:rgba(150,190,255,.55);color:#04060b}
+  button:disabled{opacity:.4;cursor:default}
+
+  /* ── the gate ──────────────────────────────────────────────────────────── */
+  .gate{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(62% 62% at 50% 46%, rgba(10,20,42,.55), rgba(2,4,8,.96) 78%);
+    cursor:pointer;text-align:center}
+  .gate.off{display:none}
+  .gate .in{max-width:30em;padding:0 24px}
+  .gate h2{font:400 clamp(24px,4vw,40px)/1.15 var(--font-ui);margin:0 0 .5em;color:var(--pale)}
+  .gate p{color:var(--dim);font-size:14.5px;margin:0 0 1.4em}
+  .gate .cue{font:600 10px/1 var(--font-mono);letter-spacing:.26em;text-transform:uppercase;color:var(--blue)}
+  .err{position:fixed;inset:0;z-index:30;display:none;align-items:center;justify-content:center;
+    background:var(--bg0);padding:30px;text-align:center}
+  .err.on{display:flex}
+  @media (max-width:900px){
+    .card{width:250px;font-size:13px} .topleft{max-width:18em} .console{gap:8px;padding:8px 10px}
+  }
+  /* narrow: the card stops competing with the sky — it goes under it */
+  @media (max-width:700px){
+    h1{font-size:23px} .say{font-size:12.5px} .topleft{max-width:none;right:18px}
+    .card{left:8px;right:8px;top:auto;bottom:158px;width:auto;max-height:34vh;padding:9px 11px}
+    .claim{font-size:13px;margin-bottom:7px}
+    .count{left:50%;transform:translateX(-50%);bottom:auto;top:33%;text-align:center}
+    .count .big{font-size:44px} .count .sub{font-size:9px;max-width:16em}
+    .console{gap:7px;padding:7px 9px;bottom:8px;left:8px;right:8px;transform:none;max-width:none}
+    input[type=range]{width:82px}
+  }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div class="scrim"></div>
+
+<div class="topleft">
+  <a class="back" href="../index.html">&larr; The Estate</a>
+  <h1>The Thunderhead</h1>
+  <p class="say">Pull a flash out of the cloud. Then <b>count</b> — the bang is the
+     nearest metre of channel divided by 343. What you hear after that is the rest
+     of the bolt, arriving in the order of its distance from you. <b>Thunder is a
+     shape, played back in time.</b></p>
+</div>
+
+<div class="count" id="count">
+  <div class="big" id="countBig">0.0</div>
+  <div class="sub" id="countSub">since the flash</div>
+</div>
+
+<div class="card">
+  <p class="chead">the claim</p>
+  <p class="claim">Every sound you hear is a piece of channel you can see, and it
+     arrives when its distance says it must.</p>
+
+  <div class="rows">
+    <div class="row"><span>nearest channel</span><span id="rDmin">—</span></div>
+    <div class="row"><span>farthest channel</span><span id="rDmax">—</span></div>
+    <div class="row hl"><span>first bang · predicted</span><span id="rF1">—</span></div>
+    <div class="row hl"><span>first bang · heard</span><span id="rF2">—</span></div>
+    <div class="row hl"><span>roll ends · predicted</span><span id="rL1">—</span></div>
+    <div class="row hl"><span>roll ends · heard</span><span id="rL2">—</span></div>
+    <div class="row"><span>channel drawn</span><span id="rSeg">—</span></div>
+    <div class="row"><span>box dimension of the bolt</span><span id="rDim">—</span></div>
+  </div>
+
+  <div id="fold" class="fold">
+    <p class="sect">the loudness is the histogram</p>
+    <canvas class="plot" id="plotEnv"></canvas>
+    <div class="legend"><span><i style="background:#e7bd6c"></i>from the geometry</span>
+      <span><i style="background:#8fb6ff"></i>measured off the waveform</span></div>
+    <p class="sect">two spectra, computed two ways</p>
+    <canvas class="plot" id="plotSpec"></canvas>
+    <div class="legend"><span><i style="background:#e7bd6c"></i>frequency-domain sum</span>
+      <span><i style="background:#8fb6ff"></i>FFT of the rendered sound</span></div>
+    <div class="verdict" id="verdict"></div>
+  </div>
+
+  <p class="note" id="honest"><b>Honest:</b> the shock-stretching law is fitted to
+     measurements, not derived here; spreading is taken as 1/<i>r</i>; the sharp
+     crack of a strike a few hundred metres off is near-field and is not modelled.
+     The <b>small-speaker lift</b> is a playback EQ, not physics — every number on
+     this card is measured on the buffer before it.</p>
+</div>
+
+<div class="console">
+  <div class="grp"><button id="bStrike" class="hot">strike ⚡</button></div>
+  <div class="sep"></div>
+  <div class="grp"><span class="lbl">distance</span>
+    <input type="range" id="sDist" min="600" max="7500" step="50" value="3400">
+    <span class="val" id="vDist">2.2 km</span></div>
+  <div class="grp"><span class="lbl">η</span>
+    <input type="range" id="sEta" min="1" max="4" step="0.1" value="2">
+    <span class="val" id="vEta">2.0</span></div>
+  <div class="sep"></div>
+  <div class="grp"><button id="bSheet" class="on">whole flash</button></div>
+  <div class="grp"><button id="bProve">prove it</button></div>
+  <div class="sep"></div>
+  <div class="grp"><button id="bLift" class="on">small speakers</button>
+    <button id="bMute">mute</button></div>
+</div>
+
+<div class="gate" id="gate"><div class="in">
+  <h2>A storm, and a long way off</h2>
+  <p>It is going to be loud, and then it is going to be quiet for a long time, and
+     then it is going to be loud again. Drag to walk round the storm.</p>
+  <p class="cue">click to open the sky</p>
+</div></div>
+
+<div class="err" id="err"><div>
+  <h2 style="font:400 24px var(--font-ui)">This room needs WebGL2.</h2>
+  <p style="color:#9aa7b8" id="errMsg"></p>
+</div></div>
+
+<script type="module">
+<!-- forge:include ../tools/ws/ws.js -->
+<!-- forge:include ./core.mjs -->
+<!-- forge:include ./render.js -->
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE ROOM
+   ═══════════════════════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+const canvas = $('gl');
+let R;
+try { R = makeRenderer(canvas); }
+catch (e) { $('err').classList.add('on'); $('errMsg').textContent = String(e.message || e); throw e; }
+
+try { WS.seen('the-thunderhead'); } catch (e) {}
+
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ── state ────────────────────────────────────────────────────────────────── */
+const MOON = (() => { const a = 2.35, e = 0.62;
+  return [Math.cos(e)*Math.sin(a), Math.sin(e), Math.cos(e)*Math.cos(a)]; })();
+
+const S = {
+  az: 0.35, aim: 1180, dist: 3400, eta: 2.0, seed: 7,
+  phase: 'idle',                     // idle | growing | flash | waiting | rolling
+  t0: 0,                             // page clock at the moment of the flash
+  reveal: 0, glow: 0, ghost: 0, core: 1, front: -1,
+  flashNow: 0, steps: 34, sheetOn: true, lift: true,
+  frame: 0, quality: 0.55
+};
+
+let flash = null, nextFlash = null, inst = null;
+let audio = null, thunder = null, playStart = 0, lastMeasure = null, lastPredict = null;
+let shot = null;
+let playStartWall = 0;
+
+/* The clock the roll runs on.  Normally the AudioContext's, so the sound front
+   drawn on the channel is sample-accurate against what you are hearing.  But a
+   context that never got a real user gesture stays SUSPENDED and its clock does
+   not advance at all — which would freeze the whole room waiting for a bang
+   that is not coming.  Fall back to the wall clock in that case. */
+function soundClock() {
+  if (audio && audio.ctx.state === 'running') return audio.ctx.currentTime - playStart;
+  return performance.now() / 1000 - playStartWall;
+}
+let listener = [0, 1.8, -3400];
+
+/* ── the flash ────────────────────────────────────────────────────────────── */
+function buildOne(seed, eta) {
+  const f = buildFlash({ seed: seed, eta: eta });
+  f.strokes = strokeTrain(seed);      /* 1-3 return strokes; a real flash flickers */
+  /* growth order -> a birth fraction per segment, so the leader can be watched
+     coming down while the sheet spreads above it */
+  let nCG = 0, nIC = 0;
+  for (const s of f.segments) { if (s.part === 0) nCG++; else if (s.part === 1) nIC++; }
+  let iCG = 0, iIC = 0;
+  for (const s of f.segments) {
+    if (s.part === 0) s.birth = 0.06 + 0.94 * (iCG++ / Math.max(1, nCG));
+    else if (s.part === 1) s.birth = 0.10 + 0.90 * (iIC++ / Math.max(1, nIC));
+    else s.birth = 0.02;
+  }
+  f.dim = boxDimension(f.cg.chan, f.cg.W, f.cg.H);
+  return f;
+}
+function packInstances(f, L) {
+  const n = f.segments.length;
+  const a = new Float32Array(n * 9);
+  for (let k = 0; k < n; k++) {
+    const s = f.segments[k], o = k * 9;
+    const mx = (s.ax + s.bx) / 2, my = (s.ay + s.by) / 2, mz = (s.az + s.bz) / 2;
+    a[o] = s.ax; a[o + 1] = s.ay; a[o + 2] = s.az;
+    a[o + 3] = s.bx; a[o + 4] = s.by; a[o + 5] = s.bz;
+    a[o + 6] = Math.min(1, Math.pow(s.w, 0.45));
+    a[o + 7] = Math.hypot(mx - L[0], my - L[1], mz - L[2]);
+    a[o + 8] = s.birth;
+  }
+  return a;
+}
+function useFlash(f) {
+  flash = f;
+  listener = camEye();
+  inst = packInstances(flash, listener);
+  R.uploadSegments(inst, flash.segments.length);
+  $('rSeg').textContent = flash.segments.length.toLocaleString() + ' segments';
+  $('rDim').textContent = 'D = ' + flash.dim.toFixed(3);
+}
+function prepareNext() {
+  S.seed = (S.seed * 1103515245 + 12345) % 2147483647;
+  nextFlash = buildOne(S.seed, S.eta);
+}
+
+/* ── the camera ───────────────────────────────────────────────────────────── */
+function camEye() {
+  return [S.dist * Math.sin(S.az), 1.8, S.dist * Math.cos(S.az)];
+}
+function camAt() {
+  const e = camEye();
+  return [e[0] * 0.06, S.aim, e[2] * 0.06];
+}
+
+/* ── audio ────────────────────────────────────────────────────────────────── */
+function noiseBuffer(ctx, secs, seed) {
+  const n = Math.floor(secs * ctx.sampleRate);
+  const b = ctx.createBuffer(1, n, ctx.sampleRate);
+  const d = b.getChannelData(0);
+  const rng = mulberry32(seed);
+  let lp = 0;
+  for (let i = 0; i < n; i++) { const w = rng() * 2 - 1; lp += (w - lp) * 0.34; d[i] = lp * 1.6; }
+  /* seam-free loop: cross-fade the last 0.25 s into the first */
+  const x = Math.floor(0.25 * ctx.sampleRate);
+  for (let i = 0; i < x; i++) { const t = i / x; d[i] = d[i] * t + d[n - x + i] * (1 - t); }
+  return b;
+}
+function initAudio() {
+  if (audio) return audio;
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const master = ctx.createGain(); master.gain.value = 1; master.connect(ctx.destination);
+
+  /* the weather: rain hiss and a low wind, both procedural */
+  const amb = ctx.createGain(); amb.gain.value = 0.0; amb.connect(master);
+  const rainSrc = ctx.createBufferSource();
+  rainSrc.buffer = noiseBuffer(ctx, 6, 991); rainSrc.loop = true;
+  const rainHP = ctx.createBiquadFilter(); rainHP.type = 'highpass'; rainHP.frequency.value = 700;
+  const rainLP = ctx.createBiquadFilter(); rainLP.type = 'lowpass'; rainLP.frequency.value = 5200;
+  rainSrc.connect(rainHP); rainHP.connect(rainLP); rainLP.connect(amb); rainSrc.start();
+  const windSrc = ctx.createBufferSource();
+  windSrc.buffer = noiseBuffer(ctx, 7, 337); windSrc.loop = true;
+  const windLP = ctx.createBiquadFilter(); windLP.type = 'lowpass'; windLP.frequency.value = 260;
+  const windG = ctx.createGain(); windG.gain.value = 2.2;
+  windSrc.connect(windLP); windLP.connect(windG); windG.connect(amb); windSrc.start();
+
+  /* SMALL-SPEAKER LIFT.  Thunder is a 40-150 Hz sound and a laptop speaker
+     cannot make 40-150 Hz, so on most machines the honest signal is silence.
+     This shelf is a PLAYBACK EQ and nothing else: the buffer that every number
+     on the card is measured from never passes through it. */
+  const lift = ctx.createBiquadFilter();
+  lift.type = 'highshelf'; lift.frequency.value = 220; lift.gain.value = 14;
+  const liftTrim = ctx.createGain(); liftTrim.gain.value = 0.33;
+  const thunderG = ctx.createGain(); thunderG.gain.value = 1;
+  lift.connect(liftTrim); liftTrim.connect(thunderG); thunderG.connect(master);
+  const dry = ctx.createGain(); dry.gain.value = 1; dry.connect(thunderG);
+
+  audio = { ctx: ctx, master: master, amb: amb, lift: lift, dry: dry, thunderG: thunderG };
+  applyMute();
+  return audio;
+}
+function applyMute() {
+  if (!audio) return;
+  const on = !WS.muted();
+  audio.master.gain.setTargetAtTime(on ? 1 : 0, audio.ctx.currentTime, 0.04);
+  audio.amb.gain.setTargetAtTime(on ? 0.055 : 0, audio.ctx.currentTime, 0.6);
+  $('bMute').textContent = WS.muted() ? 'unmute' : 'mute';
+  $('bMute').classList.toggle('on', WS.muted());
+}
+WS.onMuteChange(applyMute);
+
+/* ── striking ─────────────────────────────────────────────────────────────── */
+function segmentsForSound() {
+  return S.sheetOn ? flash.segments : flash.segments.filter(s => s.part === 0);
+}
+
+function strike() {
+  if (S.phase === 'growing' || S.phase === 'flash') return;
+  if (!flash) return;
+  initAudio();
+  if (audio.ctx.state === 'suspended') audio.ctx.resume();
+
+  /* a fresh flash for every strike — but swapped in HERE, at the start, never
+     while the last one is still hanging in the air being listened to */
+  if (nextFlash) { useFlash(nextFlash); nextFlash = null; setTimeout(prepareNext, 40); }
+
+  listener = camEye();
+  inst = packInstances(flash, listener);
+  R.uploadSegments(inst, flash.segments.length);
+
+  /* EVERYTHING the sound was made from, frozen at the moment of the strike.
+     prove it must compare the waveform against the geometry THAT waveform came
+     from — read it off live state instead and a later flash, or a later turn of
+     the head, quietly answers the question you did not ask. */
+  const segs = segmentsForSound();
+  shot = { segs: segs, strokes: flash.strokes, listener: listener, seed: S.seed };
+  lastPredict = predict(segs, listener, flash.strokes);
+  S.phase = 'growing';
+  S.t0 = performance.now() / 1000;
+  S.reveal = 0; S.glow = 0; S.ghost = 0; S.front = -1;
+  $('rDmin').textContent = (lastPredict.dMin / 1000).toFixed(3) + ' km';
+  $('rDmax').textContent = (lastPredict.dMax / 1000).toFixed(3) + ' km';
+  $('rF1').textContent = lastPredict.firstArrival.toFixed(3) + ' s';
+  $('rL1').textContent = lastPredict.lastArrival.toFixed(3) + ' s';
+  $('rF2').textContent = '—'; $('rL2').textContent = '—';
+  $('fold').classList.remove('on');
+  $('count').classList.add('on'); $('count').classList.remove('rolling');
+}
+
+/* render the thunder and arm it.  Done during the return-stroke flash, where a
+   few tens of milliseconds of hitch is invisible. */
+function armThunder() {
+  thunder = synthesise(shot.segs, shot.listener, { seed: shot.seed, strokes: shot.strokes });
+  lastMeasure = measureArrivals(thunder.samples, thunder.sr, 1e-5);
+  $('rF2').textContent = lastMeasure.first.toFixed(3) + ' s';
+  $('rL2').textContent = lastMeasure.last.toFixed(3) + ' s';
+
+  const ctx = audio.ctx;
+  const buf = ctx.createBuffer(1, thunder.samples.length, thunder.sr);
+  const d = buf.getChannelData(0);
+  /* ONE fixed gain for every strike, so a near flash really is louder than a
+     far one — normalising each buffer would have thrown that away.  Only pull
+     it down further if the thing would clip, which a very near strike does. */
+  const K = 86;
+  const g = Math.min(K, 0.98 / Math.max(thunder.peak, 1e-9));
+  for (let i = 0; i < d.length; i++) d[i] = thunder.samples[i] * g;
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.connect(S.lift ? audio.lift : audio.dry);
+  playStart = ctx.currentTime + 0.02;
+  playStartWall = performance.now() / 1000 + 0.02;
+  src.start(playStart);
+  thunder.node = src;
+}
+
+/* ── the prove-it panel ───────────────────────────────────────────────────── */
+function drawPlot(cv, series, opt) {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const c = cv.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+  const pad = 3;
+  c.strokeStyle = 'rgba(143,182,255,.10)'; c.lineWidth = 1;
+  for (let i = 1; i < 4; i++) {
+    const y = pad + (h - 2 * pad) * i / 4;
+    c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke();
+  }
+  for (const s of series) {
+    const n = s.v.length;
+    c.strokeStyle = s.col; c.lineWidth = s.lw || 1.4;
+    c.beginPath();
+    for (let i = 0; i < n; i++) {
+      const x = pad + (w - 2 * pad) * (n === 1 ? 0.5 : i / (n - 1));
+      const y = h - pad - (h - 2 * pad) * Math.max(0, Math.min(1, s.v[i]));
+      i ? c.lineTo(x, y) : c.moveTo(x, y);
+    }
+    c.stroke();
+    if (s.fill) { c.lineTo(w - pad, h - pad); c.lineTo(pad, h - pad); c.closePath();
+      c.fillStyle = s.fill; c.fill(); }
+  }
+  if (opt && opt.label) {
+    c.fillStyle = 'rgba(111,124,142,.9)';
+    c.font = '9px ui-monospace, monospace';
+    c.fillText(opt.label, 4, h - 4);
+  }
+}
+
+function proveIt() {
+  if (!thunder || !lastPredict || !shot) return;
+  /* a canvas inside display:none has clientWidth 0 and draws nothing at all,
+     silently — show the panel first, THEN plot into it */
+  $('fold').classList.add('on');
+  const segs = shot.segs;
+  /* 1 · the envelope against the distance histogram */
+  const ap = arrivalProfile(segs, shot.listener, { strokes: shot.strokes, dt: 0.05 });
+  const ev = envelopeOf(thunder.samples, thunder.sr, ap.t0, ap.dt, ap.bins.length);
+  const norm = a => { let m = 0; for (const v of a) m = Math.max(m, v); return Array.from(a, v => m > 0 ? v / m : 0); };
+  const corr = profileCorrelation(ap, ev);
+  drawPlot($('plotEnv'), [
+    { v: norm(ev.bins), col: '#8fb6ff', fill: 'rgba(143,182,255,.16)' },
+    { v: norm(ap.bins), col: '#e7bd6c', lw: 1.6 }
+  ], { label: (ap.bins.length * ap.dt).toFixed(1) + ' s of roll' });
+
+  /* 2 · the spectra */
+  const meas = bandsFromSpectrum(powerSpectrum(thunder.samples, thunder.sr, 0, undefined, 16384));
+  const pred = bandsFromPredicted(predictSpectrum(segs, shot.listener));
+  let sa = 0, sb = 0;
+  for (let i = 0; i < meas.length; i++) { sa += meas[i]; sb += pred[i]; }
+  const gg = sb > 0 ? sa / sb : 1;
+  const DYN = 72;
+  const toDb = (arr, k) => Array.from(arr, v => {
+    let m = 0; for (const x of arr) m = Math.max(m, x);
+    return Math.max(0, (10 * Math.log10(Math.max(v * k, 1e-30) / m) + DYN) / DYN);
+  });
+  let pm = 0; for (const v of meas) pm = Math.max(pm, v);
+  const dbM = Array.from(meas, v => Math.max(0, (10 * Math.log10(Math.max(v, 1e-30) / pm) + DYN) / DYN));
+  const dbP = Array.from(pred, v => Math.max(0, (10 * Math.log10(Math.max(v * gg, 1e-30) / pm) + DYN) / DYN));
+  drawPlot($('plotSpec'), [
+    { v: dbM, col: '#8fb6ff', fill: 'rgba(143,182,255,.16)' },
+    { v: dbP, col: '#e7bd6c', lw: 1.6 }
+  ], { label: '10 Hz … 4 kHz  ·  ' + DYN + ' dB' });
+  const ag = bandAgreement(meas, pred, 60);
+
+  const dF = Math.abs(lastPredict.firstArrival - lastMeasure.first) * 1000;
+  const dL = Math.abs(lastPredict.lastArrival - lastMeasure.last) * 1000;
+  const cls = (v, lim) => v <= lim ? 'good' : 'bad';
+  $('verdict').innerHTML =
+    'first bang: <span class="' + cls(dF, 12) + '">' + dF.toFixed(1) + ' ms apart</span><br>' +
+    'end of roll: <span class="' + cls(dL, 60) + '">' + dL.toFixed(1) + ' ms apart</span><br>' +
+    'envelope vs histogram: <span class="' + cls(-corr, -0.6) + '">r = ' + corr.toFixed(3) + '</span><br>' +
+    'the two spectra: <span class="' + cls(ag.rmsDb, 4.5) + '">' + ag.rmsDb.toFixed(2) + ' dB rms</span>' +
+    ' over ' + ag.bands + ' bands<br>' +
+    '<span style="color:var(--faint)">centroid ' + bandCentroid(meas).toFixed(0) + ' Hz measured, ' +
+    bandCentroid(pred).toFixed(0) + ' Hz predicted</span>';
+  $('fold').classList.add('on');
+}
+
+/* ── the loop ─────────────────────────────────────────────────────────────── */
+let fpsAcc = 0, fpsN = 0, lastT = performance.now() / 1000;
+function frame() {
+  const now = performance.now() / 1000;
+  const dt = Math.min(0.05, now - lastT); lastT = now;
+  fpsAcc += dt; fpsN++;
+  if (fpsN >= 30) {
+    const fps = fpsN / fpsAcc;
+    if (fps < 48 && S.steps > 18) S.steps -= 4;
+    else if (fps > 58 && S.steps < 52) S.steps += 2;
+    fpsAcc = 0; fpsN = 0;
+  }
+
+  const el = now - S.t0;
+  let i0 = 0, i1 = 0, l0 = [0, CB, 0], l1 = [0, 3050, 0];
+  S.flashNow = 0;
+
+  if (S.phase === 'growing') {
+    const GROW = 0.62;
+    S.reveal = Math.min(1, el / GROW);
+    S.glow = 0.10 + 0.10 * S.reveal;
+    S.core = 0.5;
+    i0 = 0.055 * S.reveal; i1 = 0.02 * S.reveal;
+    S.flashNow = 0.05 * S.reveal;
+    if (S.reveal >= 1) { S.phase = 'flash'; S.t0 = now; armThunder(); }
+  } else if (S.phase === 'flash') {
+    S.reveal = 1; S.core = 1;
+    /* the return strokes: a hard rise and a fast fall, once per stroke */
+    let g = 0;
+    for (const st of flash.strokes) {
+      const u = el - st.t;
+      if (u < 0) continue;
+      g += st.amp * Math.exp(-u / 0.085) * (1 - Math.exp(-u / 0.006));
+    }
+    S.glow = 2.1 * g;
+    i0 = 0.60 * g; i1 = 0.46 * g;
+    S.flashNow = Math.min(1, g);
+    const tail = flash.strokes[flash.strokes.length - 1].t + 0.65;
+    if (el > tail) { S.phase = 'waiting'; }
+  } else if (S.phase === 'waiting' || S.phase === 'rolling') {
+    S.reveal = 1;
+    S.glow = 0; S.core = 1;
+    const since = thunder ? soundClock() : 0;
+    S.ghost = 0.055 * Math.exp(-Math.max(0, since) / 9);
+    if (lastPredict && since >= lastPredict.firstArrival - 0.02) S.phase = 'rolling';
+    if (S.phase === 'rolling') {
+      S.front = since * C_SOUND;
+      S.frontW = 90;
+      if (lastMeasure && since > lastMeasure.last + 0.6) {
+        S.phase = 'idle'; S.front = -1; S.ghost = 0;
+        $('count').classList.remove('on');
+      }
+    } else S.front = -1;
+    /* the counter */
+    const c = $('countBig'), sub = $('countSub');
+    if (S.phase === 'waiting') {
+      c.textContent = Math.max(0, since).toFixed(1);
+      sub.textContent = 'seconds since the flash  ·  ' + (Math.max(0, since) * 0.343).toFixed(2) + ' km away';
+      $('count').classList.remove('rolling');
+    } else {
+      const roll = since - lastPredict.firstArrival;
+      c.textContent = roll.toFixed(1);
+      sub.textContent = 'seconds of roll  ·  hearing ' + (since * 0.343).toFixed(2) + ' km out';
+      $('count').classList.add('rolling');
+    }
+  } else {
+    S.reveal = 0; S.glow = 0; S.ghost = 0; S.front = -1;
+  }
+
+  /* the two lights: the leader, and the sheet in the cloud */
+  if (flash && (i0 > 0 || i1 > 0)) {
+    l0 = [0, CB * 0.45, 0];
+    l1 = [0, 3050, 0];
+  }
+
+  R.draw({
+    eye: camEye(), at: camAt(), fov: 1.02, time: now,
+    frame: S.frame++, steps: S.steps,
+    l0: l0, l1: l1, i0: i0, i1: i1,
+    storm: [0, 0], haze: 3.4e-5, moon: MOON, moonI: 1.0,
+    glow: S.glow, ghost: S.ghost, core: S.core,
+    front: S.front, frontW: S.frontW || 90, reveal: S.reveal,
+    exposure: 2.05, bloomThresh: 0.55, rain: reduced ? 0 : 1, flashNow: S.flashNow
+  });
+  requestAnimationFrame(frame);
+}
+
+/* ── controls ─────────────────────────────────────────────────────────────── */
+let dragging = false, lastX = 0, lastY = 0, moved = 0;
+canvas.addEventListener('pointerdown', e => {
+  dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY;
+  canvas.setPointerCapture(e.pointerId); canvas.classList.add('grabbing');
+});
+canvas.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  const dx = e.clientX - lastX, dy = e.clientY - lastY;
+  lastX = e.clientX; lastY = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
+  S.az += dx * 0.0042;
+  S.aim = Math.max(350, Math.min(3800, S.aim - dy * 7));
+});
+canvas.addEventListener('pointerup', e => {
+  dragging = false; canvas.classList.remove('grabbing');
+  if (moved < 6 && S.phase === 'idle') strike();
+});
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  S.dist = Math.max(600, Math.min(7500, S.dist * (1 + e.deltaY * 0.0011)));
+  $('sDist').value = Math.round(S.dist);
+  $('vDist').textContent = (S.dist / 1000).toFixed(2) + ' km';
+}, { passive: false });
+
+$('bStrike').onclick = () => strike();
+$('sDist').oninput = e => {
+  S.dist = +e.target.value;
+  $('vDist').textContent = (S.dist / 1000).toFixed(2) + ' km';
+};
+$('sEta').oninput = e => {
+  S.eta = +e.target.value;
+  $('vEta').textContent = S.eta.toFixed(1);
+};
+$('sEta').onchange = () => {
+  if (S.phase !== 'idle') return;
+  useFlash(buildOne(S.seed, S.eta));
+  setTimeout(prepareNext, 30);
+};
+$('bSheet').onclick = e => {
+  S.sheetOn = !S.sheetOn;
+  e.target.textContent = S.sheetOn ? 'whole flash' : 'visible bolt only';
+  e.target.classList.toggle('on', S.sheetOn);
+};
+$('bProve').onclick = proveIt;
+$('bLift').onclick = e => {
+  S.lift = !S.lift;
+  e.target.classList.toggle('on', S.lift);
+  e.target.textContent = S.lift ? 'small speakers' : 'flat (physical)';
+};
+$('bMute').onclick = () => { initAudio(); WS.setMuted(!WS.muted()); };
+addEventListener('keydown', e => {
+  if (e.key === ' ' || e.key.toLowerCase() === 's') { e.preventDefault(); strike(); }
+  if (e.key.toLowerCase() === 'p') proveIt();
+  if (e.key.toLowerCase() === 'm') { initAudio(); WS.setMuted(!WS.muted()); }
+});
+addEventListener('resize', () => R.resize());
+
+/* ── the gate ─────────────────────────────────────────────────────────────── */
+$('gate').onclick = () => {
+  $('gate').classList.add('off');
+  initAudio();
+  if (audio.ctx.state === 'suspended') audio.ctx.resume();
+  applyMute();
+  setTimeout(() => { if (S.phase === 'idle') strike(); }, 600);
+};
+
+/* ── go ───────────────────────────────────────────────────────────────────── */
+$('vDist').textContent = (S.dist / 1000).toFixed(2) + ' km';
+$('bMute').textContent = WS.muted() ? 'unmute' : 'mute';
+useFlash(buildOne(S.seed, S.eta));
+setTimeout(prepareNext, 60);
+requestAnimationFrame(frame);
+
+/* a read-only handle so a headless reviewer can drive the room and probe it
+   without pretending to tap a canvas (LANDMINES: a synthetic click lies, and
+   headless cannot deliver a pointer event to a canvas at all) */
+window.__thunderhead = {
+  state: S,
+  strike: strike,
+  proveIt: proveIt,
+  get flash() { return flash; },
+  get thunder() { return thunder; },
+  get numbers() { return { predict: lastPredict, measure: lastMeasure }; },
+  setDistance: v => { S.dist = v; $('sDist').value = v; $('vDist').textContent = (v / 1000).toFixed(2) + ' km'; },
+  setAz: v => { S.az = v; }
+};
+</script>
+</body>
+</html>
