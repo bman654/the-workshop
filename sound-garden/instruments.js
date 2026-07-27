@@ -74,5 +74,11 @@ window.INSTRUMENTS = [
     name: "Grain Mill",
     blurb: "tip a held cello tone into a brass hopper and it shatters into hundreds of glowing sound-grains — slide GRAIN SIZE and DENSITY to melt one note into rain, a drone, then mist",
     accent: "#7fd4b0", timbre: "breath"
+  },
+  {
+    file: "the-answering-room/index.html",
+    name: "The Answering Room",
+    blurb: "stand inside the lattice of mirror-rooms a clap makes — walk around four hundred thousand echoes, then hand them to a real convolver and hear the room they describe",
+    accent: "#d8a94a", timbre: "bell"
   }
 ];

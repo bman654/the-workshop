@@ -1,0 +1,884 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Answering Room — the Orrery Estate</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  THE ANSWERING ROOM  ·  sound-garden/the-answering-room/
+
+  A reflection in a flat wall is exactly a straight line from a MIRROR IMAGE of
+  the source. So a rectangular room's echoes are not a simulation of bouncing —
+  they are a LATTICE, the room tiled through itself forever, one copy of the clap
+  in every cell. This page draws that lattice, lets you walk around inside it,
+  and then hands the same three hundred thousand mirrors to a real ConvolverNode
+  so you hear the room they describe.
+
+  ENGINES (both inlined byte-for-byte by the forge, never forked):
+    · tools/scene3d/core.mjs — the estate's orbitable 3-D core
+    · ./core.mjs             — the room core (image sources · bands · the decay fit)
+    · tools/ws/ws.js         — the estate mute + the visit breadcrumb
+  ASSETS: assets/hello.mp3 — the estate's own voice (tools/voice), so the third
+  source you can put in the room is a sentence rather than a click.
+
+  THE CLAIM (core.test.mjs, 9 legs): a room's decay is not the straight line both
+  textbook formulas assume. Its late half always fits a LONGER T60 than its early
+  half — late sound is the sound that got lucky and hit fewer walls than average.
+  And Eyring's law, which assumes a diffuse field the lattice never had, matches
+  the mirrors to 1 % in a live room and misses by 1.9× in a foam-lined cell.
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root{
+    --ink:#efe6d4; --dim:#9c9384; --faint:#6b6459;
+    --gold:#d8a94a; --warm:#f0b96a; --cool:#5c93b8; --hot:#ff8a4c;
+    --bg0:#0a0b0d; --bg1:#141519; --panel:rgba(14,15,18,.82); --line:rgba(216,169,74,.24);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg0);color:var(--ink);
+    font:15px/1.5 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    overflow:hidden;-webkit-font-smoothing:antialiased}
+  canvas{display:block}
+  #stage{position:fixed;inset:0}
+  #lat{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:grab}
+  #lat.drag{cursor:grabbing}
+
+  /* ── the masthead lives at the head of the rail, so nothing overlaps the picture ── */
+  #top{margin:0 0 18px}
+  #top h1{margin:0;font-size:19px;font-weight:400;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);line-height:1.25}
+  #top p{margin:6px 0 0;font-size:12.5px;line-height:1.5;color:var(--dim)}
+  #top a{color:var(--faint);text-decoration:none;border-bottom:1px solid rgba(255,255,255,.12)}
+  #top a:hover{color:var(--gold)}
+
+  /* ── the left rail ── */
+  #rail{position:absolute;left:0;top:0;bottom:0;width:282px;padding:16px 16px 16px;overflow-y:auto;
+    background:linear-gradient(90deg,rgba(6,7,9,.92),rgba(6,7,9,.62) 78%,rgba(6,7,9,0));z-index:6;
+    scrollbar-width:thin;scrollbar-color:rgba(216,169,74,.3) transparent}
+  #rail::-webkit-scrollbar{width:6px}
+  #rail::-webkit-scrollbar-thumb{background:rgba(216,169,74,.3);border-radius:3px}
+  .grp{margin:0 0 16px}
+  .grp>h2{margin:0 0 7px;font-size:10.5px;letter-spacing:.19em;text-transform:uppercase;color:var(--faint);font-weight:400}
+  .row{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:12.5px;color:var(--dim)}
+  .row label{width:20px;color:var(--faint)}
+  .row input[type=range]{flex:1;-webkit-appearance:none;appearance:none;height:2px;background:rgba(216,169,74,.28);outline:none;border-radius:2px}
+  .row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;
+    background:var(--gold);cursor:pointer;box-shadow:0 0 8px rgba(216,169,74,.6)}
+  .row input[type=range]::-moz-range-thumb{width:13px;height:13px;border:0;border-radius:50%;background:var(--gold);cursor:pointer}
+  .row .v{width:46px;text-align:right;font-variant-numeric:tabular-nums;color:var(--ink);font-size:12px}
+
+  .surf{display:grid;grid-template-columns:56px 1fr;gap:5px 7px;align-items:center;font-size:11.5px}
+  .surf .nm{color:var(--faint);text-align:right}
+  .surf select{width:100%;background:rgba(255,255,255,.05);color:var(--ink);border:1px solid rgba(216,169,74,.2);
+    border-radius:3px;padding:2px 4px;font:inherit;font-size:11.5px}
+  .surf select:focus{outline:1px solid var(--gold)}
+  .sw{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;vertical-align:middle}
+
+  .btns{display:flex;flex-wrap:wrap;gap:5px}
+  button{background:rgba(216,169,74,.09);color:var(--ink);border:1px solid rgba(216,169,74,.28);
+    border-radius:3px;padding:5px 9px;font:inherit;font-size:11.5px;cursor:pointer;transition:.15s}
+  button:hover{background:rgba(216,169,74,.2);border-color:var(--gold)}
+  button.on{background:rgba(216,169,74,.32);border-color:var(--gold);color:#fff}
+  button:disabled{opacity:.4;cursor:default}
+  #clap{width:100%;padding:11px;font-size:14px;letter-spacing:.14em;text-transform:uppercase;
+    background:rgba(240,185,106,.14);border-color:rgba(240,185,106,.55);color:var(--warm)}
+  #clap:hover{background:rgba(240,185,106,.28);box-shadow:0 0 20px rgba(240,185,106,.25)}
+
+  /* ── the readout strip, under the masthead, not beside the picture ── */
+  #facts{position:absolute;left:300px;right:100px;top:17px;display:flex;flex-wrap:wrap;gap:5px 20px;
+    font-size:11.5px;color:var(--dim);z-index:5;pointer-events:none}
+  #facts b{color:var(--ink);font-weight:400;font-variant-numeric:tabular-nums}
+  #facts .k{color:var(--faint)}
+
+  /* ── the decay panel, bottom right, over the lattice ── */
+  #decayWrap{position:absolute;right:16px;bottom:14px;width:min(520px,calc(100vw - 320px));
+    background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:9px 11px 7px;z-index:6;
+    backdrop-filter:blur(6px)}
+  #decayWrap h3{margin:0 0 3px;font-size:10.5px;letter-spacing:.17em;text-transform:uppercase;color:var(--faint);font-weight:400}
+  #dTag{display:block;color:var(--dim);letter-spacing:.02em;text-transform:none;font-size:11px;margin-bottom:4px}
+  #legend{display:flex;flex-wrap:wrap;gap:3px 13px;font-size:10px;color:var(--faint);margin:4px 0 0}
+  #legend i{display:inline-block;width:12px;height:2px;margin-right:4px;vertical-align:middle;border-radius:1px}
+  #decay{width:100%;height:150px}
+  #verdict{margin-top:5px;font-size:12px;line-height:1.45;color:var(--dim);min-height:2.6em}
+  #verdict b{color:var(--warm);font-weight:400}
+  #verdict .no{color:var(--cool)}
+
+  /* ── the hover card on a single mirror ── */
+  #tip{position:absolute;z-index:9;pointer-events:none;display:none;background:rgba(8,9,11,.94);
+    border:1px solid rgba(216,169,74,.4);border-radius:4px;padding:7px 10px;font-size:11.5px;color:var(--ink);
+    max-width:250px;line-height:1.45;box-shadow:0 6px 24px rgba(0,0,0,.6)}
+  #tip .h{color:var(--warm);letter-spacing:.06em}
+  #tip .s{color:var(--faint)}
+
+  #busy{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:8;display:none;
+    color:var(--gold);font-size:13px;letter-spacing:.2em;text-transform:uppercase}
+  #foot{margin-top:4px;font-size:11px;line-height:1.6;color:var(--faint)}
+  #foot a{color:var(--dim);text-decoration:none;border-bottom:1px solid rgba(255,255,255,.1)}
+  #foot a:hover{color:var(--gold)}
+  #mute{position:absolute;right:16px;top:16px;z-index:7;cursor:pointer;font-size:11.5px;color:var(--faint);
+    border:1px solid rgba(216,169,74,.2);border-radius:3px;padding:3px 8px;background:rgba(8,9,11,.6)}
+  #mute:hover{color:var(--gold)}
+  @media (max-width:1080px){ #decayWrap{width:calc(100vw - 320px)} }
+  @media (max-width:760px){
+    #rail{width:232px}
+    #facts{left:248px;right:76px;font-size:10.5px}
+    #decayWrap{left:248px;right:10px;width:auto}
+    #decay{height:112px}
+  }
+</style>
+
+<div id="stage">
+  <canvas id="lat"></canvas>
+</div>
+
+<div id="facts"></div>
+<div id="mute" title="the estate's one shared mute">◐ sound</div>
+
+<div id="rail">
+  <div id="top">
+    <h1>The Answering<br>Room</h1>
+    <p>Every echo in a rectangular room is a straight line from a <em>mirror image</em> of the clap.
+       Drag to walk around the lattice those mirrors make. Hover one to hear it alone;
+       double-click the floor to move the clap.</p>
+  </div>
+
+  <div class="grp">
+    <h2>the box</h2>
+    <div class="row"><label>W</label><input type="range" id="rW" min="1.6" max="34" step="0.1" value="7.2"><span class="v" id="vW">7.2 m</span></div>
+    <div class="row"><label>D</label><input type="range" id="rD" min="1.4" max="26" step="0.1" value="5.4"><span class="v" id="vD">5.4 m</span></div>
+    <div class="row"><label>H</label><input type="range" id="rH" min="1.8" max="16" step="0.1" value="3.2"><span class="v" id="vH">3.2 m</span></div>
+  </div>
+
+  <div class="grp">
+    <h2>the six surfaces</h2>
+    <div class="surf" id="surf"></div>
+  </div>
+
+  <div class="grp">
+    <h2>rooms to stand in</h2>
+    <div class="btns" id="presets"></div>
+  </div>
+
+  <div class="grp">
+    <h2>the sound</h2>
+    <div class="btns" id="srcs" style="margin-bottom:6px"></div>
+    <button id="clap">clap</button>
+    <div class="btns" style="margin-top:6px">
+      <button id="dry" title="hear the source with no room at all">dry</button>
+      <button id="loop" title="keep it going">repeat</button>
+    </div>
+  </div>
+
+  <div class="grp">
+    <h2>how many mirrors</h2>
+    <div class="btns" id="budgets"></div>
+  </div>
+
+  <div class="grp" id="lookGrp">
+    <h2>what to look at</h2>
+    <div class="btns">
+      <button id="bFold" title="one wall, both ways">the fold</button>
+      <button id="bCells" class="on" title="the mirrored copies of the room">ghost rooms</button>
+      <button id="bOrder" title="colour by how many walls the echo crossed">by order</button>
+    </div>
+    <div class="row" style="margin-top:7px"><label>see</label><input type="range" id="rVis" min="8" max="160" step="1" value="64"><span class="v" id="vVis">64 m</span></div>
+  </div>
+
+  <div id="foot">
+    Kin: <a href="../the-comb/index.html">The Comb</a> notches a spectrum with one delay ·
+    <a href="../../hall-of-mirrors/index.html">the Hall of Mirrors</a> ·
+    <a href="../../the-air-you-can-see/index.html">The Air You Can See</a>.
+    Nine legs of proof live in <code>core.test.mjs</code>;
+    <a href="../index.html">← the Sound Garden</a>.
+  </div>
+</div>
+
+<div id="decayWrap">
+  <h3>the decay, mid band (500 – 2 000 Hz)</h3>
+  <em id="dTag"></em>
+  <canvas id="decay"></canvas>
+  <div id="legend">
+    <span><i style="background:rgba(240,235,220,.85)"></i>the mirrors</span>
+    <span><i style="background:rgba(255,175,90,.95)"></i>early half, fitted</span>
+    <span><i style="background:rgba(255,110,90,.95)"></i>late half, fitted</span>
+    <span><i style="background:rgba(160,255,190,.7)"></i>Eyring 1930</span>
+    <span><i style="background:rgba(120,210,255,.7)"></i>Sabine 1900</span>
+  </div>
+  <div id="verdict">measuring…</div>
+</div>
+
+<div id="tip"></div>
+<div id="busy">summing mirrors…</div>
+
+<script>
+/* The shared WS layer (inlined at build time): the estate's ONE mute key and the
+   visit breadcrumb the sky's star-per-room survey feeds on. */
+<!-- forge:include ../../tools/ws/ws.js -->
+</script>
+
+<script>
+"use strict";
+/* ═══ the estate's orbitable 3-D core, inlined byte-for-byte, unforked ═══════ */
+<!-- forge:include ../../tools/scene3d/core.mjs -->
+
+/* ═══ the room core: mirrors, bands, the decay fit — same file the Node twin runs ═══ */
+<!-- forge:include ./core.mjs -->
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   THE DRIVER
+   ══════════════════════════════════════════════════════════════════════════════ */
+(function(){
+const $ = (id) => document.getElementById(id);
+const TAU = Math.PI * 2;
+
+/* ── state ────────────────────────────────────────────────────────────────── */
+const room = makeRoom({});
+const cam  = { yaw: 0.62, pitch: 0.42, roll: 0, dolly: 26 };
+const view = { visR: 64, cells: true, byOrder: false, fold: -1 };
+let res = null, bend = null, dirty = true, pending = 0;
+let budget = 400000, srcKind = 'clap', dryOnly = false, looping = false;
+let hoverIdx = -1, hoverPt = null;
+const screenPts = { x: new Float32Array(0), y: new Float32Array(0), i: new Int32Array(0), n: 0 };
+
+/* ── canvases ─────────────────────────────────────────────────────────────── */
+const lat = $('lat'), lctx = lat.getContext('2d');
+const dec = $('decay'), dctx = dec.getContext('2d');
+let DPR = 1, LW = 0, LH = 0;
+function sizeCanvases(){
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  LW = lat.clientWidth; LH = lat.clientHeight;
+  lat.width = Math.round(LW*DPR); lat.height = Math.round(LH*DPR);
+  lctx.setTransform(DPR,0,0,DPR,0,0);
+  const dw = dec.clientWidth, dh = dec.clientHeight;
+  dec.width = Math.round(dw*DPR); dec.height = Math.round(dh*DPR);
+  dctx.setTransform(DPR,0,0,DPR,0,0);
+  dirty = true; drawDecay();
+}
+window.addEventListener('resize', sizeCanvases);
+
+/* ══ AUDIO ═════════════════════════════════════════════════════════════════ */
+let actx = null, conv = null, outGain = null, dryGain = null, comp = null;
+const dryBufs = {};              // clap / knock / voice, as AudioBuffers
+let voiceBuf = null, loopTimer = 0;
+let muted = (typeof WS !== 'undefined' && WS.muted) ? WS.muted() : false;
+
+function audio(){
+  if (actx) return actx;
+  const C = window.AudioContext || window.webkitAudioContext;
+  if (!C) return null;
+  actx = new C();
+  comp = actx.createDynamicsCompressor();
+  comp.threshold.value = -12; comp.knee.value = 8; comp.ratio.value = 4;
+  comp.attack.value = 0.004; comp.release.value = 0.18;
+  outGain = actx.createGain(); outGain.gain.value = 0.85;
+  conv = actx.createConvolver(); conv.normalize = false;
+  dryGain = actx.createGain(); dryGain.gain.value = 0;
+  conv.connect(outGain); dryGain.connect(outGain);
+  outGain.connect(comp); comp.connect(actx.destination);
+  buildDrySources();
+  return actx;
+}
+function toBuffer(f32){
+  const b = actx.createBuffer(1, f32.length, actx.sampleRate);
+  b.getChannelData(0).set(f32);
+  return b;
+}
+function buildDrySources(){
+  dryBufs.clap  = toBuffer(makeClap(actx.sampleRate, 7));
+  dryBufs.knock = toBuffer(makeKnock(actx.sampleRate, 940));
+  if (voiceBuf) dryBufs.voice = voiceBuf;
+}
+/* The estate's own voice, rendered by tools/voice and inlined as a data: URI —
+   the page still fetches nothing from the network. */
+const VOICE_URL = "<!-- forge:asset assets/hello.mp3 -->";
+async function loadVoice(){
+  try{
+    const a = audio(); if (!a) return;
+    const r = await fetch(VOICE_URL);
+    const ab = await r.arrayBuffer();
+    voiceBuf = await a.decodeAudioData(ab);
+    dryBufs.voice = voiceBuf;
+    paintSrcs();
+  }catch(e){ /* no voice; the clicks still work */ }
+}
+
+function installIR(){
+  if (!actx || !res) return;
+  const n = res.irs[0].length, ch = res.irs.length;
+  const buf = actx.createBuffer(Math.max(2, ch), n, actx.sampleRate);
+  let pk = 0;
+  for (const ir of res.irs) for (let i = 0; i < n; i++) { const a = Math.abs(ir[i]); if (a > pk) pk = a; }
+  const g = pk > 0 ? 0.98 / pk : 1;
+  for (let c = 0; c < buf.numberOfChannels; c++){
+    const src = res.irs[Math.min(c, ch-1)], d = buf.getChannelData(c);
+    for (let i = 0; i < n; i++) d[i] = src[i] * g;
+  }
+  conv.buffer = buf;
+}
+function play(kind){
+  const a = audio(); if (!a) return;
+  if (a.state === 'suspended') a.resume();
+  if (muted) return;
+  const b = dryBufs[kind] || dryBufs.clap;
+  if (!b) return;
+  const s = a.createBufferSource(); s.buffer = b;
+  const g = a.createGain();
+  g.gain.value = dryOnly ? 0.5 : (kind === 'voice' ? 0.9 : 0.55);
+  s.connect(g);
+  g.connect(dryOnly ? dryGain : conv);
+  dryGain.gain.value = dryOnly ? 1 : 0;
+  s.start();
+}
+/* Hearing ONE mirror: the same dry sound, delayed by that image's own distance and
+   scaled by its own surviving gain. Nothing else in the room is playing. */
+function playOne(im){
+  const a = audio(); if (!a || muted) return;
+  if (a.state === 'suspended') a.resume();
+  const b = dryBufs[srcKind] || dryBufs.clap; if (!b) return;
+  const s = a.createBufferSource(); s.buffer = b;
+  const d = a.createDelay(2.5); d.delayTime.value = Math.min(2.4, im.t);
+  const g = a.createGain();
+  const ref = res.images[0] ? res.images[0].g[1] : 1;
+  g.gain.value = Math.min(1.2, 0.7 * im.g[1] / ref);
+  // the band tilt this echo actually carries, as one shelf
+  const f = a.createBiquadFilter(); f.type = 'highshelf'; f.frequency.value = 2000;
+  const tilt = im.g[0] > 0 ? 20*Math.log10(Math.max(1e-4, im.g[2]/im.g[0])) : 0;
+  f.gain.value = Math.max(-40, Math.min(6, tilt));
+  s.connect(d); d.connect(f); f.connect(g); g.connect(a.destination);
+  s.start();
+}
+
+/* ══ THE SOLVE ═════════════════════════════════════════════════════════════ */
+function solve(){
+  pending++;
+  const my = pending;
+  $('busy').style.display = 'block';
+  // let the browser paint the busy line before we spend 400 ms in a loop
+  setTimeout(() => {
+    if (my !== pending) return;
+    const sr = actx ? actx.sampleRate : 48000;
+    res = renderIR(room, { sr, maxCount: budget, ears: 0.17 });
+    bend = bendTest(res, room, 1);
+    if (actx) installIR();
+    $('busy').style.display = 'none';
+    dirty = true;
+    paintFacts(); drawDecay(); paintVerdict();
+  }, 16);
+}
+
+/* ══ THE LATTICE ═══════════════════════════════════════════════════════════ */
+function unproject(sx, sy, z0){
+  /* invert scene3d's projection onto the horizontal plane world-z = z0, so a click
+     on the floor is a point in the room. Same rotation, run backwards. */
+  const cy=Math.cos(cam.yaw), sy2=Math.sin(cam.yaw), cp=Math.cos(cam.pitch), sp=Math.sin(cam.pitch);
+  const u = (sx - LW/2) / scaleOf(), v = -(sy - LH/2) / scaleOf();
+  const den = v*cp/FOCAL - sp;
+  if (Math.abs(den) < 1e-6) return null;
+  const depth = (z0 - cam.dolly*sp) / den;
+  if (depth <= 0.05) return null;
+  const rx = u*depth/FOCAL, tz = v*depth/FOCAL, ty = depth - cam.dolly;
+  const ry = ty*cp + tz*sp;
+  return [rx*cy + ry*sy2, -rx*sy2 + ry*cy, z0];
+}
+function scaleOf(){ return Math.min(LW, LH) * 0.5; }
+
+/* world coords are centred on the room so the orbit turns about the room, not a corner */
+function W(p){ return [p[0] - room.L[0]/2, p[1] - room.L[1]/2, p[2] - room.L[2]/2]; }
+
+function proj(p){
+  const q = project(W(p), cam);
+  return { x: LW/2 + q.x*scaleOf(), y: LH/2 - q.y*scaleOf(), depth: q.depth };
+}
+
+const ORDER_COLS = ['#fff0d0','#f0b96a','#e08a4a','#c4643f','#9a5aa8','#5c93b8','#3f6f8f'];
+function drawLattice(){
+  const g = lctx;
+  g.setTransform(DPR,0,0,DPR,0,0);
+  // the ground of the picture: a warm haze low, cold above
+  const sky = g.createLinearGradient(0,0,0,LH);
+  sky.addColorStop(0,'#07080a'); sky.addColorStop(0.62,'#0c0e12'); sky.addColorStop(1,'#15110c');
+  g.fillStyle = sky; g.fillRect(0,0,LW,LH);
+  if (!res) return;
+
+  const R = view.visR, R2 = R*R;
+  const rec = room.rec;
+
+  /* ── the ghost rooms: the room's own mirrored copies ── */
+  if (view.cells){
+    const L = room.L;
+    const nx = Math.min(4, Math.ceil(R/L[0])), ny = Math.min(4, Math.ceil(R/L[1])), nz = Math.min(4, Math.ceil(R/L[2]));
+    g.lineWidth = 1;
+    for (let i = -nx; i <= nx; i++) for (let j = -ny; j <= ny; j++) for (let k = -nz; k <= nz; k++){
+      const ox = i*L[0], oy = j*L[1], oz = k*L[2];
+      const cx = ox + L[0]/2 - rec[0], cy2 = oy + L[1]/2 - rec[1], cz = oz + L[2]/2 - rec[2];
+      const dd = Math.sqrt(cx*cx + cy2*cy2 + cz*cz);
+      if (dd > R*1.15) continue;
+      const home = (i===0 && j===0 && k===0);
+      const a = home ? 0.5 : Math.max(0, 0.19 * (1 - dd/(R*1.15)));
+      if (a < 0.012) continue;
+      g.strokeStyle = home ? 'rgba(240,185,106,'+a+')' : 'rgba(150,168,190,'+(a*0.85)+')';
+      const c = [];
+      for (let b = 0; b < 8; b++)
+        c.push(proj([ox + (b&1?L[0]:0), oy + (b&2?L[1]:0), oz + (b&4?L[2]:0)]));
+      const E = [[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]];
+      g.beginPath();
+      for (const [p,q] of E){
+        if (c[p].depth <= 0.06 || c[q].depth <= 0.06) continue;
+        g.moveTo(c[p].x, c[p].y); g.lineTo(c[q].x, c[q].y);
+      }
+      g.stroke();
+    }
+  }
+
+  /* ── the home room: a solid floor and lit walls, so the lattice has a centre ── */
+  drawHome(g);
+
+  /* ── the mirrors themselves ── */
+  g.globalCompositeOperation = 'lighter';
+  const list = res.images;
+  const ref = list.length ? list[0].g[1] : 1;
+  let sx = screenPts.x, sy2 = screenPts.y, si = screenPts.i, n = 0;
+  const cap = 14000;
+  if (sx.length < cap){ sx = screenPts.x = new Float32Array(cap); sy2 = screenPts.y = new Float32Array(cap); si = screenPts.i = new Int32Array(cap); }
+  for (let idx = 0; idx < list.length && n < cap; idx++){
+    const im = list[idx];
+    if (im.d > R) break;                     // list is sorted by distance
+    const p = proj(im.p);
+    if (p.depth <= 0.12) continue;
+    if (p.x < -40 || p.x > LW+40 || p.y < -40 || p.y > LH+40) continue;
+    const lvl = im.g[1] / ref;               // 1 at the direct sound
+    const db = 20*Math.log10(Math.max(1e-7, lvl));
+    let a = Math.max(0, Math.min(1, (db + 66) / 66));
+    a = Math.pow(a, 1.55);
+    if (a < 0.02) continue;
+    const near = Math.max(0.25, Math.min(2.6, 16/p.depth));
+    const rad = (0.9 + 2.6*a) * near;
+    let col;
+    if (view.byOrder) col = ORDER_COLS[Math.min(ORDER_COLS.length-1, im.order)];
+    else {
+      // warm where the walls kept the top end, cold where they ate it
+      const tilt = Math.max(0, Math.min(1, (im.g[2]/Math.max(1e-9, im.g[0]))*1.6));
+      col = 'rgb(' + Math.round(150+105*tilt) + ',' + Math.round(120+72*tilt) + ',' + Math.round(96+40*(1-tilt)+60*tilt) + ')';
+    }
+    g.globalAlpha = a * 0.9;
+    g.fillStyle = col;
+    g.beginPath(); g.arc(p.x, p.y, rad, 0, TAU); g.fill();
+    if (a > 0.55){ g.globalAlpha = a*0.20; g.beginPath(); g.arc(p.x,p.y,rad*3.4,0,TAU); g.fill(); }
+    sx[n] = p.x; sy2[n] = p.y; si[n] = idx; n++;
+  }
+  screenPts.n = n;
+  g.globalAlpha = 1;
+  g.globalCompositeOperation = 'source-over';
+
+  /* ── the fold: one wall, shown both ways ── */
+  if (view.fold >= 0) drawFold(g, FACES[view.fold]);
+
+  /* ── the hovered mirror, and the straight line it is heard along ── */
+  if (hoverIdx >= 0 && hoverIdx < res.images.length){
+    const im = res.images[hoverIdx];
+    const a = proj(im.p), b = proj(room.rec);
+    g.strokeStyle = 'rgba(255,180,90,.85)'; g.lineWidth = 1.4;
+    g.beginPath(); g.moveTo(a.x,a.y); g.lineTo(b.x,b.y); g.stroke();
+    g.fillStyle = '#ffd9a0';
+    g.beginPath(); g.arc(a.x, a.y, 5, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(255,217,160,.5)'; g.lineWidth = 1;
+    g.beginPath(); g.arc(a.x, a.y, 11, 0, TAU); g.stroke();
+  }
+}
+
+function drawHome(g){
+  const L = room.L;
+  const c = [];
+  for (let b = 0; b < 8; b++) c.push(proj([(b&1?L[0]:0), (b&2?L[1]:0), (b&4?L[2]:0)]));
+  // floor as a filled quad, tinted by its material
+  const flo = MAT[room.mats.z0];
+  const q = [c[0],c[1],c[3],c[2]];
+  if (q.every(p=>p.depth>0.06)){
+    g.beginPath(); g.moveTo(q[0].x,q[0].y);
+    for (let i=1;i<4;i++) g.lineTo(q[i].x,q[i].y);
+    g.closePath();
+    g.fillStyle = hexA(flo.col, 0.16); g.fill();
+  }
+  // the six edges, each tinted by ITS OWN wall's material — the map to the picture
+  const E = [[0,1,'z0'],[2,3,'z0'],[0,2,'z0'],[1,3,'z0'],
+             [4,5,'z1'],[6,7,'z1'],[4,6,'z1'],[5,7,'z1'],
+             [0,4,'x0'],[2,6,'x0'],[1,5,'x1'],[3,7,'x1']];
+  g.lineWidth = 1.6;
+  for (const [p,qq,face] of E){
+    if (c[p].depth <= 0.06 || c[qq].depth <= 0.06) continue;
+    g.strokeStyle = hexA(MAT[room.mats[face]].col, 0.62);
+    g.beginPath(); g.moveTo(c[p].x,c[p].y); g.lineTo(c[qq].x,c[qq].y); g.stroke();
+  }
+  // the source and the ear
+  const s = proj(room.src), r = proj(room.rec);
+  if (s.depth > 0.06){
+    const gr = g.createRadialGradient(s.x,s.y,0,s.x,s.y,26);
+    gr.addColorStop(0,'rgba(255,225,170,.95)'); gr.addColorStop(.3,'rgba(255,170,80,.45)'); gr.addColorStop(1,'rgba(255,140,60,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(s.x,s.y,26,0,TAU); g.fill();
+    g.fillStyle = '#fff3dc'; g.beginPath(); g.arc(s.x,s.y,3.6,0,TAU); g.fill();
+  }
+  if (r.depth > 0.06){
+    g.strokeStyle = 'rgba(140,215,235,.95)'; g.lineWidth = 1.8;
+    g.beginPath(); g.arc(r.x,r.y,7,0,TAU); g.stroke();
+    g.beginPath(); g.arc(r.x,r.y,2.2,0,TAU); g.fillStyle='rgba(190,235,250,.95)'; g.fill();
+    g.font = '10px system-ui, sans-serif'; g.fillStyle = 'rgba(140,215,235,.7)';
+    g.fillText('you', r.x+11, r.y+3);
+  }
+}
+function drawFold(g, f){
+  const fp = foldedPath(room, f.id);
+  const s = proj(room.src), r = proj(room.rec), h = proj(fp.hit), im = proj(fp.img);
+  g.lineWidth = 2;
+  g.strokeStyle = 'rgba(255,150,80,.95)';        // the folded path, the way sound goes
+  g.beginPath(); g.moveTo(s.x,s.y); g.lineTo(h.x,h.y); g.lineTo(r.x,r.y); g.stroke();
+  g.strokeStyle = 'rgba(120,210,255,.85)';       // the straight line, the way geometry goes
+  g.setLineDash([5,4]);
+  g.beginPath(); g.moveTo(im.x,im.y); g.lineTo(r.x,r.y); g.stroke();
+  g.setLineDash([]);
+  g.fillStyle = 'rgba(120,210,255,.9)'; g.beginPath(); g.arc(im.x,im.y,5,0,TAU); g.fill();
+  g.fillStyle = 'rgba(255,150,80,.9)'; g.beginPath(); g.arc(h.x,h.y,4,0,TAU); g.fill();
+  g.font = '11px system-ui, sans-serif';
+  const mid = { x:(im.x+r.x)/2, y:(im.y+r.y)/2 };
+  g.fillStyle = '#cfeaff';
+  g.fillText('straight to the mirror  ' + fp.straight.toFixed(6) + ' m', mid.x+8, mid.y-4);
+  g.fillStyle = '#ffc79a';
+  g.fillText('folded off the ' + f.name.toLowerCase() + '  ' + fp.folded.toFixed(6) + ' m', h.x+8, h.y+14);
+}
+function hexA(hex, a){
+  const n = parseInt(hex.slice(1), 16);
+  return 'rgba(' + ((n>>16)&255) + ',' + ((n>>8)&255) + ',' + (n&255) + ',' + a + ')';
+}
+
+/* ══ THE DECAY PANEL ═══════════════════════════════════════════════════════ */
+function drawDecay(){
+  const g = dctx, w = dec.clientWidth, h = dec.clientHeight;
+  g.setTransform(DPR,0,0,DPR,0,0);
+  g.clearRect(0,0,w,h);
+  if (!bend) return;
+  const PAD = { l: 30, r: 8, t: 6, b: 16 };
+  const iw = w - PAD.l - PAD.r, ih = h - PAD.t - PAD.b;
+  const tMax = bend.tMax, dbLo = -75;
+  const X = t => PAD.l + (t / tMax) * iw;
+  const Y = d => PAD.t + (Math.max(dbLo, Math.min(0, d)) / dbLo) * ih;
+
+  // grid
+  g.strokeStyle = 'rgba(255,255,255,.07)'; g.lineWidth = 1;
+  g.font = '9px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,.3)';
+  for (let d = 0; d >= dbLo; d -= 15){
+    const y = Y(d); g.beginPath(); g.moveTo(PAD.l,y); g.lineTo(w-PAD.r,y); g.stroke();
+    g.fillText(d + ' dB', 2, y+3);
+  }
+  const tStep = tMax > 1.2 ? 0.5 : tMax > 0.5 ? 0.2 : 0.1;
+  for (let t = 0; t <= tMax; t += tStep){
+    const x = X(t); g.beginPath(); g.moveTo(x,PAD.t); g.lineTo(x,h-PAD.b); g.stroke();
+    g.fillText(t.toFixed(t<1?1:1) + ' s', x-8, h-4);
+  }
+
+  // the honest window
+  g.fillStyle = 'rgba(216,169,74,.07)';
+  g.fillRect(X(bend.window.t0), PAD.t, X(bend.window.t1)-X(bend.window.t0), ih);
+
+  // the two textbook straight lines, both anchored at the start of the window
+  const c = bend.curve;
+  let anchor = 0;
+  for (let i = 0; i < c.t.length; i++) if (c.t[i] >= bend.window.t0){ anchor = c.db[i]; break; }
+  const line = (t60, col, dash) => {
+    if (!(t60 > 0) || !isFinite(t60)) return;
+    const s = -60/t60;
+    g.strokeStyle = col; g.lineWidth = 1.2; g.setLineDash(dash||[]);
+    g.beginPath();
+    g.moveTo(X(bend.window.t0), Y(anchor));
+    g.lineTo(X(tMax), Y(anchor + s*(tMax - bend.window.t0)));
+    g.stroke(); g.setLineDash([]);
+  };
+  line(bend.sabine, 'rgba(120,210,255,.55)', [6,4]);
+  line(bend.eyring, 'rgba(160,255,190,.55)', [2,3]);
+
+  // decayFit works in raw dB; the curve is normalised to its own peak — shift by ref
+  const shift = -c.ref;
+  const seg = (F, col) => {
+    if (!F || !F.ok) return;
+    g.strokeStyle = col; g.lineWidth = 2.2; g.globalAlpha = .95;
+    g.beginPath();
+    g.moveTo(X(F.t0), Y(F.intercept + F.slope*F.t0 + shift));
+    g.lineTo(X(F.t1), Y(F.intercept + F.slope*F.t1 + shift));
+    g.stroke(); g.globalAlpha = 1;
+  };
+  seg(bend.early, 'rgba(255,175,90,.95)');
+  seg(bend.late,  'rgba(255,110,90,.95)');
+
+  // the measured curve itself, on top
+  g.strokeStyle = 'rgba(240,235,220,.72)'; g.lineWidth = 1;
+  g.beginPath();
+  let started = false;
+  for (let i = 0; i < c.t.length; i++){
+    if (c.t[i] > tMax) break;
+    const x = X(c.t[i]), y = Y(c.db[i]);
+    if (!started){ g.moveTo(x,y); started = true; } else g.lineTo(x,y);
+  }
+  g.stroke();
+
+}
+
+function paintVerdict(){
+  const el = $('verdict');
+  if (!bend){ el.textContent = 'measuring…'; return; }
+  $('dTag').textContent = bend.count.toLocaleString() + ' mirrors, out to ' + bend.tMax.toFixed(2) + ' s'
+    + (bend.truncated ? ' — the budget ran out there, so the tail is faded rather than silent' : '');
+
+  const ax = bend.axial.best;
+  const flut = bend.flutter > 2.5
+    ? ' The one path that will not die is the <b>' + ax.name + '</b> bounce: it comes back every <b>' +
+      (ax.period*1000).toFixed(1) + ' ms</b>, ' + ax.rate.toFixed(0) + ' times a second, and on its own it would ring for <b>' +
+      fmtS(ax.t60) + '</b> — ' + bend.flutter.toFixed(1) + '× what Eyring gives the room as a whole. ' +
+      'Look for it in the lattice as a bright column standing in a dark field.'
+    : '';
+
+  if (bend.verdict === 'abstain'){
+    el.innerHTML = '<span class="no">No verdict.</span> This room falls only <b>' + bend.dropDb.toFixed(0) +
+      ' dB</b> inside the mirrors you have bought, and a slope fitted to that is a slope fitted to noise. ' +
+      'ISO 3382 will not name a decay time under 25 dB of decay, and neither will this. ' +
+      'Buy more mirrors, or deaden a surface.' + flut;
+    return;
+  }
+  if (bend.verdict === 'noline'){
+    el.innerHTML = '<span class="no">This decay is not a line at all.</span> Fitted anyway it reads ' +
+      fmtS(bend.early.t60) + ' early and ' + fmtS(bend.late.t60) + ' late, but the late half only holds r² <b>' +
+      bend.late.r2.toFixed(2) + '</b> — the residual is not noise, it is structure. ' +
+      'Sabine would call this room ' + fmtS(bend.sabine) + ' and Eyring ' + fmtS(bend.eyring) + '; ' +
+      'both are single numbers for something that is not a single anything.' + flut;
+    return;
+  }
+  const eyR = bend.early.t60 / bend.eyring;
+  el.innerHTML =
+    'Early half <b>' + bend.early.t60.toFixed(2) + ' s</b>, late half <b>' + bend.late.t60.toFixed(2) +
+    ' s</b> — the tail bends <b>×' + bend.bend.toFixed(2) + '</b> flatter. Late sound is the sound that got lucky and hit fewer walls than average; ' +
+    'Sabine (' + fmtS(bend.sabine) + ') and Eyring (' + fmtS(bend.eyring) + ') are each one straight line and have no bend to give. ' +
+    'Against Eyring the early slope runs <b>×' + eyR.toFixed(2) + '</b> at ᾱ = ' + bend.abar.toFixed(2) + '.' + flut;
+}
+function fmtS(v){ return (isFinite(v) && v < 100) ? v.toFixed(2) + ' s' : '∞'; }
+
+function paintFacts(){
+  if (!res) return;
+  const V = volume(room), S = surfaceArea(room), ma = meanAlpha(room, 1);
+  const mfp = 4*V/S;
+  $('facts').innerHTML =
+    '<span class="k">volume</span> <b>' + V.toFixed(0) + ' m³</b>' +
+    '<span class="k">surface</span> <b>' + S.toFixed(0) + ' m²</b>' +
+    '<span class="k">mean α (mid)</span> <b>' + ma.abar.toFixed(3) + '</b>' +
+    '<span class="k">mean free path</span> <b>' + mfp.toFixed(2) + ' m</b>' +
+    '<span class="k">mirrors summed</span> <b>' + res.count.toLocaleString() + '</b>' +
+    '<span class="k">farthest</span> <b>' + res.Rmax.toFixed(0) + ' m</b>' +
+    '<span class="k">first echo</span> <b>' + (res.images[1] ? (res.images[1].t*1000).toFixed(1) + ' ms' : '—') + '</b>';
+}
+
+/* ══ CONTROLS ══════════════════════════════════════════════════════════════ */
+function buildSurfaces(){
+  const el = $('surf'); el.innerHTML = '';
+  for (const f of FACES){
+    const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = f.name.replace(' wall','');
+    const sel = document.createElement('select');
+    for (const m of MATERIALS){
+      const o = document.createElement('option');
+      o.value = m.id; o.textContent = m.name;
+      if (room.mats[f.id] === m.id) o.selected = true;
+      sel.appendChild(o);
+    }
+    sel.onchange = () => { room.mats[f.id] = sel.value; buildSurfaces(); solve(); };
+    el.appendChild(nm); el.appendChild(sel);
+  }
+}
+const PRESETS = [
+  { n:'lecture room', L:[7.2,5.4,3.2], m:{x0:'wood',x1:'wood',y0:'wood',y1:'wood',z0:'carpet',z1:'plaster'} },
+  { n:'stairwell',    L:[2.6,2.2,9.0], m:{x0:'plaster',x1:'plaster',y0:'plaster',y1:'plaster',z0:'plaster',z1:'plaster'} },
+  { n:'cathedral',    L:[26,14,17],    m:{x0:'brick',x1:'brick',y0:'brick',y1:'glass',z0:'plaster',z1:'plaster'} },
+  { n:'the flutter',  L:[9,7,2.9],     m:{x0:'audience',x1:'audience',y0:'audience',y1:'audience',z0:'plaster',z1:'plaster'} },
+  { n:'foam cell',    L:[3.4,2.8,2.6], m:{x0:'foam',x1:'foam',y0:'foam',y1:'foam',z0:'foam',z1:'foam'} },
+  { n:'no ceiling',   L:[9,7,3.4],     m:{x0:'brick',x1:'brick',y0:'brick',y1:'brick',z0:'plaster',z1:'open'} },
+];
+function buildPresets(){
+  const el = $('presets'); el.innerHTML = '';
+  for (const p of PRESETS){
+    const b = document.createElement('button');
+    b.textContent = p.n;
+    b.onclick = () => {
+      room.L = p.L.slice();
+      Object.assign(room.mats, p.m);
+      const fresh = makeRoom({ L: room.L, mats: room.mats });
+      room.src = fresh.src; room.rec = fresh.rec;
+      cam.dolly = Math.max(14, Math.hypot(room.L[0],room.L[1],room.L[2]) * 2.4);
+      view.visR = Math.round(Math.min(160, Math.max(14, Math.hypot(room.L[0],room.L[1],room.L[2]) * 5.5)));
+      $('rVis').value = view.visR; $('vVis').textContent = view.visR + ' m';
+      syncDims(); buildSurfaces(); solve();
+    };
+    el.appendChild(b);
+  }
+}
+function paintSrcs(){
+  const el = $('srcs'); el.innerHTML = '';
+  const opts = [['clap','a clap'],['knock','a knock'],['voice','a voice']];
+  for (const [k, label] of opts){
+    const b = document.createElement('button');
+    b.textContent = label;
+    if (srcKind === k) b.classList.add('on');
+    if (k === 'voice' && !voiceBuf) b.disabled = true;
+    b.onclick = () => { srcKind = k; paintSrcs(); play(k); };
+    el.appendChild(b);
+  }
+}
+function buildBudgets(){
+  const el = $('budgets'); el.innerHTML = '';
+  for (const [n, v] of [['sketch',120000],['room',400000],['deep',1200000]]){
+    const b = document.createElement('button');
+    b.textContent = n;
+    if (budget === v) b.classList.add('on');
+    b.onclick = () => { budget = v; buildBudgets(); solve(); };
+    el.appendChild(b);
+  }
+}
+function syncDims(){
+  $('rW').value = room.L[0]; $('vW').textContent = room.L[0].toFixed(1) + ' m';
+  $('rD').value = room.L[1]; $('vD').textContent = room.L[1].toFixed(1) + ' m';
+  $('rH').value = room.L[2]; $('vH').textContent = room.L[2].toFixed(1) + ' m';
+}
+let dimTimer = 0;
+function dimChanged(){
+  room.L = [ +$('rW').value, +$('rD').value, +$('rH').value ];
+  const fresh = makeRoom({ L: room.L, mats: room.mats });
+  room.src = fresh.src; room.rec = fresh.rec;
+  syncDims(); dirty = true;
+  clearTimeout(dimTimer); dimTimer = setTimeout(solve, 140);
+}
+for (const id of ['rW','rD','rH']) $(id).addEventListener('input', dimChanged);
+$('rVis').addEventListener('input', () => { view.visR = +$('rVis').value; $('vVis').textContent = view.visR + ' m'; dirty = true; });
+$('bFold').textContent = 'the fold';
+
+$('clap').onclick = () => play(srcKind);
+$('dry').onclick = () => { dryOnly = !dryOnly; $('dry').classList.toggle('on', dryOnly); play(srcKind); };
+$('loop').onclick = () => {
+  looping = !looping; $('loop').classList.toggle('on', looping);
+  clearInterval(loopTimer);
+  if (looping) loopTimer = setInterval(() => play(srcKind), srcKind === 'voice' ? 5200 : 1400);
+};
+$('bCells').onclick = () => { view.cells = !view.cells; $('bCells').classList.toggle('on', view.cells); dirty = true; };
+$('bOrder').onclick = () => { view.byOrder = !view.byOrder; $('bOrder').classList.toggle('on', view.byOrder); dirty = true; };
+/* one press per wall, then off again: six folds and a rest */
+$('bFold').onclick = () => {
+  view.fold = view.fold + 1 >= FACES.length ? -1 : view.fold + 1;
+  $('bFold').classList.toggle('on', view.fold >= 0);
+  $('bFold').textContent = view.fold >= 0 ? FACES[view.fold].name.toLowerCase() : 'the fold';
+  dirty = true;
+};
+$('mute').onclick = () => {
+  muted = !muted;
+  if (typeof WS !== 'undefined' && WS.setMuted) WS.setMuted(muted);
+  paintMute();
+};
+function paintMute(){ $('mute').textContent = muted ? '◑ muted' : '◐ sound'; }
+if (typeof WS !== 'undefined' && WS.onMuteChange) WS.onMuteChange(v => { muted = v; paintMute(); });
+
+/* ══ POINTER ═══════════════════════════════════════════════════════════════ */
+let dragging = false, lastX = 0, lastY = 0, moved = 0;
+lat.addEventListener('pointerdown', e => {
+  dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY;
+  lat.setPointerCapture(e.pointerId); lat.classList.add('drag');
+});
+lat.addEventListener('pointermove', e => {
+  if (dragging){
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    moved += Math.abs(dx) + Math.abs(dy);
+    lastX = e.clientX; lastY = e.clientY;
+    applyDrag(cam, dx, dy, { speed: 0.007 });
+    dirty = true;
+    return;
+  }
+  const r = lat.getBoundingClientRect();
+  pick(e.clientX - r.left, e.clientY - r.top, e.clientX, e.clientY);
+});
+lat.addEventListener('pointerup', e => {
+  if (dragging){ dragging = false; lat.classList.remove('drag'); lat.releasePointerCapture(e.pointerId); }
+  if (moved < 5 && hoverIdx >= 0 && res) playOne(res.images[hoverIdx]);
+});
+lat.addEventListener('pointerleave', () => { hoverIdx = -1; $('tip').style.display = 'none'; dirty = true; });
+lat.addEventListener('wheel', e => {
+  e.preventDefault();
+  cam.dolly = Math.max(3, Math.min(600, cam.dolly * Math.exp(e.deltaY * 0.0011)));
+  dirty = true;
+}, { passive: false });
+
+function pick(x, y, cx, cy){
+  if (!res || !screenPts.n){ return; }
+  let best = -1, bd = 15*15;
+  for (let i = 0; i < screenPts.n; i++){
+    const dx = screenPts.x[i]-x, dy = screenPts.y[i]-y, d = dx*dx+dy*dy;
+    if (d < bd){ bd = d; best = screenPts.i[i]; }
+  }
+  if (best !== hoverIdx){ hoverIdx = best; dirty = true; }
+  const tip = $('tip');
+  if (best < 0){ tip.style.display = 'none'; return; }
+  const im = res.images[best];
+  const ref = res.images[0].g[1];
+  const walls = [];
+  const nm = ['west','east','north','south','floor','ceiling'];
+  for (let k = 0; k < 6; k++) if (im.n[k]) walls.push(im.n[k] + '× ' + nm[k]);
+  tip.innerHTML =
+    '<div class="h">' + (im.order === 0 ? 'the sound itself' : 'echo of order ' + im.order) + '</div>' +
+    (walls.length ? '<div class="s">' + walls.join(' · ') + '</div>' : '<div class="s">straight from the source</div>') +
+    '<div>' + im.d.toFixed(2) + ' m &nbsp;→&nbsp; ' + (im.t*1000).toFixed(1) + ' ms &nbsp;·&nbsp; ' +
+      (20*Math.log10(Math.max(1e-9, im.g[1]/ref))).toFixed(1) + ' dB</div>' +
+    '<div class="s">click to hear this one alone</div>';
+  tip.style.display = 'block';
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = Math.min(window.innerWidth - w - 8, cx + 16) + 'px';
+  tip.style.top  = Math.max(8, cy - h - 12) + 'px';
+}
+
+/* double-click inside the home room and the clap moves there — the plane it lands
+   on is the source's own height, so only its floor position changes. Everything in
+   the lattice is a mirror of THIS point, so the whole field re-tiles around it. */
+function moveSource(px, py){
+  const p = unproject(px, py, room.src[2] - room.L[2]/2);
+  if (!p) return false;
+  const wx = p[0] + room.L[0]/2, wy = p[1] + room.L[1]/2;
+  if (wx < 0.2 || wx > room.L[0]-0.2 || wy < 0.2 || wy > room.L[1]-0.2) return false;
+  room.src = [wx, wy, room.src[2]];
+  solve();
+  return true;
+}
+lat.addEventListener('dblclick', e => {
+  const r = lat.getBoundingClientRect();
+  moveSource(e.clientX - r.left, e.clientY - r.top);
+});
+window.ROOM_MOVE_SOURCE = moveSource;
+
+/* ══ LOOP ══════════════════════════════════════════════════════════════════ */
+function frame(){
+  if (dirty){ dirty = false; drawLattice(); }
+  requestAnimationFrame(frame);
+}
+
+/* ══ BOOT ══════════════════════════════════════════════════════════════════ */
+function boot(){
+  sizeCanvases();
+  buildSurfaces(); buildPresets(); buildBudgets(); paintSrcs(); syncDims(); paintMute();
+  cam.dolly = Math.hypot(room.L[0],room.L[1],room.L[2]) * 2.4;
+  solve();
+  frame();
+  if (typeof WS !== 'undefined' && WS.seen) WS.seen('the-answering-room');
+  // the audio graph only wakes on a real gesture, per the browsers' rules
+  const wake = () => { audio(); if (res) installIR(); loadVoice(); window.removeEventListener('pointerdown', wake); window.removeEventListener('keydown', wake); };
+  window.addEventListener('pointerdown', wake); window.addEventListener('keydown', wake);
+}
+document.addEventListener('keydown', e => {
+  if (e.key === ' '){ e.preventDefault(); play(srcKind); }
+});
+boot();
+window.ROOM_SELFTEST = () => {
+  const out = [];
+  out.push(['solve produced mirrors', !!res && res.count > 1000, res ? res.count : 0]);
+  out.push(['two ears', !!res && res.irs.length === 2, res ? res.irs.length : 0]);
+  out.push(['a verdict or an honest refusal', !!bend, bend ? (bend.resolvable ? bend.bend.toFixed(3) : 'abstains') : '—']);
+  out.push(['points on screen', screenPts.n > 50, screenPts.n]);
+  return out;
+};
+window.ROOM_STATE = () => ({ room, cam, view, count: res ? res.count : 0, bend: bend ? bend.bend : null,
+  resolvable: bend ? bend.resolvable : null, pts: screenPts.n, ears: res ? res.irs.length : 0 });
+})();
+</script>
