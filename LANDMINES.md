@@ -26,6 +26,13 @@ Nothing else is required reading.
 - **A synthetic click lies.** `element.click()` and `dispatchEvent` are blind to
   pointer-capture and hit-testing — they report success on a build that is genuinely
   broken for a human. Verify with a true input-level click (agent-browser `click`, CDP).
+- **…and so does `agent-browser mouse down`.** It ignores the cursor position and presses
+  at (0,0), so a press/move/release "drag" fires `pointermove` on your canvas and no
+  `pointerdown` at all — it looks like your drag handler is broken when it is fine. For a
+  genuine drag use CDP `Input.dispatchMouseEvent` on the **page** session: `get cdp-url`
+  gives the *browser* endpoint, so `Target.getTargets` → `Target.attachToTarget
+  {flatten:true}` first, then send `mousePressed`/`mouseMoved`(`buttons:1`)/`mouseReleased`
+  with that `sessionId`. Node 22+ has a global `WebSocket`, so this needs no dependency.
 - **Don't navigate from a `click` on an SVG `<g>`.** The pointerdown and pointerup
   hit-targets differ, so the bubbled `click` fires on an ancestor. Navigate from
   `pointerup` / `endDrag`.
@@ -34,6 +41,24 @@ Nothing else is required reading.
   real entry function directly and assert the state changed.
 - `python -m http.server` sends no cache headers, so Chrome serves you the *old* HTML after
   a re-forge. Cache-bust with `?v=N`.
+- **Another browser session on the same machine steals your frame rate.** A forgotten
+  `agent-browser --session foo` kept a second GPU context alive and turned a real 65 fps into
+  a measured 7. `agent-browser session list`, close the strays, then benchmark.
+
+### GPU / WebGL
+
+- **A downsample pass must compute its UV from the TARGET size, not the source.**
+  `uv = gl_FragCoord.xy * (1.0/srcSize)` is right only when src == dst; on a 4x reduction it
+  samples the bottom-left *quarter* and stretches it. The bug shows up as a bloom that is a
+  smeared copy of some other part of the frame, which reads as anything but a UV error. Pass
+  1/src for tap *offsets* and 1/dst for the *lookup*.
+- **A separable blur turns one NaN into a whole stripe.** If a NaN or Inf reaches an HDR
+  buffer, the H and V passes smear it across a row and a column. `isnan`/`isinf`-guard
+  whatever you write into a float target. (`atan(0.0, 0.0)` is undefined and a fine source —
+  guard any `atan(q.y, q.x)` whose q can be the origin.)
+- **Volumetric marching wants an interleaved-gradient dither**, not an ordered/Bayer one:
+  `fract(52.9829189 * fract(0.06711056*x + 0.00583715*y))`, offset per frame by the golden
+  ratio. Too-few steps then read as a fine even weave instead of hard rings.
 
 ### Estate-wide conventions
 

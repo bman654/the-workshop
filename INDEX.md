@@ -3,7 +3,7 @@
 *Generated from the estate manifest by `tools/seal/index-gen.mjs` — **never edit this file.***
 *It rebuilds every cycle. If something here is wrong, the manifest is wrong.*
 
-**464 pieces · 67 rooms · 11 districts.**
+**465 pieces · 67 rooms · 11 districts.**
 
 Grep this before you build. Rebuilding something that already stands is the estate's
 most expensive mistake — and the hidden pieces are not listed here, they are in
@@ -155,12 +155,12 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ## THE OPTICKS COURT
 
-*2 rooms · 30 pieces*
+*2 rooms · 31 pieces*
 
 - **[The Wave Tanks](ripple/index.html)** — 1 piece
   <sub>[The Loud and the Quiet Walk](loud-and-quiet/index.html)</sub>
-- **[The Hall of Mirrors](hall-of-mirrors/index.html)** — 27 pieces
-  <sub>[Caustic](optics/index.html) · [Iridescence](iridescence/index.html) · [Kaleidoscope](kaleidoscope/index.html) · [The Anamorphic Mirror](anamorphosis/index.html) · [The Bragg Stack](structural-colour/index.html) · [The Camera Obscura](camera-obscura/index.html) · [The Diffraction Grating](diffraction/index.html) · [The Drifting Star](drifting-star/index.html) · [The Green Corridor](kaleidoscope/the-green-corridor/index.html) · [The Halo](halo/index.html) · [The Lifeguard's Run](lifeguards-run/index.html) · [The Light That Can't Get Out](light-fountain/index.html) · [The Lighthouse](lighthouse/index.html) · [The Micrometer Interferometer](interferometer/index.html) · [The Mirage](mirage/index.html) · [The Mirror Maze](mirror-maze/index.html) · [The Moiré Bench](moire-bench/index.html) · [The Photon's Errand](refraction-run/index.html) · [The Polariser](polariser/index.html) · [The Pool That Dances](pool/index.html) · [The Rainbow](rainbow/index.html) · [The Sky That Was Once Fog](last-scattering/index.html) · [The Spectroscope](spectroscope/index.html) · [The Spyglass](spyglass/index.html) · [The Teacup Caustic](teacup-caustic/index.html) · [The Umbral Vault](the-umbral-vault/index.html) · [Why the Sky Is Blue](why-the-sky-is-blue/index.html)</sub>
+- **[The Hall of Mirrors](hall-of-mirrors/index.html)** — 28 pieces
+  <sub>[Caustic](optics/index.html) · [Iridescence](iridescence/index.html) · [Kaleidoscope](kaleidoscope/index.html) · [The Air You Can See](the-air-you-can-see/index.html) · [The Anamorphic Mirror](anamorphosis/index.html) · [The Bragg Stack](structural-colour/index.html) · [The Camera Obscura](camera-obscura/index.html) · [The Diffraction Grating](diffraction/index.html) · [The Drifting Star](drifting-star/index.html) · [The Green Corridor](kaleidoscope/the-green-corridor/index.html) · [The Halo](halo/index.html) · [The Lifeguard's Run](lifeguards-run/index.html) · [The Light That Can't Get Out](light-fountain/index.html) · [The Lighthouse](lighthouse/index.html) · [The Micrometer Interferometer](interferometer/index.html) · [The Mirage](mirage/index.html) · [The Mirror Maze](mirror-maze/index.html) · [The Moiré Bench](moire-bench/index.html) · [The Photon's Errand](refraction-run/index.html) · [The Polariser](polariser/index.html) · [The Pool That Dances](pool/index.html) · [The Rainbow](rainbow/index.html) · [The Sky That Was Once Fog](last-scattering/index.html) · [The Spectroscope](spectroscope/index.html) · [The Spyglass](spyglass/index.html) · [The Teacup Caustic](teacup-caustic/index.html) · [The Umbral Vault](the-umbral-vault/index.html) · [Why the Sky Is Blue](why-the-sky-is-blue/index.html)</sub>
 
 ## THE CAVERN
 
@@ -198,4 +198,4 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ---
 
-<sub>manifest generated at commit `aca794e342ccf20e779818cf941e4414ab69fd83`</sub>
+<sub>manifest generated at commit `4db2a169b8f5267dd2ad034f7673a3b29545945a`</sub>
