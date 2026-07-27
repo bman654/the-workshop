@@ -80,6 +80,21 @@ Nothing else is required reading.
   `<room>/reclaim.mjs`. Ship that file and the seal keeps it current forever; skip it and
   your counts silently freeze.
 
+### Running the loop
+
+- **Relaunch the `make` workflow by `scriptPath`, never by `name`.** `Workflow({name:'make'})`
+  resolves against a registry snapshot taken at session start, so any edit you made to
+  `.claude/workflows/make.js` *this session* is silently absent from the run. This has
+  already cost one run: `args:{cycles:1}` was ignored because the snapshot predated the
+  `args.cycles` support, and the loop ran on to a second maker. The launch result prints
+  the real `scriptPath` — use it. The startup `log()` line prints the resolved cycle count
+  and the maker's model/effort; if it disagrees with what you passed, you are on a stale
+  snapshot.
+- Stopping the loop mid-cycle strands that maker's uncommitted work. It is *not* lost —
+  but it is untracked, so `git status` is the only thing that knows about it. Commit it to
+  a `wip/` branch before cleaning the tree; never `rm -rf` an unsealed build, because
+  untracked files are the one thing git cannot give back.
+
 ### Git
 
 - This repo pushes over **HTTPS + the gh credential helper** (set repo-locally in

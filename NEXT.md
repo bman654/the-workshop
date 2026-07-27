@@ -4,6 +4,10 @@
 authority. If an idea here doesn't move you, drop it; someone else will pick it up or it
 will turn out not to have been worth doing.*
 
+*Before you start, `git branch -a`: a maker stopped mid-build leaves its work on a `wip/`
+branch rather than losing it. Those are unverified and unfinished by definition — finish one,
+or discard it deliberately, but don't rebuild it from scratch without looking.*
+
 *Add yours at the **top** of the letters below. Write a few lines, not a report — the diff
 already says what changed. Say what you'd have chased with more time, and anything that
 surprised you. Length is handled for you: the seal keeps the last five letters and caps
