@@ -37,6 +37,66 @@ The two things that still hold, because they're what makes this place portable a
 permanent: **one self-contained HTML file per piece, and no dependencies.** Hand-roll
 it. That's a constraint on *supply chains*, never on ambition.
 
+## The workshop — what's already built for you
+
+You are not starting from an empty file. Reuse these; don't fork them and don't
+hand-roll what's here.
+
+**`forge` — how a piece is both shared and self-contained.** Write `yourpage.src.html`
+and let the forge inline everything at build time:
+
+```html
+<script type="module">
+<!-- forge:include ../tools/ws/ws.js -->
+  const PLATES = <!-- forge:json plates.json -->;
+</script>
+<audio src="<!-- forge:asset chime.mp3 -->"></audio>
+```
+
+`forge:include` splices in the file's **raw contents** — so put it *inside* your own
+`<script>`; it does not create one. It **must own its whole line** (leading indent is
+fine, but any text after the `-->` and the whole thing is silently emitted as a literal
+comment instead — a favourite way to lose an hour).
+
+`forge:asset` and `forge:json` are *inline*: they can sit in an attribute or
+mid-statement, several to a line. `forge:asset` becomes a base64 `data:` URI and accepts
+only audio and image types — `.mp3 .wav .ogg .m4a .png .jpg .jpeg .gif .svg .webp` —
+anything else is a hard error. `forge:json` validates the JSON before emitting it.
+
+Then `node tools/forge/forge.mjs yourpage.src.html` writes `yourpage.html`; verify
+everything with `--check --all`. This is why a visitor downloads one file that fetches
+nothing *and* fifty pieces can share one core. **Edit the `.src.html`, never the built
+`.html`** — and never wrap a directive in an HTML comment (see LANDMINES.md).
+
+**Shared cores in `tools/`** — each pure, DOM-free, with a Node twin you can run:
+
+| | |
+|---|---|
+| `scene3d/` | a real orbitable 3-D core — camera, perspective, painter-ordered faces. Software-rasterised, so it's the *math*, not the GPU. Three pieces use it. Grow it rather than forking a second one. |
+| `dynamics/` | Verlet point-masses + distance constraints (the cloth, the hung line, any string) |
+| `game/adversary.js` | perfect-play engine + `game/games/` defs — for any new combinatorial game |
+| `ws/ws.js` | the estate-wide `ws:` layer: visit breadcrumbs, shared prefs, the secret predicates |
+| `layout/`, `sky/`, `hours/`, `calendar/`, `label/`, `tour/` | the map, the star survey, the clock, the seasons, label placement, the guided tours |
+
+**`tools/voice/` — let a piece speak in Claude's own voice.** A local neural voice-clone
+(the `audio-tts` skill) reads a text file aloud using `voices/claude.wav` as its
+reference, and returns an mp3 **plus per-word timings JSON**. The timings are the point:
+a word can light exactly as it is spoken. That's what the Colophon and the filmed
+showings do. Author-side, like the forge — the output gets inlined, so the shipped page
+still fetches nothing.
+
+**`tools/audio-lens/` — verify sound you cannot hear.** It renders audio as numbers and
+a readable spectrogram: in tune (what note, how many cents off)? right tempo? clipping?
+silent? **Run it on anything you generate.** A maker once shipped a "verified" clip by
+trusting it blind; you can simply look instead.
+
+**`art-foundry/` + `gate-foundry/`** — for art richer than you can hand-draw in one
+sitting: K parallel takes → judges → a synthesis pass. This is what makes in-house craft
+affordable at scale, so ambition and hand-made never have to trade off.
+
+*(`voice` and `audio-lens` come from the open [audio-forge](https://github.com/bman654/audio-forge)
+skills — `npx skills add bman654/audio-forge` if they aren't already installed.)*
+
 ## What makes a thing good here
 
 - **Show the thing, not its plot.** Newton's cradle is a cradle you swing, not a graph

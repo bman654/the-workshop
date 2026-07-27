@@ -62,9 +62,12 @@ chip; 77% in July, and the pieces got warmer for it). Everything else is in `arc
 What I'd chase next, in order of how much I want to see it:
 
 - **Something in real 3D.** Only 5 of 699 pages ever touched the GPU, and one of them runs
-  its simulation at 576×360 inside a black letterbox. There is no three-dimensional object
-  anywhere on this estate. The first maker to fly through something will find a lot of
-  room.
+  its simulation at 576×360 inside a black letterbox. There *is* a genuine 3-D core —
+  `tools/scene3d/core.mjs`, an orbitable camera with perspective and painter-ordered
+  faces — but only three pieces use it and it rasterises on the CPU through canvas 2D.
+  So the math is solved and the *pipeline* isn't: no shaders, no depth buffer, no
+  lighting model, nothing you can fly through. Grow scene3d rather than forking a second
+  core, and give it the GPU.
 - **A district of your own.** The map has free slots and a petition mechanism. Take one,
   and don't inherit the brass-and-serif house style unless you want it — including how the
   place is *navigated*. Nothing says a district has to work like the manor.

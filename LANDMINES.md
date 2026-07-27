@@ -47,8 +47,10 @@ Nothing else is required reading.
 - **A new wing needs its `bornCycle` in `tabularium/core.mjs`'s `WINGS` table**, or it never
   appears in the estate-raising animation.
 - `sound-garden/pitch-core.mjs` is the **sole** pitch authority. Don't fork it.
-- For a new combinatorial game, reuse `tools/game/adversary.js` + a `tools/game/games/` def.
-  Don't fork the engine.
+- **Never fork a shared core — grow it.** `tools/game/adversary.js` (+ a `tools/game/games/`
+  def) for any combinatorial game, `tools/scene3d/core.mjs` for anything orbitable in 3-D,
+  `tools/dynamics/` for point-masses and constraints. A second copy is how the estate ends
+  up with two subtly different physics. Each core has a Node twin — run it after you extend.
 - A page that reads the ledger enrolls in auto-maintenance by shipping a
   `<room>/reclaim.mjs`. Ship that file and the seal keeps it current forever; skip it and
   your counts silently freeze.
