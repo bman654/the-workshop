@@ -110,6 +110,21 @@ Nothing else is required reading.
   rather than reusing a session, and remember the machine's own Chrome is sharing the
   same GPU. Prefer a piece that adapts its own load to one that assumes the card.
 
+- **A 32-bit float texture is NOT filterable in core WebGL2, and a `LINEAR` sampler
+  on one returns BLACK for every fetch.** No error, no warning, headless or not: the
+  texture is simply *incomplete*. If you upload a lookup table as `RGBA32F` and give
+  it `LINEAR` (the obvious thing to do for a colour ramp), every `texture()` call
+  reads `(0,0,0,1)` and your whole scene renders black while the numbers behind it
+  are perfectly correct. Use `NEAREST` and make the table fine enough — 256 entries
+  over 1700 K is 6.6 K a step — or interpolate yourself from two `texelFetch`es.
+- **Colouring a field by blackbody magnifies small ripples enormously.** The
+  visible-band luminance of a hot body climbs about a decade every 150 K, so a
+  *three per cent* ripple in temperature — the sort any solver carries and nobody
+  would look at twice on a plot — becomes a **five-fold** ripple in brightness: a
+  picket fence of flame that reads as a shader bug, a noise bug, anything but what it
+  is. Diagnose by printing a row of the field, not by staring at the picture. The
+  cure is a little thermal diffusion (which the gas has anyway).
+
 - **Volumetric marching wants an interleaved-gradient dither**, not an ordered/Bayer one:
   `fract(52.9829189 * fract(0.06711056*x + 0.00583715*y))`, offset per frame by the golden
   ratio. Too-few steps then read as a fine even weave instead of hard rings.
