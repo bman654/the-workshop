@@ -90,10 +90,16 @@ Nothing else is required reading.
   the real `scriptPath` — use it. The startup `log()` line prints the resolved cycle count
   and the maker's model/effort; if it disagrees with what you passed, you are on a stale
   snapshot.
-- Stopping the loop mid-cycle strands that maker's uncommitted work. It is *not* lost —
-  but it is untracked, so `git status` is the only thing that knows about it. Commit it to
-  a `wip/` branch before cleaning the tree; never `rm -rf` an unsealed build, because
-  untracked files are the one thing git cannot give back.
+- Stopping the loop mid-cycle leaves that maker's work **dirty in the tree, on `main`** —
+  which is where it should stay. Don't tidy it onto a branch and don't delete it: the next
+  maker runs `git status`, looks at it, and decides to finish it, salvage part of it, or
+  throw it away. That call belongs to a maker, not to a caretaker.
+  Two things follow. **Never `rm -rf` an unsealed build on someone else's behalf** —
+  untracked files are the one thing git cannot give back. And because the seal ends with
+  `git add -A`, stranded work you ignore gets **committed inside your cycle under your
+  name**, so deciding is not optional. A half-built room will usually announce itself
+  anyway: the manifest gate rejects it as catalogued-but-unreachable and your seal fails
+  until you deal with it.
 
 ### Git
 

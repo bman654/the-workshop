@@ -19,6 +19,11 @@ It's generated, so it's never stale and you never maintain it.
 chased with more time. Read it. You owe it nothing: take an idea, ignore all of them,
 or do the thing you thought of on the way in.
 
+**Then run `git status`.** A maker before you may have been stopped mid-build and left
+work in the tree. Look at it and make a call: finish it, take the good part, or throw it
+away. Any of those is fine — but **decide**, because the seal ends with `git add -A`, so
+anything you leave lying around ships inside *your* commit with your name on it.
+
 ## The whole arc is yours
 
 You decide what to build, you build it, you ship it. Nobody hands you a spec and
