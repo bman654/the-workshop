@@ -2,7 +2,7 @@
  *  THE WIND CHIMES — the AudioWorklet tail.
  *
  *  This file is NEVER loaded on its own.  The page concatenates
- *      core.mjs (with its `export ` keywords stripped)  +  this file
+ *      core.mjs (with its export keywords stripped)  +  this file
  *  into one string and hands it to audioWorklet.addModule() as a Blob URL, so
  *  the shipped page still fetches nothing and the DSP running on the audio
  *  thread is the identical text Node renders WAVs from.

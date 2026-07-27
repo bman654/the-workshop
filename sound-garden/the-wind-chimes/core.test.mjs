@@ -1,273 +1,249 @@
-// ============================================================================
-//  THE WIND CHIMES — Node twin of the page's room. THE PAYOFF-LIVENESS TWIN.
-//  Run:  node sound-garden/the-wind-chimes/core.test.mjs
-//
-//  This is a DELIGHT-FIRST leaf: it makes NO math claim and there is no in-page
-//  proof pill. So this file does NOT prove a theorem — it proves the PAYOFF FIRES.
-//  The house rule it answers to: a liveness twin must be HEADLESS-DRIVABLE and must
-//  drive the room's OWN real entry function, never a synthetic canvas pointer event
-//  (headless cannot deliver a tap on a canvas, so a liveness check that waited on one
-//  would sail through green over a completely dead room).
-//
-//  So every leg below calls the SAME functions the live page calls:
-//    · createChime()/gust()/step()  — exactly what the page's rAF loop drives;
-//    · strikeTube()                 — exactly what a finger flicking a tube calls;
-//    · renderStrike()/strikeEnvelope() — exactly what the page hands to its
-//      AudioBuffer and what it draws each tube's glow from.
-//  There is ONE path, and this is it.
-//
-//  It:
-//    • runs the shared runChimeSelfTest (imported from ./core.mjs) — the six legs:
-//      the wind moves it · a strike fires · the strike rises then decays · in tune
-//      by construction · well-formed three ways · bounded in any wind;
-//    • DEEPER Node-only re-derivations — the WIND→NOTES MAPPING is real (a soft
-//      breeze reaches only the inner/high tubes; a gust sweeps the whole rack), a
-//      DIRECT TUBE-NUDGE rings in dead calm, and the glow is driven by the SAME
-//      envelope as the sound (so the payoff is visible with the sound off);
-//    • BYTE-TWIN parity — index.src.html's inlined CHIME CORE slice === ./core.mjs's
-//      and its PITCH CORE slice === ../pitch-core.mjs's, both char-for-char (the
-//      forged index.html inherits them verbatim, so the page plays exactly this);
-//    • SINGLE-SOURCE — the pitch anchor is IMPORTED, never re-typed in this leaf.
-//  process.exit(pass === total ? 0 : 1).
-//
-//  Depth note: the leaf lives one level deeper than the garden, so repoRoot is
-//  ../.. (the-wind-chimes → sound-garden → repo root), like the-squeal-bench.
-// ============================================================================
+/* ============================================================================
+ *  THE WIND CHIMES — the Node twin.
+ *  Run:  node sound-garden/the-wind-chimes/core.test.mjs      (exit 0 = green)
+ *
+ *  Zero dependencies.  It drives the SAME core.mjs the page inlines and the
+ *  worklet runs, and every leg that can carry a discriminating control has one —
+ *  a variant that MUST go red, so a passing number cannot be a dead code path
+ *  or a constant someone fitted.
+ *
+ *  A  THE LADDER          the partials are a free-free beam's, not a string's
+ *  B  THE NODES           mode 1 stands still at 0.2242 / 0.7758, by bisection
+ *  C  THE CUTTING         pitch <-> length inverts, and f goes as 1/L^2
+ *  D  THE TUNING          the six tubes are A major pentatonic, from pitch-core
+ *  E  THE CLAIM, MEASURED T60 fitted to RENDERED AUDIO peaks on the node
+ *  F  WHERE YOU HIT       striking at 0.5 removes mode 2 from the SOUND
+ *  G  THE RIG RINGS       wind strikes all six tubes; dead calm is silent
+ *  H  NOTHING BREAKS      no NaN, no clipping, in the worst overlap
+ *  I  THE BYTE TWIN       the shipped page inlines core.mjs verbatim, twice
+ *  J  THE WORKLET BUILDS  core.mjs with its exports stripped is a valid script
+ * ========================================================================== */
+
 import {
-  runChimeSelfTest, createChime, tubeFreqs, tubeLengths, tubeTau,
-  renderStrike, renderStrikes, strikeEnvelope, env, rms, peak, rmsEnvelope,
-  PENT_SEMIS, TUBE_ANGLES, TUBE_RATIOS, THETA_MAX, TAU_ATK, DEFAULT_SR,
-  semiToFreq, noteName,
+  MODE_RATIO, modeNodes, modeShape, cutLength, fundamental,
+  DEFAULT_TUBE, PENT_SEMIS, ChimeRig, ModalBank, alphaTotal, t60,
+  renderStrike, sustainCurve, peakOf, bandpass, rmsEnvelope,
+  runChimeSelfTest,
 } from './core.mjs';
+import { semiToFreq, noteName, cents } from '../pitch-core.mjs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
-const repoRoot = join(__dir, '..', '..');     // the-wind-chimes → sound-garden → repo root
-let pass = 0, total = 0;
-function check(name, cond, info){
-  total++;
-  if (cond){ pass++; console.log('  ✓ ' + name + (info ? '  ·  ' + info : '')); }
-  else { console.log('  ✗ ' + name + (info ? '  ·  ' + info : '')); }
-}
-function sliceBetween(text, begin, end){
-  const i = text.indexOf(begin), j = text.indexOf(end);
-  if (i < 0 || j < 0 || j <= i) return null;
-  return text.slice(i + begin.length, j);
-}
+let fails = 0;
+const ok = (name, pass, detail) => {
+  if (!pass) fails++;
+  console.log((pass ? '  ok   ' : '  FAIL ') + name + (detail ? '   [' + detail + ']' : ''));
+};
+const head = (s) => console.log('\n' + s);
+const stripExports = (t) =>
+  t.replace(/^export\s+(?=(?:default\s+)?(?:function|class|const|let|var))/gm, '')
+   .replace(/^export\s*\{[\s\S]*?\};?\s*$/gm, '');
 
-const FREQS = tubeFreqs(semiToFreq);
-const NAMES = PENT_SEMIS.map(noteName);
-const FLO = Math.min.apply(null, FREQS);
-
-// ── 1. THE FULL SHARED SELF-TEST (the six legs the page's model must satisfy —
-//   imported from ./core.mjs, run at the canonical SR). ───────────────────────
-console.log('\n— The shared runChimeSelfTest (six legs: the payoff, the tuning, the bounds) —');
+/* ── A · THE LADDER ─────────────────────────────────────────────────────── */
+head('A · the ladder is a free-free beam\'s, and nothing else\'s');
 {
-  const r = runChimeSelfTest(semiToFreq, DEFAULT_SR);
-  for (const l of r.lines) check(l.name, l.ok, l.detail);
-  check('self-test reports all green', r.pass === r.total, r.pass + '/' + r.total);
-}
-
-console.log('\n— Deeper Node-only re-derivations (the room\'s promises, measured) —');
-
-// ── 2a. THE WIND→NOTES MAPPING IS REAL — the single claim the room makes to a
-//   visitor without saying it in words: "a soft breeze only reaches the inner/high
-//   tubes; a gust sweeps the whole rack." Nothing in the code branches on wind
-//   strength — this behaviour falls out purely of the nested tube GEOMETRY — so it
-//   is worth measuring rather than assuming. A soft breeze must ring the HIGHEST
-//   tube and never the LOWEST; a strong one must ring ALL FIVE.
-{
-  function ringsAt(breeze, seconds, seed){
-    const c = createChime({ freqs: FREQS, seed });
-    c.setBreeze(breeze);
-    for (let i = 0; i < seconds * 60; i++) c.step(1 / 60);
-    const per = new Map();
-    for (const h of c.st.strikes) per.set(h.tube, (per.get(h.tube) || 0) + 1);
-    return per;
-  }
-  const soft = ringsAt(0.12, 60, 7);
-  const gale = ringsAt(0.80, 60, 7);
-  const HI = FREQS.length - 1, LO = 0;                 // index 4 = F#4 (highest), 0 = A3
-  const softHitsHigh = (soft.get(HI) || 0) > 0;
-  const softSparesLow = (soft.get(LO) || 0) === 0;
-  const galeSweepsAll = [0,1,2,3,4].every(i => (gale.get(i) || 0) > 0);
-  // and the soft breeze must be biased UP the rack: more strikes on the top two
-  // tubes than the bottom two (the "bright tinkles" the room promises).
-  const softTop = (soft.get(4)||0) + (soft.get(3)||0);
-  const softBot = (soft.get(0)||0) + (soft.get(1)||0);
-  const ok = softHitsHigh && softSparesLow && galeSweepsAll && softTop > softBot;
-  const fmt = m => [0,1,2,3,4].map(i => NAMES[i] + ':' + (m.get(i)||0)).join(' ');
-  check('the wind→notes mapping is real (and is pure geometry, not a rule): a SOFT breeze rings the highest tube and never reaches the lowest, and is biased to the top of the rack — while a GUST sweeps the clapper across ALL FIVE. Nothing branches on wind strength; the nested tube angles alone do this',
-        ok, `soft (0.12): ${fmt(soft)} — high rung ${softHitsHigh}, low spared ${softSparesLow}, top ${softTop} > bottom ${softBot} · gale (0.80): ${fmt(gale)} — all five ${galeSweepsAll}`);
-}
-
-// ── 2b. A DIRECT TUBE-NUDGE RINGS IN DEAD CALM — the room is an instrument you can
-//   strum with no wind at all. This drives strikeTube(), the very function the
-//   canvas pointer handler and the number-key handler call. (The definition of done
-//   names this explicitly: "direct-touch a tube to ring it.")
-{
-  const c = createChime({ freqs: FREQS, seed: 9 });
-  c.setBreeze(0);
-  for (let i = 0; i < 120; i++) c.step(1 / 60);         // 2 s of provably dead calm
-  const beforeCalm = c.st.strikes.length;
-  const hits = [];
-  for (let i = 0; i < FREQS.length; i++) hits.push(c.strikeTube(i, 0.62));
-  const allRang = hits.every((h, i) => h && h.tube === i && h.vel > 0);
-  // and each nudge must make actual SOUND — a rendered buffer with real energy
-  const buf = renderStrikes(hits, 3.0, DEFAULT_SR, FREQS);
-  const energy = rms(buf, 0, buf.length);
-  const outOfRange = c.strikeTube(99, 0.5);             // and an invalid tube rings nothing
-  const ok = beforeCalm === 0 && allRang && energy > 1e-3 && outOfRange === null;
-  check('a direct tube-nudge rings in DEAD CALM: after 2 s of wind-free silence (0 strikes), flicking each of the five tubes by the room\'s OWN strikeTube() — the same call the canvas pointer and the number keys make — rings all five with real velocity and renders real sound; an out-of-range tube rings nothing',
-        ok, `calm before: ${beforeCalm} strikes · nudged ${hits.length}/5 (all valid: ${allRang}) · rendered rms ${energy.toExponential(2)} · invalid tube → ${outOfRange}`);
-}
-
-// ── 2c. THE GLOW IS THE SOUND (the accessibility promise, checked). The page draws
-//   each struck tube's brightness from strikeEnvelope() — the SAME curve that shapes
-//   the audio. So a muted / air-off / reduced-motion / cannot-listen visitor still
-//   gets the whole payoff: the light must rise then fall exactly as the sound does,
-//   and must be strictly ordered by how hard the tube was hit.
-{
-  const tau0 = tubeTau(FREQS[0], FLO);
-  const gAt = t => strikeEnvelope(t, 0.9, tau0);
-  const g0 = gAt(0), gPeak = gAt(0.04), gLate = gAt(tau0 * 3);
-  const risesThenFalls = g0 === 0 && gPeak > g0 && gLate < gPeak;
-  // the glow tracks the AUDIO's own measured envelope, not a separate animation:
-  // sample both and correlate their shape over the tail.
-  const buf = renderStrike(FREQS[0], 0.9, tau0 * 2, DEFAULT_SR, tau0);
-  const audioEnv = rmsEnvelope(buf, DEFAULT_SR, 50);
-  let worstRel = 0;
-  for (let k = 4; k < audioEnv.length; k++){          // skip the attack blocks
-    const t = (k + 0.5) * 0.05;
-    const a = audioEnv[k] / audioEnv[4];
-    const g = gAt(t) / gAt((4 + 0.5) * 0.05);
-    worstRel = Math.max(worstRel, Math.abs(a - g));
-  }
-  const tracks = worstRel < 0.09;
-  // and a harder strike must glow brighter, monotonically
-  const brights = [0.15, 0.4, 0.7, 1.0].map(v => strikeEnvelope(0.04, v, tau0));
-  const ordered = brights.every((b, i) => i === 0 || b > brights[i-1]);
-  const ok = risesThenFalls && tracks && ordered;
-  check('the glow IS the sound (so the payoff survives with the sound OFF): a tube\'s brightness comes from the SAME strikeEnvelope the audio is shaped by — it is 0 at onset, blooms just after it, and its decay tracks the rendered audio\'s own measured envelope to <9%; and a harder strike glows strictly brighter',
-        ok, `glow(0) = ${g0} → glow(40 ms) = ${gPeak.toFixed(3)} → glow(3τ) = ${gLate.toFixed(4)} (rise-then-fall: ${risesThenFalls}) · worst |glow − audio envelope| = ${(worstRel*100).toFixed(1)}% (< 9%) · brightness by velocity [${brights.map(b=>b.toFixed(3)).join(', ')}] strictly rising: ${ordered}`);
-}
-
-// ── 2d. THE VOICE IS NOT A BELL (the A/B the ear-check confirms with real audio).
-//   The Sound Garden already has a Carillon; this leaf earns its place only if its
-//   voice is genuinely a different thing. A free-free tube's partials are the
-//   inharmonic ratios [1, 2.756, 5.404, 8.933]: crucially there is NO partial BELOW
-//   the fundamental (a bell's defining hum is an octave down at 0.5) and the
-//   overtones are spread far wider than a bell's (1.19 / 1.5 / 2.0). That is the
-//   structural reason the two cannot be mistaken for each other; verify.sh then
-//   measures it on rendered audio against an actual carillon render.
-{
-  const noSubOctave = TUBE_RATIOS.every(r => r >= 1);
-  const firstOvertone = TUBE_RATIOS[1];
-  const wayWiderThanABell = firstOvertone > 2.0;        // a bell's widest low partial is the 2.0 nominal
-  const inharmonic = TUBE_RATIOS.every((r, i) => i === 0 || Math.abs(r - Math.round(r)) > 0.05);
-  // and it must be measurable: the rendered tube has no spectral energy an octave down
-  const tau0 = tubeTau(FREQS[0], FLO);
-  const buf = renderStrike(FREQS[0], 0.9, 2.0, DEFAULT_SR, tau0);
-  // a naive one-bin DFT magnitude at f0/2 (where a bell's hum would sit) vs at f0
-  function binMag(f){
-    let re = 0, im = 0; const N = Math.min(buf.length, DEFAULT_SR);
-    for (let i = 0; i < N; i++){ const w = 2*Math.PI*f*i/DEFAULT_SR; re += buf[i]*Math.cos(w); im -= buf[i]*Math.sin(w); }
-    return Math.sqrt(re*re + im*im) / N;
-  }
-  const hum = binMag(FREQS[0]/2), fund = binMag(FREQS[0]);
-  const humIsEmpty = hum < fund * 0.02;
-  const ok = noSubOctave && wayWiderThanABell && inharmonic && humIsEmpty;
-  check('the voice is a struck TUBE, not a bell (why this leaf is not a second Carillon): the free-free partial set has NO partial below the fundamental — where a bell\'s defining hum sits an octave down — and its first overtone is at 2.756, far wider than a bell\'s 1.19/1.5/2.0. Measured on the render, the octave-below bin is empty',
-        ok, `ratios [${TUBE_RATIOS.join(', ')}] · none below 1: ${noSubOctave} · first overtone ${firstOvertone} > 2.0: ${wayWiderThanABell} · inharmonic: ${inharmonic} · |X(f₀/2)| / |X(f₀)| = ${(hum/fund).toExponential(2)} (< 2%)`);
-}
-
-// ── 2e. THE TUBE LENGTHS DO NOT LIE. The page draws tube i at length L ∝ 1/√f, and
-//   tells the visitor the eye can read the pitch order off the lengths. A free-free
-//   tube's fundamental really does go as 1/L², so that is honest — check both that
-//   the drawn lengths follow the law and that they are strictly ordered with pitch.
-{
-  const L = tubeLengths(FREQS);
+  const want = [1, 2.7565, 5.4039, 8.9330, 13.3443, 18.6379];
   let worst = 0;
-  for (let i = 0; i < FREQS.length; i++) worst = Math.max(worst, Math.abs(L[i] - Math.sqrt(FLO / FREQS[i])));
-  const ordered = L.every((l, i) => i === 0 || l < L[i-1]);      // lower pitch ⇒ longer tube
-  const longestIsLowest = L[0] === Math.max.apply(null, L);
-  // and the RACK's geometry must agree: |contact angle| falls as pitch rises, so the
-  // longest/lowest tube really is the one furthest out (the one the wind works for)
-  const nested = TUBE_ANGLES.every((a, i) => i === 0 || Math.abs(a) < Math.abs(TUBE_ANGLES[i-1]));
-  const insideRack = TUBE_ANGLES.every(a => Math.abs(a) < THETA_MAX);
-  const ok = worst === 0 && ordered && longestIsLowest && nested && insideRack;
-  check('the drawing does not lie: tube lengths are exactly L ∝ 1/√f (a free-free tube\'s f goes as 1/L², so the eye really can read pitch order off the lengths), strictly longest-is-lowest — and the rack is genuinely NESTED, |contact angle| shrinking as pitch rises, every tube inside the rack\'s edge so the swing can always reach it',
-        ok, `lengths [${L.map(x=>x.toFixed(3)).join(', ')}] worst Δ vs 1/√f = ${worst} · longest is lowest: ${longestIsLowest} · angles [${TUBE_ANGLES.join(', ')}] nested: ${nested} · all inside ±${THETA_MAX}: ${insideRack}`);
+  for (let i = 0; i < want.length; i++) worst = Math.max(worst, Math.abs(MODE_RATIO[i] - want[i]));
+  ok('1 : 2.756 : 5.404 : 8.933 : 13.34 : 18.64', worst < 5e-4, 'max dev ' + worst.toExponential(2));
+  /* control: a STRING would be 1 : 2 : 3 : 4 … — if the ladder came out harmonic
+     we would have built a monochord by accident */
+  let harm = 0;
+  for (let i = 0; i < want.length; i++) harm = Math.max(harm, Math.abs(MODE_RATIO[i] - (i + 1)));
+  ok('control: it is NOT the harmonic ladder of a string', harm > 12,
+     'departs from 1:2:3:… by ' + harm.toFixed(2));
 }
 
-console.log('\n— Byte-twin parity (the page IS the modules) —');
-
-// ── 3a. BYTE-TWIN PARITY (CHIME CORE): index.src.html's inlined slice === ./core.mjs's
-//   slice, char-for-char. forge builds index.src.html → index.html verbatim, so the
-//   forged page runs exactly this model. ────────────────────────────────────────
+/* ── B · THE NODES ──────────────────────────────────────────────────────── */
+head('B · where each mode stands still — found, not remembered');
 {
-  const BEGIN = '// ===== CHIME CORE (inlined byte-twin) BEGIN =====';
-  const END = '// ===== CHIME CORE END =====';
-  const mod = readFileSync(join(__dir, 'core.mjs'), 'utf8');
-  const src = readFileSync(join(__dir, 'index.src.html'), 'utf8');
-  const ms = sliceBetween(mod, BEGIN, END), ps = sliceBetween(src, BEGIN, END);
-  check('byte-twin parity (CHIME CORE): index.src.html\'s inlined CORE block is char-for-char ./core.mjs (between sentinels) — the page\'s animation, its live AudioBuffer voices, and its offline WAVs all run the module\'s exact pendulum, strike model and tone',
-        ms != null && ps != null && ms === ps,
-        ms == null ? 'module sentinels MISSING' : ps == null ? 'src sentinels MISSING' :
-          (ms === ps ? `slice ${ms.length} chars identical` : `DRIFT (mod ${ms.length} vs src ${ps.length})`));
+  const n1 = modeNodes(0), n2 = modeNodes(1);
+  ok('mode 1: 0.2242 and 0.7758',
+     n1.length === 2 && Math.abs(n1[0] - 0.2242) < 5e-4 && Math.abs(n1[1] - 0.7758) < 5e-4,
+     n1.map((x) => x.toFixed(4)).join(', '));
+  ok('mode 2: 0.1321, 0.5000, 0.8679 — a DIFFERENT set',
+     n2.length === 3 && Math.abs(n2[1] - 0.5) < 5e-4 && Math.abs(n2[0] - 0.1321) < 5e-4,
+     n2.map((x) => x.toFixed(4)).join(', '));
+  ok('the ends are antinodes, |Y| = 1, for every mode',
+     [0, 1, 2, 3, 4, 5].every((n) => Math.abs(Math.abs(modeShape(n, 0)) - 1) < 1e-9 &&
+                                     Math.abs(Math.abs(modeShape(n, 1)) - 1) < 1e-6),
+     'including mode 6, where the naive formula loses nine digits to cancellation');
 }
 
-// ── 3b. BYTE-TWIN PARITY (borrowed PITCH CORE): the page inlines ../pitch-core.mjs's
-//   PITCH CORE slice (which is what gives it semiToFreq) char-for-char, so the room's
-//   tuning is computed by the estate's ONE pitch law rather than a second copy. ──
+/* ── C · THE CUTTING ────────────────────────────────────────────────────── */
+head('C · the metal decides the note');
 {
-  const BEGIN = '// ===== PITCH CORE (inlined byte-twin) BEGIN =====';
-  const END = '// ===== PITCH CORE END =====';
-  const mod = readFileSync(join(__dir, '..', 'pitch-core.mjs'), 'utf8');
-  const src = readFileSync(join(__dir, 'index.src.html'), 'utf8');
-  const ms = sliceBetween(mod, BEGIN, END), ps = sliceBetween(src, BEGIN, END);
-  check('byte-twin parity (PITCH CORE): index.src.html\'s inlined PITCH CORE block is char-for-char ../pitch-core.mjs — so the five tube pitches are computed by the estate\'s ONE equal-temperament anchor, not a re-typed copy of it',
-        ms != null && ps != null && ms === ps,
-        ms == null ? 'module sentinels MISSING' : ps == null ? 'src sentinels MISSING' :
-          (ms === ps ? `slice ${ms.length} chars identical` : `DRIFT (mod ${ms.length} vs src ${ps.length})`));
+  const L = cutLength(440, DEFAULT_TUBE.od, DEFAULT_TUBE.wall);
+  ok('a tube cut for 440 Hz sings 440 Hz',
+     Math.abs(fundamental(L, DEFAULT_TUBE.od, DEFAULT_TUBE.wall) - 440) < 1e-9,
+     (L * 1000).toFixed(1) + ' mm of 25 x 1.5 mm aluminium');
+  ok('twice as long is two octaves down (f goes as 1/L^2)',
+     Math.abs(fundamental(2 * L, DEFAULT_TUBE.od, DEFAULT_TUBE.wall) - 110) < 1e-9);
+  /* controls, in the direction the gyration radius actually points: a WIDER tube
+     of the same length sings higher, and a thicker wall on a fixed bore sings
+     LOWER, because K = sqrt(od^2 + id^2)/4 falls as the bore closes up */
+  const wide = fundamental(L, 0.038, DEFAULT_TUBE.wall);
+  const thick = fundamental(L, DEFAULT_TUBE.od, 0.003);
+  ok('control: a wider tube of the same length sings higher',
+     wide > 660, wide.toFixed(1) + ' Hz at 38 mm outside diameter');
+  ok('control: a thicker wall on the same outside diameter sings lower',
+     thick < 425, thick.toFixed(1) + ' Hz for a 3 mm wall');
 }
 
-// ── 3c. THE FORGED PAGE INHERITED BOTH SLICES. forge copies index.src.html →
-//   index.html; if the build were stale, the page a visitor actually loads could run
-//   an older model than the one proven above. Check the SHIPPED file directly. ───
+/* ── D · THE TUNING ─────────────────────────────────────────────────────── */
+head('D · six tubes, tuned by the estate\'s own pitch authority');
 {
-  const built = readFileSync(join(__dir, 'index.html'), 'utf8');
-  const mod = readFileSync(join(__dir, 'core.mjs'), 'utf8');
-  const pit = readFileSync(join(__dir, '..', 'pitch-core.mjs'), 'utf8');
-  const bc = sliceBetween(built, '// ===== CHIME CORE (inlined byte-twin) BEGIN =====', '// ===== CHIME CORE END =====');
-  const bp = sliceBetween(built, '// ===== PITCH CORE (inlined byte-twin) BEGIN =====', '// ===== PITCH CORE END =====');
-  const mc = sliceBetween(mod, '// ===== CHIME CORE (inlined byte-twin) BEGIN =====', '// ===== CHIME CORE END =====');
-  const mp = sliceBetween(pit, '// ===== PITCH CORE (inlined byte-twin) BEGIN =====', '// ===== PITCH CORE END =====');
-  const ok = bc != null && bp != null && bc === mc && bp === mp;
-  check('the SHIPPED page inherited both slices: the forged index.html a visitor actually loads carries the CHIME CORE and PITCH CORE byte-identical to their modules — a stale build cannot ship a different model than the one proven here',
-        ok, ok ? `index.html: CHIME ${bc.length} chars + PITCH ${bp.length} chars, both identical to source`
-               : `CHIME match ${bc === mc} · PITCH match ${bp === mp}`);
+  const f = PENT_SEMIS.map(semiToFreq);
+  const names = PENT_SEMIS.map(noteName).join(' ');
+  const rig = new ChimeRig({ freqs: f });
+  let worst = 0;
+  for (let i = 0; i < f.length; i++) worst = Math.max(worst, Math.abs(cents(rig.freqs[i][0] / f[i])));
+  ok('every cut tube lands on its note to under a hundredth of a cent',
+     worst < 0.01, names + ' · worst ' + worst.toExponential(1) + ' cents');
+  ok('the lengths fall in a smooth graded rack',
+     rig.L.every((L, i) => i === 0 || L < rig.L[i - 1]),
+     rig.L.map((L) => (L * 1000).toFixed(0)).join(' / ') + ' mm');
 }
 
-console.log('\n— Single-source discipline (the pitch anchor is imported, not re-typed) —');
-
-// ── 4. SINGLE-SOURCE: this leaf DOES make a tuning constraint, so unlike the Squeal
-//   Bench it legitimately imports the pitch law — but it must IMPORT it, never
-//   re-type it. core.mjs must contain no equal-temperament anchor literal of its own,
-//   and must genuinely import semiToFreq from ../pitch-core.mjs. ─────────────────
+/* ── E · THE CLAIM, MEASURED ────────────────────────────────────────────── */
+head('E · the cord\'s toll — measured off the audio, not read off the formula');
 {
-  const coreSrc = readFileSync(join(__dir, 'core.mjs'), 'utf8');
-  const importsPitch = /import\s*\{[^}]*semiToFreq[^}]*\}\s*from\s*['"]\.\.\/pitch-core\.mjs['"]/.test(coreSrc);
-  // the anchor's digits (261.625565) and the semitone ratio must appear NOWHERE here
-  const reTypesAnchor = /261\.6|1\.0594|Math\.pow\(\s*2\s*,\s*[a-z]*\s*\/\s*12\s*\)/i.test(coreSrc);
-  // and every tube frequency must come from the passed-in fn, so no Hz literal at all
-  const hzLiteral = /\b(220|246\.9|277\.1|329\.6|369\.9|440)\b/.test(coreSrc);
-  const ok = importsPitch && !reTypesAnchor && !hzLiteral;
-  check('single-source: core.mjs IMPORTS semiToFreq from ../pitch-core.mjs and re-types no pitch law of its own — no equal-temperament anchor literal, no 2^(n/12), and not one tube frequency written as a Hz number. The tuning constraint is inherited from the estate, not asserted locally',
-        ok, `imports the pitch law: ${importsPitch} · re-types an anchor: ${reTypesAnchor} · contains a tube-Hz literal: ${hzLiteral} · the only tuning data typed here is the semitone set [${PENT_SEMIS.join(', ')}]`);
+  const f1 = semiToFreq(PENT_SEMIS[0]);
+  const curve = sustainCurve(f1, { steps: 33 });
+  const pk = peakOf(curve);
+  const node = modeNodes(0)[0];
+  ok('the longest ring is at the mode-1 node',
+     Math.abs(pk.xi - node) < 0.005,
+     'measured ' + pk.xi.toFixed(4) + ' vs analytic ' + node.toFixed(4) +
+     ' — apart by ' + (Math.abs(pk.xi - node) * 1000).toFixed(2) + ' thousandths of a length');
+  const want = t60(alphaTotal(0, f1, node));
+  ok('and its height agrees with the damping model to within 6%',
+     Math.abs(pk.t60 - want) / want < 0.06,
+     'measured ' + pk.t60.toFixed(2) + ' s vs ' + want.toFixed(2) + ' s');
+  const mid = curve[curve.length - 1];
+  ok('control: hung at its middle the SAME tube is dead in a quarter of the time',
+     pk.t60 / mid.t60 > 4, pk.t60.toFixed(1) + ' s vs ' + mid.t60.toFixed(1) + ' s');
 }
 
-console.log(`\n—— The Wind Chimes Node twin: ${pass}/${total} ——\n`);
-process.exit(pass === total ? 0 : 1);
+/* ── F · WHERE YOU HIT ──────────────────────────────────────────────────── */
+head('F · where the clapper lands decides the timbre');
+{
+  const f1 = semiToFreq(PENT_SEMIS[0]);
+  const sr = 22050, f2 = f1 * MODE_RATIO[1];
+  /* Q = 80: at Q = 20 the skirt of this filter still passes enough of the very
+     loud fundamental to set a -24 dB floor, and you measure the FILTER, not the
+     tube.  That cost a red leg before it was noticed. */
+  const energy = (buf, f) => {
+    const b = bandpass(buf, sr, f, 80);
+    let s = 0;
+    for (let i = Math.round(sr * 0.05); i < b.length; i++) s += b[i] * b[i];
+    return Math.sqrt(s / b.length);
+  };
+  const atMid = renderStrike(f1, 0.2242, { sr: sr, seconds: 2, xiStrike: 0.5, vel: 0.9, thud: false });
+  const atLow = renderStrike(f1, 0.2242, { sr: sr, seconds: 2, xiStrike: 0.35, vel: 0.9, thud: false });
+  const dB = 20 * Math.log10(energy(atMid, f2) / energy(atLow, f2));
+  const m1 = energy(atMid, f1) / energy(atLow, f1);
+  ok('a strike at the exact middle takes the 2nd partial out (>30 dB down)',
+     dB < -30, dB.toFixed(1) + ' dB against the same blow at 0.35');
+  ok('… while the fundamental is LOUDER for that same blow, so it is not a weak hit',
+     m1 > 1.2, 'mode 1 is ' + m1.toFixed(2) + 'x — 0.5 is nearer mode 1\'s antinode');
+}
+
+/* ── G · THE RIG RINGS ──────────────────────────────────────────────────── */
+head('G · the air really does play it');
+{
+  const f = PENT_SEMIS.map(semiToFreq);
+  const run = (speed, secs) => {
+    const rig = new ChimeRig({ freqs: f, wind: { speed: speed } });
+    const per = new Array(rig.nT).fill(0);
+    let n = 0, maxVel = 0;
+    for (let i = 0; i < secs * 60; i++) for (const e of rig.step(1 / 60)) {
+      per[e.tube]++; n++; maxVel = Math.max(maxVel, e.vel);
+      if (!(e.xi >= 0 && e.xi <= 1)) throw new Error('a strike landed off the tube: ' + e.xi);
+    }
+    return { per: per, n: n, maxVel: maxVel };
+  };
+  const calm = run(0, 30);
+  ok('dead calm rings nothing at all', calm.n === 0, calm.n + ' strikes in 30 s');
+  const breeze = run(2.4, 300);
+  ok('a breeze rings every one of the six tubes',
+     breeze.per.every((c) => c > 0), breeze.per.join(' / ') + ' strikes in five minutes');
+  const gale = run(4.5, 120);
+  ok('control: a gale rings more often, and never throws the clapper out of the rack',
+     gale.n / 120 > breeze.n / 300 && gale.maxVel < 3,
+     (gale.n / 2).toFixed(0) + ' per min vs ' + (breeze.n / 5).toFixed(0) +
+     ' · fastest blow ' + gale.maxVel.toFixed(2) + ' m/s');
+  const rig = new ChimeRig({ freqs: f, wind: { speed: 0 } });
+  rig.clapper.w = [0, 0, 0.9];
+  const sp = [];
+  for (let i = 0; i < 60 * 40; i++) {
+    rig.step(1 / 60);
+    if (i % 60 === 0) sp.push(Math.hypot(rig.clapper.w[0], rig.clapper.w[1], rig.clapper.w[2]));
+  }
+  ok('a clapper set swinging in still air comes to rest',
+     sp[sp.length - 1] < sp[0] * 0.25,
+     sp[0].toFixed(3) + ' rad/s down to ' + sp[sp.length - 1].toFixed(3) + ' over 40 s');
+}
+
+/* ── H · NOTHING BREAKS ─────────────────────────────────────────────────── */
+head('H · the voice survives the worst the wind can do');
+{
+  const f = PENT_SEMIS.map(semiToFreq);
+  const rig = new ChimeRig({ freqs: f });
+  const sr = 44100;
+  const bank = new ModalBank(rig.freqs, sr, { pans: rig.az.map((a) => Math.sin(a) * 0.62) });
+  for (let r = 0; r < 6; r++) for (let i = 0; i < rig.nT; i++) bank.strike(i, 1.6, 0.31 + 0.02 * i);
+  const n = sr * 3, L = new Float32Array(n), R = new Float32Array(n);
+  bank.render(L, R, n);
+  let peak = 0, bad = 0;
+  for (let i = 0; i < n; i++) {
+    if (!isFinite(L[i]) || !isFinite(R[i])) bad++;
+    peak = Math.max(peak, Math.abs(L[i]), Math.abs(R[i]));
+  }
+  ok('no NaN and no Inf anywhere in three seconds of pile-up', bad === 0);
+  ok('and it does not clip', peak < 0.999, 'peak ' + peak.toFixed(3));
+  const env = rmsEnvelope(L, sr, 40);
+  ok('one onset, then a falling tail',
+     env[0].v > 0 && env[env.length - 1].v < env[0].v * 0.35,
+     'rms ' + env[0].v.toFixed(3) + ' -> ' + env[env.length - 1].v.toFixed(4));
+}
+
+/* ── I · THE BYTE TWIN ──────────────────────────────────────────────────── */
+head('I · the page ships this exact core, twice');
+{
+  /* the forge strips a leading `export ` as it inlines, so compare against what
+     it actually emits — the rest must be byte-for-byte */
+  const core = stripExports(readFileSync(join(__dir, 'core.mjs'), 'utf8')).trim();
+  const page = readFileSync(join(__dir, 'index.html'), 'utf8');
+  let n = 0, at = 0;
+  for (;;) { const i = page.indexOf(core, at); if (i < 0) break; n++; at = i + 1; }
+  ok('index.html holds core.mjs verbatim twice — once for the eye, once for the ear',
+     n === 2, 'found ' + n + ' cop' + (n === 1 ? 'y' : 'ies'));
+  const tail = readFileSync(join(__dir, 'worklet.js'), 'utf8').trim();
+  ok('… and worklet.js verbatim once', page.indexOf(tail) >= 0);
+}
+
+/* ── J · THE WORKLET BUILDS ─────────────────────────────────────────────── */
+head('J · what the audio thread is handed is a valid classic script');
+{
+  const core = readFileSync(join(__dir, 'core.mjs'), 'utf8');
+  const tail = readFileSync(join(__dir, 'worklet.js'), 'utf8');
+  const src = stripExports(core) + '\n' + tail;
+  ok('no export survives the strip', !/^export/m.test(src));
+  ok('no backtick in core.mjs — the page hands it to String.raw', core.indexOf('`') < 0);
+  let compiled = true, why = '';
+  try { new Function('AudioWorkletProcessor', 'registerProcessor', 'sampleRate', src); }
+  catch (e) { compiled = false; why = e.message; }
+  ok('it compiles', compiled, why);
+}
+
+/* ── the core's own self-test, mirrored so the two can never disagree ───── */
+head('· the core\'s own self-test');
+{
+  for (const l of runChimeSelfTest().lines) ok(l.name, l.ok, l.detail);
+}
+
+console.log('\n' + (fails ? fails + ' FAILED' : 'all green') + '\n');
+process.exit(fails ? 1 : 0);

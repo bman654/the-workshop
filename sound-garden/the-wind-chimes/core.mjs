@@ -3,12 +3,13 @@
  *
  *  Written once, run in three places:
  *    · the page's module script (forge:include ./core.mjs)
- *    · the AudioWorklet — the same text, with its `export ` keywords stripped,
+ *    · the AudioWorklet — the same text, with its export keywords stripped,
  *      because a worklet is a classic script
  *    · Node — core.test.mjs (the twin) and render-wavs.mjs (the ear-check)
  *
  *  So the tube you hear, the tube you watch bending, and the tube the twin
- *  proves are one object.  DO NOT put a backtick or a dollar-brace in this file:
+ *  proves are one object.  DO NOT put a backtick or a dollar-brace ANYWHERE in
+ *  this file, comments included (that has already cost one debug cycle):
  *  the page hands the whole text to the worklet inside a String.raw template.
  *
  *  ── WHAT A CHIME TUBE ACTUALLY IS ──────────────────────────────────────────
@@ -428,7 +429,7 @@ export class ChimeRig {
     this.f1 = o.freqs;
     this.nT = this.f1.length;
     this.ring = o.ring === undefined ? 0.105 : o.ring;
-    this.cordTop = o.cordTop === undefined ? 0.075 : o.cordTop;
+    this.cordTop = o.cordTop === undefined ? 0.055 : o.cordTop;
     this.xiHang = o.xiHang === undefined ? 0.2242 : o.xiHang;
     this.rClap = o.rClap === undefined ? 0.42 : o.rClap;
     this.rSail = o.rSail === undefined ? 0.78 : o.rSail;
@@ -472,7 +473,9 @@ export class ChimeRig {
     this.tubes = [];
     for (let i = 0; i < this.nT; i++) {
       const L = this.L[i], m = this.mass[i];
-      const rTop = this.cordTop - this.xiHang * L;   /* pivot -> the tube's TOP */
+      /* the cord is re-tied as the hole moves, exactly as a chime maker does,
+       * so the tube keeps hanging where it hangs and only the CORD slides */
+      const rTop = this.cordTop;                     /* pivot -> the tube's TOP */
       const rCg = rTop + 0.5 * L;
       const I = m * (L * L / 12 + rCg * rCg);
       const sw = keep ? keep[i] : new Swinger([0, 0, 0], I, 0);
