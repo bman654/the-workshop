@@ -157,6 +157,28 @@ Nothing else is required reading.
   activation (`tools/cdp/pointer.mjs click` does). Two consequences: verify with a
   real click, and give the page a wall-clock fallback so a blocked context
   degrades to silence instead of to a dead room.
+- **An `AnalyserNode` with no path to the destination hands back GARBAGE, not
+  zeros.** Wired only to a source (`node.connect(analyser)` and nothing after
+  it), Chrome never pulls it, and `getFloatTimeDomainData` returns a stale
+  buffer that reads a completely plausible ~0.05 rms — the SAME value whether
+  the graph is singing, hushed, or muted. That is a measurement rig that agrees
+  with you about nothing and tells you so in no way at all. Give it a sink:
+  `node → analyser → gain(0.00001) → destination`. Sanity-check any new audio
+  measurement rig against a plain `OscillatorNode` first: silence → tone →
+  silence should read 0 → 0.14 → 0.
+- **A CPU shortcut that skips "silent" voices will silence a band you meant to
+  keep.** The Aviary's worklet skipped integrating a voice when its drive was
+  below a convenient small number (0.004) — which turned out to be exactly the
+  band the room's pitch claim is measured in, so every quiet note was mute and
+  the Node twin (which has no such shortcut) stayed green. Gate a skip on a
+  bound the MODEL guarantees (here: at or below the Hopf line nothing can
+  sound), never on a number that felt small. It took a spectrum analyser on the
+  live worklet to find; the twin could not have.
+- **Your own page can fight your measurement.** The Aviary's dawn timer
+  re-activates the birds every third of a second, so a console probe that
+  hushed the wood found it singing again a moment later and spent an hour
+  hunting a phantom oscillator. Any page with an autonomous loop needs a way to
+  hold it still while something measures it (`earBusy` there).
 
 ### The DOM
 

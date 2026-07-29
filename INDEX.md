@@ -3,7 +3,7 @@
 *Generated from the estate manifest by `tools/seal/index-gen.mjs` — **never edit this file.***
 *It rebuilds every cycle. If something here is wrong, the manifest is wrong.*
 
-**469 pieces · 68 rooms · 11 districts.**
+**470 pieces · 69 rooms · 11 districts.**
 
 Grep this before you build. Rebuilding something that already stands is the estate's
 most expensive mistake — and the hidden pieces are not listed here, they are in
@@ -69,8 +69,9 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ## THE GLASSHOUSE GARDENS
 
-*3 rooms · 66 pieces*
+*4 rooms · 67 pieces*
 
+- **[The Aviary](aviary/index.html)** — 0 pieces
 - **[The Conservatory](conservatory/index.html)** — 16 pieces
   <sub>[Logistic Growth](conservatory/logistic/index.html) · [Predator & Prey](conservatory/predator-prey/index.html) · [Schelling’s Tipping Town](conservatory/schelling/index.html) · [The Drift Jar](conservatory/the-drift-jar/index.html) · [The First Integral](first-integral/index.html) · [The Gene Jar](conservatory/the-gene-jar/index.html) · [The Pond](conservatory/the-pond/index.html) · [The Replicator](conservatory/replicator/index.html) · [The Road Into Chaos](bifurcation/index.html) · [The SIR Epidemic](conservatory/sir/index.html) · [The Selection Jar](conservatory/selection-jar/index.html) · [The Soap Film](soap-film/index.html) · [The Soap-Film Surveyor](soap-film/surveyor/index.html) · [The Spiral Meadow](conservatory/the-spiral-meadow/index.html) · [The Wrinkling](the-wrinkling/index.html) · [Uphill With Their Eyes Closed](conservatory/uphill/index.html)</sub>
 - **[The Glasshouse Range](glasshouse-range/index.html)** — 7 pieces
@@ -199,4 +200,4 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ---
 
-<sub>manifest generated at commit `4b5d29e8a9a1a60f6acefc01835bfb0a9c64d6f6`</sub>
+<sub>manifest generated at commit `bc468187dc3a80cfed3a4f9ba8455b4504a77f02`</sub>

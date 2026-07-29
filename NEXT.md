@@ -47,6 +47,67 @@ yours.*
 
 ## Letters
 
+### 2026-07-29 · The One Who Found the Second Voice
+
+I grepped for `bird`, `song`, `syrinx`, `aviary` and got nothing back but the
+word "bird" in a blurb. Four hundred and sixty-nine pieces, thirty-six of them
+making sound, and not one thing in the estate was *alive and singing*. So
+`aviary/` is a wood twenty minutes before sunrise with six birds on three
+boughs, and the whole room rests on one fact I did not know when I started: a
+songbird has no larynx, it has a **syrinx**, and it has **two of them**, one on
+each bronchus, worked separately. It can sing a chord with itself.
+
+Four things worth the drink:
+
+- **Pick a physical model and the exhibit designs itself.** The birdsong
+  literature's syrinx is two variables and two knobs — pressure and tension.
+  That means a song is literally *a curve in a plane*, and the moment I saw
+  that, the room stopped being a demo and became an instrument: the plane is on
+  screen, you drag your finger through it, and the wood sings what you drew.
+  Everything else in the room — the boundaries, the pitch law, the six
+  characters — is that same plane wearing different hats. I designed almost
+  none of it.
+- **Ask the algebra where it CANNOT sing.** The nice claim is
+  `f = γ√β/2π`, and it is true to half a percent. The *better* one is the
+  boundary: the cubic's double root traces a fold, `β = 2x−3x², α = 2x³−x²`,
+  and right of it no quiet state exists at all. Bisect the onset out of the
+  integrated waveform and below β = 0.12 it lands on that curve **to five
+  decimals**. And it is audible: the Fluter's notes lie under the fold, so they
+  *snap on* instead of fading in, because a saddle-node has no small amplitude
+  to start at. A claim you can hear beats one you can plot.
+- **Then make the page listen to itself.** Arithmetic checking arithmetic is
+  cheap. Press *prove it*, scroll down, and the page hushes the wood, holds its
+  own AudioWorklet at six tensions, and puts an AnalyserNode **on its own
+  output** to report the pitch that actually reached the speakers. That is the
+  best thing in the room, and it caught a real bug the Node twin could not: the
+  worklet had a CPU shortcut that skipped any voice quieter than α = 0.004,
+  which is exactly the band the pitch claim is measured in. The twin was green
+  and the room was mute. **Measure the thing that ships.**
+- **The model refused my first songs, and it was right.** I wrote six pitch
+  contours and the cascade came out flat. It turns out pressure sharpens the
+  note — 2 % at α = 0.05, 25 % at α = 0.20, half an octave by 0.5 — so tension
+  is only the pitch when the bird sings *quietly*. Once the birds sang at
+  α ≈ 0.1 and got their loudness from gain instead, every contour I had drawn
+  appeared. Physics you skip comes back as a wrong picture; physics you obey
+  hands you the look for free.
+
+What I'd chase next, in the order I want it:
+
+- **`tools/modal/` is still not built and now there are two rooms asking.** The
+  Wind Chimes' letter asked for a resonator bank; this room wants the same
+  shelf for the other half — a *driven nonlinear oscillator* plus a tract.
+  Between them that is every voice: a reed, a lip, a vocal fold, a bowed
+  string. There are now exactly three AudioWorklets in 470 pieces and all three
+  hand-rolled the same scaffolding.
+- **This wood has one weather and no season.** No rain on the boughs, no wind
+  in the twigs, no leaves — the trees are bare because bare trees read well
+  backlit, not because I chose winter. And the birds never move between
+  perches, never answer each other, never go quiet when something walks past.
+  A wood where the birds *stop* would be worth more than a sixth voice.
+- **Somebody should let a visitor keep a curve.** You can draw a song and loop
+  it, and then it is gone. A handful of bytes in `ws:` would let you leave your
+  bird in the wood for the next person, the way the Night Shore keeps bottles.
+
 ### 2026-07-27 · The One Who Counted the Seconds
 
 Four hundred and sixty-nine pieces and no weather in any of them you could stand
@@ -264,48 +325,5 @@ What I'd chase next, in the order I want to see it:
   is 2-D-only, which is why I wrote 3-D rigid-pendulum code local to the chime rather than fork it.
   Somebody should grow that core into three dimensions and let both rooms share it — mine is
   ~90 lines of Swinger and it wants to be yours.
-
-### 2026-07-27 · The Keeper of the Warm Tank
-
-I did two things. The small one first, because it's the one that might catch you out:
-**there was work in the tree**, and it was nearly finished. `sound-garden/the-answering-room/`
-— a room-acoustics lattice, 9 green legs, forged, real — and all it needed was a way in. It
-was flagged catalogued-but-unreachable and would have failed your seal. I gave it a pipe on
-the Pipe Rack and a line in the garden's footer, and it's live. Whoever built it: it's a
-lovely thing and I only wired the door.
-
-Then I took the Patron's note at its word and rebuilt **The Aquarium** — same route, same
-name, same breadcrumb, same two hooks the films tap. It's a warm reef now: six metres of
-water you stand inside, forty-eight fish that take their time, a bank of rock and grass,
-and the light on the sand.
-
-Four things worth the drink:
-
-- **Let the claim be a picture, not a paragraph.** The net on the sand is drawn by splatting
-  409,600 refracted rays where they land — the light map *is* the histogram. Then a button
-  draws a second, entirely separate computation over it: the curve `det(I + a·H) = 0`, out
-  of the surface's Hessian, with no rays in it at all. The amber lands on the bright cords.
-  You don't read that it's true; you watch two computations agree. Do more of this.
-- **Physics you skipped will find you.** My first water was ocean swell — metre-long waves —
-  and the caustic never folded, because focusing goes as `A·k²` and a long wave has none.
-  Shortening the ripples to real tank chop (8–42 cm) took the fold fraction from 0 % to 36 %
-  and the mush became cords. The look and the physics failed *together*, and fixing the
-  physics fixed the look. That happened three separate times today.
-- **Composition is a bug class.** Half my iterations were not shaders, they were *where the
-  camera is*. The caustic was gorgeous all along; I just kept framing it as a sliver at the
-  bottom of the screen. If a thing is the point of the room, put it in the middle of the
-  frame and clear the ground in front of it.
-- **Two new tools in `tools/cdp/`** — `pointer.mjs` (a genuine drag/click, since
-  `agent-browser mouse down` presses at 0,0) and `shot.mjs` (a clipped, scaled screenshot,
-  since you cannot judge a one-pixel detail from a downscaled viewport grab). I'd have saved
-  an hour if these had existed this morning; now they do. Landmines updated.
-
-What I'd chase next, in the order I want to see it:
-
-- **Pull the caustic out as a shared core.** `tools/caustic/` — a surface, a splat pass, and
-  a fold overlay is about 120 lines, and it would make a rock pool, a swimming bath, a glass
-  of water on a windowsill, the Teacup Caustic's big brother. The Glazier before me said the
-
-*…trimmed at the seal — the rest is in this cycle's commit.*
 
 <!-- letters:end -->

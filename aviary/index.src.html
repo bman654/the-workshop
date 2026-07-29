@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Aviary — two voices in one throat, and the plane they both live in</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  THE AVIARY  ·  aviary/
+
+  A wood twenty minutes before sunrise.  Six birds on three boughs.  Every note
+  any of them sings comes out of the SAME two-variable dynamical system — a
+  songbird's syrinx, modelled as a pair of labia the bird pushes air past —
+  driven along a curve in the plane of (pressure, tension).
+
+  WHAT IS ACTUALLY RUNNING
+    · the voice is an AudioWorklet: each bird is TWO syringes (a songbird has
+      one on each bronchus, worked separately) summed into ONE trachea, so the
+      two voices beat with each other rather than merely overlapping.  Each
+      syrinx is a stiff 2-D ODE integrated fourteen times per output sample by
+      RK4 and boxcar-decimated;
+    · the trachea is a one-tap feedback comb with an inverting reflection at the
+      beak, and the beak radiates the pressure derivative;
+    · the wood is WebGL2: trees grown by a recursive generalised-cylinder walk
+      from a seeded PRNG, birds lathed from a radius profile, an analytic dawn
+      sky, and a bloom + screen-space god-ray pass.  No textures, no assets.
+
+  THE CLAIMS — falsifiable, and the page tests them live in a Worker.
+    1.  WHERE IT SINGS.  Equilibria of the model satisfy x^3 - x^2 + bx + a = 0
+        with Jacobian trace -(x^2+x).  So the quiet state loses stability
+        exactly on alpha = 0 (a Hopf), is destroyed on the fold traced by
+        beta = 2x-3x^2, alpha = 2x^3-x^2, and is held open again above
+        alpha = beta+2.  Press PROVE IT and the page bisects the sounding
+        boundary out of the integrated waveform and lays the dots on the curves.
+        Below beta = 0.12 the measured onset IS the fold, to five decimals.
+    2.  WHAT PITCH.  The eigenvalues at the Hopf are +-i sqrt(beta), so a note
+        is born at f = gamma sqrt(beta) / 2pi.  Measured off the waveform, under
+        1 % across the register.  It is a THRESHOLD claim only, and the page
+        says so: blow harder and the cycle grows and the pitch runs sharp.
+    3.  TWO VOICES.  Shut one syrinx and its own predicted pitch leaves the
+        spectrum (147 dB down in the twin) while the other's stays put.
+
+  ENGINES (inlined byte-for-byte by the forge, never forked):
+    · ./core.mjs     the syrinx, the trachea, the algebra, the measurement
+    · ./song.mjs     six birds, written as pitch contours
+    · ./worklet.js   the audio-thread tail   (core+song prepended)
+    · ./prove.js     the measurement worker  (core prepended)
+    · ./render.js    the wood
+    · ./score.js     the plane, drawn
+    · tools/ws/ws.js the estate-wide mute + breadcrumb
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root{
+    --ink:#f4ead9; --dim:#b6a891; --faint:#8b7f6d;
+    --gold:#e3ba76; --warm:#f8d9a6; --blue:#96c4ff; --ember:#ffb078;
+    --bg0:#0a0a10; --panel:rgba(14,12,18,.86); --line:rgba(227,186,118,.22);
+    --font-ui:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --font-mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg0);color:var(--ink);
+    font:15px/1.55 var(--font-ui);overflow:hidden;-webkit-font-smoothing:antialiased}
+  canvas#gl{display:block;position:fixed;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
+
+  .topleft{position:fixed;top:15px;left:20px;z-index:6;pointer-events:none;max-width:min(46ch,52vw)}
+  .topleft a,.topleft button{pointer-events:auto}
+  .back{display:inline-block;font:600 10px/1 var(--font-mono);letter-spacing:.22em;
+    text-transform:uppercase;color:var(--dim);text-decoration:none;opacity:.72}
+  .back:hover{color:var(--gold);opacity:1}
+  h1{font:400 clamp(20px,2.6vw,30px)/1.12 var(--font-ui);margin:.42em 0 .12em;
+    text-shadow:0 2px 22px rgba(0,0,0,.75)}
+  .kick{font:500 9.5px/1 var(--font-mono);letter-spacing:.24em;text-transform:uppercase;
+    color:var(--gold);opacity:.8}
+  .sub{font-size:13.5px;color:var(--dim);margin:.3em 0 0;text-shadow:0 1px 14px rgba(0,0,0,.8)}
+
+  .topright{position:fixed;top:15px;right:20px;z-index:6;display:flex;gap:8px}
+  button{font:600 10px/1 var(--font-mono);letter-spacing:.16em;text-transform:uppercase;
+    color:var(--dim);background:rgba(18,15,22,.72);border:1px solid var(--line);
+    border-radius:3px;padding:7px 11px;cursor:pointer;transition:.14s}
+  button:hover{color:var(--warm);border-color:rgba(227,186,118,.5)}
+  button.on{color:#12100c;background:var(--gold);border-color:var(--gold)}
+
+  /* ── the dock ─────────────────────────────────────────────────────────── */
+  .dock{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:5;
+    display:flex;gap:16px;align-items:flex-end;max-width:calc(100vw - 32px)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:6px;
+    padding:11px 13px;backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+  #score{display:block;width:560px;max-width:calc(100vw - 40px);height:250px;
+    touch-action:none;cursor:crosshair;border-radius:3px}
+  .hint{font:500 9.5px/1.5 var(--font-mono);letter-spacing:.1em;color:var(--faint);
+    margin-top:7px;text-transform:uppercase}
+  .hint b{color:var(--gold);font-weight:600}
+  .side{display:flex;flex-direction:column;gap:9px;width:216px}
+  .lab{font:600 9px/1 var(--font-mono);letter-spacing:.2em;text-transform:uppercase;color:var(--faint)}
+  input[type=range]{width:100%;accent-color:var(--gold);margin:5px 0 0}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+  .chip{font:600 9.5px/1 var(--font-mono);letter-spacing:.08em;padding:6px 7px;
+    border:1px solid rgba(227,186,118,.22);border-radius:3px;color:var(--dim);
+    background:rgba(20,17,24,.5);cursor:pointer;transition:.13s;text-transform:none}
+  .chip:hover{color:var(--warm);border-color:rgba(227,186,118,.5)}
+  .chip.sel{color:#12100c;background:var(--gold);border-color:var(--gold)}
+  .chip .dot{display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:5px;
+    background:currentColor;opacity:.35;vertical-align:middle}
+  .chip.live .dot{opacity:1;box-shadow:0 0 7px currentColor}
+  .row{display:flex;gap:6px}
+  .row button{flex:1;padding:7px 4px}
+  .note{font:400 11.5px/1.45 var(--font-ui);color:var(--dim)}
+
+  /* ── panels ───────────────────────────────────────────────────────────── */
+  .sheet{position:fixed;inset:0;z-index:20;background:rgba(6,6,10,.93);
+    display:none;overflow:auto;padding:min(6vh,54px) 20px}
+  .sheet.show{display:block}
+  .sheet .inner{max-width:860px;margin:0 auto}
+  #proof .inner{max-width:1160px}
+  .sheet h2{font:400 24px/1.2 var(--font-ui);margin:0 0 .2em;color:var(--warm)}
+  .sheet h3{font:600 10px/1 var(--font-mono);letter-spacing:.2em;text-transform:uppercase;
+    color:var(--gold);margin:1.9em 0 .7em}
+  .sheet p{margin:.75em 0;color:#ded3c0;max-width:74ch}
+  .sheet .close{position:fixed;top:15px;right:20px}
+  .eq{font:400 15px/1.6 var(--font-mono);color:var(--warm);background:rgba(255,255,255,.035);
+    border-left:2px solid var(--gold);padding:11px 15px;margin:1em 0;overflow-x:auto}
+  .proofgrid{display:flex;flex-wrap:wrap;gap:20px;margin:1.1em 0}
+  .proofgrid canvas{background:#0d0c14;border:1px solid var(--line);border-radius:4px;
+    max-width:100%}
+  .verdict{font:400 13px/1.7 var(--font-mono);color:var(--dim);white-space:pre-wrap;
+    background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:4px;padding:13px 16px}
+  .verdict b{color:var(--warm);font-weight:600}
+  .verdict .good{color:#9fe0a8}
+  .bar{height:3px;background:rgba(255,255,255,.09);border-radius:2px;overflow:hidden;margin:.8em 0}
+  .bar i{display:block;height:100%;width:0;background:var(--gold);transition:width .2s}
+
+  /* ── the gate ─────────────────────────────────────────────────────────── */
+  .gate{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;
+    background:rgba(6,6,10,.72);cursor:pointer;text-align:center;backdrop-filter:blur(2px)}
+  .gate .big{font:400 clamp(26px,4.4vw,44px)/1.15 var(--font-ui);color:var(--warm)}
+  .gate .small{font:500 10px/1 var(--font-mono);letter-spacing:.28em;text-transform:uppercase;
+    color:var(--dim);margin-top:15px}
+  .gate.gone{display:none}
+
+  @media (max-width:1020px){
+    .dock{flex-direction:column;align-items:stretch;bottom:10px;gap:7px}
+    .side{width:auto}
+    #score{height:180px}
+    .card{padding:8px 10px}
+    .note{display:none}
+    .topleft{max-width:70vw}
+    .sub{display:none}
+  }
+  @media (max-width:1020px) and (max-height:820px){
+    #score{height:132px}
+    .hint{font-size:8.5px;margin-top:5px}
+    .chip{padding:5px 6px;font-size:9px}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+
+<div class="topleft">
+  <a class="back" href="../index.html">← the estate</a>
+  <h1>The Aviary</h1>
+  <div class="kick">two voices in one throat</div>
+  <p class="sub">Every note in this wood is one point moving in a plane. Draw in the plane and the wood will sing what you drew.</p>
+</div>
+
+<div class="topright">
+  <button id="bAbout">about</button>
+  <button id="bProve">prove it</button>
+  <button id="bMute">mute</button>
+</div>
+
+<div class="dock">
+  <div class="card">
+    <canvas id="score" width="1120" height="500"></canvas>
+    <div class="hint"><b>drag inside</b> to sing · release to keep it looping · <b>press a bird</b> to hear its own curve</div>
+  </div>
+  <div class="card side">
+    <div>
+      <div class="lab">the light <span id="lightVal" style="float:right;opacity:.7">—</span></div>
+      <input id="light" type="range" min="0" max="100" value="6">
+    </div>
+    <div>
+      <div class="lab">the wood</div>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="row">
+      <button id="bSide">both syringes</button>
+      <button id="bClear">clear</button>
+    </div>
+    <div class="note" id="readout">—</div>
+  </div>
+</div>
+
+<div class="sheet" id="about"><div class="inner">
+  <button class="close" id="cAbout">close</button>
+  <h2>What is singing</h2>
+  <p>A songbird has no larynx. It has a <b>syrinx</b>, at the fork where the windpipe
+  splits, and it has <b>two of them</b> — one on each bronchus, worked by separate
+  muscles. Each is a pair of soft labia the bird pushes air past. Below a threshold
+  they sit still and the air goes by in silence; above it they flap, and the flap
+  chops the airflow into a tone.</p>
+  <p>The model here is the low-dimensional one from the birdsong-physics literature.
+  In a time nondimensionalised by the labial rate constant γ, the labial midpoint x
+  obeys</p>
+  <div class="eq">dx/dτ = u<br>du/dτ = −α − βx − x³ + x² − (x² + x)u</div>
+  <p>α is the pressure in the air sac; β is how tight the bird holds the labia. γ is
+  nothing but the clock — it turns τ back into seconds, and so sets the bird's
+  register. That is the entire instrument. Six birds, one equation, different curves.</p>
+
+  <h3>Where it sings, and where it cannot</h3>
+  <p>Equilibria have u = 0 and satisfy x³ − x² + βx + α = 0, with Jacobian trace
+  −(x² + x) and determinant β + 3x² − 2x. Three things follow with no simulation in
+  them at all:</p>
+  <p><b>The Hopf line.</b> The trace vanishes at x = 0, which the cubic forces to
+  α = 0. Left of it the quiet state is stable and nothing can sound. The eigenvalues
+  there are ±i√β, so a note is <i>born</i> at</p>
+  <div class="eq">f = γ √β / 2π</div>
+  <p><b>The fold.</b> The quiet state can also be destroyed outright, by colliding
+  with a saddle. Double roots satisfy the cubic and 3x² − 2x + β = 0 together, which
+  parametrises the fold by its own double root: β = 2x − 3x², α = 2x³ − x², for x
+  from ½ to ⅔. It runs from (0, ¼) to (4/27, 0). Right of it there is no quiet state
+  anywhere, so the bird <i>must</i> sing.</p>
+  <p><b>The roof.</b> The trace also vanishes at x = −1, which forces α = β + 2. Blow
+  harder than that and the labia are simply held open. Silence again.</p>
+  <p>Between the Hopf line and the fold — only below β = ¼ — a quiet state and a song
+  can both exist, and which you get depends on where you came from. The Fluter's
+  notes lie in there, which is why they snap on instead of fading in: a saddle-node
+  does not have a small amplitude to start at.</p>
+
+  <h3>What is honest about it, and what is not</h3>
+  <p>The pitch formula is a <b>threshold</b> claim and the room does not pretend
+  otherwise. Push α up and the limit cycle grows, the oscillation stops being
+  sinusoidal, and the note runs sharp: 2 % at α = 0.05, 25 % at α = 0.20, half an
+  octave by α = 0.5. That is why these birds sing at low pressure — it is where
+  tension really is the pitch — and it is a constraint the model imposed on the
+  composing, not one that was designed in.</p>
+  <p>The six birds are <b>not identifications</b> and not recordings. Nothing here
+  was fitted to a field tape. They are six curves a hand drew in two numbers, named
+  for the shape they make. The claim is not that this is a blackbird; the claim is
+  that all six of them, and anything you draw, come out of one equation with two
+  knobs.</p>
+
+  <h3>Two voices</h3>
+  <p>Both syringes empty into one trachea, so their partials add <i>before</i> the
+  tube and beat with each other. The Chatterer holds its two sides deliberately out
+  of tune — 3180 Hz on the left, 3800 Hz on the right, a ratio of 1.195, which is
+  nobody's interval. Shut one side and that pitch leaves the spectrum by 147 dB while
+  the other stays exactly where it was. That is a thing one throat can do and two
+  throats cannot: sing a chord with itself.</p>
+</div></div>
+
+<div class="sheet" id="proof"><div class="inner">
+  <button class="close" id="cProof">close</button>
+  <h2>Prove it</h2>
+  <p>The curves below are algebra — the Hopf line, the fold, the roof, and the
+  eigenvalue pitch, all out of the cubic and its Jacobian, with no sound in them
+  anywhere. The dots are measurements: the same integrator the audio thread is
+  running, bisecting the sounding boundary and counting the crossings of the
+  rendered waveform, in a worker, on your machine, now.</p>
+  <div class="bar"><i id="pbar"></i></div>
+  <div class="proofgrid">
+    <canvas id="pc1" width="1080" height="620"></canvas>
+    <canvas id="pc2" width="1080" height="620"></canvas>
+  </div>
+  <div class="verdict" id="verdict">press <b>prove it</b> again to run the measurement</div>
+
+  <h3>and now the same claim, measured on the sound actually leaving the speakers</h3>
+  <p>Everything above is arithmetic checking arithmetic. This last one is different:
+  the page hushes the wood, holds its own AudioWorklet at six tensions just above
+  the Hopf line, and puts an <b>analyser on its own output</b> — the signal your
+  speakers get — to see what pitch came out. Then it holds one note below the fold
+  and one above it, at the same tension, to hear the fold.</p>
+  <div class="row" style="max-width:280px;margin:1em 0">
+    <button id="bEar">listen to it</button>
+  </div>
+  <div class="verdict" id="earverdict">not yet measured — this one takes about twenty seconds, and the wood goes quiet while it runs</div>
+</div></div>
+
+<div class="gate" id="gate"><div>
+  <div class="big">The Aviary</div>
+  <div class="small">click to let the light in</div>
+</div></div>
+
+<script type="module">
+<!-- forge:include ../tools/ws/ws.js -->
+<!-- forge:include ./core.mjs -->
+<!-- forge:include ./song.mjs -->
+<!-- forge:include ./score.js -->
+<!-- forge:include ./render.js -->
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE TWO OFF-THREAD COPIES.  The forge strips `export ` and static imports as
+   it inlines, so the same core text drops straight into a classic worklet
+   script and into a worker.  This is why core.mjs and song.mjs may not contain
+   a backtick anywhere -- comments included.  core.test.mjs asserts it.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const CORE_TEXT = String.raw`
+<!-- forge:include ./core.mjs -->
+`;
+const SONG_TEXT = String.raw`
+<!-- forge:include ./song.mjs -->
+`;
+const WORKLET_TAIL = String.raw`
+<!-- forge:include ./worklet.js -->
+`;
+const PROVE_TAIL = String.raw`
+<!-- forge:include ./prove.js -->
+`;
+const strip = (s) => s
+  .replace(/^export\s+(?=(?:default\s+)?(?:function|class|const|let|var))/gm, '')
+  .replace(/^export\s*\{[\s\S]*?\};?\s*$/gm, '')
+  .replace(/^import\s[^\n]*?;\s*$/gm, '');
+const WORKLET_SRC = strip(CORE_TEXT) + '\n' + strip(SONG_TEXT) + '\n' + WORKLET_TAIL;
+const WORKER_SRC = strip(CORE_TEXT) + '\n' + PROVE_TAIL;
+
+const $ = (id) => document.getElementById(id);
+try { WS.seen('aviary'); } catch (e) {}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   1 · THE WOOD
+   ═══════════════════════════════════════════════════════════════════════════ */
+const cv = $('gl');
+const gl = cv.getContext('webgl2', { antialias: true, alpha: false, powerPreference: 'high-performance' });
+if (!gl) {
+  document.body.innerHTML = '<p style="padding:3em;font:16px Georgia,serif;color:#e6dcc9">' +
+    'This wood needs WebGL2.</p>';
+  throw new Error('no webgl2');
+}
+const wood = createWood(gl, { seed: 20260729 });
+
+/* six birds on the boughs, nearest first */
+const PERCH = wood.fore.perches;
+const ORDER = ['fluter', 'chatterer', 'piper', 'seesaw', 'cascade', 'rattle'];
+function tintOf(hue, v) {
+  const h = hue / 360, s = 0.30;
+  const f = (n) => {
+    const k = (n + h * 12) % 12;
+    return v - v * s * Math.max(-1, Math.min(Math.min(k - 3, 9 - k), 1));
+  };
+  return [f(0), f(8), f(4)];
+}
+const birds = ORDER.map((id, i) => {
+  const sp = speciesById(id);
+  const pr = PERCH[Math.min(i, PERCH.length - 1)];
+  const near = pr.depth === 0;
+  return {
+    sp: sp, id: id, name: sp.name, p: pr.p.slice(), depth: pr.depth,
+    size: (0.30 + 0.10 * sp.size) * (1 + pr.depth * 0.20),
+    yaw: (pr.p[0] < 0 ? 0.55 : -0.55) + (i % 2 ? 0.25 : -0.15),
+    tint: tintOf(sp.hue, 0.16 + 0.07 * (i % 3)),
+    phase: i * 1.7, env: 0, a: A_REST, b: 0.5, here: false, hero: near, sel: false,
+    pan: Math.max(-0.85, Math.min(0.85, pr.p[0] / 3.4)),
+    dist: 0.25 + pr.depth * 0.55,
+    level: 1 / (1 + pr.depth * 0.55),
+  };
+});
+let selected = 0;
+birds[0].sel = true;
+
+/* ════════════════════════════════════════════════════════════════════════════
+   2 · THE VOICE
+   ═══════════════════════════════════════════════════════════════════════════ */
+let actx = null, node = null, audioReady = false;
+async function startAudio() {
+  if (actx) return;
+  actx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+  const blob = new Blob([WORKLET_SRC], { type: 'text/javascript' });
+  const url = URL.createObjectURL(blob);
+  try {
+    await actx.audioWorklet.addModule(url);
+    node = new AudioWorkletNode(actx, 'aviary', {
+      numberOfInputs: 0, outputChannelCount: [2],
+      processorOptions: {
+        substeps: 14,
+        voices: birds.map((b) => ({ sp: packSpecies(b.sp), pan: b.pan, dist: b.dist,
+          level: b.level, hero: b.hero })),
+        handSp: packSpecies(speciesById('piper')),
+        gain: 0.62, wet: 0.30,
+      },
+    });
+    node.connect(actx.destination);
+    node.port.onmessage = onSnap;
+    node.port.postMessage({ type: 'mute', v: WS.muted() });
+    pushActive();
+    audioReady = true;
+  } catch (err) { console.error('worklet failed', err); }
+  finally { URL.revokeObjectURL(url); }
+  if (actx.state === 'suspended') { try { await actx.resume(); } catch (e) {} }
+}
+const tell = (m) => { if (audioReady) node.port.postMessage(m); };
+
+/* the live trail the score draws */
+const trail = [];
+const handTrail = [];
+function onSnap(e) {
+  const m = e.data;
+  if (m.type === 'diag') { window.__lastDiag = m; return; }
+  if (m.type !== 'snap') return;
+  for (let i = 0; i < birds.length; i++) {
+    birds[i].env = m.env[i];
+    birds[i].a = m.a[i]; birds[i].b = m.b[i];
+  }
+  const s = birds[selected];
+  trail.push([s.a, s.b, s.env]);
+  if (trail.length > 150) trail.shift();
+  handTrail.push([m.hand[0], m.hand[1], m.hand[2]]);
+  if (handTrail.length > 150) handTrail.shift();
+  handEnv = m.hand[2];
+}
+let handEnv = 0;
+
+/* ════════════════════════════════════════════════════════════════════════════
+   3 · THE LIGHT — who is awake
+   ═══════════════════════════════════════════════════════════════════════════ */
+let light = 0.06, lightAuto = true;
+function pushActive() {
+  const ids = [];
+  for (let i = 0; i < birds.length; i++) {
+    const on = light >= birds[i].sp.enter;
+    birds[i].here = on;
+    if (on) ids.push(i);
+  }
+  tell({ type: 'active', ids: ids });
+  renderChips();
+}
+$('light').addEventListener('input', (e) => {
+  light = +e.target.value / 100; lightAuto = false; pushActive();
+});
+
+/* ════════════════════════════════════════════════════════════════════════════
+   4 · THE PLANE
+   ═══════════════════════════════════════════════════════════════════════════ */
+const sc = $('score');
+const sctx = sc.getContext('2d');
+let DPR = Math.min(2.5, window.devicePixelRatio || 1);
+let view = null;
+function layoutScore() {
+  const r = sc.getBoundingClientRect();
+  sc.width = Math.max(2, Math.round(r.width * DPR));
+  sc.height = Math.max(2, Math.round(r.height * DPR));
+  view = makeView(r.width, r.height, {
+    aMin: -0.030, aMax: 0.215, bMin: 0, bMax: 3.00,
+    gamma: birds[selected].sp.gamma,
+    pad: { l: 42, r: 44, t: 12, b: 24 },
+  });
+}
+function drawScore() {
+  if (!view) return;
+  sctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  drawPlane(sctx, view, snAlpha, { aStep: 0.1, legend: true });
+  /* the selected bird's own curve, ghosted */
+  const g = ghostPath();
+  if (g) drawPath(sctx, view, g, { color: 'rgba(227,186,118,0.34)', width: 1.3, dash: [3, 3], breakBelow: 0.004 });
+  if (drawn.length > 1) drawPath(sctx, view, drawn, { color: 'rgba(150,220,255,0.62)', width: 1.7 });
+  drawComet(sctx, view, trail, 'rgba(255,186,110,ALPHA)');
+  if (handMode !== 'off') drawComet(sctx, view, handTrail, 'rgba(150,224,255,ALPHA)');
+}
+function ghostPath() {
+  const sp = birds[selected].sp;
+  const pk = packSpecies(sp);
+  const ph = pk.phrases[0];
+  const out = [];
+  let t = 0;
+  for (const [k, gap] of ph) {
+    const g = pk.gestures[k];
+    for (const p of g.pts) out.push([t + p[0] * g.dur, airPressure(p[1]), p[2]]);
+    t += g.dur + gap;
+  }
+  return out;
+}
+
+/* ── drawing in it ────────────────────────────────────────────────────────── */
+let drawn = [], drawing = false, drawT0 = 0, handMode = 'off';
+function ptFromEvent(ev) {
+  const r = sc.getBoundingClientRect();
+  return [ev.clientX - r.left, ev.clientY - r.top];
+}
+sc.addEventListener('pointerdown', (ev) => {
+  startAudio();
+  const [x, y] = ptFromEvent(ev);
+  if (!view.inside(x, y)) return;
+  sc.setPointerCapture(ev.pointerId);
+  drawing = true; drawn = []; drawT0 = performance.now();
+  handMode = 'live';
+  tell({ type: 'hand', mode: 'live', gamma: birds[selected].sp.gamma });
+  pushDrawn(x, y);
+  ev.preventDefault();
+});
+sc.addEventListener('pointermove', (ev) => {
+  if (!drawing) return;
+  const [x, y] = ptFromEvent(ev);
+  pushDrawn(x, y);
+});
+function pushDrawn(x, y) {
+  const a = Math.max(view.aMin, Math.min(view.aMax, view.ia(x)));
+  const b = Math.max(0.004, Math.min(view.bMax, view.ib(y)));
+  drawn.push([(performance.now() - drawT0) / 1000, a, b]);
+  tell({ type: 'handXY', a: airPressure(a), b: b, a2: A_REST, b2: b });
+}
+function endDraw(ev) {
+  if (!drawing) return;
+  drawing = false;
+  try { sc.releasePointerCapture(ev.pointerId); } catch (e) {}
+  const dur = drawn.length ? drawn[drawn.length - 1][0] : 0;
+  if (drawn.length > 4 && dur > 0.18) {
+    const D = Math.max(0.25, Math.min(5.0, dur));
+    const pts = drawn.map((p) => [p[0] / dur, p[1], p[2]]);
+    handMode = 'loop';
+    tell({ type: 'hand', mode: 'loop', pts: pts, dur: D, gamma: birds[selected].sp.gamma });
+    say('your curve, ' + D.toFixed(2) + ' s round — ' + Math.round(100 * pts.filter(
+      (p) => mustSing(p[1], p[2])).length / pts.length) + ' % of it above the fold');
+  } else {
+    handMode = 'off'; drawn = [];
+    tell({ type: 'hand', mode: 'off' });
+  }
+}
+sc.addEventListener('pointerup', endDraw);
+sc.addEventListener('pointercancel', endDraw);
+
+$('bClear').onclick = () => {
+  drawn = []; handMode = 'off'; handTrail.length = 0;
+  tell({ type: 'hand', mode: 'off' });
+  say('—');
+};
+function say(s) { $('readout').textContent = s; }
+
+/* ── the chips ────────────────────────────────────────────────────────────── */
+function renderChips() {
+  const host = $('chips');
+  if (host.childElementCount !== birds.length) {
+    host.innerHTML = '';
+    birds.forEach((b, i) => {
+      const el = document.createElement('button');
+      el.className = 'chip';
+      el.innerHTML = '<span class="dot"></span>' + b.name.replace('The ', '');
+      el.onclick = () => { startAudio(); select(i); tell({ type: 'sing', v: i }); };
+      host.appendChild(el);
+    });
+  }
+  birds.forEach((b, i) => {
+    const el = host.children[i];
+    el.classList.toggle('sel', i === selected);
+    el.classList.toggle('live', b.here);
+    el.style.opacity = b.here ? 1 : 0.45;
+    el.title = b.sp.note;
+  });
+}
+function select(i) {
+  birds[selected].sel = false;
+  selected = i;
+  birds[i].sel = true;
+  trail.length = 0;
+  layoutScore();
+  renderChips();
+  say(birds[i].name + ' — ' + birds[i].sp.note);
+}
+
+/* ── one syrinx or two ────────────────────────────────────────────────────── */
+let sideMode = 0;
+$('bSide').onclick = () => {
+  startAudio();
+  sideMode = (sideMode + 1) % 3;
+  $('bSide').textContent = ['both syringes', 'left syrinx only', 'right syrinx only'][sideMode];
+  $('bSide').classList.toggle('on', sideMode !== 0);
+  for (let i = 0; i < birds.length; i++) tell({ type: 'side', v: i, side: sideMode });
+  tell({ type: 'side', v: -1, side: sideMode });
+};
+
+/* ── mute, panels ─────────────────────────────────────────────────────────── */
+function syncMute() {
+  const m = WS.muted();
+  $('bMute').textContent = m ? 'unmute' : 'mute';
+  $('bMute').classList.toggle('on', m);
+  tell({ type: 'mute', v: m });
+}
+$('bMute').onclick = () => { startAudio(); WS.setMuted(!WS.muted()); syncMute(); };
+WS.onMuteChange(syncMute);
+syncMute();
+$('bAbout').onclick = () => $('about').classList.add('show');
+$('cAbout').onclick = () => $('about').classList.remove('show');
+$('cProof').onclick = () => $('proof').classList.remove('show');
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { $('about').classList.remove('show'); $('proof').classList.remove('show'); }
+  if (e.key.toLowerCase() === 'm') { startAudio(); WS.setMuted(!WS.muted()); syncMute(); }
+});
+
+/* ── picking a bird out of the wood ───────────────────────────────────────── */
+let dragging = false, dragMoved = 0, yaw = 0, pitchA = 0.055, lastX = 0, lastY = 0;
+cv.addEventListener('pointerdown', (e) => {
+  dragging = true; dragMoved = 0; lastX = e.clientX; lastY = e.clientY;
+  cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  const dx = e.clientX - lastX, dy = e.clientY - lastY;
+  lastX = e.clientX; lastY = e.clientY;
+  dragMoved += Math.abs(dx) + Math.abs(dy);
+  yaw = Math.max(-0.65, Math.min(0.65, yaw - dx * 0.0022));
+  pitchA = Math.max(-0.16, Math.min(0.40, pitchA + dy * 0.0018));
+});
+cv.addEventListener('pointerup', (e) => {
+  dragging = false;
+  try { cv.releasePointerCapture(e.pointerId); } catch (err) {}
+  startAudio();
+  if (dragMoved > 9) return;
+  /* a tap: which bird is nearest on screen? */
+  const rect = cv.getBoundingClientRect();
+  const ux = (e.clientX - rect.left) / rect.width, uy = (e.clientY - rect.top) / rect.height;
+  let best = -1, bd = 0.075;
+  for (let i = 0; i < birds.length; i++) {
+    if (!birds[i].here) continue;
+    const q = wood.project([birds[i].p[0], birds[i].p[1] + 0.05, birds[i].p[2]]);
+    if (!q) continue;
+    const d = Math.hypot(q[0] - ux, (q[1] - uy) * rect.height / rect.width);
+    if (d < bd) { bd = d; best = i; }
+  }
+  if (best >= 0) { select(best); tell({ type: 'sing', v: best }); }
+});
+
+/* ════════════════════════════════════════════════════════════════════════════
+   5 · PROVE IT
+   ═══════════════════════════════════════════════════════════════════════════ */
+let worker = null, proving = false;
+$('bProve').onclick = () => {
+  $('proof').classList.add('show');
+  if (proving) return;
+  proving = true;
+  $('verdict').textContent = 'measuring…';
+  $('pbar').style.width = '0%';
+  const blob = new Blob([WORKER_SRC], { type: 'text/javascript' });
+  const url = URL.createObjectURL(blob);
+  worker = new Worker(url);
+  URL.revokeObjectURL(url);
+  worker.onmessage = (e) => {
+    const m = e.data;
+    if (m.type === 'progress') {
+      $('pbar').style.width = (m.frac * 100).toFixed(0) + '%';
+      $('verdict').textContent = 'measuring ' + m.stage + '…';
+    } else if (m.type === 'done') {
+      $('pbar').style.width = '100%';
+      proving = false;
+      worker.terminate(); worker = null;
+      drawProof(m);
+    }
+  };
+  worker.postMessage({ type: 'run' });
+};
+
+function panelW() {
+  const host = document.querySelector('#proof .inner');
+  const avail = (host ? host.clientWidth : window.innerWidth - 40) - 22;
+  return Math.max(280, Math.min(548, avail >= 700 ? avail / 2 : avail));
+}
+function panelView(cvs, o) {
+  const dpr = Math.min(2.5, window.devicePixelRatio || 1);
+  const w = panelW();
+  const h = Math.round(w * 0.62);
+  cvs.style.width = w + 'px'; cvs.style.height = h + 'px';
+  cvs.width = Math.round(w * dpr); cvs.height = Math.round(h * dpr);
+  const c = cvs.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { c: c, v: makeView(w, h, o) };
+}
+
+function drawProof(m) {
+  /* ── panel 1: the sounding boundary, close in on the fold ──────────────── */
+  const P1 = panelView($('pc1'), {
+    aMin: -0.02, aMax: 0.20, bMin: 0, bMax: 0.32, gamma: 23500,
+    pad: { l: 42, r: 46, t: 12, b: 26 },
+  });
+  drawPlane(P1.c, P1.v, snAlpha, { aStep: 0.05, legend: false,
+    hzMarks: [500, 750, 1000, 1250, 1500, 1750, 2000] });
+  let worstFold = 0, belowHopf = 0;
+  P1.c.save();
+  for (const [b, a] of m.onset) {
+    if (a === null) continue;
+    if (a <= 0) belowHopf++;
+    const sn = snAlpha(b);
+    if (sn !== null && b <= 0.12) worstFold = Math.max(worstFold, Math.abs(a - sn));
+    if (b > P1.v.bMax) continue;
+    const x = P1.v.x(Math.max(P1.v.aMin, Math.min(P1.v.aMax, a))), y = P1.v.y(b);
+    P1.c.beginPath(); P1.c.arc(x, y, 4.4, 0, 6.2832);
+    P1.c.fillStyle = 'rgba(255,255,255,0.95)'; P1.c.fill();
+    P1.c.lineWidth = 1.4; P1.c.strokeStyle = 'rgba(20,16,12,0.9)'; P1.c.stroke();
+  }
+  P1.c.restore();
+  legend(P1.c, P1.v, [
+    ['rgba(255,176,120,0.95)', 'the fold — algebra'],
+    ['rgba(150,196,255,0.9)', 'the Hopf line — algebra'],
+    ['#ffffff', 'measured onset, from rest'],
+  ]);
+
+  /* ── panel 2: the pitch a note is born with ────────────────────────────── */
+  const c2 = $('pc2');
+  const dpr = Math.min(2.5, window.devicePixelRatio || 1);
+  const w2 = panelW();
+  const h2 = Math.round(w2 * 0.62);
+  c2.style.width = w2 + 'px'; c2.style.height = h2 + 'px';
+  c2.width = Math.round(w2 * dpr); c2.height = Math.round(h2 * dpr);
+  const k = c2.getContext('2d');
+  k.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const pad = { l: 46, r: 16, t: 14, b: 30 };
+  const iw = w2 - pad.l - pad.r, ih = h2 - pad.t - pad.b;
+  k.clearRect(0, 0, w2, h2);
+  k.fillStyle = 'rgba(18,16,26,0.9)'; k.fillRect(pad.l, pad.t, iw, ih);
+  const bMax = 2.7, fMax = 6600;
+  const X = (b) => pad.l + b / bMax * iw;
+  const Y = (f) => pad.t + ih - f / fMax * ih;
+  k.strokeStyle = 'rgba(224,196,150,0.10)';
+  k.font = '9px ui-monospace,Menlo,monospace';
+  k.textAlign = 'right'; k.textBaseline = 'middle';
+  for (let f = 1000; f <= fMax; f += 1000) {
+    k.beginPath(); k.moveTo(pad.l, Y(f)); k.lineTo(pad.l + iw, Y(f)); k.stroke();
+    k.fillStyle = 'rgba(224,196,150,0.46)';
+    k.fillText((f / 1000) + 'k', pad.l - 6, Y(f));
+  }
+  k.strokeStyle = 'rgba(255,176,120,0.92)'; k.lineWidth = 2;
+  k.beginPath();
+  for (let i = 0; i <= 120; i++) {
+    const b = bMax * i / 120;
+    const f = 23500 * Math.sqrt(b) / (2 * Math.PI);
+    if (i === 0) k.moveTo(X(b), Y(f)); else k.lineTo(X(b), Y(f));
+  }
+  k.stroke();
+  let worstPitch = 0;
+  for (const [b, w] of m.pitch) {
+    if (w === null) continue;
+    const meas = 23500 * w / (2 * Math.PI);
+    const pred = 23500 * Math.sqrt(b) / (2 * Math.PI);
+    worstPitch = Math.max(worstPitch, Math.abs(meas / pred - 1));
+    k.beginPath(); k.arc(X(b), Y(meas), 4.4, 0, 6.2832);
+    k.fillStyle = 'rgba(255,255,255,0.95)'; k.fill();
+    k.lineWidth = 1.4; k.strokeStyle = 'rgba(20,16,12,0.9)'; k.stroke();
+  }
+  k.strokeStyle = 'rgba(224,196,150,0.26)'; k.lineWidth = 1;
+  k.strokeRect(pad.l + 0.5, pad.t + 0.5, iw - 1, ih - 1);
+  k.font = '9px ui-monospace,Menlo,monospace'; k.fillStyle = 'rgba(224,196,150,0.55)';
+  k.textAlign = 'center'; k.textBaseline = 'top';
+  k.fillText('TENSION  β  →', pad.l + iw / 2, pad.t + ih + 10);
+  k.save(); k.translate(14, pad.t + ih / 2); k.rotate(-Math.PI / 2);
+  k.fillText('PITCH  Hz  →', 0, 0); k.restore();
+  k.textAlign = 'left';
+  k.fillStyle = 'rgba(255,176,120,0.9)';
+  k.fillText('f = γ √β / 2π   (γ = 23500)', pad.l + 8, pad.t + 6);
+  k.fillStyle = '#fff';
+  k.fillText('measured off the waveform at α = 0.004', pad.l + 8, pad.t + 18);
+
+  /* ── the verdict ───────────────────────────────────────────────────────── */
+  let roofTxt = '';
+  let worstRoof = 0;
+  for (const [b, r] of m.roof) {
+    if (r === null) { roofTxt += '   β=' + b.toFixed(2) + '  roof NOT found\n'; continue; }
+    worstRoof = Math.max(worstRoof, Math.abs(r - (b + 2)));
+    roofTxt += '   β = ' + b.toFixed(2).padStart(4) + '    predicted α = ' + (b + 2).toFixed(3)
+      + '    measured ' + r.toFixed(3) + '\n';
+  }
+  const ok = (c) => c ? '<span class="good">✓</span>' : '<b>✗</b>';
+  $('verdict').innerHTML =
+    ok(belowHopf === 0) + '  <b>nothing sounds at or below the Hopf line</b> — ' +
+      m.onset.length + ' tensions measured, ' + belowHopf + ' of them sounding at α ≤ 0\n' +
+    ok(worstFold < 3e-3) + '  <b>below β = 0.12 the measured onset IS the fold</b> — worst disagreement ' +
+      worstFold.toExponential(2) + ' in α\n' +
+    ok(worstRoof < 0.02) + '  <b>the roof is α = β + 2</b> — worst disagreement ' + worstRoof.toFixed(4) + '\n' +
+      roofTxt +
+    ok(worstPitch < 0.01) + '  <b>the note is born at f = γ√β/2π</b> — worst error ' +
+      (worstPitch * 100).toFixed(2) + ' % over ' + m.pitch.length + ' tensions\n' +
+    '\n   ' + (m.ms / 1000).toFixed(1) + ' s of integration, in a worker, on this machine.';
+}
+
+function legend(c, v, rows) {
+  c.save();
+  c.font = '9px ui-monospace,Menlo,monospace';
+  c.textAlign = 'left'; c.textBaseline = 'middle';
+  let y = v.h - v.pad.b - 14 - (rows.length - 1) * 13;
+  for (const [col, txt] of rows) {
+    c.fillStyle = col;
+    c.beginPath(); c.arc(v.pad.l + 12, y, 3.4, 0, 6.2832); c.fill();
+    c.fillStyle = 'rgba(230,214,190,0.82)';
+    c.fillText(txt, v.pad.l + 21, y);
+    y += 13;
+  }
+  c.restore();
+}
+
+/* ── and the ear: the page listening to its own output ──────────────────── */
+let earBusy = false;
+$('bEar').onclick = async () => {
+  if (earBusy) return;
+  await startAudio();
+  if (!audioReady) { $('earverdict').textContent = 'no audio thread to listen to.'; return; }
+  earBusy = true;
+  const V = $('earverdict');
+  V.textContent = 'hushing the wood…';
+  const wasLight = light, wasAuto = lightAuto;
+  lightAuto = false;
+  const an = actx.createAnalyser();
+  an.fftSize = 16384; an.smoothingTimeConstant = 0;
+  const sink = actx.createGain(); sink.gain.value = 0.00001;
+  node.connect(an); an.connect(sink); sink.connect(actx.destination);
+  tell({ type: 'active', ids: [] });
+  tell({ type: 'wet', v: 0 });
+  tell({ type: 'hand', mode: 'off' });
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  await wait(6500);
+  const sr = actx.sampleRate, N = an.fftSize, LO = Math.round(150 / sr * N);
+  const td = new Float32Array(N), fd = new Float32Array(an.frequencyBinCount);
+  const G = 23500;
+  async function probe(alpha, hz, settle) {
+    const b = hzToBeta(hz, G);
+    tell({ type: 'hand', mode: 'live', gamma: G });
+    tell({ type: 'handXY', a: alpha, b: b, a2: A_REST, b2: b });
+    await wait(settle);
+    let s = 0, n = 0, best = -Infinity, bi = LO;
+    for (let k = 0; k < 10; k++) {
+      await wait(40);
+      an.getFloatTimeDomainData(td);
+      for (let i = 0; i < N; i++) { s += td[i] * td[i]; n++; }
+      an.getFloatFrequencyData(fd);
+      for (let i = LO; i < fd.length; i++) if (fd[i] > best) { best = fd[i]; bi = i; }
+    }
+    an.getFloatFrequencyData(fd);
+    const y0 = fd[bi - 1], y1 = fd[bi], y2 = fd[bi + 1];
+    const d = 0.5 * (y0 - y2) / ((y0 - 2 * y1 + y2) || 1);
+    const rms = Math.sqrt(s / n);
+    return { rms: rms, hz: rms > 1e-3 ? (bi + d) * sr / N : null };
+  }
+  const rows = [];
+  let worst = 0, sang = 0;
+  const TARGETS = [2000, 2600, 3000, 3600, 4200, 5200];
+  for (let i = 0; i < TARGETS.length; i++) {
+    V.textContent = 'listening… ' + (i + 1) + ' of ' + (TARGETS.length + 3);
+    const r = await probe(0.004, TARGETS[i], 1400);
+    if (r.hz) { sang++; worst = Math.max(worst, Math.abs(r.hz / TARGETS[i] - 1)); }
+    rows.push('   β = ' + hzToBeta(TARGETS[i], G).toFixed(4) + '   predicted ' +
+      String(TARGETS[i]).padStart(5) + ' Hz   heard ' +
+      (r.hz ? r.hz.toFixed(0).padStart(5) + ' Hz   ' +
+        ((r.hz / TARGETS[i] - 1) * 100).toFixed(2) + ' %' : ' silent'));
+  }
+  V.textContent = 'listening… below the Hopf line';
+  const below = await probe(-0.05, 3000, 1600);
+  V.textContent = 'listening… under the fold';
+  const under = await probe(0.02, 1200, 1700);
+  V.textContent = 'listening… over the fold';
+  const over = await probe(0.12, 1200, 1700);
+  node.disconnect(an); an.disconnect(); sink.disconnect();
+  tell({ type: 'wet', v: 0.30 });
+  tell({ type: 'hand', mode: 'off' });
+  lightAuto = wasAuto; light = wasLight; $('light').value = Math.round(light * 100);
+  pushActive();
+  earBusy = false;
+  const ok = (c) => c ? '<span class="good">✓</span>' : '<b>✗</b>';
+  const foldA = snAlpha(hzToBeta(1200, G));
+  V.innerHTML =
+    ok(sang === TARGETS.length && worst < 0.02) +
+      '  <b>the pitch that came out of the audio thread is γ√β/2π</b> — worst error ' +
+      (worst * 100).toFixed(2) + ' % over ' + sang + ' of ' + TARGETS.length + ' tones\n' +
+    rows.join('\n') + '\n' +
+    ok(below.rms < 1e-4) + '  <b>at α = −0.05, below the Hopf line, the output is literally zero</b> — rms ' +
+      below.rms.toExponential(2) + '\n' +
+    ok(under.rms < 1e-4 && over.rms > 1e-3) +
+      '  <b>and you can hear the fold</b> — at β = ' + hzToBeta(1200, G).toFixed(4) +
+      ' the fold is at α = ' + foldA.toFixed(4) + ':\n' +
+      '   α = 0.02 (under it)  rms ' + under.rms.toExponential(2) + '   ' + (under.hz ? under.hz.toFixed(0) + ' Hz' : 'SILENT') + '\n' +
+      '   α = 0.12 (over it)   rms ' + over.rms.toExponential(2) + '   ' + (over.hz ? over.hz.toFixed(0) + ' Hz' : 'SILENT') +
+      (over.hz ? '   (' + ((over.hz / 1200 - 1) * 100).toFixed(0) + ' % sharp — that is the pressure, and it is in the note above)' : '');
+};
+
+/* ════════════════════════════════════════════════════════════════════════════
+   6 · THE LOOP
+   ═══════════════════════════════════════════════════════════════════════════ */
+function resize() {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.round(window.innerWidth * DPR), h = Math.round(window.innerHeight * DPR);
+  cv.width = w; cv.height = h;
+  wood.resize(w, h);
+  layoutScore();
+}
+window.addEventListener('resize', resize);
+resize();
+renderChips();
+pushActive();
+say(birds[0].name + ' — ' + birds[0].sp.note);
+
+/* a small hook so a maker can interrogate the room from the console */
+window.__aviary = { birds: birds, wood: wood, tell: (m) => tell(m),
+  audio: () => ({ ctx: actx, node: node }),
+  core: { Bird: Bird, Syrinx: Syrinx, Tract: Tract, A_REST: A_REST, airPressure: airPressure,
+          snAlpha: snAlpha, onsetOmega: onsetOmega, omegaToHz: omegaToHz, hzToBeta: hzToBeta,
+          SPECIES: SPECIES, packSpecies: packSpecies },
+  state: () => ({ light: light, selected: selected, handMode: handMode, audio: audioReady }) };
+
+let t0 = performance.now(), lastFrame = t0;
+function frame(now) {
+  const dt = Math.min(0.05, (now - lastFrame) / 1000);
+  lastFrame = now;
+  const t = (now - t0) / 1000;
+  if (lightAuto && !earBusy) {
+    light = Math.min(1, light + dt / 260);
+    $('light').value = Math.round(light * 100);
+    if (Math.random() < dt * 3) pushActive();
+  }
+  $('lightVal').textContent = light < 0.10 ? 'first grey'
+    : light < 0.30 ? 'before dawn' : light < 0.62 ? 'the sky opens'
+    : light < 0.88 ? 'the rim of the sun' : 'sunrise';
+  /* the eye needs an envelope even before the worklet exists */
+  if (!audioReady) for (const b of birds) b.env *= 0.9;
+  wood.draw({ time: t, light: light, yaw: yaw, pitch: pitchA, birds: birds });
+  drawScore();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ════════════════════════════════════════════════════════════════════════════
+   7 · THE GATE
+   ═══════════════════════════════════════════════════════════════════════════ */
+$('gate').addEventListener('click', async () => {
+  $('gate').classList.add('gone');
+  await startAudio();
+});
+try { WS.startDwell('aviary', {}); } catch (e) {}
+</script>
+</body>
+</html>
