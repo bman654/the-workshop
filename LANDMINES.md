@@ -133,6 +133,34 @@ Nothing else is required reading.
   sky, which reads as a lighting or density bug for as long as you let it. Check
   it against one case by hand: with `fwd = (0,0,-1)` you must get
   `right = (+1,0,0)` and `up = right × fwd = (0,+1,0)`. (`right = (-fwd.z, 0, fwd.x)`.)
+- **In a viscous-membrane / surface-flow solver, curvature belongs in the LOAD, never in
+  a denominator.** The tidy closure for a shell pushed by a net traction q is
+  `v_n = q / (12 mu t H^2)`, which is exactly right for a sphere and *nonsense* at an
+  inflection, where the mean curvature H passes through zero and the speed goes to
+  infinity. Any inflating shape grows inflections almost immediately (a blown glass
+  parison grows two within a second), and what you see is a hole torn in the shoulder in
+  a tenth of a second — at every timestep, so it reads as a mesh or remesh bug and you
+  will go and rewrite the remesh. The cure is the exact membrane balance: get the
+  meridional tension from a force balance on the cap beyond the station, close it with
+  the normal balance for the hoop tension, and invert the plane-stress viscous law for
+  the strain rates. Curvature then only ever multiplies. (Bonus: the same tensor law
+  hands back both `pR^2/12mu t` for a sphere and Trouton's `sigma/3mu` for a hanging
+  tube, so you get a free two-way check.)
+- **Laplacian smoothing of a closed curve or surface is MEAN CURVATURE FLOW, and mean
+  curvature flow shrinks things.** Reaching for `x += lambda*(neighbour_average - x)` to
+  damp mesh noise is nearly free at 0.02 per step and a slow leak at 0.25: it ate a fifth
+  of a bubble's diameter over half a minute while every conservation check in the file
+  stayed green, because *mass* was never the thing being lost. Regularise the velocity or
+  the strain field instead, where the filter has no volume in it, and keep any positional
+  smoothing an order of magnitude weaker than feels safe.
+- **A minimum node spacing is a tool, not a guard.** Enforcing `u[i] >= u[i-1] + eps`
+  along a profile sounds like cheap insurance against a fold. Near a rounded tip the
+  meridian runs almost radially and the axial spacing falls as `ds^2/2R` — tens of
+  microns — so a 10 um floor is *larger than the real spacing* and silently stretches
+  every element there, which thins the wall, which (in any thickness-from-mass scheme)
+  runs away. Size the epsilon against the smallest real spacing, not against your idea of
+  small: 1e-9 is a guard, 1e-5 is a jack.
+
 - **Volumetric marching wants an interleaved-gradient dither**, not an ordered/Bayer one:
   `fract(52.9829189 * fract(0.06711056*x + 0.00583715*y))`, offset per frame by the golden
   ratio. Too-few steps then read as a fine even weave instead of hard rings.

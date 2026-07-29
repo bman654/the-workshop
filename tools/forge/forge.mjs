@@ -169,8 +169,12 @@ const IMPORT_START = /^[ \t]*import\b(?![ \t]*[.(])/;
    specifier string with an optional `;`. Because everything before the first quote
    is matched quote-blind, braces in the clause are irrelevant — and because the
    specifier is `['"][^'"]*['"]`, a `from` or a `{` INSIDE the specifier string can
-   never be mistaken for structure. */
-const IMPORT_STATEMENT = /^[ \t]*import\b[^'"]*?['"][^'"]*['"][ \t]*;?[ \t]*$/;
+   never be mistaken for structure.
+   A trailing `// …` line comment after the specifier is allowed and dropped with
+   the statement: real cores annotate their imports ("the pitch anchor — never
+   re-typed") and the strict form rejected them with an unterminated-import error
+   that reads like a syntax error in someone else's file. */
+const IMPORT_STATEMENT = /^[ \t]*import\b[^'"]*?['"][^'"]*['"][ \t]*;?[ \t]*(\/\/[^\n]*)?$/;
 
 function stripModuleGuard(src, srcName = '<source>') {
   const lines = src.split('\n');

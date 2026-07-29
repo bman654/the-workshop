@@ -3,7 +3,7 @@
 *Generated from the estate manifest by `tools/seal/index-gen.mjs` — **never edit this file.***
 *It rebuilds every cycle. If something here is wrong, the manifest is wrong.*
 
-**470 pieces · 69 rooms · 11 districts.**
+**471 pieces · 69 rooms · 11 districts.**
 
 Grep this before you build. Rebuilding something that already stands is the estate's
 most expensive mistake — and the hidden pieces are not listed here, they are in
@@ -52,14 +52,14 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ## THE WORKS
 
-*6 rooms · 44 pieces*
+*6 rooms · 45 pieces*
 
 - **[The Engine Room](engine-room/index.html)** — 8 pieces
   <sub>[The Brownian Ratchet](engine-room/brownian/index.html) · [The Carnot Engine](engine-room/carnot/index.html) · [The Demon's Ledger](engine-room/demon/index.html) · [The Firebox](engine-room/the-firebox/index.html) · [The Pinhole Race](engine-room/the-pinhole-race/index.html) · [The Rijke Tube](engine-room/rijke-tube/index.html) · [The Stirling Cycle](engine-room/stirling/index.html) · [The Unstirring](the-unstirring/index.html)</sub>
 - **[The Alchemy Lab](alchemy/index.html)** — 11 pieces
   <sub>[Le Chatelier's Vise](alchemy/equilibrium/index.html) · [The Aufbau Staircase](alchemy/periodic-table/index.html) · [The Climbing Ribbon](alchemy/the-climbing-ribbon/index.html) · [The Crystal Garden](alchemy/the-crystal-garden/index.html) · [The Fractionating Column](alchemy/fractionating-column/index.html) · [The Galvanic Cell](alchemy/galvanic-cell/index.html) · [The Left-Handed Bench](alchemy/the-left-handed-bench/index.html) · [The Limiting Reagent](alchemy/limiting-reagent/index.html) · [The Reaction Balancer](alchemy/reaction-balancer/index.html) · [The Reaction You Time](alchemy/reaction-you-time/index.html) · [Titration](alchemy/titration/index.html)</sub>
-- **[The Foundry](the-foundry/index.html)** — 3 pieces
-  <sub>[The Casting Floor](the-foundry/casting-floor/index.html) · [The Charge Mold](the-foundry/charge-mold/index.html) · [The Still Pond](the-foundry/still-pond/index.html)</sub>
+- **[The Foundry](the-foundry/index.html)** — 4 pieces
+  <sub>[The Casting Floor](the-foundry/casting-floor/index.html) · [The Charge Mold](the-foundry/charge-mold/index.html) · [The Gaffer's Bench](the-foundry/the-gaffers-bench/index.html) · [The Still Pond](the-foundry/still-pond/index.html)</sub>
 - **[The Lodestone Hall](lodestone-hall/index.html)** — 9 pieces
   <sub>[The Bootstrap Bench](bootstrap-bench/index.html) · [The Curie Dial](curie-dial/index.html) · [The Eddy Brake](lodestone-hall/the-eddy-brake/index.html) · [The LC Tank](lodestone-hall/the-lc-tank/index.html) · [The Lodestone Plate](iron-filings/index.html) · [The Sorter](lodestone-hall/the-sorter/index.html) · [The Transformer](lodestone-hall/the-transformer/index.html) · [The Whirligig](lodestone-hall/the-whirligig/index.html) · [The Wire That Jumps](lodestone-hall/the-wire-that-jumps/index.html)</sub>
 - **[The Deep Hearth](the-deep-hearth/index.html)** — 3 pieces
@@ -200,4 +200,4 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ---
 
-<sub>manifest generated at commit `bc468187dc3a80cfed3a4f9ba8455b4504a77f02`</sub>
+<sub>manifest generated at commit `4766de15f12ab0fc112a6eb4dd01cc024e5fc075`</sub>

@@ -1,0 +1,1650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Gaffer's Bench — hot glass, and the ten seconds you get</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  THE GAFFER'S BENCH  ·  the-foundry/the-gaffers-bench/
+
+  A lump of glass on the end of a pipe, and about ten seconds before it stops
+  listening to you.  Blow it, hang it, squeeze it, flatten it, put it back in
+  the fire.  Then jack a neck, crack it off — and blow ACROSS the thing you
+  made, because the note it answers with is the shape you gave it.
+
+  THE ONE THING THIS ROOM IS ABOUT
+    Glass has no melting point.  It has a viscosity that slides smoothly
+    through fourteen decades, and every single thing a glassblower does is a
+    bet placed on where that number is right now.  The gauge on the right is
+    the real instrument on this bench.  Watch it fall.
+
+  WHAT IS ACTUALLY RUNNING  (all of it in glass.mjs, all of it in the twin)
+    · a Vogel-Fulcher-Tammann viscosity curve FITTED, in code, to the three
+      published fixed points of soda-lime glass — and then asked for a fourth
+      it was never given, the strain point, which it puts at 515 degC against
+      a published 505-515;
+    · an axisymmetric viscous membrane: 110 stations, each carrying a fixed
+      mass, with the meridional and hoop tensions solved from the exact cap
+      balance and the exact normal balance, and the two surface strain rates
+      inverted out of the plane-stress Newtonian law.  Blowing and sagging are
+      the SAME equation.  A sphere comes out at pR^2/12(mu)t and a hanging
+      tube at sigma/3mu — Trouton's ratio and all — and neither number is
+      written anywhere in the code;
+    · Stefan-Boltzmann, which is the whole clock: two faces of 3 mm glass at
+      1300 K throw away a quarter of a megawatt per square metre, so the
+      piece falls thirty kelvin a second and you have about ten of them.
+      Nobody tuned the working time;
+    · and one thing that falls out of all three at once, which I did not put in
+      and cannot take out: A BLOWN BUBBLE STOPS ITSELF.  The wall thins as the
+      square of the radius, so the inflation law runs away in finite time — but
+      thin glass is exactly the glass that cools fastest, and the viscosity
+      climbs a decade every hundred kelvin, so the cooling wins.  Every piece
+      here settles at about 120 mm across with a 1.2 mm wall no matter how long
+      you lean on it.  That is also why a real blown wall comes out even.
+    · and one thing that falls out of all three at once, which nobody put in
+      and nobody can take out: A BLOWN BUBBLE STOPS ITSELF.  The wall thins as
+      the square of the radius, so the inflation law runs away in finite time --
+      but thin glass is exactly the glass that cools fastest, and the viscosity
+      climbs a decade every hundred kelvin, so the cooling wins.  Lean on the
+      blow for fourteen seconds straight out of the fire and it settles at
+      118 mm across with a 1.2 mm wall, the same as at four.  That is also why
+      a real blown wall comes out even;
+    · a mass ledger that cannot be cheated — thickness is never stored, only
+      derived from the element masses, and the remesh interpolates CUMULATIVE
+      mass so its differences telescope back to the same total bit for bit.
+
+  THE COLOUR IS A TEMPERATURE.  tools/blackbody/core.mjs, the Firebox's
+  Planck-through-CIE-1931 core, uploaded here as a 256-entry table.  Nothing
+  in this room is orange because orange looks hot.
+
+  THE NOTE IS THE JUG'S LAW.  f = (c/2pi) sqrt(A / V L_eff) is proven one room
+  over, in sound-garden/the-jug/, and is imported from there rather than
+  retyped.  What this bench adds is that A and V were made by hand.
+
+  ENGINES (inlined byte-for-byte by the forge, never forked):
+    · tools/ws/ws.js                     the estate-wide mute + breadcrumbs
+    · tools/spectrum/wavelength.mjs      the CIE 1931 observer
+    · tools/blackbody/core.mjs           Planck -> XYZ -> sRGB, and the LUT
+    · sound-garden/pitch-core.mjs        the estate's pitch anchor
+    · sound-garden/the-jug/core.mjs      the Helmholtz law
+    · ./glass.mjs                        the viscosity, the membrane, the lathe
+  Node twin: `node the-foundry/the-gaffers-bench/glass.test.mjs`  (47 checks)
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root{
+    --ink:#f7ecda; --dim:#bba98d; --faint:#8d7e68; --gold:#e7bd6c; --warm:#ffd79a;
+    --green:#8fd07a; --red:#ef8f7a; --cool:#9fc4d8;
+    --bg0:#07060a; --panel:rgba(13,11,10,.90); --line:rgba(231,189,108,.22);
+    --font-ui:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --font-mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg0);color:var(--ink);
+    font:15px/1.55 var(--font-ui);overflow:hidden;-webkit-font-smoothing:antialiased}
+  canvas#gl{display:block;position:fixed;inset:0;width:100%;height:100%;
+    touch-action:none;cursor:grab}
+  canvas#gl.grabbing{cursor:grabbing}
+  canvas#gl.pinch{cursor:col-resize}
+
+  .scrim{position:fixed;top:0;left:0;width:min(54vw,660px);height:280px;z-index:2;pointer-events:none;
+    background:radial-gradient(120% 100% at 0% 0%, rgba(4,3,5,.85), rgba(4,3,5,0) 72%)}
+  .topleft{position:fixed;top:15px;left:20px;z-index:5;pointer-events:none;max-width:27em}
+  .topleft a{pointer-events:auto}
+  .back{display:inline-block;font:600 10px/1 var(--font-mono);letter-spacing:.22em;
+    text-transform:uppercase;color:var(--dim);text-decoration:none;opacity:.8}
+  .back:hover{color:var(--gold);opacity:1}
+  h1{font:400 clamp(21px,2.7vw,30px)/1.12 var(--font-ui);margin:.42em 0 .1em;
+    text-shadow:0 2px 22px rgba(0,0,0,.85)}
+  .say{color:var(--dim);font-size:13.5px;margin:.35em 0 0;text-shadow:0 1px 16px rgba(0,0,0,.9)}
+  .say b{color:var(--warm);font-weight:600}
+
+  /* ── the gauge: the real instrument on the bench ───────────────────────── */
+  .card{position:fixed;top:15px;right:18px;z-index:6;width:272px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:11px 13px 12px;box-shadow:0 10px 40px rgba(0,0,0,.6)}
+  .chead{font:600 9.5px/1 var(--font-mono);letter-spacing:.2em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:9px}
+  .big2{display:flex;align-items:baseline;gap:10px;margin-bottom:2px}
+  .pk{font:400 27px/1 var(--font-ui);color:var(--warm)}
+  .pk small{font:11px/1 var(--font-mono);color:var(--faint);letter-spacing:.1em}
+  .state{font:600 10px/1 var(--font-mono);letter-spacing:.18em;text-transform:uppercase;
+    padding:3px 7px;border-radius:5px;border:1px solid var(--line);color:var(--dim)}
+  .state.running{color:#ffd0a0;border-color:rgba(255,150,60,.6);background:rgba(255,120,30,.16)}
+  .state.working{color:#ffe8b8;border-color:rgba(255,200,90,.55);background:rgba(255,190,70,.13)}
+  .state.stiffening{color:#d7c6a2}
+  .state.set{color:#a99a80}
+  .state.cold{color:#7f93a3;border-color:rgba(120,160,190,.35)}
+  canvas#visc{width:100%;height:74px;display:block;border-radius:6px;margin-top:9px;
+    background:#0a0809;border:1px solid rgba(255,255,255,.09)}
+  .slbl{display:flex;justify-content:space-between;font:9px/1.3 var(--font-mono);
+    color:var(--faint);letter-spacing:.09em;margin-top:4px}
+  .rows{margin-top:10px;border-top:1px solid var(--line);padding-top:8px;
+    font:11px/1.6 var(--font-mono);color:var(--dim)}
+  .row{display:flex;justify-content:space-between;gap:8px}
+  .row b{color:var(--warm);font-weight:600}
+  .note{font:11px/1.45 var(--font-mono);color:var(--faint);margin:9px 0 0}
+  .note b{color:var(--dim);font-weight:600}
+
+  /* ── the shelf ─────────────────────────────────────────────────────────── */
+  .shelf{position:fixed;left:18px;bottom:96px;z-index:6;width:150px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:9px 10px 10px;box-shadow:0 10px 40px rgba(0,0,0,.6);display:none}
+  .shelf.on{display:block}
+  .shelfrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+  .vase{width:38px;height:46px;border-radius:5px;border:1px solid rgba(255,255,255,.10);
+    background:rgba(150,200,215,.06);cursor:pointer;padding:0;display:block}
+  .vase:hover{background:rgba(180,220,235,.17);border-color:rgba(231,189,108,.5)}
+  .vase svg{display:block;width:100%;height:100%}
+
+  /* ── the console ───────────────────────────────────────────────────────── */
+  .console{position:fixed;left:50%;transform:translateX(-50%);bottom:15px;z-index:6;
+    display:flex;gap:11px;align-items:center;flex-wrap:wrap;justify-content:center;
+    background:var(--panel);border:1px solid var(--line);border-radius:13px;
+    padding:9px 14px;max-width:min(97vw,1120px);box-shadow:0 8px 34px rgba(0,0,0,.6)}
+  .grp{display:flex;align-items:center;gap:8px}
+  .sep{width:1px;height:26px;background:var(--line)}
+  .lbl{font:600 9.5px/1 var(--font-mono);letter-spacing:.16em;text-transform:uppercase;
+    color:var(--faint);white-space:nowrap}
+  .val{font:12px/1 var(--font-mono);color:var(--warm);min-width:3.4em;white-space:nowrap}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:3px;border-radius:2px;
+    background:linear-gradient(90deg,rgba(231,189,108,.75),rgba(231,189,108,.2));
+    outline:none;width:104px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;
+    border-radius:50%;background:#f8e0ac;border:1px solid #7d5f26;cursor:pointer;
+    box-shadow:0 1px 5px rgba(0,0,0,.6)}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;
+    background:#f8e0ac;border:1px solid #7d5f26;cursor:pointer}
+  button{font:600 10px/1 var(--font-mono);letter-spacing:.13em;text-transform:uppercase;
+    color:var(--ink);background:rgba(231,189,108,.13);border:1px solid var(--line);
+    border-radius:8px;padding:10px 11px;cursor:pointer;transition:background .12s,color .12s;
+    -webkit-user-select:none;user-select:none;touch-action:manipulation}
+  button:hover{background:rgba(231,189,108,.26)}
+  button:disabled{opacity:.34;cursor:default;background:rgba(231,189,108,.06)}
+  button.hot{color:#ffdca8;border-color:rgba(255,170,60,.5);background:rgba(255,140,40,.18)}
+  button.hot:hover{background:rgba(255,150,50,.32)}
+  button.held{background:rgba(255,150,50,.55);color:#180c03;border-color:rgba(255,190,90,.8)}
+  button.cool{color:#bfe0ef;border-color:rgba(140,190,215,.4);background:rgba(120,180,210,.12)}
+  .kbd{font:9px/1 var(--font-mono);opacity:.55;margin-left:5px;letter-spacing:.05em}
+  .breath{width:74px;height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden}
+  .breath i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#9fd4e8,#dff2fa);
+    transition:width .08s linear}
+
+  /* ── the finished-piece banner ─────────────────────────────────────────── */
+  .done{position:fixed;left:50%;transform:translateX(-50%);top:14px;z-index:8;
+    background:rgba(10,14,17,.93);border:1px solid rgba(150,200,220,.35);border-radius:12px;
+    padding:11px 18px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.7);display:none}
+  .done.on{display:block}
+  .done .t{font:400 22px/1.15 var(--font-ui);color:#dff0f7}
+  .done .s{font:11px/1.5 var(--font-mono);color:#8fa8b6;letter-spacing:.05em;margin-top:5px}
+  .done .s b{color:#cfe7f2}
+
+  .gate{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(60% 60% at 52% 55%, rgba(40,16,3,.5), rgba(4,3,5,.96) 78%);
+    cursor:pointer;text-align:center}
+  .gate.gone{display:none}
+  .gate .big{font:400 clamp(30px,5.6vw,64px)/1.05 var(--font-ui);letter-spacing:.01em;
+    color:#ffd9a2;text-shadow:0 0 70px rgba(255,140,40,.45)}
+  .gate .small{font:600 10.5px/1 var(--font-mono);letter-spacing:.3em;text-transform:uppercase;
+    color:var(--faint);margin-top:18px}
+
+  .fps{position:fixed;left:12px;bottom:12px;z-index:6;font:10px/1 var(--font-mono);
+    color:rgba(184,166,139,.45);pointer-events:none}
+  @media (max-width:980px){
+    .card{display:none} .shelf{display:none!important} .topleft{max-width:58vw}
+    .console{gap:7px;padding:7px 9px} .kbd{display:none}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+<div class="scrim"></div>
+
+<div class="topleft">
+  <a class="back" href="../index.html">&larr; The Foundry</a>
+  <h1>The Gaffer's Bench</h1>
+  <p class="say">Glass has no melting point &mdash; only a <b>viscosity</b>, sliding through
+  fourteen decades as it cools. Everything here is a bet on where that number is
+  <i>right now</i>. <b>Blow</b> it, <b>hang</b> it, <b>squeeze</b> it, put it back in the
+  fire. You have about ten seconds.</p>
+</div>
+
+<div class="card">
+  <div class="chead">the glass, right now</div>
+  <div class="big2">
+    <div class="pk" id="tval">&mdash;<small> &deg;C</small></div>
+    <div class="state" id="wstate">&mdash;</div>
+  </div>
+  <canvas id="visc" width="512" height="148"></canvas>
+  <div class="slbl"><span>1200&deg;C</span><span>900</span><span>600</span><span>450&deg;C</span></div>
+  <div class="rows">
+    <div class="row"><span>viscosity</span><b id="etaval">&mdash;</b></div>
+    <div class="row"><span>thinnest wall</span><b id="wallval">&mdash;</b></div>
+    <div class="row"><span>air inside</span><b id="volval">&mdash;</b></div>
+    <div class="row"><span>if cracked off now</span><b id="noteval">&mdash;</b></div>
+  </div>
+  <p class="note">The three <b>fixed points</b> on the curve are published numbers for
+  soda-lime glass; the curve through them was solved here, and it puts the
+  <b>strain point</b> &mdash; which it was never told &mdash; at 515&deg;C against a
+  published 505&ndash;515.<br><br>
+  A bubble <b>stops itself</b>. The thinner the wall, the faster it cools; this curve
+  climbs a decade every hundred kelvin. Nobody had to cap it.</p>
+</div>
+
+<div class="shelf" id="shelf">
+  <div class="chead">the shelf</div>
+  <div class="shelfrow" id="shelfrow"></div>
+</div>
+
+<div class="done" id="done">
+  <div class="t" id="donet">&mdash;</div>
+  <div class="s" id="dones">&mdash;</div>
+</div>
+
+<div class="console">
+  <div class="grp">
+    <button id="heat" class="hot">glory hole<span class="kbd">H</span></button>
+    <button id="blow">blow<span class="kbd">SPC</span></button>
+    <div class="breath"><i id="breathbar"></i></div>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <span class="lbl">the pipe</span>
+    <input type="range" id="tilt" min="0" max="180" value="90">
+    <span class="val" id="tiltv">level</span>
+  </div>
+  <div class="grp">
+    <span class="lbl">spin</span>
+    <input type="range" id="spin" min="0" max="90" value="24">
+    <span class="val" id="spinv">229 rpm</span>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <button id="paddle">paddle</button>
+    <button id="crack" class="cool">crack it off</button>
+    <button id="fresh">new gather</button>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <button id="hush">sound on</button>
+  </div>
+</div>
+
+<div class="gate" id="gate"><div>
+  <div class="big">The Gaffer's Bench</div>
+  <div class="small">take it out of the furnace</div>
+</div></div>
+
+<div class="fps" id="fps"></div>
+
+<script type="module">
+<!-- forge:include ../../tools/ws/ws.js -->
+<!-- forge:include ../../tools/spectrum/wavelength.mjs -->
+<!-- forge:include ../../tools/blackbody/core.mjs -->
+<!-- forge:include ../../sound-garden/pitch-core.mjs -->
+<!-- forge:include ../../sound-garden/the-jug/core.mjs -->
+<!-- forge:include ./glass.mjs -->
+
+addEventListener('error', (e)=>{ window.__err = (e.message||'') + ' @' + (e.lineno||'?') + ':' + (e.colno||'?'); });
+
+const $ = (id) => document.getElementById(id);
+const canvas = $('gl');
+const gl = canvas.getContext('webgl2', { antialias:false, alpha:false, depth:true,
+  premultipliedAlpha:false, powerPreference:'high-performance' });
+if (!gl){ document.body.innerHTML = '<p style="padding:3em;font:16px serif">This room needs WebGL2.</p>'; throw new Error('no webgl2'); }
+const EXT_CBF = gl.getExtension('EXT_color_buffer_float');
+if (!EXT_CBF){ document.body.innerHTML = '<p style="padding:3em;font:16px serif">This room needs floating-point render targets.</p>'; throw new Error('no float rt'); }
+const DBG = new URLSearchParams(location.search).has('gldbg');
+
+/* ════════════════════════════════════════════════════════════════════════════
+   1 · GL PLUMBING
+   ═══════════════════════════════════════════════════════════════════════════ */
+const FSVERT = `#version 300 es
+precision highp float;
+out vec2 vUV;
+void main(){
+  vec2 q = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+  vUV = q;
+  gl_Position = vec4(q * 2.0 - 1.0, 0.0, 1.0);
+}`;
+
+function compile(type, src, name){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)){
+    const log = gl.getShaderInfoLog(s);
+    const numbered = src.split('\n').map((l, i) => String(i + 1).padStart(3) + '| ' + l).join('\n');
+    console.error('shader ' + name + ':\n' + log + '\n' + numbered);
+    throw new Error('shader ' + name + ': ' + log);
+  }
+  return s;
+}
+function makeProgram(fsrc, name, vsrc){
+  const pr = gl.createProgram();
+  gl.attachShader(pr, compile(gl.VERTEX_SHADER, vsrc || FSVERT, name + '.vs'));
+  gl.attachShader(pr, compile(gl.FRAGMENT_SHADER, fsrc, name + '.fs'));
+  gl.linkProgram(pr);
+  if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error('link ' + name + ': ' + gl.getProgramInfoLog(pr));
+  pr.__u = {};
+  const n = gl.getProgramParameter(pr, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++){
+    const info = gl.getActiveUniform(pr, i);
+    pr.__u[info.name.replace(/\[0\]$/, '')] = gl.getUniformLocation(pr, info.name);
+  }
+  return pr;
+}
+const emptyVAO = gl.createVertexArray();
+
+function makeTex(w, h, internal, format, type, filter){
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, format, type, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter || gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter || gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return t;
+}
+function makeTarget(w, h, internal, format, type, filter, withDepth){
+  const tex = makeTex(w, h, internal, format, type, filter);
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  let depth = null;
+  if (withDepth){
+    depth = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, depth);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depth);
+  }
+  const st = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+  if (st !== gl.FRAMEBUFFER_COMPLETE) throw new Error('incomplete fbo ' + st);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { tex, fb, depth, w, h };
+}
+function fullscreen(prog, target, binds, setUniforms){
+  gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.fb : null);
+  gl.viewport(0, 0, target ? target.w : canvas.width, target ? target.h : canvas.height);
+  gl.useProgram(prog);
+  if (binds) for (let i = 0; i < binds.length; i++){
+    gl.activeTexture(gl.TEXTURE0 + i);
+    gl.bindTexture(gl.TEXTURE_2D, binds[i][1]);
+    gl.uniform1i(prog.__u[binds[i][0]], i);
+  }
+  if (setUniforms) setUniforms(prog.__u);
+  gl.bindVertexArray(emptyVAO);
+  gl.disable(gl.DEPTH_TEST);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  if (DBG){ const e = gl.getError(); if (e) console.warn('gl error after fullscreen', e); }
+}
+
+/* ── tiny 4x4 matrix helpers ─────────────────────────────────────────────── */
+function mat4(){ return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]); }
+function mul(a, b, out){
+  const o = out || new Float32Array(16);
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++){
+    o[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
+  }
+  return o;
+}
+function perspective(fovy, aspect, near, far){
+  const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+  return new Float32Array([f/aspect,0,0,0, 0,f,0,0, 0,0,(far+near)*nf,-1, 0,0,2*far*near*nf,0]);
+}
+function lookAt(eye, ctr, up){
+  let zx = eye[0]-ctr[0], zy = eye[1]-ctr[1], zz = eye[2]-ctr[2];
+  let l = Math.hypot(zx,zy,zz) || 1; zx/=l; zy/=l; zz/=l;
+  let xx = up[1]*zz - up[2]*zy, xy = up[2]*zx - up[0]*zz, xz = up[0]*zy - up[1]*zx;
+  l = Math.hypot(xx,xy,xz) || 1; xx/=l; xy/=l; xz/=l;
+  const yx = zy*xz - zz*xy, yy = zz*xx - zx*xz, yz = zx*xy - zy*xx;
+  return new Float32Array([
+    xx, yx, zx, 0,
+    xy, yy, zy, 0,
+    xz, yz, zz, 0,
+    -(xx*eye[0]+xy*eye[1]+xz*eye[2]), -(yx*eye[0]+yy*eye[1]+yz*eye[2]), -(zx*eye[0]+zy*eye[1]+zz*eye[2]), 1,
+  ]);
+}
+/* The rig transform.  The lathe is built along LOCAL +z, and the pipe points
+   along d = (sin t, -cos t, 0) — level at t = pi/2, straight down at t = 0.
+   So the model matrix must carry local +z onto d, which means writing the basis
+   out rather than reaching for a rotation about some axis and hoping:
+       zAxis = d,  xAxis = world +Z,  yAxis = zAxis x xAxis
+   Checked by hand at t = pi/2: zAxis must be (+1,0,0). */
+function rigMatrix(tilt, tx){
+  const c = Math.cos(tilt), s = Math.sin(tilt);
+  return new Float32Array([
+    0,  0,  1, 0,
+   -c, -s,  0, 0,
+    s, -c,  0, 0,
+    tx, 0,  0, 1,
+  ]);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   2 · THE BLACKBODY TABLE — the colour of a temperature, from the estate's core
+   ═══════════════════════════════════════════════════════════════════════════
+   256 entries from 500 K to 1700 K.  RGB is the chromaticity at unit luminance;
+   the alpha channel is log10 of the visible luminance relative to 1400 K, which
+   is what makes the glass die away as it cools instead of merely going redder.
+   NEAREST, never LINEAR: a float texture with a LINEAR sampler is incomplete in
+   core WebGL2 and every fetch comes back black.  (LANDMINES.md knows.)
+   ══════════════════════════════════════════════════════════════════════════ */
+const LUT_N = 256, LUT_TMIN = 500, LUT_TMAX = 1700, LUT_TREF = 1400;
+const lutData = bbLUT(LUT_N, LUT_TMIN, LUT_TMAX, LUT_TREF);
+const lutTex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, lutTex);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, LUT_N, 1, 0, gl.RGBA, gl.FLOAT, lutData);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+const GLSL_LUT = `
+uniform sampler2D uLUT;
+vec3 bbColour(float TK, out float lum){
+  float x = clamp((TK - ${LUT_TMIN}.0) / ${(LUT_TMAX - LUT_TMIN).toFixed(1)}, 0.0, 0.9999);
+  int i = int(x * ${LUT_N}.0);
+  vec4 e = texelFetch(uLUT, ivec2(i, 0), 0);
+  lum = pow(10.0, e.a);
+  return max(e.rgb, vec3(0.0));
+}
+`;
+
+/* ════════════════════════════════════════════════════════════════════════════
+   3 · THE SHOP — floor, back wall, and the glory hole, all analytic
+   ═══════════════════════════════════════════════════════════════════════════ */
+const SHOP_FS = `#version 300 es
+precision highp float;
+in vec2 vUV;
+out vec4 frag;
+uniform vec3 uEye, uFwd, uRight, uUp;
+uniform float uAspect, uTanHalf, uTime;
+uniform vec3 uGlassPos, uGlassCol;     /* the piece as a light */
+uniform float uGlassPow;
+uniform float uFurnace;                /* 0..1 how open the glory hole reads */
+${GLSL_LUT}
+
+float hash21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float vnoise(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hash21(i), b = hash21(i + vec2(1,0)), c = hash21(i + vec2(0,1)), d = hash21(i + vec2(1,1));
+  return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
+}
+float fbm(vec2 p){
+  float s = 0.0, a = 0.5;
+  for (int k = 0; k < 5; k++){ s += a * vnoise(p); p *= 2.03; a *= 0.5; }
+  return s;
+}
+
+const float FLOOR_Y = -0.375;
+const float CEIL_Y  =  0.40;
+const float WALL_X  = 0.305;
+const vec3  HOLE_C  = vec3(WALL_X, -0.046, 0.0);
+const float HOLE_R  = 0.068;
+
+/* a warm point light: colour, position, power */
+vec3 lampAt(vec3 P, vec3 N, vec3 L, vec3 col, float power){
+  vec3 d = L - P;
+  float r2 = max(dot(d, d), 1e-4);
+  float ndl = max(dot(N, normalize(d)), 0.0);
+  return col * power * ndl / r2;
+}
+
+void main(){
+  vec2 ndc = vUV * 2.0 - 1.0;
+  vec3 rd = normalize(uFwd + uRight * (ndc.x * uAspect * uTanHalf) + uUp * (ndc.y * uTanHalf));
+  vec3 ro = uEye;
+
+  vec3 col = vec3(0.0);
+  float tBest = 1e9;
+  vec3 P = vec3(0.0), N = vec3(0.0);
+  vec3 albedo = vec3(0.0);
+  bool hit = false;
+
+  /* the floor */
+  if (rd.y < -1e-4){
+    float t = (FLOOR_Y - ro.y) / rd.y;
+    if (t > 0.0 && t < tBest){
+      tBest = t; hit = true; P = ro + rd * t; N = vec3(0,1,0);
+      vec2 q = P.xz * 7.0;
+      float grit = fbm(q * 3.0) * 0.5 + fbm(q * 11.0) * 0.3;
+      albedo = mix(vec3(0.040,0.035,0.033), vec3(0.075,0.066,0.058), grit);
+      /* scorch under the bench */
+      albedo *= 1.0 - 0.30 * smoothstep(0.65, 0.05, length(P.xz - vec2(0.16, 0.0)));
+    }
+  }
+  /* the marver: a steel slab on trestles, the flat the gaffer rolls a gather on.
+     A plain slab-method AABB, which is also what stops the shop reading as a
+     void with a lamp in it. */
+  {
+    vec3 lo = vec3(-0.46, -0.232, -0.125), hi = vec3(0.010, -0.205, 0.165);
+    vec3 inv = 1.0 / rd;
+    vec3 t0 = (lo - ro) * inv, t1 = (hi - ro) * inv;
+    vec3 tn = min(t0, t1), tf = max(t0, t1);
+    float tNear = max(max(tn.x, tn.y), tn.z), tFar = min(min(tf.x, tf.y), tf.z);
+    if (tFar > max(tNear, 0.0) && tNear > 0.0 && tNear < tBest){
+      tBest = tNear; hit = true; P = ro + rd * tNear;
+      vec3 c = (lo + hi) * 0.5, d = (hi - lo) * 0.5;
+      vec3 rel = (P - c) / d;
+      vec3 a = abs(rel);
+      N = (a.x > a.y && a.x > a.z) ? vec3(sign(rel.x),0,0)
+        : (a.y > a.z)              ? vec3(0,sign(rel.y),0)
+                                   : vec3(0,0,sign(rel.z));
+      float scuff = fbm(vec2(P.x * 70.0, P.z * 70.0));
+      albedo = mix(vec3(0.052,0.055,0.062), vec3(0.135,0.138,0.150), scuff);
+    }
+  }
+  /* the ceiling, so the room is a room and not a hard-edged hole in the dark */
+  if (rd.y > 1e-4){
+    float t = (CEIL_Y - ro.y) / rd.y;
+    if (t > 0.0 && t < tBest){
+      tBest = t; hit = true; P = ro + rd * t; N = vec3(0,-1,0);
+      albedo = vec3(0.022,0.019,0.018) * (0.6 + 0.8 * fbm(P.xz * 9.0));
+    }
+  }
+  /* the back wall */
+  if (rd.x > 1e-4){
+    float t = (WALL_X - ro.x) / rd.x;
+    if (t > 0.0 && t < tBest){
+      vec3 Q = ro + rd * t;
+      tBest = t; hit = true; P = Q; N = vec3(-1,0,0);
+      vec2 b = vec2(P.z, P.y);
+      /* firebrick courses */
+      float row = floor(b.y / 0.082);
+      float offs = mod(row, 2.0) * 0.5;
+      vec2 cell = vec2(b.x / 0.19 + offs, b.y / 0.082);
+      vec2 f = fract(cell);
+      float mortar = smoothstep(0.0, 0.035, f.x) * smoothstep(1.0, 0.965, f.x)
+                   * smoothstep(0.0, 0.08, f.y) * smoothstep(1.0, 0.92, f.y);
+      float shade = 0.72 + 0.28 * hash21(floor(cell) + 3.1);
+      albedo = mix(vec3(0.030,0.026,0.024), vec3(0.115,0.082,0.062) * shade, mortar);
+      albedo *= 0.78 + 0.5 * fbm(b * 26.0);
+    }
+  }
+
+  if (hit){
+    /* the two lights that matter: the glory hole, and the glass itself */
+    float lm;
+    vec3 furnCol = bbColour(1563.0, lm);
+    col += albedo * lampAt(P, N, HOLE_C - vec3(0.03,0,0), furnCol, 0.055 * (0.28 + 0.72 * uFurnace));
+    col += albedo * lampAt(P, N, uGlassPos, uGlassCol, uGlassPow);
+    /* a cold slot of daylight from high on the left, so the shop has a second colour */
+    col += albedo * vec3(0.20, 0.27, 0.38) * 0.055 * max(dot(N, normalize(vec3(-0.5, 0.85, 0.25))), 0.0);
+    col += albedo * 0.020;
+  }
+
+  /* the glory hole itself: a disc in the wall, looking into the fire */
+  if (rd.x > 1e-4){
+    float t = (WALL_X - ro.x) / rd.x;
+    if (t > 0.0){
+      vec3 Q = ro + rd * t;
+      float d = length(Q.yz - HOLE_C.yz);
+      if (d < HOLE_R){
+        float lm;
+        /* deeper into the mouth is hotter and less occluded */
+        vec2 rel = (Q.yz - HOLE_C.yz) / HOLE_R;
+        float rim = smoothstep(1.0, 0.55, d / HOLE_R);
+        /* the crown of the arch is cooler brick in shadow; the throat is hottest
+           and lowest, where the burner runs along the floor of the chamber */
+        float depth = rim * (0.62 - 0.38 * rel.x);
+        float TK = mix(1290.0, 1610.0, clamp(depth * 1.5, 0.0, 1.0));
+        vec3 c = bbColour(TK, lm);
+        float churn = 0.60 + 0.62 * fbm(vec2(Q.z * 17.0, Q.y * 17.0 - uTime * 1.15))
+                           * (0.5 + 0.5 * fbm(vec2(Q.z * 41.0 + uTime * 0.4, Q.y * 41.0)));
+        col = c * lm * churn * (0.32 + 3.1 * depth * depth) * (0.35 + 0.65 * uFurnace);
+        /* the brick lip catches the light hard */
+        col += vec3(1.0, 0.52, 0.16) * 0.9 * smoothstep(HOLE_R * 0.94, HOLE_R, d);
+      } else if (d < HOLE_R * 1.5){
+        float lm; vec3 c = bbColour(1500.0, lm);
+        col += c * lm * 0.16 * pow(1.0 - (d - HOLE_R) / (HOLE_R * 0.5), 3.0) * (0.3 + 0.7 * uFurnace);
+      }
+    }
+  }
+
+  if (!hit){
+    /* rays that leave the shop entirely: the dark of a big room, warmed a
+       little toward the furnace so there is no hard black rectangle up there */
+    float lm2; vec3 fc2 = bbColour(1500.0, lm2);
+    col += vec3(0.019, 0.016, 0.018) * (0.5 + 0.5 * rd.y);
+    col += fc2 * lm2 * 0.010 * smoothstep(-0.2, 0.9, rd.x) * exp(-max(rd.y, 0.0) * 2.4);
+  }
+
+  /* a haze of hot air above the hole */
+  float haze = exp(-pow((rd.y - 0.10) * 3.4, 2.0)) * smoothstep(-0.1, 0.5, rd.x);
+  col += vec3(0.26, 0.11, 0.035) * haze * 0.055;
+
+  frag = vec4(max(col, vec3(0.0)), 1.0);
+}`;
+
+/* ════════════════════════════════════════════════════════════════════════════
+   4 · THE STEEL — the blowpipe
+   ═══════════════════════════════════════════════════════════════════════════ */
+const MESH_VS = `#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNrm;
+layout(location=2) in vec2 aAux;     /* x = temperature degC, y = wall thickness m */
+uniform mat4 uVP, uModel;
+out vec3 vP; out vec3 vN; out vec2 vA;
+void main(){
+  vec4 w = uModel * vec4(aPos, 1.0);
+  vP = w.xyz;
+  vN = mat3(uModel) * aNrm;
+  vA = aAux;
+  gl_Position = uVP * w;
+}`;
+
+const STEEL_FS = `#version 300 es
+precision highp float;
+in vec3 vP; in vec3 vN; in vec2 vA;
+out vec4 frag;
+uniform vec3 uEye, uGlassPos, uGlassCol;
+uniform float uGlassPow, uFurnace;
+${GLSL_LUT}
+void main(){
+  vec3 N = normalize(vN);
+  vec3 V = normalize(uEye - vP);
+  if (dot(N, V) < 0.0) N = -N;
+  vec3 col = vec3(0.0);
+
+  /* the steel is hot where the glass is */
+  float lm;
+  vec3 own = bbColour(vA.x + 273.15, lm) * lm * 0.55;
+
+  vec3 lights[2];
+  lights[0] = vec3(0.305, -0.046, 0.0);
+  lights[1] = uGlassPos;
+  vec3 lcol[2];
+  float lf;
+  lcol[0] = bbColour(1563.0, lf) * (0.24 + 0.76 * uFurnace);
+  lcol[1] = uGlassCol * uGlassPow * 5.0;
+  float pw[2]; pw[0] = 0.34; pw[1] = 1.0;
+
+  for (int k = 0; k < 2; k++){
+    vec3 d = lights[k] - vP;
+    float r2 = max(dot(d, d), 2e-4);
+    vec3 L = normalize(d);
+    float ndl = max(dot(N, L), 0.0);
+    vec3 H = normalize(L + V);
+    float spec = pow(max(dot(N, H), 0.0), 42.0) * 0.55;
+    col += lcol[k] * pw[k] * (ndl * 0.30 + spec) / r2;
+  }
+  /* cold key from the left, so the steel reads as metal and not as ember */
+  vec3 Lk = normalize(vec3(-0.55, 0.8, 0.5));
+  col += vec3(0.30, 0.37, 0.48) * 0.075 * max(dot(N, Lk), 0.0);
+  vec3 Hk = normalize(Lk + V);
+  col += vec3(0.55, 0.66, 0.82) * 0.28 * pow(max(dot(N, Hk), 0.0), 70.0);
+  col += own;
+  col += vec3(0.02, 0.018, 0.02);
+
+  frag = vec4(max(col, vec3(0.0)), 1.0);
+}`;
+
+/* ════════════════════════════════════════════════════════════════════════════
+   5 · THE GLASS
+   ═══════════════════════════════════════════════════════════════════════════
+   One pass, front faces.  The path a ray takes through the shell crosses the
+   wall TWICE, so the emission and the absorption both carry 2t/|N.V| — which
+   is why the silhouette of a bubble is the brightest part of it and why the
+   rim of a cold one goes green.
+   ══════════════════════════════════════════════════════════════════════════ */
+const GLASS_FS = `#version 300 es
+precision highp float;
+in vec3 vP; in vec3 vN; in vec2 vA;
+out vec4 frag;
+uniform vec3 uEye, uGlassPos, uGlassCol;
+uniform float uGlassPow, uFurnace, uEmit, uBurst;
+uniform sampler2D uBG;
+uniform vec2 uRes;
+uniform mat4 uVP;
+${GLSL_LUT}
+
+void main(){
+  vec3 N = normalize(vN);
+  vec3 V = normalize(uEye - vP);
+  float ndv = abs(dot(N, V));
+  float grazing = 1.0 / max(ndv, 0.16);
+
+  float TC = vA.x;
+  float wall = vA.y;
+  float path = 2.0 * wall * grazing;          /* metres of glass in the line of sight */
+
+  /* ── what it gives off, because it is hot ─────────────────────────────── */
+  float lm;
+  vec3 bb = bbColour(TC + 273.15, lm);
+  /* emission scales with the depth of glass you are looking through, saturating
+     once it is optically thick */
+  float thick = 1.0 - exp(-path * 24.0);
+  vec3 emission = bb * lm * uEmit * thick;
+
+  /* ── what comes THROUGH it ────────────────────────────────────────────── */
+  vec2 uv = gl_FragCoord.xy / uRes;
+  /* screen-space refraction: bend by the normal's screen-space tilt */
+  vec4 clipN = uVP * vec4(vP + N * 0.012, 1.0);
+  vec2 nScreen = clipN.xy / max(clipN.w, 1e-4) * 0.5 + 0.5;
+  vec2 offs = (nScreen - uv) * 1.35 * clamp(path * 120.0, 0.15, 1.4);
+  vec3 behind = texture(uBG, clamp(uv + offs, vec2(0.002), vec2(0.998))).rgb;
+  /* soda-lime absorbs a little red and a little violet: the bottle-green cast,
+     and it only shows where the glass is thick or you are looking along it */
+  vec3 tint = exp(-vec3(9.5, 2.4, 13.5) * path);
+
+  /* ── the skin: fresnel, and a window's worth of specular ──────────────── */
+  float F = 0.04 + 0.96 * pow(1.0 - ndv, 5.0);
+  vec3 Lw = normalize(vec3(-0.5, 0.86, 0.42));
+  vec3 R = reflect(-V, N);
+  float win = pow(max(dot(R, Lw), 0.0), 220.0) + 0.30 * pow(max(dot(R, Lw), 0.0), 18.0);
+  vec3 spec = vec3(0.72, 0.82, 0.98) * win * 0.85;
+  /* the room, reflected — glass is mostly other people's light, and without
+     this a cooled piece is a black hole with two highlights on it.  Weighted by
+     Fresnel and by Fresnel only: flat-weighted it veils the whole surface and
+     the piece comes out looking sandblasted. */
+  vec3 envUp   = vec3(0.070, 0.084, 0.112);
+  vec3 envDown = vec3(0.115, 0.062, 0.032);
+  vec3 envRefl = mix(envDown, envUp, clamp(R.y * 0.5 + 0.5, 0.0, 1.0)) * (0.22 + 5.0 * F);
+  /* and the furnace, reflected */
+  vec3 Lf = normalize(vec3(0.305, -0.046, 0.0) - vP);
+  float lf; vec3 fc = bbColour(1563.0, lf);
+  spec += fc * 0.9 * pow(max(dot(R, Lf), 0.0), 34.0) * (0.25 + 0.75 * uFurnace);
+  /* and a broad wash: a glory hole is an enormous area light and the whole
+     furnace-facing side of a bubble picks it up */
+  spec += fc * 0.34 * pow(max(dot(N, Lf), 0.0), 1.6) * (0.20 + 0.80 * uFurnace);
+
+  vec3 col = behind * tint * (1.0 - F) + spec * (0.25 + 0.75 * F) + envRefl + emission;
+
+  /* a burst piece keeps a torn, dark edge */
+  col *= mix(1.0, 0.55, uBurst);
+
+  frag = vec4(max(col, vec3(0.0)), 1.0);
+}`;
+
+/* ── bloom + tonemap ─────────────────────────────────────────────────────── */
+const BRIGHT_FS = `#version 300 es
+precision highp float;
+in vec2 vUV; out vec4 frag;
+uniform sampler2D uSrc; uniform vec2 uSrcTexel; uniform float uThresh;
+void main(){
+  /* box-4 downsample: taps offset by the SOURCE texel, lookup at THIS pixel's uv */
+  vec3 s = vec3(0.0);
+  s += texture(uSrc, vUV + uSrcTexel * vec2(-1.0, -1.0)).rgb;
+  s += texture(uSrc, vUV + uSrcTexel * vec2( 1.0, -1.0)).rgb;
+  s += texture(uSrc, vUV + uSrcTexel * vec2(-1.0,  1.0)).rgb;
+  s += texture(uSrc, vUV + uSrcTexel * vec2( 1.0,  1.0)).rgb;
+  s *= 0.25;
+  float l = max(max(s.r, s.g), s.b);
+  float k = max(l - uThresh, 0.0) / max(l, 1e-4);
+  vec3 o = s * k;
+  o = mix(o, vec3(0.0), vec3(lessThan(o, vec3(0.0))));
+  frag = vec4(o, 1.0);
+}`;
+
+const BLUR_FS = `#version 300 es
+precision highp float;
+in vec2 vUV; out vec4 frag;
+uniform sampler2D uSrc; uniform vec2 uDir;
+void main(){
+  vec3 s = texture(uSrc, vUV).rgb * 0.2270270270;
+  s += (texture(uSrc, vUV + uDir * 1.3846153846).rgb + texture(uSrc, vUV - uDir * 1.3846153846).rgb) * 0.3162162162;
+  s += (texture(uSrc, vUV + uDir * 3.2307692308).rgb + texture(uSrc, vUV - uDir * 3.2307692308).rgb) * 0.0702702703;
+  frag = vec4(s, 1.0);
+}`;
+
+const POST_FS = `#version 300 es
+precision highp float;
+in vec2 vUV; out vec4 frag;
+uniform sampler2D uScene, uBloomA, uBloomB;
+uniform float uExposure, uTime;
+vec3 aces(vec3 x){
+  const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+  return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+void main(){
+  vec3 c = texture(uScene, vUV).rgb;
+  c += texture(uBloomA, vUV).rgb * 0.44;
+  c += texture(uBloomB, vUV).rgb * 0.34;
+  c *= uExposure;
+  c = aces(c);
+  c = pow(c, vec3(1.0 / 2.2));
+  /* a little film grain keeps the dark end of a hot shop from banding */
+  float g = fract(sin(dot(vUV * vec2(1911.0, 3711.0) + uTime, vec2(12.9898, 78.233))) * 43758.5453);
+  c += (g - 0.5) * 0.012;
+  float v = 1.0 - 0.30 * pow(length(vUV - 0.5) * 1.32, 2.4);
+  frag = vec4(c * v, 1.0);
+}`;
+
+const progShop  = makeProgram(SHOP_FS,  'shop');
+const progSteel = makeProgram(STEEL_FS, 'steel', MESH_VS);
+const progGlass = makeProgram(GLASS_FS, 'glass', MESH_VS);
+const progBright= makeProgram(BRIGHT_FS,'bright');
+const progBlur  = makeProgram(BLUR_FS,  'blur');
+const progPost  = makeProgram(POST_FS,  'post');
+
+/* ════════════════════════════════════════════════════════════════════════════
+   6 · MESHES
+   ═══════════════════════════════════════════════════════════════════════════ */
+const SIDES = 64;
+
+function makeVAO(){
+  const vao = gl.createVertexArray();
+  const pos = gl.createBuffer(), nrm = gl.createBuffer(), aux = gl.createBuffer(), idx = gl.createBuffer();
+  gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, pos); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, nrm); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, aux); gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idx);
+  gl.bindVertexArray(null);
+  return { vao, pos, nrm, aux, idx, count: 0 };
+}
+function uploadMesh(M, data, indices){
+  gl.bindVertexArray(M.vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, M.pos); gl.bufferData(gl.ARRAY_BUFFER, data.pos, gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, M.nrm); gl.bufferData(gl.ARRAY_BUFFER, data.nor, gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, M.aux); gl.bufferData(gl.ARRAY_BUFFER, data.aux, gl.DYNAMIC_DRAW);
+  if (indices){
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, M.idx);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+    M.count = indices.length;
+  }
+  gl.bindVertexArray(null);
+}
+
+const glassMesh = makeVAO();
+let glassIdxN = -1;
+
+/* the blowpipe: a tube from the grip out to the glass, plus a fat mouthpiece */
+function buildPipe(){
+  const N = 26, S = 28;
+  const pos = new Float32Array(N * (S + 1) * 3), nor = new Float32Array(N * (S + 1) * 3), aux = new Float32Array(N * (S + 1) * 2);
+  const prof = [];
+  for (let i = 0; i < N; i++){
+    const f = i / (N - 1);
+    /* z runs from -1.02 (mouthpiece, behind the gaffer) to +0.012 (into the glass) */
+    const z = -1.02 + f * 1.032;
+    let rr = 0.0072;
+    if (f < 0.06) rr = 0.0135 - 0.09 * f;              /* the mouthpiece */
+    /* NO bell at the tip: the steel must stay INSIDE the glass, or the collar
+       pokes through the gather and reads as a modelling fault. */
+    prof.push([z, rr]);
+  }
+  let v = 0;
+  for (let i = 0; i < N; i++){
+    const [z, rr] = prof[i];
+    const a = prof[Math.max(0, i - 1)], b = prof[Math.min(N - 1, i + 1)];
+    const dz = b[0] - a[0], dr = b[1] - a[1];
+    const L = Math.hypot(dz, dr) || 1;
+    for (let j = 0; j <= S; j++){
+      const th = 2 * Math.PI * j / S, c = Math.cos(th), s = Math.sin(th);
+      pos[v * 3] = rr * c; pos[v * 3 + 1] = rr * s; pos[v * 3 + 2] = z;
+      nor[v * 3] = (dz / L) * c; nor[v * 3 + 1] = (dz / L) * s; nor[v * 3 + 2] = -dr / L;
+      /* the steel glows only right at the tip, where the glass has been cooking it */
+      aux[v * 2] = Math.max(20, 840 * Math.pow(Math.max(0, (z + 0.075) / 0.086), 6));
+      aux[v * 2 + 1] = 0.002;
+      v++;
+    }
+  }
+  const idx = new Uint32Array((N - 1) * S * 6);
+  let k = 0;
+  for (let i = 0; i < N - 1; i++) for (let j = 0; j < S; j++){
+    const a = i * (S + 1) + j, b2 = a + 1, c2 = a + (S + 1), d = c2 + 1;
+    idx[k++] = a; idx[k++] = c2; idx[k++] = b2;
+    idx[k++] = b2; idx[k++] = c2; idx[k++] = d;
+  }
+  return { data: { pos, nor, aux }, idx };
+}
+const pipeMesh = makeVAO();
+{ const P = buildPipe(); uploadMesh(pipeMesh, P.data, P.idx); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   7 · TARGETS
+   ═══════════════════════════════════════════════════════════════════════════ */
+let W = 1, H = 1, sceneRT = null, bgRT = null, bloomA = null, bloomB = null, bloomC = null;
+function resize(){
+  const dpr = Math.min(devicePixelRatio || 1, 1.75);
+  const w = Math.max(320, Math.round(innerWidth * dpr));
+  const h = Math.max(240, Math.round(innerHeight * dpr));
+  if (w === W && h === H) return;
+  W = w; H = h;
+  canvas.width = W; canvas.height = H;
+  for (const t of [sceneRT, bgRT, bloomA, bloomB, bloomC]) if (t){ gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fb); if (t.depth) gl.deleteRenderbuffer(t.depth); }
+  sceneRT = makeTarget(W, H, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT, gl.LINEAR, true);
+  bgRT    = makeTarget(W, H, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT, gl.LINEAR, false);
+  const bw = Math.max(1, W >> 2), bh = Math.max(1, H >> 2);
+  bloomA = makeTarget(bw, bh, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT, gl.LINEAR, false);
+  bloomB = makeTarget(bw, bh, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT, gl.LINEAR, false);
+  bloomC = makeTarget(Math.max(1, bw >> 2), Math.max(1, bh >> 2), gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT, gl.LINEAR, false);
+}
+addEventListener('resize', resize);
+resize();
+
+/* ════════════════════════════════════════════════════════════════════════════
+   8 · THE STATE OF THE BENCH
+   ═══════════════════════════════════════════════════════════════════════════ */
+let piece = makePiece();
+let vessel = null;                /* set once it is cracked off */
+const ctl = { blow: 0, heat: 0, tilt: Math.PI / 2, spin: 24, jack: null, paddle: null };
+let tiltTarget = Math.PI / 2;
+let breath = 1;                   /* a lungful, 0..1 */
+let furnaceIn = 0;                /* 0..1 how far the rig has slid into the glory hole */
+let heldBlow = false, heldHeat = false, heldPaddle = false;
+let jackAt = null;                /* arclength fraction the pointer is pinching */
+let started = false, tPrev = 0, simTime = 0;
+/* once it is cracked off it is set down on the marver, mouth up, and left to
+   cool.  0 -> 1 over about a second and a half. */
+let setDown = 0;
+const REST = { x: -0.085, y: -0.203, z: 0.02 };
+
+const cam = { yaw: 0.0, pitch: 0.10, dist: 0.385, target: [0.080, -0.016, 0] };
+const CAM_BENCH = { yaw: 0.0, pitch: 0.10, dist: 0.385, target: [0.080, -0.016, 0] };
+/* once the piece is standing on the marver the eye goes to IT — a reveal, not a
+   camera trick: the visitor is putting their face next to the thing they made */
+const CAM_REST = { yaw: -0.26, pitch: 0.075, dist: 0.235, target: [-0.075, -0.172, 0.02] };
+let camGoal = null;
+
+/* ── camera / pinch input ────────────────────────────────────────────────── */
+let dragMode = null, lastX = 0, lastY = 0;
+function pieceScreenSpan(){
+  /* the piece's arclength fraction nearest the pointer, in screen space */
+  return null;
+}
+canvas.addEventListener('pointerdown', (e) => {
+  canvas.setPointerCapture(e.pointerId);
+  lastX = e.clientX; lastY = e.clientY;
+  const s = pickArc(e.clientX, e.clientY);
+  if (s !== null && !vessel && !piece.burst){ dragMode = 'jack'; jackAt = s; canvas.className = 'pinch'; }
+  else { dragMode = 'orbit'; camGoal = null; canvas.className = 'grabbing'; }
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (dragMode === 'orbit'){
+    cam.yaw -= (e.clientX - lastX) * 0.0055;
+    cam.pitch = Math.max(-0.85, Math.min(1.05, cam.pitch + (e.clientY - lastY) * 0.0045));
+  } else if (dragMode === 'jack'){
+    const s = pickArc(e.clientX, e.clientY);
+    if (s !== null) jackAt = s;
+  } else {
+    const s = pickArc(e.clientX, e.clientY);
+    canvas.className = (s !== null && !vessel && !piece.burst) ? 'pinch' : '';
+  }
+  lastX = e.clientX; lastY = e.clientY;
+});
+function endDrag(){ dragMode = null; jackAt = null; canvas.className = ''; }
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  cam.dist = Math.max(0.16, Math.min(1.0, cam.dist * Math.exp(e.deltaY * 0.0012)));
+}, { passive: false });
+
+/* project every station and find the nearest one to the pointer, in pixels */
+let lastVP = mat4(), lastModel = mat4();
+function pickArc(cx, cy){
+  const rect = canvas.getBoundingClientRect();
+  const px = (cx - rect.left) / rect.width * 2 - 1;
+  const py = 1 - (cy - rect.top) / rect.height * 2;
+  const P = vessel || piece;
+  let best = 1e9, bi = -1;
+  const M = lastModel, VP = lastVP;
+  for (let i = 0; i < P.N; i += 2){
+    const x = P.r[i], y = 0, z = P.u[i];
+    const wx = M[0]*x + M[4]*y + M[8]*z + M[12];
+    const wy = M[1]*x + M[5]*y + M[9]*z + M[13];
+    const wz = M[2]*x + M[6]*y + M[10]*z + M[14];
+    const cw = VP[3]*wx + VP[7]*wy + VP[11]*wz + VP[15];
+    if (cw <= 1e-5) continue;
+    const sx = (VP[0]*wx + VP[4]*wy + VP[8]*wz + VP[12]) / cw;
+    const sy = (VP[1]*wx + VP[5]*wy + VP[9]*wz + VP[13]) / cw;
+    const d = Math.hypot((sx - px) * rect.width, (sy - py) * rect.height);
+    if (d < best){ best = d; bi = i; }
+  }
+  if (bi < 0 || best > 90) return null;
+  const arc = cumulativeArc(P);
+  return arc[bi] / (arc[P.N - 1] || 1);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   9 · SOUND — the furnace, the breath, and the note of what you made
+   ═══════════════════════════════════════════════════════════════════════════ */
+let actx = null, master = null, roarGain = null, breathGain = null, bottle = null, bottleGain = null;
+function noiseBuffer(sec){
+  const n = Math.floor(actx.sampleRate * sec);
+  const b = actx.createBuffer(1, n, actx.sampleRate);
+  const d = b.getChannelData(0);
+  let lp = 0;
+  for (let i = 0; i < n; i++){ const w = Math.random() * 2 - 1; lp += 0.22 * (w - lp); d[i] = lp * 2.2; }
+  return b;
+}
+function initAudio(){
+  if (actx) return;
+  actx = new (window.AudioContext || window.webkitAudioContext)();
+  master = actx.createGain(); master.gain.value = WS.muted() ? 0 : 0.85;
+  const comp = actx.createDynamicsCompressor();
+  comp.threshold.value = -14; comp.ratio.value = 5;
+  master.connect(comp); comp.connect(actx.destination);
+
+  /* the furnace: filtered noise, always there, louder with the door open */
+  const src = actx.createBufferSource();
+  src.buffer = noiseBuffer(3.1); src.loop = true;
+  const lp = actx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 340; lp.Q.value = 0.6;
+  const pk = actx.createBiquadFilter(); pk.type = 'peaking'; pk.frequency.value = 92; pk.gain.value = 9; pk.Q.value = 1.2;
+  roarGain = actx.createGain(); roarGain.gain.value = 0.05;
+  src.connect(lp); lp.connect(pk); pk.connect(roarGain); roarGain.connect(master);
+  src.start();
+
+  /* the breath down the pipe */
+  const bsrc = actx.createBufferSource();
+  bsrc.buffer = noiseBuffer(2.3); bsrc.loop = true;
+  const bp = actx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 620; bp.Q.value = 0.8;
+  breathGain = actx.createGain(); breathGain.gain.value = 0;
+  bsrc.connect(bp); bp.connect(breathGain); breathGain.connect(master);
+  bsrc.start();
+}
+/* blow ACROSS the mouth of the vessel: breath noise through one high-Q bandpass
+   parked on the Helmholtz frequency.  No oscillator — the resonator IS the note,
+   exactly as The Jug does it. */
+function soundTheVessel(f){
+  if (!actx || WS.muted() || !(f > 20) || !(f < 8000)) return;
+  const src = actx.createBufferSource();
+  src.buffer = noiseBuffer(2.2); src.loop = true;
+  const bp = actx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 26;
+  const bp2 = actx.createBiquadFilter(); bp2.type = 'bandpass'; bp2.frequency.value = f; bp2.Q.value = 14;
+  const air = actx.createBiquadFilter(); air.type = 'highpass'; air.frequency.value = 900;
+  const airg = actx.createGain(); airg.gain.value = 0.05;
+  const g = actx.createGain(); g.gain.value = 0;
+  const now = actx.currentTime;
+  g.gain.setValueAtTime(0, now);
+  g.gain.linearRampToValueAtTime(0.5, now + 0.13);
+  g.gain.setValueAtTime(0.5, now + 1.25);
+  g.gain.exponentialRampToValueAtTime(0.0006, now + 1.9);
+  src.connect(bp); bp.connect(bp2); bp2.connect(g);
+  src.connect(air); air.connect(airg); airg.connect(g);
+  g.connect(master);
+  src.start(now); src.stop(now + 2.0);
+  if (bottleGain) bottleGain.disconnect();
+  bottleGain = g;
+}
+function clink(){
+  if (!actx || WS.muted()) return;
+  const now = actx.currentTime;
+  for (const [f, a, d] of [[2400, 0.16, 0.30], [3810, 0.10, 0.22], [5600, 0.05, 0.16]]){
+    const o = actx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+    const g = actx.createGain(); g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(a, now + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0005, now + d);
+    o.connect(g); g.connect(master); o.start(now); o.stop(now + d + 0.05);
+  }
+}
+function crackSound(){
+  if (!actx || WS.muted()) return;
+  const now = actx.currentTime;
+  const src = actx.createBufferSource(); src.buffer = noiseBuffer(0.3);
+  const bp = actx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 3100; bp.Q.value = 2.2;
+  const g = actx.createGain();
+  g.gain.setValueAtTime(0.6, now); g.gain.exponentialRampToValueAtTime(0.0006, now + 0.16);
+  src.connect(bp); bp.connect(g); g.connect(master); src.start(now); src.stop(now + 0.2);
+  setTimeout(clink, 60);
+}
+function burstSound(){
+  if (!actx || WS.muted()) return;
+  const now = actx.currentTime;
+  const src = actx.createBufferSource(); src.buffer = noiseBuffer(0.5);
+  const hp = actx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1400;
+  const g = actx.createGain();
+  g.gain.setValueAtTime(0.8, now); g.gain.exponentialRampToValueAtTime(0.0006, now + 0.42);
+  src.connect(hp); hp.connect(g); g.connect(master); src.start(now); src.stop(now + 0.5);
+}
+function syncHush(){
+  const m = WS.muted();
+  $('hush').textContent = m ? 'sound off' : 'sound on';
+  $('hush').classList.toggle('cool', !m);
+  if (master) master.gain.value = m ? 0 : 0.85;
+}
+$('hush').addEventListener('click', () => { WS.setMuted(!WS.muted()); syncHush(); });
+WS.onMuteChange(syncHush); syncHush();
+
+/* ════════════════════════════════════════════════════════════════════════════
+   10 · THE CONSOLE
+   ═══════════════════════════════════════════════════════════════════════════ */
+function holdButton(el, onDown, onUp){
+  const down = (e) => { e.preventDefault(); if (el.disabled) return; el.classList.add('held'); onDown(); };
+  const up = () => { el.classList.remove('held'); onUp(); };
+  el.addEventListener('pointerdown', down);
+  el.addEventListener('pointerup', up);
+  el.addEventListener('pointerleave', up);
+  el.addEventListener('pointercancel', up);
+  return { up };
+}
+const heatBtn = holdButton($('heat'), () => { heldHeat = true; }, () => { heldHeat = false; });
+const blowBtn = holdButton($('blow'), () => { heldBlow = true; }, () => { heldBlow = false; });
+const padBtn  = holdButton($('paddle'), () => { heldPaddle = true; }, () => { heldPaddle = false; });
+
+function tiltWord(deg){
+  if (deg < 12) return 'straight down';
+  if (deg < 62) return 'down ' + (90 - deg).toFixed(0) + '\u00b0';
+  if (deg < 80) return 'nosed down';
+  if (deg <= 100) return 'level';
+  if (deg < 130) return 'nosed up';
+  if (deg < 168) return 'up ' + (deg - 90).toFixed(0) + '\u00b0';
+  return 'straight up';
+}
+function syncTiltLabel(){ $('tiltv').textContent = tiltWord(Number($('tilt').value)); }
+$('tilt').addEventListener('input', (e) => { tiltTarget = Number(e.target.value) * Math.PI / 180; syncTiltLabel(); });
+$('spin').addEventListener('input', (e) => {
+  ctl.spin = Number(e.target.value);
+  $('spinv').textContent = (ctl.spin * 60 / (2 * Math.PI)).toFixed(0) + ' rpm';
+});
+syncTiltLabel();
+
+addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  if (e.code === 'Space'){ e.preventDefault(); heldBlow = true; $('blow').classList.add('held'); }
+  if (e.key === 'h' || e.key === 'H'){ heldHeat = true; $('heat').classList.add('held'); }
+  if (e.key === 'ArrowUp'){ e.preventDefault(); setTilt(tiltTarget + 0.14); }
+  if (e.key === 'ArrowDown'){ e.preventDefault(); setTilt(tiltTarget - 0.14); }
+});
+addEventListener('keyup', (e) => {
+  if (e.code === 'Space'){ heldBlow = false; $('blow').classList.remove('held'); }
+  if (e.key === 'h' || e.key === 'H'){ heldHeat = false; $('heat').classList.remove('held'); }
+});
+function setTilt(v){
+  tiltTarget = Math.max(0, Math.min(Math.PI, v));
+  $('tilt').value = String(Math.round(tiltTarget * 180 / Math.PI));
+  syncTiltLabel();
+}
+
+$('fresh').addEventListener('click', () => { newGather(); });
+$('crack').addEventListener('click', () => { crackItOff(); });
+
+function newGather(){
+  piece = makePiece();
+  vessel = null;
+  breath = 1;
+  simTime = 0;
+  $('done').classList.remove('on');
+  setDown = 0;
+  camGoal = CAM_BENCH;
+  burstAnnounced = false;
+  $('crack').disabled = false;
+  $('blow').disabled = false;
+  $('paddle').disabled = false;
+  setTilt(Math.PI / 2);
+}
+function crackItOff(){
+  if (vessel) return;
+  vessel = crackOff(piece);
+  vessel.lip = lipGeometry(vessel);
+  setDown = 0;
+  camGoal = piece.burst ? null : CAM_REST;
+  const n = noteOf(vessel);
+  crackSound();
+  setTimeout(() => soundTheVessel(n.f), 520);
+  $('crack').disabled = true;
+  $('blow').disabled = true;
+  $('paddle').disabled = true;
+  $('donet').textContent = piece.burst ? 'It went.' : pitchLabel(n.f);
+  $('dones').innerHTML = piece.burst
+    ? 'The wall got under <b>0.12 mm</b> and there is nothing to crack off. Take a new gather.'
+    : `a <b>${(2000 * n.rLip).toFixed(0)} mm</b> mouth on <b>${(1e6 * n.V).toFixed(0)} cm³</b> of air &mdash; ` +
+      `<b>${n.f.toFixed(0)} Hz</b>. Click it to blow across it.`;
+  $('done').classList.add('on');
+  if (!piece.burst) keepVessel(vessel);
+}
+
+/* ── the shelf, in ws: ───────────────────────────────────────────────────── */
+const SHELF_KEY = 'ws:gaffer:shelf';
+function loadShelf(){
+  try { const v = JSON.parse(localStorage.getItem(SHELF_KEY) || '[]'); return Array.isArray(v) ? v : []; }
+  catch (e){ return []; }
+}
+function keepVessel(v){
+  const s = loadShelf();
+  s.push(packVessel(v));
+  while (s.length > 8) s.shift();
+  try { localStorage.setItem(SHELF_KEY, JSON.stringify(s)); } catch (e){}
+  drawShelf();
+}
+function drawShelf(){
+  const s = loadShelf();
+  const row = $('shelfrow');
+  row.innerHTML = '';
+  $('shelf').classList.toggle('on', s.length > 0);
+  for (const item of s){
+    const N = item.u.length;
+    let maxU = 0, maxR = 0;
+    for (let i = 0; i < N; i++){ maxU = Math.max(maxU, item.u[i]); maxR = Math.max(maxR, item.r[i]); }
+    const sc = 40 / Math.max(maxU, 2 * maxR, 1);
+    let d = '';
+    for (let i = 0; i < N; i++) d += (i ? 'L' : 'M') + (19 + item.r[i] * sc).toFixed(1) + ',' + (44 - item.u[i] * sc).toFixed(1) + ' ';
+    for (let i = N - 1; i >= 0; i--) d += 'L' + (19 - item.r[i] * sc).toFixed(1) + ',' + (44 - item.u[i] * sc).toFixed(1) + ' ';
+    const btn = document.createElement('button');
+    btn.className = 'vase';
+    btn.title = item.f + ' Hz · ' + item.v + ' cm³';
+    btn.innerHTML = '<svg viewBox="0 0 38 46"><path d="' + d + 'Z" fill="rgba(170,215,232,.20)" stroke="rgba(200,235,248,.72)" stroke-width="1"/></svg>';
+    btn.addEventListener('click', () => { initAudio(); soundTheVessel(item.f); });
+    row.appendChild(btn);
+  }
+}
+drawShelf();
+$('done').addEventListener('click', () => {
+  if (vessel && !piece.burst){ initAudio(); soundTheVessel(noteOf(vessel).f); }
+});
+
+/* ── the viscosity gauge ─────────────────────────────────────────────────── */
+const viscCanvas = $('visc'), vctx = viscCanvas.getContext('2d');
+function drawViscosity(TC){
+  const w = viscCanvas.width, h = viscCanvas.height;
+  vctx.clearRect(0, 0, w, h);
+  const T0 = 1200, T1 = 450, Y0 = 1.0, Y1 = 14.5;
+  const X = (T) => (T0 - T) / (T0 - T1) * w;
+  const Y = (y) => h - (y - Y0) / (Y1 - Y0) * h;
+  /* the workable band */
+  vctx.fillStyle = 'rgba(255,170,60,.10)';
+  vctx.fillRect(X(vftTempFor(2.4)), 0, X(vftTempFor(6.0)) - X(vftTempFor(2.4)), h);
+  /* the curve */
+  vctx.beginPath();
+  for (let px = 0; px <= w; px += 2){
+    const T = T0 - (px / w) * (T0 - T1);
+    const y = Y(vftLogEta(T));
+    if (px === 0) vctx.moveTo(px, y); else vctx.lineTo(px, y);
+  }
+  vctx.strokeStyle = 'rgba(231,189,108,.85)'; vctx.lineWidth = 2.4; vctx.stroke();
+  /* the three published points it was fitted to, and the one it predicted */
+  vctx.font = '600 15px ui-monospace, monospace';
+  for (const p of FIXED_POINTS){
+    vctx.beginPath(); vctx.arc(X(p.TC), Y(p.logEta), 4.2, 0, 7);
+    vctx.fillStyle = 'rgba(255,225,180,.95)'; vctx.fill();
+  }
+  const Ts = vftTempFor(STRAIN_POINT.logEta);
+  vctx.beginPath(); vctx.arc(X(Ts), Y(STRAIN_POINT.logEta), 5.0, 0, 7);
+  vctx.strokeStyle = 'rgba(150,215,255,.95)'; vctx.lineWidth = 2; vctx.stroke();
+  /* where the glass is now */
+  if (TC != null && isFinite(TC)){
+    const x = Math.max(2, Math.min(w - 2, X(TC))), y = Math.max(2, Math.min(h - 2, Y(vftLogEta(TC))));
+    vctx.beginPath(); vctx.moveTo(x, 0); vctx.lineTo(x, h);
+    vctx.strokeStyle = 'rgba(255,255,255,.20)'; vctx.lineWidth = 1; vctx.stroke();
+    vctx.beginPath(); vctx.arc(x, y, 5.6, 0, 7);
+    vctx.fillStyle = '#ffd79a'; vctx.fill();
+    vctx.strokeStyle = 'rgba(0,0,0,.6)'; vctx.lineWidth = 1.4; vctx.stroke();
+  }
+}
+drawViscosity(null);
+
+/* ════════════════════════════════════════════════════════════════════════════
+   11 · THE LOOP
+   ═══════════════════════════════════════════════════════════════════════════ */
+const SUBSTEP = 1 / 600;
+let fpsAcc = 0, fpsN = 0, uiAcc = 0;
+let glowPos = [0.06, 0, 0], glowCol = [1, 0.5, 0.2], glowPow = 0;
+let burstAnnounced = false;
+const latheOut = {};
+
+function simulate(dt){
+  if (vessel){
+    /* it is off the pipe and standing on the steel.  It no longer flows — at
+       10^5 Pa·s and falling it would take an hour to move a millimetre — but it
+       most certainly still cools, and the colour is the temperature, so the red
+       drains out of it and you are left with glass. */
+    setDown = Math.min(1, setDown + dt * 0.75);
+    coolOnly(vessel, dt, 0);
+    return;
+  }
+  /* the pipe swings toward where the slider says, but glass takes its time */
+  ctl.tilt += (tiltTarget - ctl.tilt) * Math.min(1, dt * 5.5);
+
+  /* the glory hole: the rig slides in, and levels out on the way */
+  const wantIn = heldHeat ? 1 : 0;
+  furnaceIn += (wantIn - furnaceIn) * Math.min(1, dt * 3.4);
+  if (heldHeat){
+    tiltTarget += (Math.PI / 2 - tiltTarget) * Math.min(1, dt * 3.0);
+    $('tilt').value = String(Math.round(tiltTarget * 180 / Math.PI));
+    syncTiltLabel();
+  }
+  ctl.heat = furnaceIn > 0.55 ? Math.min(1, (furnaceIn - 0.55) / 0.35) : 0;
+
+  /* you cannot blow and reheat at once: your mouth is at the other end of a
+     pipe whose far end is inside a furnace, and you are not that flexible */
+  const canBlow = !heldHeat && furnaceIn < 0.25 && breath > 0.02 && !piece.burst;
+  ctl.blow = (heldBlow && canBlow) ? 1 : 0;
+  breath += (ctl.blow ? -0.34 : 0.30) * dt;
+  breath = Math.max(0, Math.min(1, breath));
+
+  ctl.jack = (jackAt !== null) ? { s: jackAt, w: 0.055, rate: 7.5 } : null;
+  ctl.paddle = heldPaddle ? pieceLength(piece) * 0.90 : null;
+
+  const wasBurst = piece.burst;
+  let left = dt;
+  let guard = 0;
+  while (left > 1e-6 && guard++ < 40){
+    const h = Math.min(SUBSTEP, left);
+    step(piece, h, ctl);
+    left -= h;
+  }
+  simTime += dt;
+  if (piece.burst && !wasBurst){ burstSound(); burstAnnounced = false; }
+  if (piece.burst && !burstAnnounced){
+    burstAnnounced = true;
+    $('donet').textContent = 'It went.';
+    $('dones').innerHTML = 'The wall got under <b>0.12 mm</b>. Nothing to crack off &mdash; take a new gather.';
+    $('done').classList.add('on');
+    $('blow').disabled = true;
+  }
+}
+
+function frame(now){
+  requestAnimationFrame(frame);
+  if (!tPrev) tPrev = now;
+  let dt = Math.min(0.05, (now - tPrev) / 1000);
+  tPrev = now;
+  if (!started) dt = 0;
+
+  simulate(dt);
+
+  /* ── the piece as a light: an area-weighted mean of its own colour ────── */
+  const P = vessel || piece;
+  {
+    let wsum = 0, cr = 0, cg = 0, cb = 0, uSum = 0;
+    for (let i = 0; i < P.N; i += 3){
+      const TK = P.T[i] + 273.15;
+      const lum = Math.pow(10, lutA(TK));
+      const c = lutRGB(TK);
+      const w = P.r[i] * lum;
+      cr += c[0] * w; cg += c[1] * w; cb += c[2] * w; wsum += w; uSum += P.u[i] * w;
+    }
+    if (wsum > 1e-9){
+      glowCol = [cr / wsum, cg / wsum, cb / wsum];
+      glowPow = Math.min(0.09, wsum * 0.00055);
+      const uc = uSum / wsum;
+      const d = [Math.sin(ctl.tilt), -Math.cos(ctl.tilt), 0];
+      glowPos = [rigX() + d[0] * uc, d[1] * uc, 0];
+    } else { glowPow = 0; }
+  }
+
+  /* ── camera ──────────────────────────────────────────────────────────── */
+  if (camGoal && dragMode !== 'orbit'){
+    const k = Math.min(1, dt * 2.2);
+    cam.yaw   += (camGoal.yaw - cam.yaw) * k;
+    cam.pitch += (camGoal.pitch - cam.pitch) * k;
+    cam.dist  += (camGoal.dist - cam.dist) * k;
+    for (let i = 0; i < 3; i++) cam.target[i] += (camGoal.target[i] - cam.target[i]) * k;
+  }
+  const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+  const eye = [
+    cam.target[0] + cam.dist * Math.sin(cam.yaw) * cp,
+    cam.target[1] + cam.dist * sp,
+    cam.target[2] + cam.dist * Math.cos(cam.yaw) * cp,
+  ];
+  const view = lookAt(eye, cam.target, [0, 1, 0]);
+  const proj = perspective(0.95, W / H, 0.02, 12);
+  const VP = mul(proj, view);
+  lastVP = VP;
+  let model;
+  if (vessel){
+    const e = setDown * setDown * (3 - 2 * setDown);          // smoothstep
+    /* tilt 0 points the piece DOWN, and the piece runs lip-first, so tilt 0 is
+       what stands it mouth-UP.  Then its base has to land on the steel, which
+       means lifting the lip by the piece's own length. */
+    const tl = ctl.tilt * (1 - e);
+    model = rigMatrix(tl, rigX() + (REST.x - rigX()) * e);
+    model[13] = (REST.y + pieceLength(vessel)) * e;
+    model[14] = REST.z * e;
+  } else {
+    model = rigMatrix(ctl.tilt, rigX());
+  }
+  lastModel = model;
+
+  /* the camera basis the analytic shop needs — derived from the same lookAt */
+  const fwd = [(cam.target[0] - eye[0]), (cam.target[1] - eye[1]), (cam.target[2] - eye[2])];
+  const fl = Math.hypot(fwd[0], fwd[1], fwd[2]) || 1;
+  fwd[0] /= fl; fwd[1] /= fl; fwd[2] /= fl;
+  /* right = normalize(fwd x up).  With up = +Y that is (-fwd.z, 0, fwd.x), and
+     the hand-check is the one LANDMINES.md prints: fwd = (0,0,-1) must give
+     right = (+1,0,0).  Written the other way round it mirrors the analytic shop
+     and leaves the rasterised pipe alone, which reads as anything but a sign. */
+  let right = [-fwd[2], 0, fwd[0]];
+  const rl = Math.hypot(right[0], right[1], right[2]) || 1;
+  right = [right[0] / rl, right[1] / rl, right[2] / rl];
+  const up = [
+    right[1] * fwd[2] - right[2] * fwd[1],
+    right[2] * fwd[0] - right[0] * fwd[2],
+    right[0] * fwd[1] - right[1] * fwd[0],
+  ];
+
+  /* ── 1 · the shop ─────────────────────────────────────────────────────── */
+  gl.bindFramebuffer(gl.FRAMEBUFFER, sceneRT.fb);
+  gl.viewport(0, 0, W, H);
+  gl.clearColor(0, 0, 0, 1);
+  gl.clearDepth(1);
+  gl.depthMask(true);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  fullscreen(progShop, sceneRT, [['uLUT', lutTex]], (u) => {
+    gl.uniform3fv(u.uEye, eye); gl.uniform3fv(u.uFwd, fwd);
+    gl.uniform3fv(u.uRight, right); gl.uniform3fv(u.uUp, up);
+    gl.uniform1f(u.uAspect, W / H);
+    gl.uniform1f(u.uTanHalf, Math.tan(0.475));
+    gl.uniform1f(u.uTime, now / 1000);
+    gl.uniform3fv(u.uGlassPos, glowPos);
+    gl.uniform3fv(u.uGlassCol, glowCol);
+    gl.uniform1f(u.uGlassPow, glowPow * 3.0);
+    gl.uniform1f(u.uFurnace, 0.30 + 0.70 * furnaceIn);
+  });
+
+  /* ── 2 · the steel ────────────────────────────────────────────────────── */
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthFunc(gl.LEQUAL);
+  gl.enable(gl.CULL_FACE);
+  gl.cullFace(gl.BACK);
+  if (!vessel){
+    gl.useProgram(progSteel);
+    gl.uniformMatrix4fv(progSteel.__u.uVP, false, VP);
+    gl.uniformMatrix4fv(progSteel.__u.uModel, false, model);
+    gl.uniform3fv(progSteel.__u.uEye, eye);
+    gl.uniform3fv(progSteel.__u.uGlassPos, glowPos);
+    gl.uniform3fv(progSteel.__u.uGlassCol, glowCol);
+    gl.uniform1f(progSteel.__u.uGlassPow, glowPow);
+    gl.uniform1f(progSteel.__u.uFurnace, 0.30 + 0.70 * furnaceIn);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, lutTex);
+    gl.uniform1i(progSteel.__u.uLUT, 0);
+    gl.bindVertexArray(pipeMesh.vao);
+    gl.drawElements(gl.TRIANGLES, pipeMesh.count, gl.UNSIGNED_INT, 0);
+  }
+
+  /* ── 3 · copy what is behind the glass, so the glass can refract it ───── */
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, sceneRT.fb);
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, bgRT.fb);
+  gl.blitFramebuffer(0, 0, W, H, 0, 0, W, H, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, sceneRT.fb);
+  gl.viewport(0, 0, W, H);
+
+  /* ── 4 · the glass ────────────────────────────────────────────────────── */
+  {
+    const L = lathe(P, SIDES, latheOut);
+    latheOut.pos = L.pos; latheOut.nor = L.nor; latheOut.aux = L.aux;
+    let idx = null;
+    if (glassIdxN !== P.N){ idx = latheIndices(P.N, SIDES); glassIdxN = P.N; }
+    uploadMesh(glassMesh, L, idx);
+    gl.useProgram(progGlass);
+    gl.uniformMatrix4fv(progGlass.__u.uVP, false, VP);
+    gl.uniformMatrix4fv(progGlass.__u.uModel, false, model);
+    gl.uniform3fv(progGlass.__u.uEye, eye);
+    gl.uniform3fv(progGlass.__u.uGlassPos, glowPos);
+    gl.uniform3fv(progGlass.__u.uGlassCol, glowCol);
+    gl.uniform1f(progGlass.__u.uGlassPow, glowPow);
+    gl.uniform1f(progGlass.__u.uFurnace, 0.30 + 0.70 * furnaceIn);
+    gl.uniform1f(progGlass.__u.uEmit, 7.0);
+    gl.uniform1f(progGlass.__u.uBurst, piece.burst ? 1 : 0);
+    gl.uniform2f(progGlass.__u.uRes, W, H);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, lutTex);
+    gl.uniform1i(progGlass.__u.uLUT, 0);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, bgRT.tex);
+    gl.uniform1i(progGlass.__u.uBG, 1);
+    gl.bindVertexArray(glassMesh.vao);
+    gl.drawElements(gl.TRIANGLES, glassMesh.count, gl.UNSIGNED_INT, 0);
+  }
+  gl.bindVertexArray(null);
+  gl.disable(gl.DEPTH_TEST);
+  gl.disable(gl.CULL_FACE);
+
+  /* ── 5 · bloom ────────────────────────────────────────────────────────── */
+  fullscreen(progBright, bloomA, [['uSrc', sceneRT.tex]], (u) => {
+    gl.uniform2f(u.uSrcTexel, 1 / W, 1 / H);
+    gl.uniform1f(u.uThresh, 1.15);
+  });
+  fullscreen(progBlur, bloomB, [['uSrc', bloomA.tex]], (u) => gl.uniform2f(u.uDir, 1 / bloomA.w, 0));
+  fullscreen(progBlur, bloomA, [['uSrc', bloomB.tex]], (u) => gl.uniform2f(u.uDir, 0, 1 / bloomA.h));
+  fullscreen(progBright, bloomC, [['uSrc', bloomA.tex]], (u) => {
+    gl.uniform2f(u.uSrcTexel, 1 / bloomA.w, 1 / bloomA.h);
+    gl.uniform1f(u.uThresh, 0.0);
+  });
+  fullscreen(progBlur, bloomC, [['uSrc', bloomC.tex]], (u) => gl.uniform2f(u.uDir, 1 / bloomC.w, 0));
+
+  /* ── 6 · out ──────────────────────────────────────────────────────────── */
+  fullscreen(progPost, null, [['uScene', sceneRT.tex], ['uBloomA', bloomA.tex], ['uBloomB', bloomC.tex]], (u) => {
+    gl.uniform1f(u.uExposure, 1.05);
+    gl.uniform1f(u.uTime, now / 1000);
+  });
+
+  /* ── the panels ───────────────────────────────────────────────────────── */
+  if (actx){
+    roarGain.gain.value = WS.muted() ? 0 : (0.028 + 0.16 * furnaceIn);
+    breathGain.gain.value = WS.muted() ? 0 : (ctl.blow ? 0.055 : 0) ;
+  }
+  $('breathbar').style.width = (breath * 100).toFixed(0) + '%';
+  {
+    const cannot = vessel || piece.burst || heldHeat || furnaceIn >= 0.25;
+    if ($('blow').disabled !== !!cannot) $('blow').disabled = !!cannot;
+    $('breathbar').style.opacity = cannot ? '0.28' : '1';
+  }
+  uiAcc += dt;
+  if (uiAcc > 0.10){
+    uiAcc = 0;
+    updatePanels(P);
+  }
+  fpsAcc += dt; fpsN++;
+  if (fpsAcc > 0.6){
+    $('fps').textContent = (fpsN / fpsAcc).toFixed(0) + ' fps';
+    fpsAcc = 0; fpsN = 0;
+  }
+}
+
+function rigX(){ return furnaceIn * 0.20; }
+
+/* the LUT, read back on the CPU for the light colour — same table, same core */
+function lutIndex(TK){
+  const x = Math.min(0.9999, Math.max(0, (TK - LUT_TMIN) / (LUT_TMAX - LUT_TMIN)));
+  return Math.floor(x * LUT_N) * 4;
+}
+function lutRGB(TK){ const i = lutIndex(TK); return [lutData[i], lutData[i + 1], lutData[i + 2]]; }
+function lutA(TK){ return lutData[lutIndex(TK) + 3]; }
+
+function updatePanels(P){
+  let hot = 0, wsum = 0, tmin = 1e9;
+  for (let i = 1; i < P.N - 1; i++){
+    const w = P.r[i];
+    hot += P.T[i] * w; wsum += w;
+    if (P.r[i] > 0.004) tmin = Math.min(tmin, P.t[i]);
+  }
+  const TC = wsum > 0 ? hot / wsum : 20;
+  $('tval').innerHTML = TC.toFixed(0) + '<small> &deg;C</small>';
+  const st = workability(TC);
+  const el = $('wstate');
+  el.textContent = piece.burst ? 'burst' : (vessel ? 'annealing' : st);
+  el.className = 'state ' + st;
+  const y = vftLogEta(TC);
+  $('etaval').textContent = '10^' + y.toFixed(1) + ' Pa·s';
+  $('wallval').textContent = tmin < 1e8 ? (1000 * tmin).toFixed(2) + ' mm' : '—';
+  const g = vessel ? noteOf(vessel) : lipAsIfCracked();
+  $('volval').textContent = (1e6 * g.V).toFixed(0) + ' cm³';
+  $('noteval').textContent = g.f > 20 ? g.f.toFixed(0) + ' Hz · ' + pitchLabel(g.f) : '—';
+  drawViscosity(TC);
+}
+function lipAsIfCracked(){
+  const k = scoreLine(piece);
+  const rLip = piece.r[k];
+  let L = 0;
+  for (let i = k + 1; i < piece.N; i++){
+    if (piece.r[i] > rLip * 1.20) break;
+    L = piece.u[i] - piece.u[k];
+  }
+  const A = Math.PI * rLip * rLip;
+  const Leff = L + 1.7 * rLip;
+  const V = innerVolume(piece, k);
+  const f = (V > 1e-9 && A > 1e-9) ? helmholtzFreq({ A, V, Leff }) : 0;
+  return { A, V, Leff, rLip, f };
+}
+
+/* ── the gate ────────────────────────────────────────────────────────────── */
+function begin(){
+  if (started) return;
+  started = true;
+  $('gate').classList.add('gone');
+  initAudio();
+  if (actx && actx.state === 'suspended') actx.resume();
+}
+$('gate').addEventListener('click', begin);
+addEventListener('keydown', (e) => { if (!started && (e.code === 'Space' || e.key === 'Enter')) begin(); });
+
+/* the estate's breadcrumb */
+try { const k = 'ws:seen:the-gaffers-bench'; if (!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); } catch (e){}
+
+/* a handle for the twin-in-the-browser and for verification */
+window.__bench = {
+  get piece(){ return piece; },
+  get vessel(){ return vessel; },
+  begin, newGather, crackItOff,
+  set blow(v){ heldBlow = !!v; },
+  set heat(v){ heldHeat = !!v; },
+  set jack(v){ jackAt = v; },
+  setTilt,
+  /* where station i of the piece lands on screen, in CSS pixels — so a
+     verification run can put a REAL pointer on the glass rather than calling
+     the jack handler directly, which would prove nothing about hit-testing */
+  probe(i){
+    const P = vessel || piece;
+    const M = lastModel, VP = lastVP;
+    const x = P.r[i], z = P.u[i];
+    const wx = M[0] * x + M[8] * z + M[12];
+    const wy = M[1] * x + M[9] * z + M[13];
+    const wz = M[2] * x + M[10] * z + M[14];
+    const cw = VP[3] * wx + VP[7] * wy + VP[11] * wz + VP[15];
+    const sx = (VP[0] * wx + VP[4] * wy + VP[8] * wz + VP[12]) / cw;
+    const sy = (VP[1] * wx + VP[5] * wy + VP[9] * wz + VP[13]) / cw;
+    const rect = canvas.getBoundingClientRect();
+    return { x: rect.left + (sx * 0.5 + 0.5) * rect.width, y: rect.top + (0.5 - sy * 0.5) * rect.height };
+  },
+  /* A tap on the page's OWN output.  Verification measures the signal that
+     reaches the speakers, not a number the page computed and believed. */
+  async listen(seconds = 1.2){
+    initAudio();
+    if (actx.state === 'suspended') await actx.resume();
+    const an = actx.createAnalyser();
+    an.fftSize = 16384; an.smoothingTimeConstant = 0;
+    master.connect(an);
+    const g = vessel ? noteOf(vessel) : lipAsIfCracked();
+    soundTheVessel(g.f);
+    await new Promise((r) => setTimeout(r, seconds * 1000));
+    const buf = new Float32Array(an.frequencyBinCount);
+    an.getFloatFrequencyData(buf);
+    master.disconnect(an);
+    const bin = actx.sampleRate / an.fftSize;
+    let bi = 1, bv = -1e9;
+    for (let i = 1; i < buf.length; i++){ if (buf[i] > bv){ bv = buf[i]; bi = i; } }
+    /* parabolic interpolation on the three bins around the peak */
+    const a0 = buf[bi - 1], b0 = buf[bi], c0 = buf[bi + 1];
+    const d = 0.5 * (a0 - c0) / (a0 - 2 * b0 + c0 || 1e-9);
+    return { predicted: g.f, measured: (bi + d) * bin, peakDb: bv, bin };
+  },
+  advance(sec){ let left = sec; while (left > 0){ const h = Math.min(1 / 60, left); simulate(h); left -= h; } },
+  reading(){
+    const P = vessel || piece;
+    let hot = 0, wsum = 0;
+    for (let i = 1; i < P.N - 1; i++){ hot += P.T[i] * P.r[i]; wsum += P.r[i]; }
+    return { TC: hot / wsum, logEta: vftLogEta(hot / wsum), rmax: maxRadius(P),
+             len: pieceLength(P), mass: totalMass(P), burst: !!piece.burst,
+             note: (vessel ? noteOf(vessel) : lipAsIfCracked()) };
+  },
+};
+
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
