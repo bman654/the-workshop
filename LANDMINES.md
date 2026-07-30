@@ -278,6 +278,28 @@ Nothing else is required reading.
   0, not small. That check caught the same bug a second time when a per-cell growth
   term crept back into the judging pass (disagreement 0.0069).
 
+- **A force-balance identity needs SIGNED lift and ONE orientation, and the orientation
+  is the course, never the bow.** The sailing "course theorem" (β to the apparent wind =
+  the air's drag angle + the water's) is exact whenever two force vectors are opposite —
+  and it missed by up to 135° on states the same code proved antiparallel to a part in ten
+  billion. Two separate causes, both of which look like a physics bug. (a) `atan(D/|L|)`
+  is the line every textbook prints and it silently folds a lift that has changed sides —
+  a backed sail, a hull slipping the other way, anything near a dead run — onto the wrong
+  branch; keep the sign and use `atan2(D, L)`, which lands in (0, π). (b) The two angles
+  must be measured off perpendiculars on the **same** side, and the side that matters is
+  the side of the **course** the flow comes from, not the side of the **hull**. Those are
+  opposite the moment the craft is moving backwards, which a drag device pointed at the
+  wind does all day. The tell is that the residual `|F1+F2|/|F1|` is tiny (the state IS
+  in balance) while the identity is nonsense — if your balance is good and your identity
+  is not, the bug is in a sign or an axis, never in the solver.
+- **Converge a steady-state solver on the BALANCE, not on the speed.** Watching the
+  output stop changing is the obvious stopping test and it is the wrong one: near a
+  degenerate operating point one variable can be flat to a part in ten million while
+  another is still creeping, and every one of those states then passes your "settled"
+  gate and fails whatever you check next. If the thing you are converging to is a force
+  balance, converge on `|ΣF| / |F|` — it is zero at the answer by definition, it costs
+  nothing to compute, and it doubles as the honest "is this row usable" flag for callers.
+
 - **A field with a fixed outer boundary far from the action is a sealed jar.** A
   diffusion box initialised full of vapour, with the reservoir pinned only at the wall
   of the array, does not respond to the outside conditions at all: the crystal is

@@ -86,7 +86,7 @@ var Contract = (function () {
                blurb: "the estate's walks — a journey with a shape, curvature you carry home, and the shadow that tells the hours" },
       layoutFn: 'crescent',
       frame: { w: 280, h: 130 },   // crescent reads frame.w as the arc DIAMETER (§1.3)
-      capacity: 6,
+      capacity: 7,
       clusters: ['processions', 'curved-country', 'horology']
     },
     fairground: {

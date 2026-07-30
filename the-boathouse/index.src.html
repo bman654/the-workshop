@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Boathouse — the angle between two arrows</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  THE BOATHOUSE  ·  the-boathouse/
+
+  A sailing craft is TWO FOILS working in TWO FLUIDS, back to back: one in the
+  air, one in the water. In any steady state the force the air makes on it and
+  the force the water makes on it are EXACTLY OPPOSITE — the boat is not
+  accelerating, so they must be. Write each as a lift across its own flow plus a
+  drag along it, call the angle between each force and its own perpendicular the
+  DRAG ANGLE, and the whole of sailing falls out of two arrows pointing opposite
+  ways:
+
+        beta_apparent  =  eps_air  +  eps_water
+
+  where beta_apparent is the angle between the course the craft makes good and
+  the wind it FEELS. It is not an approximation and not a fit. The room paints
+  both arrows flat on the water under the boat while you sail her, and the
+  moment you stop working the tiller they line up.
+
+  WHAT IT GIVES AWAY
+    · A craft driven by DRAG ALONE has no lift in the air, so eps_air is exactly
+      ninety degrees, so its course is always more than ninety degrees from the
+      wind it feels — and therefore from the wind there is. A drag machine can
+      never make ground upwind. Ever. THE BARN DOOR is in the shed to be tried.
+    · To point higher you must cut drag in the WATER exactly as hard as in the
+      air; both terms sit on the same footing. THE ICEBOAT is the same rig on
+      steel runners, where eps_water collapses to half a degree.
+    · Nothing in it mentions speed. That is why the iceboat makes ground to
+      WINDWARD two and a half times faster than the wind is blowing, and why a
+      hull that must make its own waves cannot even keep up with it.
+
+  WHAT IS MODELLED, AND HOW HONESTLY  (all of it in sail.mjs, all in the twin)
+    · Sail: thin-aerofoil lift slope 2 pi AR/(AR+2) about a zero-lift angle of
+      -2 camber, induced drag CL^2/(pi AR e), blended into the flat-plate law
+      past stall — which is why one expression carries the rig from close-hauled
+      to a dead run, where it hands back a barn door of CD ~ 2 all by itself.
+    · Hull friction is the ITTC-1957 line, Cf = 0.075/(log10 Re - 2)^2, checked
+      against its published values at three decades.
+    · Wave-making is a MODELLED saturating hump and is labelled as such wherever
+      it appears. Nothing is claimed of it except that it is the reason a
+      displacement hull cannot outrun the wind.
+    · Ice runners are Coulomb, mu = 0.012 (steel on ice is published at
+      0.005-0.02), with a grip limit, because a sharpened blade cuts a groove.
+    · The wind in the PHYSICS is steady. The cat's paws crawling downwind across
+      the water are the wind's texture, drawn — and the reason the wind is held
+      steady is that a steady wind is the only kind a boat can settle in, and
+      the settling is the exhibit.
+
+  THE PICTURE
+    One WebGL2 fragment shader owns the scenery: a ray per pixel onto the plane
+    y = 0, shaded as moving water (five wave trains, advected gusts, sun glitter,
+    whitecaps once it blows) or as wind-scoured ice. A 2-D canvas over the top
+    owns the exhibit — the craft, its wake, and the two arrows painted flat on
+    the surface. BOTH USE THE SAME CAMERA BASIS, built once in render.js, which
+    is the only way to be sure the boat sits where the water says it does.
+    The wind always blows down the screen, so a beat to windward is a zig-zag up
+    the picture and you can see the whole leg at once.
+
+  ENGINES (inlined byte-for-byte by the forge, never forked):
+    · tools/ws/ws.js    the estate-wide mute + breadcrumbs
+    · ./sail.mjs        the two foils, the theorem, the tank, the polar
+    · ./render.js       the camera, the sea shader, the craft
+  Node twin: `node the-boathouse/sail.test.mjs`   (47 checks)
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root{
+    --ink:#eef4fa; --dim:#a3b6c9; --faint:#6f8397;
+    --brass:#d8b070; --warm:#ffd9a0;
+    --air:#ff9d5c; --water:#5cc8e8; --resid:#f2f5f8;
+    --sea:#0a1520; --bg0:#050a10;
+    --panel:rgba(8,14,22,.82); --line:rgba(150,190,220,.20);
+    --brassline:rgba(216,176,112,.30);
+    --ui:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg0);color:var(--ink);
+    font-family:var(--ui);-webkit-font-smoothing:antialiased}
+  body{overflow-x:hidden}
+  a{color:var(--brass)}
+
+  /* ── the stage ─────────────────────────────────────────────────────────── */
+  #stage{position:relative;width:100%;height:100svh;min-height:520px;
+    overflow:hidden;background:var(--sea);touch-action:none;cursor:grab}
+  #stage.dragging{cursor:grabbing}
+  #gl,#ov{position:absolute;inset:0;width:100%;height:100%;display:block}
+  #ov{pointer-events:none}
+
+  .panel{position:absolute;background:var(--panel);border:1px solid var(--line);
+    border-radius:9px;backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);
+    padding:10px 12px;pointer-events:auto}
+  .lbl{font:600 9.5px/1.35 var(--mono);letter-spacing:.20em;text-transform:uppercase;
+    color:var(--faint)}
+  .num{font:600 15px/1.2 var(--mono);color:var(--ink)}
+
+  #topleft{top:16px;left:16px;border:none;background:none;padding:0;
+    text-shadow:0 1px 14px rgba(2,6,12,.95),0 0 40px rgba(2,6,12,.85)}
+  #scrim{position:absolute;inset:0 0 auto 0;height:190px;pointer-events:none;
+    background:linear-gradient(rgba(3,8,14,.55),rgba(3,8,14,0))}
+  .back{display:inline-block;font:600 10px/1 var(--mono);letter-spacing:.22em;
+    text-transform:uppercase;color:var(--faint);text-decoration:none;opacity:.85}
+  .back:hover{color:var(--brass);opacity:1}
+  h1{margin:.5em 0 .1em;font:400 27px/1.1 var(--ui);letter-spacing:.005em}
+  #topleft .sub{font:400 12.5px/1.4 var(--ui);color:var(--dim);max-width:29ch}
+
+  #shed{top:16px;right:16px;display:flex;flex-direction:column;gap:9px;width:252px}
+  .chips{display:flex;gap:5px}
+  .chip{flex:1;font:600 9.5px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;
+    padding:7px 3px;border-radius:6px;border:1px solid var(--brassline);
+    background:rgba(216,176,112,.06);color:var(--dim);cursor:pointer;text-align:center}
+  .chip:hover{background:rgba(216,176,112,.16);color:var(--ink)}
+  .chip.on{background:rgba(216,176,112,.30);color:#fff2dc;border-color:var(--brass)}
+  .row{display:flex;align-items:center;gap:8px}
+  .row .lbl{flex:0 0 52px}
+  input[type=range]{flex:1;accent-color:var(--brass);height:16px}
+  .val{font:600 11px/1 var(--mono);color:var(--warm);min-width:52px;text-align:right}
+  .btn{font:600 9.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;
+    padding:7px 9px;border-radius:6px;border:1px solid var(--line);
+    background:rgba(150,190,220,.07);color:var(--dim);cursor:pointer}
+  .btn:hover{background:rgba(150,190,220,.16);color:var(--ink)}
+  .btn.on{background:rgba(92,200,232,.24);color:#dff4fb;border-color:rgba(92,200,232,.5)}
+
+  #arrows{right:16px;top:196px;width:252px}
+  #arrowsCv{width:100%;height:170px;display:block;margin:4px 0 8px}
+  .kv{display:flex;justify-content:space-between;font:500 11px/1.7 var(--mono)}
+  .kv b{font-weight:600}
+  .kAir{color:var(--air)} .kWat{color:var(--water)}
+  .sumline{border-top:1px solid var(--line);margin-top:5px;padding-top:5px}
+  #balance{font:600 11px/1.5 var(--mono)}
+
+  #instr{left:16px;bottom:16px;display:grid;grid-template-columns:repeat(3,auto);
+    gap:2px 20px}
+  #instr .cell .lbl{font-size:8.5px}
+  #instr .cell .num{font-size:17px}
+  #instr .cell .num small{font-size:10px;color:var(--faint);font-weight:500}
+
+  #race{top:16px;left:50%;transform:translateX(-50%);text-align:center;min-width:250px}
+  #raceMsg{font:400 13.5px/1.4 var(--ui);color:var(--warm)}
+  #raceNum{font:600 20px/1.2 var(--mono);color:var(--ink)}
+
+  #keys{right:16px;bottom:16px;font:500 10.5px/1.75 var(--mono);color:var(--faint);
+    text-align:right;background:none;border:none}
+  #keys b{color:var(--dim);font-weight:600}
+
+  #hint{left:50%;bottom:22px;transform:translateX(-50%);font:400 13px/1.4 var(--ui);
+    color:var(--warm);text-align:center;transition:opacity .6s;border-color:var(--brassline)}
+  #hint.gone{opacity:0;pointer-events:none}
+
+  /* ── the page below ────────────────────────────────────────────────────── */
+  main{max-width:960px;margin:0 auto;padding:54px 22px 90px}
+  h2{font:400 24px/1.2 var(--ui);margin:52px 0 6px;color:var(--warm)}
+  h2:first-child{margin-top:0}
+  .kicker{font:600 9.5px/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:14px}
+  p{font:400 16px/1.62 var(--ui);color:#d6e2ee;max-width:70ch}
+  p.small{font-size:14px;color:var(--dim)}
+  b{color:#fff}
+  .eq{font:500 17px/1.7 var(--mono);color:var(--warm);margin:16px 0;
+    padding:12px 16px;border-left:2px solid var(--brassline);background:rgba(216,176,112,.05)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  @media (max-width:820px){ .grid2{grid-template-columns:1fr} }
+  .card{border:1px solid var(--line);border-radius:10px;padding:16px 18px;
+    background:rgba(10,18,28,.5)}
+  canvas.plate{width:100%;display:block;border-radius:8px;background:rgba(4,9,15,.65)}
+  table{border-collapse:collapse;width:100%;font:500 12.5px/1.7 var(--mono);margin-top:8px}
+  th{text-align:left;font-weight:600;color:var(--faint);font-size:9.5px;letter-spacing:.14em;
+    text-transform:uppercase;border-bottom:1px solid var(--line);padding:4px 8px 5px 0}
+  td{padding:3px 8px 3px 0;color:#cfdde9;border-bottom:1px solid rgba(150,190,220,.07)}
+  td.n{text-align:right;font-variant-numeric:tabular-nums}
+  .ok{color:#8fd8b0} .bad{color:#f0977f}
+  .foot{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);
+    font:400 13px/1.7 var(--ui);color:var(--faint)}
+  .muted{opacity:.55}
+  @media (max-width:900px){
+    #arrows,#shed{width:196px}
+    #arrowsCv{height:132px}
+    #keys{display:none}
+    h1{font-size:22px}
+    #topleft .sub{max-width:22ch;font-size:11.5px}
+  }
+  /* ── the phone: everything the stage needs, stacked along the bottom ─────
+     The two arrows are painted on the WATER, so on a narrow screen the little
+     diagram can go and the numbers stay — they are what you read while you
+     steer with your thumb. */
+  @media (max-width:620px){
+    #stage{height:100svh}
+    #topleft .sub{display:none}
+    h1{font-size:19px;margin:.35em 0 0}
+    #race{top:10px;right:10px;left:auto;transform:none;min-width:0;padding:6px 10px;text-align:right}
+    #race #raceNum{font-size:15px}
+    #race #raceMsg{font-size:11px}
+    #shed{left:8px;right:8px;top:auto;bottom:172px;width:auto;gap:7px}
+    #arrows{left:8px;right:8px;top:auto;bottom:86px;width:auto}
+    #arrowsCv{display:none}
+    #arrows .kv{display:inline-flex;width:49%;font-size:10.5px;line-height:1.55}
+    #arrows .sumline{border-top:none;margin-top:0;padding-top:0}
+    #balance{display:flex !important;width:100% !important;margin-top:3px}
+    #instr{left:8px;right:8px;bottom:8px;grid-template-columns:repeat(3,1fr);gap:0 8px}
+    #instr .cell .num{font-size:14px}
+    #instr .cell:nth-child(n+4){display:none}
+    #hint{bottom:282px;left:8px;right:8px;transform:none;font-size:12px}
+    /* the water ENDS where the console begins, instead of the console sitting on
+       top of the boat.  A tall narrow frame cannot hold both a horizon and a
+       boat high enough to clear 300px of panels — the camera would have to look
+       so far down that the sky leaves the picture. */
+    #gl,#ov{height:calc(100% - 292px)}
+    #stage{background:linear-gradient(#050a10,#050a10)}
+    #stage::after{content:"";position:absolute;left:0;right:0;height:1px;
+      top:calc(100% - 292px);background:rgba(150,190,220,.16);pointer-events:none}
+  }
+  }
+  /* a phone on its side has no room for a stack; keep the water and the balance */
+  @media (max-height:520px) and (max-width:940px){
+    #arrows,#instr,#hint{display:none}
+    #shed{top:auto;bottom:8px;right:8px;left:auto;width:186px}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <canvas id="gl"></canvas>
+  <canvas id="ov"></canvas>
+
+  <div id="scrim"></div>
+  <div class="panel" id="topleft">
+    <a class="back" href="../index.html">&larr; The Estate</a>
+    <h1>The Boathouse</h1>
+    <div class="sub">Two foils, two fluids, and the angle between two arrows that point opposite ways.</div>
+  </div>
+
+  <div class="panel" id="shed">
+    <div class="lbl">In the shed</div>
+    <div class="chips">
+      <div class="chip on" data-craft="dinghy">Dinghy</div>
+      <div class="chip" data-craft="iceboat">Iceboat</div>
+      <div class="chip" data-craft="barndoor">Barn door</div>
+    </div>
+    <div class="row"><div class="lbl">Wind</div>
+      <input id="wind" type="range" min="2" max="16" step="0.5" value="6">
+      <div class="val" id="windVal">11.7 kt</div></div>
+    <div class="row" style="gap:5px">
+      <div class="btn on" id="trimBtn" style="flex:1">Crew trims</div>
+      <div class="btn" id="resetBtn">Reset</div>
+      <div class="btn" id="muteBtn">🔊</div>
+    </div>
+  </div>
+
+  <div class="panel" id="arrows">
+    <div class="lbl">The two arrows</div>
+    <canvas id="arrowsCv"></canvas>
+    <div class="kv"><span class="kAir">ε air</span><b class="kAir" id="vEpsA">—</b></div>
+    <div class="kv"><span class="kWat">ε water</span><b class="kWat" id="vEpsH">—</b></div>
+    <div class="kv sumline"><span>sum</span><b id="vSum">—</b></div>
+    <div class="kv"><span>β to apparent</span><b id="vBeta">—</b></div>
+    <div id="balance" class="kv" style="margin-top:4px"><span id="vResLbl">out of balance</span><b id="vRes">—</b></div>
+  </div>
+
+  <div class="panel" id="race">
+    <div class="lbl" id="raceLbl">To the windward mark</div>
+    <div id="raceNum">—</div>
+    <div id="raceMsg"></div>
+  </div>
+
+  <div class="panel" id="instr">
+    <div class="cell"><div class="lbl">Boat</div><div class="num" id="iVb">0.0<small> kt</small></div></div>
+    <div class="cell"><div class="lbl">Apparent</div><div class="num" id="iVa">0.0<small> kt</small></div></div>
+    <div class="cell"><div class="lbl">VMG up</div><div class="num" id="iVmg">0.0<small> kt</small></div></div>
+    <div class="cell"><div class="lbl">Course to wind</div><div class="num" id="iTwa">—<small>°</small></div></div>
+    <div class="cell"><div class="lbl">Apparent angle</div><div class="num" id="iAwa">—<small>°</small></div></div>
+    <div class="cell"><div class="lbl">Heel</div><div class="num" id="iHeel">0<small>°</small></div></div>
+  </div>
+
+  <div class="panel" id="keys">
+    <b>← →</b> tiller &nbsp; <b>↑ ↓</b> sheet<br>
+    <b>space</b> let the crew trim &nbsp; <b>R</b> reset<br>
+    <span style="opacity:.72">let go of the tiller and she holds her course</span><br>
+    <b>drag</b> the water: across steers, up-down sheets
+  </div>
+
+  <div class="panel" id="hint">Steer her. The mark is dead upwind — you cannot point at it.</div>
+</div>
+
+<main>
+
+  <h2>What a boat is</h2>
+  <div class="kicker">two foils, back to back</div>
+  <p>A sailing craft is <b>two foils working in two fluids</b>. One of them is in the air and
+  you can see it. The other is the hull, the board and the rudder, and it is doing exactly
+  as much work. Everything a boat can and cannot do is the argument between them.</p>
+
+  <p>In any steady state the craft is not accelerating, so the force the air makes on it and
+  the force the water makes on it are <b>exactly opposite</b>. That is all. Write each of
+  those two forces as a lift across its own flow plus a drag along it, and call the angle
+  between each force and its own perpendicular the <b>drag angle</b> —</p>
+
+  <div class="eq">ε<sub>air</sub> = atan( D<sub>air</sub> / L<sub>air</sub> )&nbsp;&nbsp;&nbsp;measured off the apparent wind<br>
+  ε<sub>water</sub> = atan( D<sub>water</sub> / L<sub>water</sub> )&nbsp;&nbsp;&nbsp;measured off the course</div>
+
+  <p>— and then, purely because two vectors point opposite ways,</p>
+
+  <div class="eq" style="font-size:20px">β<sub>apparent</sub> &nbsp;=&nbsp; ε<sub>air</sub> &nbsp;+&nbsp; ε<sub>water</sub></div>
+
+  <p>where β<sub>apparent</sub> is the angle between the course the craft makes good and the
+  wind it <i>feels</i>. Not an approximation, not a fit — a statement about two arrows. The
+  room paints both of them on the water under the boat while you sail her, and the panel
+  keeps the running total. Work the tiller and the arrows come apart, because a boat you are
+  working is a boat that is accelerating. Let her go and they lie down along one line.</p>
+
+  <p>Read it twice and it starts giving things away.</p>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="kicker" style="color:var(--air)">the first thing</div>
+      <p class="small">A craft driven by <b>drag alone</b> has no lift in the air, so
+      ε<sub>air</sub> is <b>exactly ninety degrees</b> — and the sum of two angles, one of
+      which is already ninety, cannot be less than ninety. Its course is always more than a
+      right angle from the wind it feels, and therefore (the wind triangle) more than a right
+      angle from the wind there is. <b>A drag machine can never make ground upwind. Ever.</b>
+      The barn door is in the shed. Take it out and try.</p>
+    </div>
+    <div class="card">
+      <div class="kicker" style="color:var(--water)">the second thing</div>
+      <p class="small">The two terms sit on the same footing, so to point higher you must cut
+      drag in the <b>water</b> exactly as hard as in the air. Put the same rig on steel
+      runners and ε<sub>water</sub> collapses from thirteen degrees to half a one. And
+      nothing in the identity mentions <b>speed</b> — which is why the iceboat makes ground
+      to <i>windward</i> two and a half times faster than the wind is blowing, while a hull
+      that has to make its own waves cannot even keep up with it.</p>
+    </div>
+  </div>
+
+  <h2>The polar, found by sailing</h2>
+  <div class="kicker">not a table — one hundred and eighty tank tests, run in front of you</div>
+  <p>No boat speed is typed into this room anywhere. To draw a polar the page pins a heading,
+  lets the crew trim for best drive, and waits until the two forces are opposite to a part in
+  a million; then it writes down what the craft was doing. Sixty times, per craft, on both
+  tacks. It begins as soon as the plate reaches the screen — watch it fill in.</p>
+
+  <div class="card" style="margin-top:14px">
+    <div class="row" style="gap:8px;margin-bottom:12px">
+      <div class="btn" id="polarBtn">Sail them again</div>
+      <div class="val" id="polarState" style="min-width:auto;color:var(--dim)"></div>
+    </div>
+    <canvas id="polarCv" class="plate" style="aspect-ratio:1.3"></canvas>
+    <table id="polarTable"><thead><tr>
+      <th>craft</th><th class="n">closest course</th><th class="n">best VMG up</th>
+      <th class="n">top speed</th><th class="n">× the wind</th></tr></thead><tbody></tbody></table>
+    <p class="small" style="margin-top:12px">The upwind half of the barn door's curve is not
+    faint. It is <b>absent</b>: there is no heading, at any wind, at which it gains a metre
+    to windward.</p>
+  </div>
+
+  <h2>Prove it</h2>
+  <div class="kicker">the identity, on every state the room can reach</div>
+  <p>The theorem is worth nothing if it is a curve fit, so here is the same claim checked
+  three ways, live, in this page. Nothing below is a stored number.</p>
+
+  <div class="card" style="margin-top:14px">
+    <div class="btn" id="proveBtn" style="display:inline-block">Run the checks</div>
+    <div id="proveOut" style="margin-top:14px"></div>
+    <canvas id="proveCv" class="plate" style="aspect-ratio:2.4;margin-top:14px"></canvas>
+  </div>
+
+  <h2>What is modelled, and how honestly</h2>
+  <div class="kicker">the parts that are published, and the parts that are mine</div>
+  <div class="grid2">
+    <div class="card"><p class="small">
+      <b>Published, and checked against its own source.</b> The sail is thin-aerofoil theory:
+      lift slope 2π·AR/(AR+2) about a zero-lift angle of −2·camber, induced drag CL²/(π·AR·e),
+      blended past stall into the flat-plate law — which is why <i>one</i> expression carries
+      the rig from close-hauled to a dead run, where it hands back a barn door of C<sub>D</sub> ≈ 2
+      without being told to. Hull friction is the <b>ITTC-1957</b> line,
+      C<sub>f</sub> = 0.075/(log₁₀Re − 2)², and the twin checks it at three decades against
+      the values a naval architect would look up. Ice friction is Coulomb at μ = 0.012;
+      steel on ice is published at 0.005–0.02.</p></div>
+    <div class="card"><p class="small">
+      <b>Modelled, and labelled.</b> Wave-making is a saturating Fn⁶ hump. It is not a
+      prediction of anything and nothing here rests on its shape — only on the fact that a
+      displacement hull has one, which is why it cannot outrun its own wind. The iceboat's
+      lateral grip limit is invented (a sharpened blade cuts a groove and then lets go). The
+      wind in the physics is <b>steady</b>: the cat's paws crawling downwind across the water
+      are the wind's texture, drawn, and the reason the wind is held steady is that a steady
+      wind is the only kind a boat can settle in — and the settling is the whole exhibit.</p></div>
+  </div>
+
+  <p class="small" style="margin-top:22px" id="camline"></p>
+
+  <div class="foot">
+    <p class="small">The theorem is Lanchester's, and it is older than the aeroplane.
+    Nothing in this room's core knows what a polar diagram is, what angle a boat points, or
+    how fast one goes; all of that is output.
+    Kin to <a href="../wind-tunnel/index.html">The Glass Wind Tunnel</a>, which is the same
+    lift and the same drag with only one of the two fluids in it, and to
+    <a href="../night-shore/index.html">The Night Shore</a>, which is the water this was
+    launched from. Twin: <code>node the-boathouse/sail.test.mjs</code>.</p>
+  </div>
+</main>
+
+<script type="module">
+<!-- forge:include ../tools/ws/ws.js -->
+<!-- forge:include ./sail.mjs -->
+<!-- forge:include ./render.js -->
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE ROOM
+   ════════════════════════════════════════════════════════════════════════════ */
+window.addEventListener('error', e => { window.__err = (e.error && e.error.stack) || String(e.message); });
+
+const $ = s => document.querySelector(s);
+/* sail.mjs has a private `clamp` of its own that the forge inlines into this
+   same scope, so the room uses another name for the same idea. */
+const CL = (x, a, b) => x < a ? a : (x > b ? b : x);
+const toKt = v => v / KT;
+
+WS.seen('the-boathouse');
+WS.startDwell('the-boathouse', {});
+
+/* ── the world ──────────────────────────────────────────────────────────── */
+const WIND_FROM = Math.PI / 2;              /* upwind is +y: the top of the screen */
+const MARK = { x: 0, y: 165 };              /* the windward mark                   */
+const START = { x: 0, y: 0, half: 26 };
+
+const env = { windSpeed: 6.0, windFrom: WIND_FROM };
+let craftId = 'dinghy';
+let craft = CRAFT[craftId];
+let st = newState(craft, { psi: WIND_FROM - 0.85, sheet: 0.45 });
+let f = null;
+let autoTrim = true;
+let trail = [];
+let tiller = 0, sheetCmd = st.sheet, holdPsi = st.psi, trimTick = 0;
+let phase = 0;
+
+/* the race */
+let race = { leg: 1, t0: null, running: false, done: false, best: {} };
+try {
+  for (const id of Object.keys(CRAFT)) {
+    const v = localStorage.getItem('ws:boathouse:best:' + id);
+    if (v) race.best[id] = +v;
+  }
+} catch (e) { /* private mode: no records, no problem */ }
+
+function resetBoat(keepRace) {
+  st = newState(craft, { psi: WIND_FROM - 0.85, sheet: 0.45 });
+  st.vx = 0.4 * Math.cos(st.psi); st.vy = 0.4 * Math.sin(st.psi);
+  sheetCmd = st.sheet; tiller = 0; trail = []; holdPsi = st.psi;
+  f = forces(craft, st, env);
+  if (!keepRace) { race.leg = 1; race.t0 = null; race.running = false; race.done = false; }
+  camPos = null;
+}
+
+/* ── the sea ────────────────────────────────────────────────────────────── */
+const glCanvas = $('#gl'), ovCanvas = $('#ov');
+let R = null, glDead = false;
+try { R = Sea.initGL(glCanvas); } catch (e) { glDead = true; window.__glErr = String(e); }
+if (!R) glDead = true;
+
+const ovc = ovCanvas.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+
+function resize() {
+  /* measure the CANVAS, not the stage: on a phone the water is shorter than the
+     stage because the console lives under it rather than on top of it */
+  const r = ovCanvas.getBoundingClientRect();
+  W = Math.max(320, Math.round(r.width));
+  H = Math.max(320, Math.round(r.height));
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  for (const c of [glCanvas, ovCanvas]) { c.width = Math.round(W * DPR); c.height = Math.round(H * DPR); }
+  ovc.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+
+/* ── the camera ─────────────────────────────────────────────────────────── */
+let camPos = null, camK = 1;
+function buildCamera() {
+  const ux = Math.cos(env.windFrom), uy = Math.sin(env.windFrom);   /* upwind unit */
+  const V = Math.hypot(st.vx, st.vy);
+  const back = (23 + 1.05 * V) * camK, height = (10 + 0.46 * V) * camK, look = (32 + 2.5 * V) * camK;
+  const want = {
+    ex: st.x - ux * back, ey: height, ez: st.y - uy * back,
+    tx: st.x + ux * look, ty: 1.2, tz: st.y + uy * look
+  };
+  if (!camPos) camPos = want;
+  else {
+    const k = 0.075;
+    for (const key of Object.keys(want)) camPos[key] += (want[key] - camPos[key]) * k;
+  }
+  return Sea.makeCamera(
+    [camPos.ex, camPos.ey, camPos.ez],
+    [camPos.tx, camPos.ty, camPos.tz],
+    0.90, W / H);
+}
+
+/* ── sound: wind in your ears, water under the hull, cloth shaking ──────── */
+let AC = null, snd = null;
+function initAudio() {
+  if (AC || WS.muted()) return;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return;
+  AC = new Ctx();
+  const n = AC.sampleRate * 2;
+  const buf = AC.createBuffer(1, n, AC.sampleRate);
+  const d = buf.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < n; i++) { const w = Math.random() * 2 - 1; last = last * 0.32 + w * 0.68; d[i] = last * 0.7; }
+  function src() { const s = AC.createBufferSource(); s.buffer = buf; s.loop = true; s.start(); return s; }
+  const master = AC.createGain(); master.gain.value = 0.0; master.connect(AC.destination);
+
+  /* wind: a broad hiss that climbs with the wind you FEEL */
+  const wg = AC.createGain(); wg.gain.value = 0;
+  const wf = AC.createBiquadFilter(); wf.type = 'bandpass'; wf.frequency.value = 620; wf.Q.value = 0.55;
+  src().connect(wf); wf.connect(wg); wg.connect(master);
+  /* water: a low rush that climbs with the speed through it */
+  const hg = AC.createGain(); hg.gain.value = 0;
+  const hf = AC.createBiquadFilter(); hf.type = 'lowpass'; hf.frequency.value = 300; hf.Q.value = 0.9;
+  src().connect(hf); hf.connect(hg); hg.connect(master);
+  /* the sail shaking: noise gated by an LFO, which is what luffing sounds like */
+  const lg = AC.createGain(); lg.gain.value = 0;
+  const lf = AC.createBiquadFilter(); lf.type = 'bandpass'; lf.frequency.value = 1150; lf.Q.value = 0.8;
+  const lm = AC.createGain(); lm.gain.value = 0;
+  const lfo = AC.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 7.2;
+  const lfoG = AC.createGain(); lfoG.gain.value = 1.0;
+  lfo.connect(lfoG); lfoG.connect(lm.gain); lfo.start();
+  src().connect(lf); lf.connect(lm); lm.connect(lg); lg.connect(master);
+
+  snd = { master, wg, hg, lg, hf, wf, lfo };
+  master.gain.linearRampToValueAtTime(0.9, AC.currentTime + 1.2);
+}
+function updateAudio() {
+  if (!snd || !f) return;
+  const t = AC.currentTime, k = t + 0.09;
+  const ice = craft.ground.mode === 'ice';
+  snd.wg.gain.setTargetAtTime(CL(Math.pow(f.Va / 18, 1.7), 0, 0.42), t, 0.14);
+  snd.wf.frequency.setTargetAtTime(420 + f.Va * 26, t, 0.2);
+  snd.hg.gain.setTargetAtTime(CL(Math.pow(f.Vb / (ice ? 26 : 5.6), 1.5), 0, ice ? 0.46 : 0.30), t, 0.16);
+  snd.hf.frequency.setTargetAtTime(ice ? 120 + f.Vb * 9 : 220 + f.Vb * 55, t, 0.2);
+  snd.lg.gain.setTargetAtTime(CL(f.luff * 0.30 * CL(f.Va / 6, 0, 1.4), 0, 0.34), t, 0.08);
+  snd.lfo.frequency.setTargetAtTime(4.5 + f.Va * 0.35, t, 0.3);
+}
+function setMuted(m) {
+  WS.setMuted(m);
+  $('#muteBtn').textContent = m ? '🔇' : '🔊';
+  if (snd) snd.master.gain.setTargetAtTime(m ? 0 : 0.9, AC.currentTime, 0.1);
+  if (!m) initAudio();
+}
+$('#muteBtn').onclick = () => setMuted(!WS.muted());
+WS.onMuteChange(m => { $('#muteBtn').textContent = m ? '🔇' : '🔊'; if (snd) snd.master.gain.setTargetAtTime(m ? 0 : 0.9, AC.currentTime, 0.1); });
+$('#muteBtn').textContent = WS.muted() ? '🔇' : '🔊';
+
+/* ── controls ───────────────────────────────────────────────────────────── */
+const keys = new Set();
+addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey) return;
+  const k = e.key.toLowerCase();
+  if (['arrowleft', 'arrowright', 'arrowup', 'arrowdown', ' ', 'a', 'd', 'w', 's', 'r'].includes(k)) {
+    if (k === ' ') { setTrim(!autoTrim); e.preventDefault(); return; }
+    if (k === 'r') { resetBoat(); e.preventDefault(); return; }
+    keys.add(k); e.preventDefault(); dismissHint(); initAudio();
+  }
+  if (k === '1') pickCraft('dinghy');
+  if (k === '2') pickCraft('iceboat');
+  if (k === '3') pickCraft('barndoor');
+});
+addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+addEventListener('blur', () => keys.clear());
+
+let drag = null;
+const stage = $('#stage');
+stage.addEventListener('pointerdown', e => {
+  if (e.target.closest('.panel')) return;
+  stage.setPointerCapture(e.pointerId);
+  drag = { x: e.clientX, y: e.clientY, sheet0: sheetCmd };
+  stage.classList.add('dragging'); dismissHint(); initAudio();
+});
+stage.addEventListener('pointermove', e => {
+  if (!drag) return;
+  tiller = CL((e.clientX - drag.x) / (W * 0.20), -1, 1);
+  sheetCmd = CL(drag.sheet0 + (e.clientY - drag.y) / (H * 0.35) * craft.sheetMax, 0, craft.sheetMax);
+  if (Math.abs(e.clientY - drag.y) > 6) setTrim(false);
+});
+function endDrag() { if (drag) { drag = null; tiller = 0; stage.classList.remove('dragging'); } }
+stage.addEventListener('pointerup', endDrag);
+stage.addEventListener('pointercancel', endDrag);
+
+function setTrim(on) {
+  autoTrim = on;
+  $('#trimBtn').classList.toggle('on', on);
+  $('#trimBtn').textContent = on ? 'Crew trims' : 'You trim';
+}
+$('#trimBtn').onclick = () => setTrim(!autoTrim);
+$('#resetBtn').onclick = () => resetBoat();
+
+function pickCraft(id) {
+  if (!CRAFT[id]) return;
+  craftId = id; craft = CRAFT[id];
+  document.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.craft === id));
+  resetBoat();
+  if (polarDone) { fillPolarTable(); drawPolars(1); }
+}
+document.querySelectorAll('.chip').forEach(c => c.onclick = () => { pickCraft(c.dataset.craft); dismissHint(); initAudio(); });
+
+$('#wind').oninput = e => {
+  env.windSpeed = +e.target.value;
+  $('#windVal').textContent = toKt(env.windSpeed).toFixed(1) + ' kt';
+  polarDone = false;
+};
+$('#windVal').textContent = toKt(env.windSpeed).toFixed(1) + ' kt';
+
+let hintGone = false;
+function dismissHint() { if (!hintGone) { hintGone = true; $('#hint').classList.add('gone'); } }
+setTimeout(dismissHint, 14000);
+
+/* ── the loop ───────────────────────────────────────────────────────────── */
+let lastT = 0, acc = 0;
+const DT = 1 / 200;
+
+function tick(now) {
+  requestAnimationFrame(tick);
+  /* the first rAF timestamp can be EARLIER than a performance.now() taken while
+     the module was still evaluating, so dt comes out negative exactly once. */
+  const dt = CL((now - lastT) / 1000, 0, 0.08);
+  lastT = now;
+  phase += dt;
+
+  /* the helm */
+  let t = tiller;
+  if (keys.has('arrowleft') || keys.has('a')) t += 1;
+  if (keys.has('arrowright') || keys.has('d')) t -= 1;
+  t = CL(t, -1, 1);
+  if (keys.has('arrowup') || keys.has('w')) { sheetCmd = CL(sheetCmd - dt * 1.1, 0, craft.sheetMax); setTrim(false); }
+  if (keys.has('arrowdown') || keys.has('s')) { sheetCmd = CL(sheetCmd + dt * 1.1, 0, craft.sheetMax); setTrim(false); }
+
+  acc += dt;
+  let n = 0;
+  while (acc >= DT && n < 40) {
+    /* THE HELMSMAN.  A real dinghy needs a hand on the tiller every second, and
+       a boat nobody is holding rounds up into the wind and stops — which would
+       mean the visitor could never see the two arrows lie down, because a boat
+       that is turning is a boat that is accelerating.  So: while you are
+       steering, you steer; the moment you let go she takes the heading you left
+       her on and holds it.  The rudder makes only a yaw MOMENT in this model,
+       never a force, so holding a course never touches the force balance.     */
+    let rud;
+    if (Math.abs(t) > 0.02) { rud = t * 0.55; holdPsi = st.psi; }
+    else {
+      const e = wrapPi(holdPsi - st.psi);
+      rud = CL(2.6 * e - 1.05 * st.r, -0.55, 0.55);
+    }
+    /* the crew trims a few times a second, not two hundred */
+    if (autoTrim && (trimTick++ % 12 === 0)) sheetCmd = bestTrim(craft, st, env);
+    f = step(craft, st, env, DT, { rudder: rud, sheet: sheetCmd });
+    acc -= DT; n++;
+  }
+  if (!f) f = forces(craft, st, env);
+
+  /* the wake */
+  const V = Math.hypot(st.vx, st.vy);
+  const tail = trail[trail.length - 1];
+  if (!tail || Math.hypot(st.x - tail.x, st.y - tail.y) > 0.55) {
+    trail.push({ x: st.x, y: st.y, psi: st.psi, v: V });
+    if (trail.length > 150) trail.shift();
+  }
+
+  updateRace();
+  updateAudio();
+  draw();
+  hud();
+}
+
+/* ── the race ───────────────────────────────────────────────────────────── */
+function updateRace() {
+  const dm = Math.hypot(st.x - MARK.x, st.y - MARK.y);
+  const moving = Math.hypot(st.vx, st.vy) > 0.35;
+  if (!race.running && !race.done && moving && st.y > 2) { race.running = true; race.t0 = performance.now(); }
+  if (race.running && race.leg === 1 && dm < 15) { race.leg = 2; }
+  if (race.running && race.leg === 2 && st.y < 0 && Math.abs(st.x) < START.half) {
+    race.running = false; race.done = true;
+    const secs = (performance.now() - race.t0) / 1000;
+    const prev = race.best[craftId];
+    if (!prev || secs < prev) {
+      race.best[craftId] = secs;
+      try { localStorage.setItem('ws:boathouse:best:' + craftId, String(secs)); } catch (e) {}
+    }
+    WS.flag('boathouse-round');
+  }
+}
+
+/* ── drawing ────────────────────────────────────────────────────────────── */
+function draw() {
+  const cam = buildCamera();
+  const bx = -Math.cos(env.windFrom), by = -Math.sin(env.windFrom);  /* blows toward */
+  const ice = craft.ground.mode === 'ice';
+
+  if (!glDead) {
+    /* the sun sits low and upwind, so the glitter path leads to the mark */
+    const el = 0.150, az = env.windFrom - 0.66;
+    const sun = [Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el)];
+    const m = Math.hypot(sun[0], sun[1], sun[2]);
+    Sea.drawSea(R, cam, {
+      time: phase, windX: bx, windY: by, windSpeed: env.windSpeed,
+      ice, sun: [sun[0] / m, sun[1] / m, sun[2] / m], dawn: 0.7
+    });
+  }
+
+  ovc.clearRect(0, 0, W, H);
+
+  /* the course, and the laylines you cannot cross */
+  Sea.surfaceLine(ovc, cam, START.x - START.half, START.y, START.x + START.half, START.y,
+    W, H, 'rgba(216,176,112,0.45)', 1.6, [7, 7]);
+  if (bestCourseDeg) {
+    const a = bestCourseDeg / DEG;
+    for (const s of [1, -1]) {
+      const dx = Math.sin(a) * s, dy = -Math.cos(a);
+      Sea.surfaceLine(ovc, cam, MARK.x, MARK.y, MARK.x + dx * 320, MARK.y + dy * 320,
+        W, H, 'rgba(150,190,220,0.16)', 1.2, [4, 10]);
+    }
+  }
+  /* a faint bearing line to the mark, so you always know where you are going */
+  Sea.surfaceLine(ovc, cam, st.x, st.y, MARK.x, MARK.y, W, H, 'rgba(255,154,76,0.16)', 1.2, [3, 12]);
+  Sea.drawMark(ovc, cam, MARK.x, MARK.y, W, H, '#c9642e', 3.4, 'MARK');
+
+  Sea.drawWake(ovc, cam, trail, W, H, ice);
+
+  /* THE TWO ARROWS, painted flat on the surface under the boat */
+  if (f && f.Fa > 1e-6) {
+    const ref = Math.max(60, f.Fa);
+    const L = CL(Math.sqrt(f.Fa) * 0.42, 3.5, 20);
+    const scale = L / f.Fa;
+    Sea.surfaceArrow(ovc, cam, st.x, st.y, f.Fax, f.Fay, f.Fa * scale, W, H,
+      'rgba(255,157,92,0.95)', 4.5, null);
+    Sea.surfaceArrow(ovc, cam, st.x, st.y, f.Fhx, f.Fhy, f.Fh * scale, W, H,
+      'rgba(92,200,232,0.95)', 4.5, null);
+    const sx = f.Fax + f.Fhx, sy = f.Fay + f.Fhy;
+    const sm = Math.hypot(sx, sy);
+    if (sm / f.Fa > 0.02) {
+      Sea.surfaceArrow(ovc, cam, st.x, st.y, sx, sy, sm * scale, W, H,
+        'rgba(255,255,255,0.72)', 2.2, null);
+    }
+  }
+
+  Sea.drawCraft(ovc, cam, craft, st, f, W, H, { phase });
+  drawArrowPanel();
+}
+
+/* ── the HUD ────────────────────────────────────────────────────────────── */
+let hudN = 0;
+function hud() {
+  if ((hudN++ & 3) !== 0) return;
+  const V = Math.hypot(st.vx, st.vy);
+  $('#iVb').innerHTML = toKt(V).toFixed(1) + '<small> kt</small>';
+  $('#iVa').innerHTML = toKt(f.Va).toFixed(1) + '<small> kt</small>';
+  const vmg = V * Math.cos(f.twa);
+  $('#iVmg').innerHTML = (isFinite(vmg) ? toKt(vmg).toFixed(1) : '—') + '<small> kt</small>';
+  $('#iTwa').innerHTML = (isFinite(f.twa) ? (f.twa * DEG).toFixed(0) : '—') + '<small>°</small>';
+  $('#iAwa').innerHTML = (Math.abs(f.awa) * DEG).toFixed(0) + '<small>°</small>';
+  $('#iHeel').innerHTML = (Math.abs(st.heel) * DEG).toFixed(0) + '<small>°</small>';
+
+  const ok = isFinite(f.betaA);
+  $('#vEpsA').textContent = (f.epsA * DEG).toFixed(2) + '°';
+  $('#vEpsH').textContent = (f.epsH * DEG).toFixed(2) + '°';
+  $('#vSum').textContent = ((f.epsA + f.epsH) * DEG).toFixed(2) + '°';
+  $('#vBeta').textContent = ok ? (f.betaA * DEG).toFixed(2) + '°' : '—';
+  const resid = f.Fa > 1e-6 ? Math.hypot(f.Fax + f.Fhx, f.Fay + f.Fhy) / f.Fa : 1;
+  const err = ok ? Math.abs(f.betaA - f.epsA - f.epsH) * DEG : NaN;
+  const el = $('#vRes'), lb = $('#vResLbl');
+  if (resid < 0.004) {
+    lb.textContent = 'she is settled';
+    el.textContent = 'β − Σε = ' + (err < 0.005 ? '0.00' : err.toFixed(2)) + '°';
+    el.className = 'ok';
+  } else {
+    lb.textContent = 'out of balance ' + (resid * 100).toFixed(0) + '%';
+    el.textContent = 'β − Σε = ' + (isFinite(err) ? err.toFixed(1) : '—') + '°';
+    el.className = resid > 0.10 ? 'bad' : '';
+  }
+
+  /* the race board */
+  const dm = Math.hypot(st.x - MARK.x, st.y - MARK.y);
+  if (race.done) {
+    const b = race.best[craftId];
+    $('#raceLbl').textContent = 'Round trip';
+    $('#raceNum').textContent = b ? b.toFixed(1) + ' s' : '—';
+    $('#raceMsg').textContent = 'Home. Press R and beat it.';
+  } else if (race.leg === 2) {
+    $('#raceLbl').textContent = 'Home — cross the line';
+    $('#raceNum').textContent = ((performance.now() - race.t0) / 1000).toFixed(1) + ' s';
+    $('#raceMsg').textContent = Math.abs(st.y).toFixed(0) + ' m to run';
+  } else {
+    $('#raceLbl').textContent = 'To the windward mark';
+    $('#raceNum').textContent = dm.toFixed(0) + ' m';
+    const b = race.best[craftId];
+    $('#raceMsg').textContent = race.running
+      ? ((performance.now() - race.t0) / 1000).toFixed(1) + ' s' + (b ? '  ·  best ' + b.toFixed(1) : '')
+      : (craftId === 'barndoor' ? 'It will not go there.' : 'dead upwind');
+  }
+}
+
+/* ── the two-arrows diagram ─────────────────────────────────────────────── */
+const acv = $('#arrowsCv'), actx = acv.getContext('2d');
+function drawArrowPanel() {
+  const w = acv.clientWidth, h = acv.clientHeight;
+  if (!w || !h) return;
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  if (acv.width !== Math.round(w * dpr)) { acv.width = Math.round(w * dpr); acv.height = Math.round(h * dpr); }
+  actx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  actx.clearRect(0, 0, w, h);
+  if (!f || !isFinite(f.betaA)) return;
+
+  const cx = w * 0.50, cy = h * 0.52, Rr = Math.min(w * 0.40, h * 0.40);
+  /* course to the right; the apparent wind comes from beta above it */
+  const beta = f.betaA;
+  const line = (a, len, col, wd, dash) => {
+    actx.save(); actx.setLineDash(dash || []);
+    actx.strokeStyle = col; actx.lineWidth = wd; actx.lineCap = 'round';
+    actx.beginPath(); actx.moveTo(cx, cy);
+    actx.lineTo(cx + Math.cos(a) * len, cy - Math.sin(a) * len);
+    actx.stroke(); actx.restore();
+  };
+  const arrow = (a, len, col, wd) => {
+    line(a, len, col, wd);
+    const hx = cx + Math.cos(a) * len, hy = cy - Math.sin(a) * len;
+    actx.save(); actx.fillStyle = col; actx.beginPath();
+    actx.moveTo(hx, hy);
+    actx.lineTo(hx - Math.cos(a - 0.40) * 9, hy + Math.sin(a - 0.40) * 9);
+    actx.lineTo(hx - Math.cos(a + 0.40) * 9, hy + Math.sin(a + 0.40) * 9);
+    actx.closePath(); actx.fill(); actx.restore();
+  };
+  /* the course, and the wind it feels */
+  line(0, Rr * 1.5, 'rgba(150,190,220,0.55)', 1.4, [5, 5]);
+  line(beta, Rr * 1.5, 'rgba(255,217,160,0.62)', 1.4, [5, 5]);
+  /* the beta wedge between them — this is the angle the identity is about */
+  actx.beginPath(); actx.moveTo(cx, cy);
+  actx.arc(cx, cy, Rr * 0.62, -beta, 0);
+  actx.closePath(); actx.fillStyle = 'rgba(216,176,112,0.15)'; actx.fill();
+
+  /* the two forces.  The air force sits eps_air back from the perpendicular to
+     the apparent wind; the water force is the same arrow turned round. */
+  const aAirTrue = beta - Math.PI / 2 - f.epsA;
+  /* the perpendiculars each epsilon is measured from */
+  line(beta - Math.PI / 2, Rr * 0.80, 'rgba(255,157,92,0.28)', 1, [3, 4]);
+  line(Math.PI / 2, Rr * 0.80, 'rgba(92,200,232,0.28)', 1, [3, 4]);
+  arrow(aAirTrue, Rr, 'rgba(255,157,92,0.95)', 3.6);
+  arrow(aAirTrue + Math.PI, Rr * 0.88, 'rgba(92,200,232,0.95)', 3.6);
+  /* and the leftover, when she is not settled */
+  const sx = f.Fax + f.Fhx, sy = f.Fay + f.Fhy;
+  const sm = Math.hypot(sx, sy);
+  if (f.Fa > 1e-6 && sm / f.Fa > 0.02) {
+    const aS = Math.atan2(sy, sx);
+    /* rotate the world angle into the panel frame (course points right) */
+    const aC = Math.atan2(st.vy, st.vx);
+    arrow(-(aS - aC), Rr * Math.min(1, sm / f.Fa) * 0.9, 'rgba(255,255,255,0.66)', 2);
+  }
+
+  actx.font = '600 9px ui-monospace,Menlo,monospace';
+  actx.fillStyle = 'rgba(216,176,112,0.9)';
+  actx.fillText('β ' + (beta * DEG).toFixed(0) + '°', cx + Rr * 0.62 * Math.cos(beta / 2),
+    cy - Rr * 0.62 * Math.sin(beta / 2));
+  actx.fillStyle = 'rgba(150,190,220,0.7)';
+  actx.fillText('course', cx + Rr * 1.05, cy + 12);
+  actx.fillStyle = 'rgba(255,217,160,0.75)';
+  actx.fillText('wind felt', cx + Math.cos(beta) * Rr * 1.05 - 8, cy - Math.sin(beta) * Rr * 1.05 - 6);
+}
+
+/* ── the polars ─────────────────────────────────────────────────────────── */
+const pcv = $('#polarCv'), pctx = pcv.getContext('2d');
+let polars = {}, polarDone = false, polarRun = null, bestCourseDeg = null;
+const CCOL = { dinghy: '#ffcf7a', iceboat: '#5cc8e8', barndoor: '#e8607a' };
+
+function polarSize() {
+  const w = pcv.clientWidth, h = Math.round(w / 1.3);
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  if (pcv.width !== Math.round(w * dpr)) { pcv.width = Math.round(w * dpr); pcv.height = Math.round(h * dpr); }
+  pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { w, h };
+}
+
+function drawPolars(progress) {
+  const { w, h } = polarSize();
+  pctx.clearRect(0, 0, w, h);
+  /* A FULL polar needs its origin in the MIDDLE of the plate.  Hanging it near
+     the bottom (which is right for an upwind-only half-plate) silently clips
+     everything downwind of a beam reach off the bottom edge — and downwind is
+     exactly where the barn door's entire curve lives, so the one craft the
+     section is about vanishes and looks like a missing dataset. */
+  const cx = w * 0.5, cy = h * 0.545, Rr = Math.min(w * 0.44, h * 0.44);
+  /* THE PLATE IS SCALED TO WHICHEVER CRAFT IS ON THE WATER.  One linear scale
+     for all three is honest and useless: the iceboat needs twelve times the
+     paper the dinghy does, so on a plate that fits the iceboat the dinghy is a
+     squiggle at the origin.  Scaling to the selection makes each craft
+     readable, and the scale JUMPING when you pick the iceboat is itself the
+     demonstration.  Anything off the plate is drawn dotted at the rim, never
+     pinned to it as if it were data. */
+  let vmax = 1, offPlate = [];
+  const mine = polars[craftId] || [];
+  for (const r of mine) if (r.settled) vmax = Math.max(vmax, r.Vb);
+  vmax = Math.max(vmax, env.windSpeed * 0.62) * 1.10;
+  for (const id of Object.keys(polars)) {
+    let m = 0;
+    for (const r of polars[id]) if (r.settled) m = Math.max(m, r.Vb);
+    if (m > vmax * 1.02) offPlate.push({ id, m });
+  }
+
+  /* rings and spokes: the wind blows DOWN, straight at you, as on the water */
+  pctx.save();
+  pctx.strokeStyle = 'rgba(150,190,220,0.14)'; pctx.lineWidth = 1;
+  pctx.font = '500 9px ui-monospace,Menlo,monospace';
+  const ringStep = vmax > 26 ? 10 : (vmax > 12 ? 5 : (vmax > 6 ? 2 : 1));
+  for (let v = ringStep; v <= vmax; v += ringStep) {
+    pctx.beginPath(); pctx.arc(cx, cy, Rr * v / vmax, 0, Math.PI * 2); pctx.stroke();
+    pctx.fillStyle = 'rgba(150,190,220,0.42)';
+    const rr = Rr * v / vmax;
+    pctx.fillText(toKt(v).toFixed(0) + ' kt', cx - rr * 0.707 + 5, cy - rr * 0.707 - 4);
+  }
+  for (let d = 0; d <= 180; d += 30) {
+    for (const mir of (d === 0 || d === 180 ? [1] : [1, -1])) {
+      pctx.beginPath(); pctx.moveTo(cx, cy);
+      pctx.lineTo(cx + mir * Math.sin(d / DEG) * Rr, cy - Math.cos(d / DEG) * Rr);
+      pctx.strokeStyle = d === 0 ? 'rgba(216,176,112,0.35)' : 'rgba(150,190,220,0.09)';
+      pctx.stroke();
+      if (d % 60 === 0) {
+        pctx.fillStyle = 'rgba(150,190,220,0.45)';
+        pctx.fillText(d + '°', cx + mir * Math.sin(d / DEG) * (Rr + 13) - 8,
+          cy - Math.cos(d / DEG) * (Rr + 13) + 3);
+      }
+    }
+  }
+  /* the wind arrow, coming down the page at you */
+  pctx.strokeStyle = 'rgba(216,176,112,0.5)'; pctx.lineWidth = 1.6;
+  pctx.beginPath(); pctx.moveTo(cx, cy - Rr - 34); pctx.lineTo(cx, cy - Rr - 12); pctx.stroke();
+  pctx.beginPath(); pctx.moveTo(cx, cy - Rr - 6); pctx.lineTo(cx - 5, cy - Rr - 16);
+  pctx.lineTo(cx + 5, cy - Rr - 16); pctx.closePath();
+  pctx.fillStyle = 'rgba(216,176,112,0.65)'; pctx.fill();
+  pctx.fillStyle = 'rgba(216,176,112,0.55)';
+  pctx.fillText('the wind', cx + 10, cy - Rr - 22);
+  pctx.restore();
+
+  /* THE CURVES, plotted by the COURSE the craft made good — never the heading.
+     Several headings can make the SAME course (a craft that is pinching, or
+     being blown bodily backwards, arrives at a course it did not aim for), so
+     joining the tank tests in heading order draws a zig-zag with radial spikes
+     that looks like a broken dataset.  A polar is the ENVELOPE of what the
+     craft can reach: bin by course and keep the FASTEST result in each bin.
+     The raw tank tests stay on the plate as dots underneath it. */
+  const envelope = rows => {
+    /* A RUNNING max over a window, not a max per bin.  Per-bin fails on exactly
+       the states that matter: a craft PINCHING (heading 20 deg off the wind,
+       making 0.7 kt on a course of 92) lands in a bin between two states doing
+       three times that, and the curve takes a deep notch at 93 degrees and at
+       178 that looks like a bug and is really under-sampling.  A running max
+       can never sit above a measured point or below the reachable set, which
+       is the definition of the thing being drawn.                            */
+    const STEP = 2, WIN = 3.4, out = [];
+    for (let d = 0; d <= 180; d += STEP) {
+      let best = null;
+      for (const r of rows) {
+        if (Math.abs(r.twaMeasured - d) > WIN) continue;
+        if (!best || r.Vb > best.Vb) best = r;
+      }
+      if (best) out.push({ twaMeasured: d, Vb: best.Vb });
+    }
+    return out;
+  };
+  for (const id of ['dinghy', 'iceboat', 'barndoor']) {
+    const raw = (polars[id] || []).filter(r => r.settled && r.Vb > 0.02);
+    if (!raw.length) continue;
+    /* every settled tank test, as a faint dot */
+    for (const mir of [1, -1]) for (const r of raw) {
+      if (r.Vb > vmax) continue;
+      const a = r.twaMeasured / DEG;
+      pctx.beginPath();
+      pctx.arc(cx + mir * Math.sin(a) * Rr * r.Vb / vmax, cy - Math.cos(a) * Rr * r.Vb / vmax, 1.5, 0, 7);
+      pctx.globalAlpha = id === craftId ? 0.40 : 0.20;
+      pctx.fillStyle = CCOL[id]; pctx.fill();
+    }
+    pctx.globalAlpha = 1;
+    const rows = envelope(raw);
+    /* split the curve where it leaves the plate, so the part that is off the
+       paper is dotted and the part that is on it is a solid measurement */
+    let run = [], runs = [];
+    for (const r of rows) {
+      const over = r.Vb > vmax;
+      if (!run.length || run.over === over) { run.over = over; run.push(r); }
+      else { runs.push(run); const prev = run[run.length - 1]; run = [prev, r]; run.over = over; }
+    }
+    if (run.length) runs.push(run);
+    /* drawn on BOTH tacks: the sea has no favourite side, and the twin checks
+       that a wind turned sixty degrees gives the identical answer */
+    for (const mir of [1, -1]) {
+      for (const seg of runs) {
+        pctx.save();
+        pctx.beginPath();
+        seg.forEach((r, i) => {
+          const a = r.twaMeasured / DEG, rad = Rr * Math.min(r.Vb, vmax * 1.005) / vmax;
+          const x = cx + mir * Math.sin(a) * rad, y = cy - Math.cos(a) * rad;
+          if (i === 0) pctx.moveTo(x, y); else pctx.lineTo(x, y);
+        });
+        pctx.strokeStyle = CCOL[id];
+        pctx.lineWidth = id === craftId ? 2.8 : 1.6;
+        pctx.globalAlpha = (id === craftId ? 1 : 0.6) * (seg.over ? 0.42 : 1);
+        if (seg.over) pctx.setLineDash([3, 5]);
+        pctx.stroke();
+        pctx.restore();
+      }
+
+    }
+    pctx.globalAlpha = 1;
+  }
+
+  /* the live boat, on its own polar */
+  if (f && isFinite(f.twa) && f.Vb > 0.05) {
+    const a = f.twa / DEG;
+    const x = cx + Math.sin(a) * Rr * Math.min(f.Vb, vmax) / vmax;
+    const y = cy - Math.cos(a) * Rr * Math.min(f.Vb, vmax) / vmax;
+    pctx.beginPath(); pctx.arc(x, y, 5.5, 0, 7);
+    pctx.fillStyle = 'rgba(255,255,255,0.92)'; pctx.fill();
+    pctx.lineWidth = 1.4; pctx.strokeStyle = '#0a1520'; pctx.stroke();
+  }
+
+  /* legend */
+  pctx.font = '600 10px ui-monospace,Menlo,monospace';
+  let ly = 16;
+  for (const id of ['dinghy', 'iceboat', 'barndoor']) {
+    if (!polars[id]) continue;
+    pctx.fillStyle = CCOL[id];
+    pctx.fillRect(12, ly - 7, 16, 2.5);
+    pctx.fillText(CRAFT[id].name, 34, ly - 2);
+    ly += 15;
+  }
+  for (const o of offPlate) {
+    pctx.fillStyle = CCOL[o.id];
+    pctx.globalAlpha = 0.85;
+    pctx.fillText(CRAFT[o.id].name + ' runs off this plate — ' + toKt(o.m).toFixed(0) +
+      ' kt. Take it out and the paper rescales.', 12, ly - 2);
+    pctx.globalAlpha = 1;
+    ly += 15;
+  }
+  pctx.fillStyle = 'rgba(150,190,220,0.5)';
+  pctx.font = '500 10px ui-monospace,Menlo,monospace';
+  pctx.fillText('scaled to ' + CRAFT[craftId].name + ' · true wind ' + toKt(env.windSpeed).toFixed(1) +
+    ' kt, blowing down the page', 12, h - 10);
+  if (progress != null && progress < 1) {
+    pctx.fillStyle = 'rgba(216,176,112,0.85)';
+    pctx.fillText('settling… ' + Math.round(progress * 100) + '%', 12, h - 24);
+  }
+}
+
+function runPolars() {
+  if (polarRun) return;
+  polars = {}; polarDone = false;
+  const ids = ['dinghy', 'iceboat', 'barndoor'];
+  const angles = [];
+  for (let d = 3; d <= 180; d += 3) angles.push(d);
+  let i = 0, j = 0;
+  const total = ids.length * angles.length;
+  let done = 0;
+  $('#polarState').textContent = 'sailing…';
+  polarRun = setInterval(() => {
+    const t0 = performance.now();
+    while (performance.now() - t0 < 22 && i < ids.length) {
+      const id = ids[i];
+      polars[id] = polars[id] || [];
+      const s = settle(CRAFT[id], env, angles[j] / DEG);
+      polars[id].push({
+        twa: angles[j], twaMeasured: s.f.twa * DEG, Vb: s.Vb,
+        awa: s.f.betaA * DEG, epsA: s.f.epsA * DEG, epsH: s.f.epsH * DEG,
+        vmg: s.Vb * Math.cos(s.f.twa), residual: s.residual, settled: s.settled
+      });
+      done++; j++;
+      if (j >= angles.length) { j = 0; i++; }
+    }
+    drawPolars(done / total);
+    if (i >= ids.length) {
+      clearInterval(polarRun); polarRun = null; polarDone = true;
+      $('#polarState').textContent = total + ' tank tests';
+      fillPolarTable();
+      drawPolars(1);
+    }
+  }, 0);
+}
+
+function fillPolarTable() {
+  const tb = $('#polarTable tbody');
+  tb.innerHTML = '';
+  for (const id of ['dinghy', 'iceboat', 'barndoor']) {
+    const rows = polars[id] || [];
+    const s = polarSummary(rows, env.windSpeed);
+    const tr = document.createElement('tr');
+    const cl = s.closest ? s.closest.twaMeasured.toFixed(1) + '°' : '<span class="bad">never</span>';
+    const up = s.bestUpwind && s.bestUpwind.vmg > 0
+      ? toKt(s.bestUpwind.vmg).toFixed(2) + ' kt'
+      : '<span class="bad">none, at any heading</span>';
+    tr.innerHTML = '<td style="color:' + CCOL[id] + '">' + CRAFT[id].name + '</td>' +
+      '<td class="n">' + cl + '</td><td class="n">' + up + '</td>' +
+      '<td class="n">' + (s.fastest ? toKt(s.fastest.Vb).toFixed(2) + ' kt' : '—') + '</td>' +
+      '<td class="n">' + s.speedRatio.toFixed(2) + '×</td>';
+    tb.appendChild(tr);
+    if (id === craftId && s.bestUpwind && s.bestUpwind.vmg > 0) bestCourseDeg = s.bestUpwind.twaMeasured;
+  }
+}
+
+$('#polarBtn').onclick = runPolars;
+
+/* ── prove it ───────────────────────────────────────────────────────────── */
+const vcv = $('#proveCv'), vctx = vcv.getContext('2d');
+$('#proveBtn').onclick = () => {
+  const out = $('#proveOut');
+  out.innerHTML = '<p class="small muted">sailing every state…</p>';
+  setTimeout(runProof, 20);
+};
+
+function runProof() {
+  const winds = [3, 6, 11];
+  const froms = [0.7734, -1.9, 2.6];
+  let n = 0, worstErr = 0, worstAt = '', worstResid = 0, worstCross = 0;
+  const series = { pts: [] };
+
+  for (const id of ['dinghy', 'iceboat', 'barndoor']) {
+    for (let wi = 0; wi < winds.length; wi++) {
+      const e2 = { windSpeed: winds[wi], windFrom: froms[wi] };
+      for (let d = 20; d <= 178; d += 4) {
+        const s = settle(CRAFT[id], e2, d / DEG);
+        if (!s.settled) continue;
+        n++;
+        const err = Math.abs(s.f.betaA - s.f.epsA - s.f.epsH) * DEG;
+        if (err > worstErr) { worstErr = err; worstAt = CRAFT[id].name + ', ' + toKt(winds[wi]).toFixed(0) + ' kt, ' + d + '°'; }
+        worstResid = Math.max(worstResid, s.residual);
+        worstCross = Math.max(worstCross,
+          Math.abs((s.f.Fax * s.f.Fhy - s.f.Fay * s.f.Fhx) / (s.f.Fa * s.f.Fh)));
+        if (id === 'dinghy' && wi === 1) {
+          /* a craft that is PINCHING makes a course nothing like its heading, so
+             the states arrive out of order in course; sorted below before it is
+             drawn, or the polyline doubles back on itself */
+          series.pts.push({ twa: s.f.twa * DEG, beta: s.f.betaA * DEG,
+                            sum: (s.f.epsA + s.f.epsH) * DEG });
+        }
+      }
+    }
+  }
+
+  /* the drag machine, swept hard */
+  let bdBest = -Infinity, bdEps = 0, bdN = 0, bdClosest = Infinity;
+  for (const V of [2, 6, 10, 16]) {
+    for (let d = 2; d <= 178; d += 2) {
+      const s = settle(CRAFT.barndoor, { windSpeed: V, windFrom: -1.1 }, d / DEG);
+      if (!s.settled) continue;
+      bdN++;
+      bdBest = Math.max(bdBest, s.Vb * Math.cos(s.f.twa));
+      bdEps = Math.max(bdEps, Math.abs(s.f.epsA * DEG - 90));
+      bdClosest = Math.min(bdClosest, s.f.twa * DEG);
+    }
+  }
+
+  /* the ledger: cut one drag, and see where the degrees actually went */
+  const base = CRAFT.dinghy;
+  const wet = JSON.parse(JSON.stringify(base)); wet.ground.swet *= 0.5; wet.ground.cwSat *= 0.5;
+  const air = JSON.parse(JSON.stringify(base)); air.rig.cd0 *= 0.5; air.rig.windage *= 0.5;
+  const at = c => settle(c, { windSpeed: 6, windFrom: 0 }, 50 / DEG);
+  const s0 = at(base), sW = at(wet), sA = at(air);
+  const led = [];
+  for (const [what, s] of [['half the water drag', sW], ['half the air drag', sA]]) {
+    led.push({
+      what,
+      dA: (s.f.epsA - s0.f.epsA) * DEG,
+      dH: (s.f.epsH - s0.f.epsH) * DEG,
+      dB: (s.f.betaA - s0.f.betaA) * DEG
+    });
+  }
+
+  const good = v => '<span class="ok">' + v + '</span>';
+  const bad = v => '<span class="bad">' + v + '</span>';
+  const num = x => (Math.abs(x) < 1e-3 ? x.toExponential(1) : x.toFixed(3));
+
+  $('#proveOut').innerHTML =
+    '<table><thead><tr><th>the claim</th><th>what came back</th></tr></thead><tbody>' +
+    '<tr><td>β<sub>apparent</sub> = ε<sub>air</sub> + ε<sub>water</sub>, over <b>' + n +
+      '</b> settled states — 3 craft × 3 winds × 40 headings, at three arbitrary wind bearings</td>' +
+      '<td class="n">' + good('worst ' + worstErr.toExponential(2) + '°') +
+      '<br><span class="muted">at ' + worstAt + '</span></td></tr>' +
+    '<tr><td>…because the two forces are <b>antiparallel</b>: |sin| of the angle between them</td>' +
+      '<td class="n">' + good(worstCross.toExponential(2)) + '</td></tr>' +
+    '<tr><td>…and every one of those states really came to rest: |F<sub>air</sub>+F<sub>water</sub>| / |F<sub>air</sub>|</td>' +
+      '<td class="n">' + good(worstResid.toExponential(2)) + '</td></tr>' +
+    '<tr><td>the identity is off by <b>no more</b> than the state is from rest (radians vs residual)</td>' +
+      '<td class="n">' + ((worstErr / DEG <= worstResid * 1.05) ? good((worstErr / DEG).toExponential(2) + ' ≤ ' + worstResid.toExponential(2)) : bad('no')) + '</td></tr>' +
+    '<tr><td>the barn door\'s air drag angle, over <b>' + bdN + '</b> states at four winds</td>' +
+      '<td class="n">' + good('exactly 90° (' + bdEps.toExponential(1) + '° off)') + '</td></tr>' +
+    '<tr><td>the barn door\'s best VMG <b>to windward</b>, anywhere in that sweep</td>' +
+      '<td class="n">' + (bdBest <= 0 ? good(bdBest.toFixed(3) + ' m/s') : bad(bdBest.toFixed(3))) +
+      '<br><span class="muted">closest course it ever made: ' + bdClosest.toFixed(1) + '°</span></td></tr>' +
+    led.map(l => '<tr><td>ledger — <b>' + l.what + '</b>: Δβ = Δε<sub>air</sub> + Δε<sub>water</sub></td>' +
+      '<td class="n">' + num(l.dB) + '° = ' + num(l.dA) + '° + ' + num(l.dH) + '°<br><span class="muted">left over ' +
+      Math.abs(l.dB - l.dA - l.dH).toExponential(1) + '°</span></td></tr>').join('') +
+    '</tbody></table>' +
+    '<p class="small" style="margin-top:14px">The last two rows are the interesting ones. Halving the drag in the water buys ' +
+    Math.abs(led[0].dB).toFixed(2) + '° of pointing and essentially all of it comes from ε<sub>water</sub>. Halving the drag in the <i>air</i> improves ε<sub>air</sub> by ' +
+    Math.abs(led[1].dA).toFixed(2) + '° and buys only ' + Math.abs(led[1].dB).toFixed(2) +
+    '° — because the boat then goes faster and hands ' + led[1].dH.toFixed(2) +
+    '° of it straight back to the water. The identity accounts for every hundredth of a degree of that, and it was never told about boats.</p>';
+
+  series.pts.sort((a, b) => a.twa - b.twa);
+  drawProof({
+    twa: series.pts.map(p => p.twa),
+    beta: series.pts.map(p => p.beta),
+    sum: series.pts.map(p => p.sum)
+  });
+}
+
+function drawProof(series) {
+  const w = vcv.clientWidth, h = Math.round(w / 2.4);
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  vcv.width = Math.round(w * dpr); vcv.height = Math.round(h * dpr);
+  vctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  vctx.clearRect(0, 0, w, h);
+  const L = 54, Rr = w - 18, T = 16, B = h - 30;
+  const xs = d => L + (Rr - L) * (d - 20) / 160;
+  const ys = v => B - (B - T) * v / 190;
+
+  vctx.strokeStyle = 'rgba(150,190,220,0.16)'; vctx.lineWidth = 1;
+  vctx.font = '500 9px ui-monospace,Menlo,monospace';
+  vctx.fillStyle = 'rgba(150,190,220,0.45)';
+  for (let v = 0; v <= 180; v += 45) {
+    vctx.beginPath(); vctx.moveTo(L, ys(v)); vctx.lineTo(Rr, ys(v)); vctx.stroke();
+    vctx.fillText(v + '°', 8, ys(v) + 3);
+  }
+  for (let d = 30; d <= 180; d += 30) {
+    vctx.beginPath(); vctx.moveTo(xs(d), T); vctx.lineTo(xs(d), B); vctx.stroke();
+    vctx.fillText(d + '°', xs(d) - 9, B + 15);
+  }
+  vctx.fillText('course made good, off the true wind →', L, h - 3);
+
+  const plot = (ys_, col, wd, dash) => {
+    vctx.save(); vctx.setLineDash(dash || []);
+    vctx.beginPath();
+    for (let i = 0; i < series.twa.length; i++) {
+      const x = xs(series.twa[i]), y = ys(ys_[i]);
+      if (i === 0) vctx.moveTo(x, y); else vctx.lineTo(x, y);
+    }
+    vctx.strokeStyle = col; vctx.lineWidth = wd; vctx.stroke(); vctx.restore();
+  };
+  plot(series.beta, 'rgba(255,217,160,0.95)', 5.5);
+  plot(series.sum, 'rgba(92,200,232,0.95)', 1.8, [5, 5]);
+
+  vctx.font = '600 11px ui-monospace,Menlo,monospace';
+  vctx.fillStyle = 'rgba(255,217,160,0.95)';
+  vctx.fillText('β to the apparent wind', L + 8, T + 16);
+  vctx.fillStyle = 'rgba(92,200,232,0.95)';
+  vctx.fillText('ε air + ε water', L + 8, T + 31);
+  vctx.fillStyle = 'rgba(150,190,220,0.5)';
+  vctx.font = '500 10px ui-monospace,Menlo,monospace';
+  vctx.fillText('the dinghy, at ' + toKt(6).toFixed(1) + ' kt — one curve drawn twice', L + 8, T + 47);
+}
+
+/* ── boot ───────────────────────────────────────────────────────────────── */
+resize();
+resetBoat();
+setTrim(true);
+
+const camBad = Sea.selfCheck();
+$('#camline').innerHTML = camBad.length
+  ? '<span class="bad">camera basis check FAILED: ' + camBad.join('; ') + '</span>'
+  : '<span class="muted">The overlay and the shader share one hand-rolled camera basis, checked at boot ' +
+    'against the case you can do in your head — looking down −Z, right must be +X and up must be +Y. ' +
+    'It agrees.' + (glDead ? ' <span class="bad">(WebGL2 is unavailable here, so the sea is not drawn.)</span>' : '') + '</span>';
+
+if (glDead) $('#stage').style.background = 'linear-gradient(#12243a,#071019 60%,#040a12)';
+
+/* only draw the sea while the stage is actually on screen */
+let stageVisible = true;
+if (window.IntersectionObserver) {
+  new IntersectionObserver(es => { stageVisible = es[0].isIntersecting; }, { threshold: 0 }).observe($('#stage'));
+}
+
+requestAnimationFrame(t => { lastT = t; requestAnimationFrame(tick); });
+drawPolars(null);
+
+/* the polars sail themselves the first time the plate comes into view — a blank
+   canvas with a button under it is a worse invitation than a thing already
+   happening */
+if (window.IntersectionObserver) {
+  const po = new IntersectionObserver(es => {
+    if (es[0].isIntersecting && !polarDone && !polarRun) runPolars();
+  }, { threshold: 0.25 });
+  po.observe($('#polarCv'));
+}
+
+/* the dev hooks the browser check drives */
+window.__boat = {
+  state: () => ({
+    craft: craftId, x: st.x, y: st.y, psi: st.psi, heel: st.heel, sheet: st.sheet,
+    Vb: Math.hypot(st.vx, st.vy), Va: f ? f.Va : 0,
+    betaA: f ? f.betaA * DEG : NaN, epsA: f ? f.epsA * DEG : NaN, epsH: f ? f.epsH * DEG : NaN,
+    twa: f ? f.twa * DEG : NaN, luff: f ? f.luff : 0,
+    residual: f && f.Fa > 1e-6 ? Math.hypot(f.Fax + f.Fhx, f.Fay + f.Fhy) / f.Fa : NaN,
+    theoremErr: f ? Math.abs(f.betaA - f.epsA - f.epsH) * DEG : NaN,
+    glDead, camBad, err: window.__err || window.__glErr || null,
+    leg: race.leg, running: race.running, done: race.done,
+    polarDone, W, H
+  }),
+  pick: pickCraft,
+  helm: (t, secs) => { tiller = t; setTimeout(() => { tiller = 0; }, (secs || 1) * 1000); },
+  hold: () => holdPsi,
+  sheet: v => { setTrim(false); sheetCmd = CL(v, 0, craft.sheetMax); },
+  trim: setTrim,
+  wind: v => { env.windSpeed = v; $('#wind').value = v; $('#windVal').textContent = toKt(v).toFixed(1) + ' kt'; },
+  place: (x, y, psi, v) => {
+    st.x = x; st.y = y; st.psi = psi;
+    st.vx = (v || 0) * Math.cos(psi); st.vy = (v || 0) * Math.sin(psi); holdPsi = psi;
+    trail = []; camPos = null;
+  },
+  cam: k => { camK = k; camPos = null; },
+  audio: () => snd ? {
+    state: AC.state, master: +snd.master.gain.value.toFixed(4),
+    wind: +snd.wg.gain.value.toFixed(4), hull: +snd.hg.gain.value.toFixed(4),
+    luff: +snd.lg.gain.value.toFixed(4), windHz: Math.round(snd.wf.frequency.value),
+    hullHz: Math.round(snd.hf.frequency.value)
+  } : { state: 'not started', muted: WS.muted() },
+  polars: runPolars,
+  prove: runProof,
+  polarData: () => polars
+};
+</script>
+</body>
+</html>
