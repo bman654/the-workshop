@@ -3,7 +3,7 @@
 *Generated from the estate manifest by `tools/seal/index-gen.mjs` — **never edit this file.***
 *It rebuilds every cycle. If something here is wrong, the manifest is wrong.*
 
-**488 pieces · 74 rooms · 11 districts.**
+**489 pieces · 74 rooms · 11 districts.**
 
 Grep this before you build. Rebuilding something that already stands is the estate's
 most expensive mistake — and the hidden pieces are not listed here, they are in
@@ -70,7 +70,7 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ## THE GLASSHOUSE GARDENS
 
-*6 rooms · 72 pieces*
+*7 rooms · 73 pieces*
 
 - **[The Aviary](aviary/index.html)** — 0 pieces
 - **[The Conservatory](conservatory/index.html)** — 18 pieces
@@ -80,6 +80,7 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 - **[The Gardens · Glasshouse](strange-garden/index.html)** — 40 pieces
   <sub>[Boids](strange-garden/pieces/boids.html) · [Bz Reaction](strange-garden/pieces/bz-reaction.html) · [Chladni](strange-garden/pieces/chladni.html) · [Cloth](strange-garden/pieces/cloth.html) · [Cyclic Ca](strange-garden/pieces/cyclic-ca.html) · [Dla](strange-garden/pieces/dla.html) · [Double Pendulum](strange-garden/pieces/double-pendulum.html) · [Falling Sand](strange-garden/pieces/falling-sand.html) · [Field Notes from the Strange Garden](strange-garden/field-notes.html) · [Flow Field](strange-garden/pieces/flow-field.html) · [Fourier Epicycles](strange-garden/pieces/fourier-epicycles.html) · [Game Of Life](strange-garden/pieces/game-of-life.html) · [Harmonograph](strange-garden/pieces/harmonograph.html) · [Julia](strange-garden/pieces/julia.html) · [Kuramoto](strange-garden/pieces/kuramoto.html) · [L System](strange-garden/pieces/l-system.html) · [Langtons Ant](strange-garden/pieces/langtons-ant.html) · [Lenia](strange-garden/pieces/lenia.html) · [Lorenz](strange-garden/pieces/lorenz.html) · [Magnetic Pendulum](strange-garden/pieces/magnetic-pendulum.html) · [Mandelbrot](strange-garden/pieces/mandelbrot.html) · [Metaballs](strange-garden/pieces/metaballs.html) · [N Body](strange-garden/pieces/n-body.html) · [Particle Life](strange-garden/pieces/particle-life.html) · [Penrose](strange-garden/pieces/penrose.html) · [Phyllotaxis](strange-garden/pieces/phyllotaxis.html) · [Physarum](strange-garden/pieces/physarum.html) · [Reaction Diffusion](strange-garden/pieces/reaction-diffusion.html) · [Ripple Tank](strange-garden/pieces/ripple-tank.html) · [Sandpile](strange-garden/pieces/sandpile.html) · [Strange Attractors](strange-garden/pieces/strange-attractors.html) · [Tessellarium](tessellarium/index.html) · [Tesseract](strange-garden/pieces/tesseract.html) · [The Aperiodic Patch](aperiodic-patch/index.html) · [The Elementary Garden](elementary-garden/index.html) · [The Marbling Bath](strange-garden/pieces/the-marbling-bath.html) · [The Raked Garden](strange-garden/pieces/the-raked-garden.html) · [Truchet](strange-garden/pieces/truchet.html) · [Voronoi](strange-garden/pieces/voronoi.html) · [Wfc](strange-garden/pieces/wfc.html)</sub>
 - **[The Headwaters](the-headwaters/index.html)** — 0 pieces
+- **[The Hive](the-hive/index.html)** — 0 pieces
 - **[The Snow Cabinet](the-snow-cabinet/index.html)** — 0 pieces
 
 ## THE OBSERVATORY RISE
@@ -123,10 +124,10 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ## THE FAIRGROUND
 
-*17 rooms · 62 pieces*
+*16 rooms · 62 pieces*
 
-- **[The Midway](midway/index.html)** — 10 pieces
-  <sub>[The Banked Curve](banked-curve/index.html) · [The Coaster](the-coaster/index.html) · [The Drop Tower](drop-tower/index.html) · [The Errand](the-errand/index.html) · [The Ferris Wheel](ferris-wheel/index.html) · [The Rotor](rotor/index.html) · [The Star Flyer](star-flyer/index.html) · [The Swing-Ship](swing-ship/index.html) · [The Teacups](teacups/index.html) · [Things That Won’t Fall Over](spin-cabinet/index.html)</sub>
+- **[The Midway](midway/index.html)** — 11 pieces
+  <sub>[The Banked Curve](banked-curve/index.html) · [The Coaster](the-coaster/index.html) · [The Drop Tower](drop-tower/index.html) · [The Errand](the-errand/index.html) · [The Ferris Wheel](ferris-wheel/index.html) · [The Juggler's Pitch](the-jugglers-pitch/index.html) · [The Rotor](rotor/index.html) · [The Star Flyer](star-flyer/index.html) · [The Swing-Ship](swing-ship/index.html) · [The Teacups](teacups/index.html) · [Things That Won’t Fall Over](spin-cabinet/index.html)</sub>
 - **[The Arcade](arcade/index.html)** — 24 pieces
   <sub>[2048](arcade/games/2048.html) · [Asteroids](arcade/games/asteroids.html) · [Breakout](arcade/games/breakout.html) · [Bulwark](arcade/games/bulwark.html) · [Centipede](arcade/games/centipede.html) · [Chomp](arcade/games/chomp.html) · [Crossing](arcade/games/crossing.html) · [Dig Dug](arcade/games/digdug.html) · [Gyre](arcade/games/gyre.html) · [Lode Runner](arcade/games/lode-runner.html) · [Lunar Lander](arcade/games/lunar-lander.html) · [Missile Command](arcade/games/missile-command.html) · [Pong](arcade/games/pong.html) · [Qubit](arcade/games/qubit.html) · [Sim](arcade/games/sim.html) · [Snake](arcade/games/snake.html) · [Starfighter](arcade/games/starfighter.html) · [Swarm](arcade/games/swarm.html) · [Tessera](arcade/games/tessera.html) · [Tetris](arcade/games/tetris.html) · [The Climb](arcade/games/the-climb.html) · [The Last Line](arcade/games/the-last-line.html) · [Tiltyard](arcade/games/tiltyard.html) · [Vanguard](arcade/games/vanguard.html)</sub>
 - **[The Puzzle Pavilion](puzzle-pavilion/index.html)** — 5 pieces
@@ -137,7 +138,6 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 - **[The Hedge Maze](daedalus/index.html)** — 3 pieces
   <sub>[Ariadne](ariadne/index.html) · [The Provably Shortest Path](pathfinder/index.html) · [Theseus’s Thread](labyrinth/index.html)</sub>
 - **[The Level Ride](the-level-ride/index.html)** — 0 pieces
-- **[The Juggler's Pitch](the-jugglers-pitch/index.html)** — 0 pieces
 - **[The Warren](warren/the-crossing.html)** — 1 piece
   <sub>[The Homicidal Chauffeur](the-homicidal-chauffeur/index.html)</sub>
 - **[The Arcade · The Fold](the-shepherd/index.html)** — 0 pieces
@@ -206,4 +206,4 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ---
 
-<sub>manifest generated at commit `556d09b44c0c120fd6158f2f068a4def15034f7c`</sub>
+<sub>manifest generated at commit `f21c77dbe071f706f3e4887f838520b875ce7c01`</sub>

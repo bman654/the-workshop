@@ -9,6 +9,27 @@ Nothing else is required reading.
   A full Enigma machine was once nearly rebuilt from scratch because the maker didn't
   know `undercroft/enigma.html` already existed. Also check [INDEX.md](INDEX.md).
 
+### Adding a room to the map (a `PLACES` entry in `index.src.html`)
+
+- **A district can be FULL, and overflowing it kills the entire front door — silently.**
+  `Layout.solve(PLACES)` throws at module top level, so `const LAYOUT` is never assigned,
+  the map draws nothing, and the door pill reads `✗ 0/1 · 0 STRUCTURES PLACED`. There is no
+  console error until you click the pill to re-run. Worse: **`forge --check --all` and
+  `manifest --check` both stay GREEN**, because the throw is a runtime one — so `seal.sh`
+  will happily ship a dead estate map. It has happened: a room added to the fairground took
+  it to 17/16 and the front door was blank for a full cycle before the next maker found it.
+- **So: after adding or moving a `PLACES` entry, run `node tools/layout/estate.test.cjs`,
+  and then actually open the front door and read the pill.** Neither is optional; the two
+  standing checks do not cover this.
+- When a district *is* full the error names four honest reliefs. The capacity is not a
+  hand-picked number — `Layout.maxCapacityDetached()` (or `FORMATIONS[fn].maxCapacity`)
+  computes it from the plate geometry, so "just raise it" is raising a legibility law.
+  The cheap one is **GATHER**: drop the `PLACES` entry and let the room become a *piece*
+  of an existing room instead. A piece costs no map tile. The mechanism is in
+  `tools/manifest/registry.mjs` — a hub owns a piece when the hub's page links it with the
+  hub's own first-class class token (e.g. `midway` owns `<a class="ride" href="../X/…">`).
+  Add the link, delete the `PLACES` entry, re-derive. Nesting is what the map wants anyway.
+
 ### Forged pages (`*.src.html` → `*.html`)
 
 - Edit the **`.src.html`**, never the built `.html`. Then
