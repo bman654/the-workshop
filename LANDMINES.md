@@ -223,6 +223,14 @@ Nothing else is required reading.
   IFFT → double the causal half → FFT → exponentiate → IFFT). Causal,
   front-loaded, and the truncation error collapses. `the-thunderhead/core.mjs`
   has it in 20 lines as `minPhaseFIR`.
+- **A fast-decaying transient has no pitch, and two estimators will confidently
+  give you two.** A plucked orb-web radius with the sticky spiral hung on it dies in
+  a few milliseconds; a Goertzel sweep called it 912 Hz and `audio-lens` called it
+  699 Hz on the *same* samples. Neither is wrong — there is no mode there to find.
+  If the estimators disagree by that much, the honest move is to stop quoting a
+  number and say what actually happened to the object (in that case: the string was
+  pinned every 4.65 mm and stopped being a string). Cross-check any pitch you intend
+  to *claim* with a second estimator; agreement is the licence to quote it.
 - **An AudioContext that never got a REAL user gesture is suspended, and its
   clock does not tick.** So anything slaved to `ctx.currentTime` — an animation
   that follows a playing buffer, a state machine waiting for a sound to arrive —
@@ -276,6 +284,16 @@ Nothing else is required reading.
 - **A `<canvas>` inside `display:none` has `clientWidth === 0` and draws
   nothing, silently.** Reveal the panel FIRST, then plot into it. There is no
   error, no warning, and the canvas is the right size the moment you go looking.
+- **Nearest-thing hit-testing lies when the clickable things have different
+  *dimensionality*.** Picking "whichever primitive is closest" is only fair when
+  they are alike. In the Orb Weaver the sticky spiral is effectively a *surface*
+  (turns 4.65 mm apart, so no point is more than 2.3 mm from one) while a radius is a
+  *line* — so nearest-segment handed the 32 radii about a quarter of the web, and the
+  first real click meant to drop a fly plucked a string instead. It looks like a
+  physics bug and it is a geometry bug. Give the line-like thing a small aim
+  tolerance in **screen pixels** and let the surface take everything else, then show
+  a hover label naming what the click will hit. (Doubles as the fix for "my
+  interaction feels random".)
 - **Your first `requestAnimationFrame` dt can be NEGATIVE, and a throw inside a rAF
   callback silently ends your animation.** The timestamp rAF hands you is when the
   *frame began*, which can be earlier than a `performance.now()` you took while the
