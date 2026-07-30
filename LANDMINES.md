@@ -70,6 +70,12 @@ Nothing else is required reading.
   scene) instead of "fly", and the symptom was "my flight code does nothing", twice.
   Ask the page: `getBoundingClientRect()` on the element, aim at its centre, then click.
   One extra `eval` and the test survives every layout change.
+  **They also rot DURING a run, from your own clicks.** A button whose label changes
+  when you press it ("sand the rail" → "sanding") changes width, which re-centres a
+  flex console, which moves every slider beside it by twenty pixels — so the *next*
+  drag in the same script silently lands on nothing and the control never moves.
+  Re-ask for the rect before every single aim, not once per session. (A four-line
+  shell helper that does eval-rect → `pointer.mjs` is the whole fix.)
 - **Another browser session on the same machine steals your frame rate.** A forgotten
   `agent-browser --session foo` kept a second GPU context alive and turned a real 65 fps into
   a measured 7. `agent-browser session list`, close the strays, then benchmark.
@@ -317,6 +323,18 @@ Nothing else is required reading.
   IFFT → double the causal half → FFT → exponentiate → IFFT). Causal,
   front-loaded, and the truncation error collapses. `the-thunderhead/core.mjs`
   has it in 20 lines as `minPhaseFIR`.
+- **AN ONSET OR TEMPO ESTIMATOR HAS A RATE CEILING, AND PAST IT IT RETURNS A
+  PLAUSIBLE NUMBER.** A slipping locomotive fires 15.8 exhaust beats a second;
+  `audio-lens --tempo` read **255.7 BPM** (4.3/s — an exact quarter of the truth,
+  octave-folded) and its onset detector found **2.8/s**. Neither is a bug in the
+  tool and neither is a bug in the sound: the chuffs are 100 ms long, so above
+  about eight a second they physically OVERLAP and there are no separate onsets
+  left to find (the silence between beats fell from 74 % to 10 %). The trap is
+  that you get a confident wrong number rather than a refusal. Always compare the
+  measured rate against the count you *fired*; when they part company, say what
+  happened to the sound instead of quoting either — here, "the beats merge into a
+  roar" is the honest finding, and it is why a driver stops counting a slipping
+  engine.
 - **A fast-decaying transient has no pitch, and two estimators will confidently
   give you two.** A plucked orb-web radius with the sticky spiral hung on it dies in
   a few milliseconds; a Goertzel sweep called it 912 Hz and `audio-lens` called it
@@ -434,6 +452,17 @@ Nothing else is required reading.
   wind does all day. The tell is that the residual `|F1+F2|/|F1|` is tiny (the state IS
   in balance) while the identity is nonsense — if your balance is good and your identity
   is not, the bug is in a sign or an axis, never in the solver.
+- **A "STEADY STATE" THAT IS STILL DRIFTING MEASURES YOUR DRIFT, NOT YOUR CLAIM.** A
+  locomotive's exhaust beats should be perfectly even; mine measured 5.4 % spread and
+  the deliberately-mis-quartered control 16 %, which is a feeble separation and I
+  nearly loosened the tolerance to accept it. Nothing was uneven: the train was still
+  accelerating, and a monotonic 10 % drift across the window has a standard deviation
+  of about 3 % all by itself. Two fixes, and take both: **hold the operating point
+  with a control the model already has** (a proportional loop on the brake — it is
+  scaffolding, not physics, and the solver never learns about it), and **measure the
+  property you actually mean**. "Limping" is the ALTERNATION between one gap and the
+  next, mean |g[i] − g[i−1]|, which is blind to any smooth drift. The separation went
+  from 5.4 vs 16 % to **0.45 vs 30.5 %**.
 - **Converge a steady-state solver on the BALANCE, not on the speed.** Watching the
   output stop changing is the obvious stopping test and it is the wrong one: near a
   degenerate operating point one variable can be flat to a part in ten million while

@@ -1,0 +1,1564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Four Beats to a Turn — a locomotive whose sound is its speedometer</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  FOUR BEATS TO A TURN  ·  engine-room/four-beats-to-a-turn/
+
+  Stand at the lineside. Open the regulator and let her go.
+
+  THE CLAIM
+    A double-acting cylinder exhausts TWICE per turn of the crank. Two cylinders
+    quartered ninety degrees apart therefore exhaust FOUR times, evenly spaced,
+    and every one of those goes up the chimney as a beat. So the sound of a
+    locomotive is a speedometer:
+
+        beats per second  =  4 v / (pi D)
+
+    Nothing on this page plays a recording and nothing loops. Every chuff is
+    scheduled at the instant loco.mjs says an exhaust valve opened, to the
+    fraction of a simulation step, and the page prints the rate it MEASURES from
+    those scheduled times beside the rate the drawn speed predicts. Three clocks
+    have to agree: the beats you hear, the telegraph poles going by, and the
+    needle. They do — until the wheels slip, and then the first one runs away on
+    its own. That is what slipping IS.
+
+  WHAT IS EXACT AND WHAT IS A MODEL — the page says so too
+    EXACT (and in the twin): the crank and rod kinematics; four release events a
+    revolution, spaced by the geometry; a quartering error limping the beat by
+    exactly that error; the work closure (torque round the crank = the area of
+    the four indicator cards); the adhesion bound |F_rail| <= mu N.
+    A MODEL: the indicator card itself (hyperbolic expansion, a wire-drawing
+    term, a speed-dependent back pressure) and the lumped boiler and fire.
+
+  ENGINES (inlined byte-for-byte by the forge, never forked):
+    · ./loco.mjs            the whole locomotive — kinematics, cards, adhesion,
+                            boiler, and the voice of the exhaust
+    · tools/ws/ws.js        the estate-wide mute and the visit breadcrumb
+  Node twin: node engine-room/four-beats-to-a-turn/loco.test.mjs  (51 checks)
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root{
+    --ink:#f4e9d6; --dim:#bfae92; --faint:#8d7f68;
+    --brass:#e0b463; --warm:#ffd9a0; --green:#93cf7c; --red:#f0907a; --steel:#a9b6c0;
+    --bg0:#0a0b0e; --panel:rgba(15,13,12,.90); --line:rgba(224,180,99,.24);
+    --font-ui:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --font-mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg0);color:var(--ink);
+    font:15px/1.55 var(--font-ui);overflow:hidden;-webkit-font-smoothing:antialiased}
+  canvas#gl{display:block;position:fixed;inset:0;width:100%;height:100%;
+    touch-action:none;cursor:grab}
+  canvas#gl.grabbing{cursor:grabbing}
+
+  .scrim{position:fixed;top:0;left:0;width:min(60vw,760px);height:300px;z-index:2;pointer-events:none;
+    background:radial-gradient(120% 100% at 0% 0%, rgba(5,4,6,.88), rgba(5,4,6,0) 74%)}
+  .scrim2{position:fixed;bottom:0;left:0;right:0;height:230px;z-index:2;pointer-events:none;
+    background:linear-gradient(to top, rgba(5,4,6,.80), rgba(5,4,6,0))}
+
+  .topleft{position:fixed;top:16px;left:22px;z-index:5;pointer-events:none;max-width:28em}
+  .topleft a{pointer-events:auto}
+  .back{display:inline-block;font:600 10px/1 var(--font-mono);letter-spacing:.22em;
+    text-transform:uppercase;color:var(--faint);text-decoration:none;margin-bottom:9px}
+  .back:hover{color:var(--brass)}
+  h1{font:400 30px/1.1 var(--font-ui);margin:0 0 7px;letter-spacing:.005em}
+  h1 em{font-style:normal;color:var(--brass)}
+  .say{margin:0;color:var(--dim);font-size:14.5px;max-width:26em}
+  .say b{color:var(--ink);font-weight:600}
+  .say code{font:600 13px var(--font-mono);color:var(--brass)}
+
+  /* ── the reading card, top right ─────────────────────────────────────────── */
+  .card{position:fixed;top:16px;right:18px;z-index:6;width:308px;background:var(--panel);
+    border:1px solid var(--line);border-radius:3px;padding:13px 14px 12px;
+    backdrop-filter:blur(9px);box-shadow:0 18px 44px rgba(0,0,0,.55)}
+  .chead{font:600 9.5px/1 var(--font-mono);letter-spacing:.2em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:10px}
+  .row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:5px 0}
+  .row .k{color:var(--dim);font-size:13px}
+  .row .v{font:600 15px var(--font-mono);color:var(--ink);white-space:nowrap}
+  .row .v.gold{color:var(--brass)} .row .v.ok{color:var(--green)} .row .v.bad{color:var(--red)}
+  .rule{height:1px;background:var(--line);margin:9px 0 8px}
+  canvas#ruler{display:block;width:100%;height:46px;margin:2px 0 4px}
+  .note{margin:6px 0 0;font-size:11.5px;line-height:1.42;color:var(--faint)}
+  .note b{color:var(--dim);font-weight:600}
+  .verdict{margin-top:9px;font:600 11px/1.4 var(--font-mono);color:var(--green);
+    border-top:1px solid var(--line);padding-top:8px}
+  .verdict.bad{color:var(--red)}
+
+  /* ── the footplate, bottom ───────────────────────────────────────────────── */
+  .console{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:6;
+    display:flex;align-items:flex-end;gap:16px;background:var(--panel);
+    border:1px solid var(--line);border-radius:3px;padding:11px 15px 10px;
+    backdrop-filter:blur(9px);box-shadow:0 16px 40px rgba(0,0,0,.5)}
+  .lever{display:flex;flex-direction:column;align-items:center;gap:5px;width:92px}
+  .lever .lbl{font:600 9px/1 var(--font-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+  .lever .val{font:600 12px var(--font-mono);color:var(--brass)}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:92px;height:4px;border-radius:2px;
+    background:linear-gradient(90deg,rgba(224,180,99,.55),rgba(224,180,99,.16));outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:#f0dcb2;border:1px solid #6b5427;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.6)}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:#f0dcb2;
+    border:1px solid #6b5427;cursor:pointer}
+  .sep{width:1px;align-self:stretch;background:var(--line)}
+  .btns{display:flex;flex-direction:column;gap:6px}
+  button{font:600 11px/1 var(--font-mono);letter-spacing:.09em;color:var(--ink);
+    background:rgba(224,180,99,.10);border:1px solid var(--line);border-radius:2px;
+    padding:7px 11px;cursor:pointer;white-space:nowrap}
+  button:hover{background:rgba(224,180,99,.22);border-color:rgba(224,180,99,.5)}
+  button.on{background:rgba(147,207,124,.20);border-color:rgba(147,207,124,.5);color:#c8ecb8}
+  button.hot{background:rgba(240,144,122,.16);border-color:rgba(240,144,122,.45)}
+
+  /* ── the gauge, bottom left ──────────────────────────────────────────────── */
+  .gauges{position:fixed;left:22px;bottom:16px;z-index:6;display:flex;gap:12px;align-items:flex-end}
+  canvas#dial{width:132px;height:132px;display:block;filter:drop-shadow(0 10px 22px rgba(0,0,0,.6))}
+  .speedo{background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:9px 12px 8px;
+    backdrop-filter:blur(9px);min-width:126px}
+  .speedo .big{font:600 25px/1 var(--font-mono);color:var(--ink)}
+  .speedo .big small{font-size:12px;color:var(--faint);font-weight:400}
+  .speedo .sub{font:11px/1.4 var(--font-mono);color:var(--faint);margin-top:4px}
+
+  .gate{position:fixed;inset:0;z-index:9;display:flex;align-items:center;justify-content:center;
+    background:rgba(6,5,8,.72);backdrop-filter:blur(3px);cursor:pointer;text-align:center}
+  .gate .big{font:400 40px/1.1 var(--font-ui);color:var(--ink);letter-spacing:.01em}
+  .gate .small{font:600 11px/1 var(--font-mono);letter-spacing:.26em;text-transform:uppercase;
+    color:var(--brass);margin-top:14px}
+  .gate.gone{display:none}
+
+  .fps{position:fixed;right:14px;bottom:12px;z-index:4;font:10px var(--font-mono);
+    color:rgba(180,166,140,.45);pointer-events:none}
+
+  @media (max-width:920px){
+    .card{display:none} .topleft{max-width:min(30em,72vw)} h1{font-size:23px}
+    .say{font-size:13px}
+    .console{gap:9px;padding:8px 10px;flex-wrap:wrap;max-width:96vw;justify-content:center;bottom:10px}
+    .lever,input[type=range]{width:70px}
+    canvas#dial{display:none}
+    .gauges{left:auto;right:12px;top:14px;bottom:auto}
+    .speedo{min-width:0} .speedo .big{font-size:21px}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+<div class="scrim"></div>
+<div class="scrim2"></div>
+
+<div class="topleft">
+  <a class="back" href="../index.html">&larr; The Engine Room</a>
+  <h1>Four Beats to a <em>Turn</em></h1>
+  <p class="say">Two cylinders, each open at both ends, quartered a quarter-turn apart.
+  That is <b>four exhausts every revolution</b> &mdash; so the beat you hear is the wheel
+  going round, and the sound of a locomotive is a speedometer with no dial in it:
+  <code>beats/s = 4v / &pi;D</code>. Open the regulator. Then hang it in full gear on
+  greasy rail and listen to the one moment the arithmetic breaks.</p>
+</div>
+
+<div class="card">
+  <div class="chead">three clocks, one crank</div>
+  <div class="row"><span class="k">heard &mdash; from the scheduled intervals</span><span class="v gold" id="rHeard">&mdash;</span></div>
+  <div class="row"><span class="k">the railway &mdash; 4v / &pi;D</span><span class="v" id="rTrack">&mdash;</span></div>
+  <div class="row"><span class="k">the wheel &mdash; 4 &times; rev/s</span><span class="v" id="rWheel">&mdash;</span></div>
+  <div class="row"><span class="k">poles &mdash; 55 m apart, last few</span><span class="v" id="rPole">&mdash;</span></div>
+  <canvas id="ruler" width="560" height="92"></canvas>
+  <p class="note">Every tick is one exhaust valve opening, at the crank angle
+  <b>loco.mjs</b> put it at &mdash; not on a grid. The <b>tall tick is one turn of
+  the wheel</b>: watch the chalk mark on the near driver come round with it. Even
+  spacing is the quartering &mdash; knock it out and the engine limps.</p>
+  <div class="rule"></div>
+  <div class="row"><span class="k">rail force / adhesion</span><span class="v" id="rAdh">&mdash;</span></div>
+  <div class="row"><span class="k">steam: raised / used</span><span class="v" id="rSteam">&mdash;</span></div>
+  <div class="row"><span class="k">work per kg of steam</span><span class="v" id="rEcon">&mdash;</span></div>
+  <div class="verdict" id="verdict">&mdash;</div>
+  <p class="note" style="margin-top:8px">Exact here: the kinematics, the four beats and
+  their spacing, the work closure, and <b>|F<sub>rail</sub>| &le; &mu;N</b>. A model, and
+  only a model: the indicator card and the lumped boiler.</p>
+</div>
+
+<div class="gauges">
+  <canvas id="dial" width="264" height="264"></canvas>
+  <div class="speedo">
+    <div class="big" id="spd">0<small> km/h</small></div>
+    <div class="sub" id="spdsub">at rest</div>
+  </div>
+</div>
+
+<div class="console">
+  <div class="lever">
+    <span class="lbl">regulator</span>
+    <input type="range" id="reg" min="0" max="100" value="0">
+    <span class="val" id="regv">shut</span>
+  </div>
+  <div class="lever">
+    <span class="lbl">cut-off</span>
+    <input type="range" id="cut" min="10" max="85" value="75">
+    <span class="val" id="cutv">75%</span>
+  </div>
+  <div class="lever">
+    <span class="lbl">brake</span>
+    <input type="range" id="brk" min="0" max="100" value="0">
+    <span class="val" id="brkv">off</span>
+  </div>
+  <div class="sep"></div>
+  <div class="lever">
+    <span class="lbl">wagons</span>
+    <input type="range" id="wag" min="0" max="8" value="5">
+    <span class="val" id="wagv">5</span>
+  </div>
+  <div class="sep"></div>
+  <div class="btns">
+    <button id="sand">sand the rail</button>
+    <button id="whistle">whistle</button>
+  </div>
+  <div class="btns">
+    <button id="quarter">knock the quartering out</button>
+    <button id="hush">sound on</button>
+  </div>
+</div>
+
+<div class="gate" id="gate"><div>
+  <div class="big">Four Beats to a Turn</div>
+  <div class="small">step up to the lineside</div>
+</div></div>
+
+<div class="fps" id="fps"></div>
+
+<script type="module">
+<!-- forge:include ../../tools/ws/ws.js -->
+<!-- forge:include ./loco.mjs -->
+
+addEventListener('error', (e) => { window.__err = (e.message || '') + ' @' + (e.lineno || '?') + ':' + (e.colno || '?'); });
+
+const $ = (id) => document.getElementById(id);
+const canvas = $('gl');
+const gl = canvas.getContext('webgl2', { antialias: true, alpha: false, depth: true,
+  premultipliedAlpha: true, powerPreference: 'high-performance' });
+if (!gl) {
+  document.body.innerHTML = '<p style="padding:3em;font:16px serif">This room needs WebGL2.</p>';
+  throw new Error('no webgl2');
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   1 · A SMALL AMOUNT OF LINEAR ALGEBRA
+   ═══════════════════════════════════════════════════════════════════════════ */
+const M4 = {
+  ident: () => new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]),
+  mul(a, b) {                                    /* a then b?  no: returns a*b */
+    const o = new Float32Array(16);
+    for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
+      let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k];
+      o[c * 4 + r] = s;
+    }
+    return o;
+  },
+  trans(x, y, z) { const m = M4.ident(); m[12] = x; m[13] = y; m[14] = z; return m; },
+  scale(x, y, z) { const m = M4.ident(); m[0] = x; m[5] = y; m[10] = z; return m; },
+  rotZ(a) { const m = M4.ident(), c = Math.cos(a), s = Math.sin(a); m[0] = c; m[1] = s; m[4] = -s; m[5] = c; return m; },
+  rotY(a) { const m = M4.ident(), c = Math.cos(a), s = Math.sin(a); m[0] = c; m[2] = -s; m[8] = s; m[10] = c; return m; },
+  rotX(a) { const m = M4.ident(), c = Math.cos(a), s = Math.sin(a); m[5] = c; m[6] = s; m[9] = -s; m[10] = c; return m; },
+  persp(fovy, asp, n, f) {
+    const t = 1 / Math.tan(fovy / 2), m = new Float32Array(16);
+    m[0] = t / asp; m[5] = t; m[10] = (f + n) / (n - f); m[11] = -1; m[14] = 2 * f * n / (n - f);
+    return m;
+  },
+  look(eye, at, up) {
+    const z = norm(sub(eye, at)), x = norm(cross(up, z)), y = cross(z, x);
+    return new Float32Array([
+      x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0,
+      -dot(x, eye), -dot(y, eye), -dot(z, eye), 1]);
+  },
+};
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const mulS = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const len = (a) => Math.hypot(a[0], a[1], a[2]);
+const norm = (a) => { const l = len(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+const xform = (m, p) => [
+  m[0] * p[0] + m[4] * p[1] + m[8]  * p[2] + m[12],
+  m[1] * p[0] + m[5] * p[1] + m[9]  * p[2] + m[13],
+  m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]];
+const xformN = (m, p) => [
+  m[0] * p[0] + m[4] * p[1] + m[8]  * p[2],
+  m[1] * p[0] + m[5] * p[1] + m[9]  * p[2],
+  m[2] * p[0] + m[6] * p[1] + m[10] * p[2]];
+
+/* ════════════════════════════════════════════════════════════════════════════
+   2 · MESH BUILDING
+   Normals are STATED, never derived from winding, and nothing is culled — the
+   hand-built-mesh landmine. Colour rides on the vertex, so one program draws
+   the whole engine.
+   ═══════════════════════════════════════════════════════════════════════════ */
+class Mesh {
+  constructor() { this.p = []; this.n = []; this.c = []; }
+  vert(pos, nrm, col) {
+    this.p.push(pos[0], pos[1], pos[2]);
+    this.n.push(nrm[0], nrm[1], nrm[2]);
+    this.c.push(col[0], col[1], col[2]);
+  }
+  tri(a, b, c, nrm, col) { this.vert(a, nrm, col); this.vert(b, nrm, col); this.vert(c, nrm, col); }
+  quad(a, b, c, d, nrm, col) { this.tri(a, b, c, nrm, col); this.tri(a, c, d, nrm, col); }
+  /* an oriented box: M places its centre, h is the half-extent */
+  box(M, h, col, faceTint) {
+    const S = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+    for (let f = 0; f < 6; f++) {
+      const ax = S[f], u = (f < 2) ? [0,1,0] : [1,0,0], w = cross(ax, u);
+      const cen = [ax[0]*h[0], ax[1]*h[1], ax[2]*h[2]];
+      const hu = [u[0]*h[0], u[1]*h[1], u[2]*h[2]], hw = [w[0]*h[0], w[1]*h[1], w[2]*h[2]];
+      const q = [
+        add(cen, add(mulS(hu,-1), mulS(hw,-1))), add(cen, add(hu, mulS(hw,-1))),
+        add(cen, add(hu, hw)),                   add(cen, add(mulS(hu,-1), hw))];
+      const tint = faceTint ? faceTint(f) : 1;
+      this.quad(xform(M,q[0]), xform(M,q[1]), xform(M,q[2]), xform(M,q[3]),
+                norm(xformN(M, ax)), [col[0]*tint, col[1]*tint, col[2]*tint]);
+    }
+  }
+  /* a capped cylinder between two points */
+  cyl(a, b, r, segs, col, capCol, r2) {
+    const ax = norm(sub(b, a)), rb = Math.abs(ax[1]) > 0.9 ? [1,0,0] : [0,1,0];
+    const u = norm(cross(rb, ax)), w = cross(ax, u);
+    const R2 = (r2 === undefined) ? r : r2;
+    const P = (t, rad, base) => add(base, add(mulS(u, rad*Math.cos(t)), mulS(w, rad*Math.sin(t))));
+    for (let i = 0; i < segs; i++) {
+      const t0 = i / segs * Math.PI * 2, t1 = (i + 1) / segs * Math.PI * 2;
+      const n0 = add(mulS(u, Math.cos(t0)), mulS(w, Math.sin(t0)));
+      const n1 = add(mulS(u, Math.cos(t1)), mulS(w, Math.sin(t1)));
+      const a0 = P(t0, r, a), a1 = P(t1, r, a), b0 = P(t0, R2, b), b1 = P(t1, R2, b);
+      this.tri(a0, a1, b1, norm(add(n0, n1)), col);
+      this.tri(a0, b1, b0, norm(add(n0, n1)), col);
+      if (capCol) {
+        this.tri(a, a1, a0, mulS(ax, -1), capCol);
+        this.tri(b, b0, b1, ax, capCol);
+      }
+    }
+  }
+  build() {
+    const n = this.p.length / 3;
+    const data = new Float32Array(n * 9);
+    for (let i = 0; i < n; i++) {
+      data[i*9+0] = this.p[i*3]; data[i*9+1] = this.p[i*3+1]; data[i*9+2] = this.p[i*3+2];
+      data[i*9+3] = this.n[i*3]; data[i*9+4] = this.n[i*3+1]; data[i*9+5] = this.n[i*3+2];
+      data[i*9+6] = this.c[i*3]; data[i*9+7] = this.c[i*3+1]; data[i*9+8] = this.c[i*3+2];
+    }
+    const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+    const vbo = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 36, 0);
+    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 36, 12);
+    gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 36, 24);
+    gl.bindVertexArray(null);
+    return { vao, count: n };
+  }
+}
+const hex = (h) => [parseInt(h.slice(1,3),16)/255, parseInt(h.slice(3,5),16)/255, parseInt(h.slice(5,7),16)/255];
+const shade = (c, k) => [c[0]*k, c[1]*k, c[2]*k];
+
+/* ════════════════════════════════════════════════════════════════════════════
+   3 · THE LOCOMOTIVE, PART BY PART
+   Local frame: +x is the way she is going, +y up, +z out of the near side.
+   The origin sits on the railhead under the driving (middle) axle.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const R_W    = wheelR();          /* 0.686 m */
+const R_CR   = crankR();          /* 0.305 m */
+const AXLES  = [-2.30, 0, 2.30];  /* trailing, driving, leading */
+const GAUGE  = 0.7175;
+const Z_PIN  = 0.865;             /* crank pin plane (main rod) */
+const Z_CPL  = 0.965;             /* coupling rod plane */
+const Y_AX   = R_W;
+
+const C = {
+  green:  hex('#16402c'), greenD: hex('#0e2b1e'), black: hex('#15171a'),
+  smoke:  hex('#0f1113'), brass:  hex('#cf9c35'), copper: hex('#8a5a2e'),
+  red:    hex('#7e2119'), steel:  hex('#8e99a2'), steelD: hex('#5f6a73'),
+  cream:  hex('#c8b184'), coal:   hex('#0b0b0d'), rust:   hex('#5c4632'),
+  wood:   hex('#3a2c1e'), tyre:   hex('#0d0f11'),
+};
+
+/* ── a driving wheel, drawn in its own frame (axle at origin, axis +z) ─────── */
+function wheelMesh(withCrankPin) {
+  const m = new Mesh(), SP = 14, hubR = 0.19, rimIn = R_W - 0.10;
+  /* tyre */
+  m.cyl([0,0,-0.048], [0,0,0.048], R_W, 40, C.tyre, null);
+  /* wheel centre: a slightly dished disc */
+  m.cyl([0,0,-0.030], [0,0,0.034], rimIn, 40, C.green, shade(C.green, 1.12));
+  /* hub */
+  m.cyl([0,0,-0.10], [0,0,0.13], hubR, 20, shade(C.green, 0.85), shade(C.green, 1.2));
+  /* spokes, cut into the centre as raised ribs */
+  for (let i = 0; i < SP; i++) {
+    const a = i / SP * Math.PI * 2;
+    const M = M4.mul(M4.rotZ(a), M4.trans((hubR + rimIn) / 2, 0, 0.048));
+    m.box(M4.mul(M4.rotZ(a), M4.mul(M4.trans((hubR + rimIn) / 2, 0, 0.049), M4.ident())),
+          [(rimIn - hubR) / 2, 0.043, 0.016], shade(C.green, 1.25));
+    void M;
+  }
+  /* the counterweight — a crescent opposite the pin */
+  for (let i = -5; i <= 5; i++) {
+    const a = Math.PI + i * 0.10;
+    const rr = (hubR + rimIn) / 2 + 0.06;
+    m.box(M4.mul(M4.rotZ(a), M4.trans(rr, 0, 0.036)),
+          [(rimIn - hubR) / 2 - 0.02, 0.058, 0.030], shade(C.green, 0.78));
+  }
+  /* the mark a fitter chalks on a tyre — come round once, and you have heard
+     four beats. It is the claim, drawn. */
+  m.box(M4.trans((0.40 + R_W) / 2, 0, 0.0505), [(R_W - 0.40) / 2, 0.030, 0.001], [0.96, 0.92, 0.84]);
+  m.box(M4.trans(R_W - 0.024, 0, 0.0505), [0.024, 0.055, 0.001], [0.96, 0.92, 0.84]);
+  if (withCrankPin) {
+    m.cyl([R_CR, 0, 0.05], [R_CR, 0, Z_PIN - 0.72 + 0.10], 0.072, 14, C.steel, C.steelD);
+    m.cyl([R_CR, 0, 0.05], [R_CR, 0, Z_CPL - 0.72 + 0.10], 0.048, 14, C.steel, C.steelD);
+  } else {
+    m.cyl([R_CR, 0, 0.05], [R_CR, 0, Z_CPL - 0.72 + 0.10], 0.052, 14, C.steel, C.steelD);
+  }
+  return m.build();
+}
+
+/* ── everything that does not move ─────────────────────────────────────────── */
+function bodyMesh() {
+  const m = new Mesh();
+  const bandAt = (x, r, col) => m.cyl([x - 0.035, 2.15, 0], [x + 0.035, 2.15, 0], r + 0.012, 34, col, null);
+
+  /* running plate + valance */
+  m.box(M4.trans(0.3, 1.47, 0), [4.05, 0.05, 1.30], C.black);
+  m.box(M4.trans(0.3, 1.36, 1.28), [4.05, 0.09, 0.02], shade(C.black, 1.5));
+  m.box(M4.trans(0.3, 1.36, -1.28), [4.05, 0.09, 0.02], shade(C.black, 1.5));
+  /* frames + a hint of motion-plate below */
+  m.box(M4.trans(0.2, 1.05, 0.56), [3.5, 0.36, 0.035], shade(C.black, 1.25));
+  m.box(M4.trans(0.2, 1.05, -0.56), [3.5, 0.36, 0.035], shade(C.black, 1.25));
+
+  /* boiler barrel */
+  m.cyl([-1.55, 2.15, 0], [3.02, 2.15, 0], 0.72, 44, C.green, null);
+  bandAt(-0.55, 0.72, C.black); bandAt(1.15, 0.72, C.black); bandAt(2.55, 0.72, C.black);
+  /* smokebox + door */
+  m.cyl([2.98, 2.15, 0], [3.92, 2.15, 0], 0.755, 44, C.smoke, C.smoke);
+  m.cyl([3.90, 2.15, 0], [3.99, 2.15, 0], 0.70, 40, shade(C.smoke, 1.5), shade(C.smoke, 1.7));
+  m.cyl([3.97, 2.15, 0], [4.06, 2.15, 0], 0.10, 16, C.brass, shade(C.brass, 1.15));
+  m.box(M4.mul(M4.trans(4.04, 2.15, 0), M4.rotZ(0.6)), [0.015, 0.30, 0.03], C.brass);
+
+  /* chimney: a stovepipe with a flared cap */
+  m.cyl([3.46, 2.78, 0], [3.46, 3.58, 0], 0.185, 24, C.smoke, null, 0.170);
+  m.cyl([3.46, 3.54, 0], [3.46, 3.74, 0], 0.196, 24, C.copper, shade(C.copper, 0.55), 0.258);
+  /* dome + safety valves */
+  m.cyl([0.30, 2.78, 0], [0.30, 3.00, 0], 0.30, 26, C.brass, null, 0.285);
+  m.cyl([0.30, 3.00, 0], [0.30, 3.12, 0], 0.285, 26, C.brass, null, 0.215);
+  m.cyl([0.30, 3.12, 0], [0.30, 3.18, 0], 0.215, 26, C.brass, shade(C.brass, 1.25), 0.10);
+  m.cyl([-1.10, 2.80, 0], [-1.10, 3.02, 0], 0.19, 18, C.brass, shade(C.brass, 1.25));
+  m.cyl([-1.16, 3.00, 0], [-1.16, 3.14, 0], 0.055, 12, C.brass, shade(C.brass, 1.3));
+  m.cyl([-1.04, 3.00, 0], [-1.04, 3.14, 0], 0.055, 12, C.brass, shade(C.brass, 1.3));
+  /* whistle */
+  m.cyl([-1.55, 2.82, 0.16], [-1.55, 3.20, 0.16], 0.045, 12, C.brass, shade(C.brass, 1.3));
+
+  /* side tanks */
+  for (const s of [1, -1]) {
+    m.box(M4.trans(0.55, 1.99, s * 1.06), [2.10, 0.45, 0.24], C.green,
+          (f) => (f === 2 ? 1.22 : f === 3 ? 0.7 : 1));
+    /* lining */
+    m.box(M4.trans(0.55, 1.99, s * 1.302), [1.98, 0.34, 0.004], C.green);
+    m.box(M4.trans(0.55, 2.33, s * 1.303), [1.98, 0.013, 0.004], C.cream);
+    m.box(M4.trans(0.55, 1.65, s * 1.303), [1.98, 0.013, 0.004], C.cream);
+    m.box(M4.trans(2.53, 1.99, s * 1.303), [0.013, 0.34, 0.004], C.cream);
+    m.box(M4.trans(-1.43, 1.99, s * 1.303), [0.013, 0.34, 0.004], C.cream);
+    /* filler */
+    m.cyl([1.9, 2.42, s * 1.06], [1.9, 2.50, s * 1.06], 0.15, 14, C.brass, shade(C.brass, 1.2));
+    /* rivets — the reason a tank side is never a flat rectangle */
+    for (let i = 0; i < 26; i++) {
+      const rx = -1.50 + i * 0.162;
+      for (const ry of [1.60, 2.38]) {
+        m.cyl([rx, ry, s * 1.300], [rx, ry, s * 1.318], 0.019, 6, shade(C.green, 1.35), shade(C.green, 1.5));
+      }
+    }
+    for (let i = 0; i < 8; i++) {
+      const ry = 1.64 + i * 0.092;
+      for (const rx of [-1.48, 2.58]) {
+        m.cyl([rx, ry, s * 1.300], [rx, ry, s * 1.318], 0.019, 6, shade(C.green, 1.35), shade(C.green, 1.5));
+      }
+    }
+  }
+
+  /* cab: front plate, sides, roof */
+  m.box(M4.trans(-1.72, 2.45, 0), [0.05, 1.00, 1.28], C.green);       /* spectacle plate */
+  for (const s of [1, -1]) {
+    /* a cab side with a doorway cut in it: front pillar, rear pillar, waist */
+    const tint = (f) => (f === 4 ? 1.15 : f === 5 ? 0.72 : 1);
+    m.box(M4.trans(-1.90, 2.42, s * 1.26), [0.20, 0.97, 0.045], C.green, tint);
+    m.box(M4.trans(-3.24, 2.42, s * 1.26), [0.16, 0.97, 0.045], C.green, tint);
+    m.box(M4.trans(-2.57, 1.83, s * 1.26), [0.51, 0.38, 0.045], C.green, tint);
+    m.box(M4.trans(-2.57, 2.14, s * 1.263), [0.44, 0.014, 0.006], C.cream);
+    m.box(M4.trans(-2.55, 3.25, s * 1.26), [0.85, 0.16, 0.05], C.greenD);
+    /* the spectacle window, punched as a dark plate on the front */
+    m.box(M4.trans(-1.76, 2.72, s * 0.62), [0.03, 0.26, 0.28], hex('#0a1418'));
+    m.box(M4.trans(-1.755, 2.72, s * 0.62), [0.012, 0.29, 0.31], C.brass);
+  }
+  m.box(M4.trans(-2.62, 3.44, 0), [1.02, 0.045, 1.36], C.greenD, (f) => (f === 2 ? 1.5 : 1));
+  m.box(M4.trans(-1.62, 3.30, 0), [0.10, 0.16, 1.34], C.greenD);
+  /* the cab interior: a floor, a dark backhead, and the fire door */
+  m.box(M4.trans(-2.60, 1.44, 0), [0.90, 0.04, 1.24], hex('#1a140e'));
+  m.box(M4.trans(-1.95, 2.20, 0), [0.16, 0.66, 0.74], hex('#221912'));
+  m.box(M4.trans(-1.79, 2.02, 0), [0.03, 0.22, 0.24], hex('#e0762a'));
+  m.cyl([-1.86, 2.72, 0.34], [-1.74, 2.72, 0.34], 0.09, 12, C.brass, shade(C.brass, 1.2));
+  m.cyl([-1.86, 2.72, -0.34], [-1.74, 2.72, -0.34], 0.09, 12, C.brass, shade(C.brass, 1.2));
+
+  /* bunker */
+  m.box(M4.trans(-3.85, 2.14, 0), [0.55, 0.66, 1.24], C.green,
+        (f) => (f === 1 ? 0.75 : f === 4 ? 1.12 : 1));
+  for (let i = 0; i < 26; i++) {
+    const a = (i * 2.399), rr = 0.9 * Math.sqrt((i + 0.5) / 26);
+    m.box(M4.mul(M4.trans(-3.85 + rr * Math.cos(a) * 0.55, 2.82 - rr * rr * 0.12, rr * Math.sin(a) * 1.15),
+                 M4.rotY(a * 3)), [0.11, 0.09, 0.11], shade(C.coal, 1 + (i % 3) * 0.35));
+  }
+
+  /* buffer beams, buffers, hook */
+  for (const s of [1, -1]) {
+    const bx = s > 0 ? 4.30 : -4.44;
+    m.box(M4.trans(bx, 1.34, 0), [0.06, 0.30, 1.32], C.red);
+    for (const t of [1, -1]) {
+      m.cyl([bx, 1.34, t * 0.86], [bx + s * 0.30, 1.34, t * 0.86], 0.075, 14, C.black, null);
+      m.cyl([bx + s * 0.28, 1.34, t * 0.86], [bx + s * 0.34, 1.34, t * 0.86], 0.13, 16, C.steelD, C.steel);
+    }
+    m.cyl([bx, 1.10, 0], [bx + s * 0.16, 1.10, 0], 0.05, 10, C.steelD, C.steelD);
+  }
+
+  /* cylinders + slide bars, both sides */
+  for (const s of [1, -1]) {
+    const z = s * Z_PIN;
+    m.cyl([3.05, Y_AX, z], [3.95, Y_AX, z], 0.30, 26, C.black, shade(C.black, 1.35));
+    m.cyl([2.98, Y_AX, z], [3.08, Y_AX, z], 0.335, 26, shade(C.black, 1.5), null);
+    m.cyl([3.90, Y_AX, z], [4.00, Y_AX, z], 0.335, 26, shade(C.black, 1.5), null);
+    /* valve chest on top */
+    m.box(M4.trans(3.50, Y_AX + 0.40, z), [0.42, 0.16, 0.20], shade(C.black, 1.2));
+    /* slide bars */
+    m.box(M4.trans(2.58, Y_AX + 0.115, z), [0.50, 0.022, 0.10], C.steelD);
+    m.box(M4.trans(2.58, Y_AX - 0.115, z), [0.50, 0.022, 0.10], C.steelD);
+    /* cylinder drain cocks */
+    m.cyl([3.20, Y_AX - 0.30, z], [3.20, Y_AX - 0.44, z], 0.030, 8, C.steelD, null);
+    m.cyl([3.80, Y_AX - 0.30, z], [3.80, Y_AX - 0.44, z], 0.030, 8, C.steelD, null);
+  }
+
+  /* axles */
+  for (const ax of [-2.30, 0, 2.30]) m.cyl([ax, R_W, -0.70], [ax, R_W, 0.70], 0.085, 12, hex('#1a1c1f'), null);
+  /* handrails */
+  for (const s of [1, -1]) {
+    m.cyl([-1.62, 2.62, s * 0.575], [3.86, 2.62, s * 0.575], 0.024, 8, C.brass, shade(C.brass, 1.2));
+    for (let i = 0; i < 7; i++) {
+      const hx = -1.40 + i * 0.88;
+      m.cyl([hx, 2.62, s * 0.50], [hx, 2.62, s * 0.575], 0.022, 6, shade(C.brass, 0.8), null);
+    }
+  }
+  /* lamp irons + a lamp */
+  m.box(M4.trans(4.16, 2.86, 0), [0.05, 0.10, 0.09], C.black);
+  m.box(M4.trans(4.20, 3.02, 0), [0.10, 0.12, 0.11], hex('#2a2a2c'));
+  return m.build();
+}
+
+/* ── a rod: a fluted bar with two bosses ───────────────────────────────────── */
+function rodMesh(L, w, h) {
+  const m = new Mesh();
+  m.box(M4.trans(L / 2, 0, 0), [L / 2, h, w], C.steel, (f) => (f === 2 ? 1.25 : f === 3 ? 0.6 : 1));
+  m.box(M4.trans(L / 2, 0, 0), [L / 2 - 0.10, h * 0.55, w * 1.35], shade(C.steel, 0.72));
+  m.cyl([0, 0, -w * 1.6], [0, 0, w * 1.6], h * 1.5, 14, shade(C.steel, 0.9), C.steelD);
+  m.cyl([L, 0, -w * 1.6], [L, 0, w * 1.6], h * 1.5, 14, shade(C.steel, 0.9), C.steelD);
+  return m.build();
+}
+function crossheadMesh() {
+  const m = new Mesh();
+  m.box(M4.ident(), [0.13, 0.155, 0.075], C.steel, (f) => (f === 2 ? 1.2 : 1));
+  m.box(M4.trans(0, 0, 0), [0.10, 0.20, 0.045], shade(C.steel, 0.8));
+  m.cyl([0.16, 0, 0], [0.95, 0, 0], 0.055, 12, C.steel, C.steelD);   /* piston rod */
+  return m.build();
+}
+
+/* ── a wagon ───────────────────────────────────────────────────────────────── */
+function wagonMesh() {
+  const m = new Mesh();
+  const col = hex('#4a3524'), colD = hex('#33251a');
+  m.box(M4.trans(0, 1.70, 0), [2.35, 0.62, 1.22], col, (f) => (f === 2 ? 0.55 : f === 4 ? 1.18 : f === 5 ? 0.68 : 1));
+  for (let i = -3; i <= 3; i++) {
+    m.box(M4.trans(i * 0.66, 1.70, 1.235), [0.05, 0.62, 0.02], colD);
+    m.box(M4.trans(i * 0.66, 1.70, -1.235), [0.05, 0.62, 0.02], colD);
+  }
+  /* a heap of coal in it */
+  for (let i = 0; i < 34; i++) {
+    const a = i * 2.399, rr = Math.sqrt((i + 0.5) / 34);
+    m.box(M4.mul(M4.trans(rr * Math.cos(a) * 2.0, 2.30 - rr * rr * 0.16, rr * Math.sin(a) * 1.0), M4.rotY(a * 2)),
+          [0.14, 0.10, 0.14], shade(C.coal, 1 + (i % 4) * 0.28));
+  }
+  m.box(M4.trans(0, 1.02, 0), [2.45, 0.10, 1.24], hex('#241a12'));
+  m.box(M4.trans(2.50, 1.34, 0), [0.05, 0.26, 1.24], C.rust);
+  m.box(M4.trans(-2.50, 1.34, 0), [0.05, 0.26, 1.24], C.rust);
+  for (const s of [1, -1]) for (const t of [1, -1]) {
+    m.cyl([s * 2.55, 1.34, t * 0.86], [s * 2.80, 1.34, t * 0.86], 0.065, 10, C.black, C.steelD);
+  }
+  return m.build();
+}
+function wagonWheelMesh() {
+  const m = new Mesh();
+  m.cyl([0, 0, -0.045], [0, 0, 0.045], 0.47, 24, C.tyre, null);
+  m.cyl([0, 0, -0.030], [0, 0, 0.032], 0.40, 24, hex('#2c2118'), hex('#3a2c20'));
+  for (let i = 0; i < 10; i++) {
+    m.box(M4.mul(M4.rotZ(i / 10 * Math.PI * 2), M4.trans(0.26, 0, 0.036)), [0.14, 0.032, 0.014], hex('#3f3025'));
+  }
+  m.cyl([0, 0, -0.07], [0, 0, 0.09], 0.11, 14, hex('#241b14'), hex('#33271c'));
+  return m.build();
+}
+
+/* ── the world: sleepers, rails, poles, hills ──────────────────────────────── */
+const SLEEPER_PITCH = 0.66, SLEEPER_N = 260;
+function trackMesh() {
+  const m = new Mesh();
+  for (let i = 0; i < SLEEPER_N; i++) {
+    const x = (i - SLEEPER_N / 2) * SLEEPER_PITCH;
+    const j = ((i * 2654435761) >>> 0) / 4294967296;
+    m.box(M4.mul(M4.trans(x, 0.055, (j - 0.5) * 0.03), M4.rotY((j - 0.5) * 0.02)),
+          [0.13, 0.055, 1.28], shade(C.wood, 0.75 + j * 0.5));
+  }
+  return m.build();
+}
+function railMesh() {
+  const m = new Mesh(), X = SLEEPER_N * SLEEPER_PITCH / 2;
+  for (const s of [1, -1]) {
+    m.box(M4.trans(0, 0.145, s * GAUGE), [X, 0.035, 0.035], hex('#6b6f72'), (f) => (f === 2 ? 1.9 : 0.55));
+    m.box(M4.trans(0, 0.095, s * GAUGE), [X, 0.045, 0.012], hex('#3b3f42'));
+  }
+  return m.build();
+}
+const POLE_PITCH = SPEC.poleSpacing, POLE_N = 40;
+function poleMesh() {
+  const m = new Mesh();
+  for (let i = 0; i < POLE_N; i++) {
+    const x = (i - POLE_N / 2) * POLE_PITCH, z = -6.4;
+    m.cyl([x, 0, z], [x + 0.10, 7.4, z], 0.10, 8, hex('#2b2119'), null, 0.075);
+    for (let k = 0; k < 3; k++) {
+      m.box(M4.trans(x + 0.07, 6.5 + k * 0.42, z), [0.05, 0.035, 0.62], hex('#332619'));
+    }
+    /* the wires, sagging to the next pole */
+    if (i < POLE_N - 1) for (const t of [-0.5, 0.5]) for (let k = 0; k < 3; k++) {
+      const y0 = 6.55 + k * 0.42;
+      for (let s2 = 0; s2 < 5; s2++) {
+        const u0 = s2 / 5, u1 = (s2 + 1) / 5;
+        const sag = (u) => y0 - 0.55 * 4 * u * (1 - u);
+        const p0 = [x + u0 * POLE_PITCH, sag(u0), z + t * 1.15];
+        const p1 = [x + u1 * POLE_PITCH, sag(u1), z + t * 1.15];
+        m.cyl(p0, p1, 0.020, 4, hex('#1c1712'), null);
+      }
+    }
+  }
+  return m.build();
+}
+function sceneryMesh() {
+  const m = new Mesh(), rnd = lcg(4242);
+  /* a fence along the near side */
+  for (let i = 0; i < 150; i++) {
+    const x = (i - 75) * 3.1;
+    m.cyl([x, 0, 7.6], [x, 1.15, 7.6], 0.055, 6, hex('#2a2016'), null);
+    if (i < 149) for (const y of [0.55, 1.02]) m.box(M4.trans(x + 1.55, y, 7.6), [1.55, 0.035, 0.02], hex('#241c14'));
+  }
+  /* bushes and trees, both sides, well back */
+  for (let i = 0; i < 320; i++) {
+    const x = rnd() * 700 - 350;
+    const far = rnd() > 0.24;
+    let z = far ? -34 - rnd() * 120 : 24 + rnd() * 52;
+    /* leave the engine's own window clear: nothing near the camera in front of it */
+    if (!far && Math.abs(x) < 26) z = 46 + rnd() * 34;
+    const h = 2.4 + rnd() * 6.2, r = h * (0.26 + rnd() * 0.13);
+    const g = 0.34 + rnd() * 0.26;
+    m.cyl([x, 0, z], [x, h * 0.46, z], r * 0.15, 5, hex('#1c150e'), null, r * 0.09);
+    for (let k = 0; k < 4; k++) {
+      const yy = h * (0.42 + k * 0.17);
+      const jx = (rnd() - 0.5) * r * 0.7, jz = (rnd() - 0.5) * r * 0.7;
+      m.cyl([x + jx, yy, z + jz], [x + jx * 0.4, yy + h * 0.24, z + jz * 0.4],
+            r * (1.0 - k * 0.21), 6, [0.055 * g, 0.115 * g, 0.048 * g],
+            [0.075 * g, 0.145 * g, 0.058 * g], r * (0.8 - k * 0.21));
+    }
+  }
+  /* distant ridges */
+  for (let ring = 0; ring < 3; ring++) {
+    const zz = -170 - ring * 190, hgt = 22 + ring * 16;
+    const tint = [0.030 + ring * 0.012, 0.038 + ring * 0.015, 0.062 + ring * 0.022];
+    for (let i = 0; i < 46; i++) {
+      const x = (i - 23) * 46;
+      const h = hgt * (0.34 + 0.66 * (0.5 + 0.34 * Math.sin(i * 1.7 + ring * 2.1)
+                + 0.16 * Math.sin(i * 5.3 + ring)));
+      const hL = hgt * (0.34 + 0.66 * (0.5 + 0.34 * Math.sin((i - 1) * 1.7 + ring * 2.1)
+                + 0.16 * Math.sin((i - 1) * 5.3 + ring)));
+      m.tri([x - 46, 0, zz], [x + 46, 0, zz], [x, h, zz], [0, 0, 1], tint);
+      m.quad([x - 46, 0, zz], [x, h, zz], [x - 46, hL * 0.62, zz], [x - 46, 0, zz], [0, 0, 1], tint);
+    }
+  }
+  return m.build();
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   4 · SHADERS
+   ═══════════════════════════════════════════════════════════════════════════ */
+const SKY_COL_HI = [0.048, 0.078, 0.158];
+const SKY_COL_LO = [0.80, 0.44, 0.30];
+const SUN_DIR = norm([0.88, 0.26, 0.40]);
+const SUN_COL = [1.55, 1.02, 0.58];
+
+function prog(vs, fs) {
+  const c = (t, s) => {
+    const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o);
+    if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o) + '\n' + s);
+    return o;
+  };
+  const p = gl.createProgram();
+  gl.attachShader(p, c(gl.VERTEX_SHADER, vs)); gl.attachShader(p, c(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  return p;
+}
+const U = (p) => new Proxy({}, { get: (t, k) => (t[k] !== undefined ? t[k] : (t[k] = gl.getUniformLocation(p, k))) });
+
+/* the common tail: fog, tonemap. Held in one string so both surface shaders
+   agree about the air. No backtick inside it. */
+const FOG_FS = [
+  'float nh(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }',
+  'float n3(vec3 p){',
+  '  vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);',
+  '  float a = mix(mix(nh(i), nh(i + vec3(1,0,0)), f.x), mix(nh(i + vec3(0,1,0)), nh(i + vec3(1,1,0)), f.x), f.y);',
+  '  float b = mix(mix(nh(i + vec3(0,0,1)), nh(i + vec3(1,0,1)), f.x), mix(nh(i + vec3(0,1,1)), nh(i + vec3(1,1,1)), f.x), f.y);',
+  '  return mix(a, b, f.z);',
+  '}',
+  /* the sky: a tight warm band on the horizon, deep blue above, and a soft
+     counterglow opposite the sun — which is where this camera happens to look */
+  'vec3 skyAt(vec3 d){',
+  '  vec3 n = normalize(d);',
+  '  float t = clamp(n.y * 2.7 + 0.03, 0.0, 1.0);',
+  '  vec3 c = mix(uSkyLo, uSkyHi, pow(t, 0.44));',
+  '  float s = max(dot(n, uSun), 0.0);',
+  '  c += uSunCol * (pow(s, 320.0) * 3.0 + pow(s, 9.0) * 0.14) * (1.0 - t * 0.7);',
+  '  c += vec3(0.10, 0.045, 0.075) * pow(max(-dot(n, uSun), 0.0), 2.0) * (1.0 - t) * 0.9;',
+  '  return c;',
+  '}',
+  /* aerial perspective: what a thing recedes INTO is the sky behind it */
+  'vec3 applyFog(vec3 col, vec3 P, vec3 eye){',
+  '  vec3 d = P - eye; float dist = length(d);',
+  '  float f = 1.0 - exp(-dist * 0.00135);',
+  '  return mix(col, skyAt(d), f);',
+  '}',
+  /* the shadow the train lays across the ground and the track: two horizontal
+     slabs through the body, softening with the distance the light travels.
+     A shadow, not a claim. uSh = (tail x, head x). */
+  /* the sky the body BLOCKS: contact shading, which is what grounds a thing */
+  'float trainAO(vec3 P){',
+  '  float lat = exp(-pow(abs(P.z) / 1.9, 2.2));',
+  '  float lon = smoothstep(uSh.x - 2.2, uSh.x + 1.2, P.x) * (1.0 - smoothstep(uSh.y - 1.0, uSh.y + 2.2, P.x));',
+  '  return lat * lon * (1.0 - smoothstep(0.0, 1.6, P.y));',
+  '}',
+  'float trainShadow(vec3 P){',
+  '  if (uSun.y < 0.02) return 0.0;',
+  '  float sh = 0.0;',
+  '  for (int k = 0; k < 2; k++){',
+  '    float yp = (k == 0) ? 0.55 : 2.10;',
+  '    float t = (yp - P.y) / uSun.y;',
+  '    if (t <= 0.0) continue;',
+  '    vec2 q = P.xz + uSun.xz * t;',
+  '    float soft = 0.20 + 0.085 * t;',
+  '    float hz = (k == 0) ? 0.95 : 1.34;',
+  '    float a = 1.0 - smoothstep(hz - soft, hz + soft, abs(q.y));',
+  '    float b = (1.0 - smoothstep(uSh.y - soft, uSh.y + soft, q.x))',
+  '            * smoothstep(uSh.x - soft * 3.0, uSh.x + soft * 3.0, q.x);',
+  '    sh = max(sh, a * b * ((k == 0) ? 0.85 : 1.0));',
+  '  }',
+  '  return sh;',
+  '}',
+  'vec3 tonemap(vec3 c){',
+  '  c = c / (1.0 + max(max(c.r, c.g), c.b));',
+  '  c = pow(clamp(c, 0.0, 1.0), vec3(0.4545));',
+  '  c = mix(c, c * c * (3.0 - 2.0 * c), 0.42);',
+  '  float l = dot(c, vec3(0.299, 0.587, 0.114));',
+  '  return clamp(mix(vec3(l), c, 1.16), 0.0, 1.0);',
+  '}',
+].join('\n');
+
+const LIT_VS = ['#version 300 es', 'precision highp float;',
+  'layout(location=0) in vec3 aPos;',
+  'layout(location=1) in vec3 aNrm;',
+  'layout(location=2) in vec3 aCol;',
+  'uniform mat4 uVP, uM;',
+  'out vec3 vP, vN, vC;',
+  'void main(){',
+  '  vec4 w = uM * vec4(aPos, 1.0);',
+  '  vP = w.xyz; vN = mat3(uM) * aNrm; vC = aCol;',
+  '  gl_Position = uVP * w;',
+  '}'].join('\n');
+
+const LIT_FS = ['#version 300 es', 'precision highp float;',
+  'in vec3 vP, vN, vC;',
+  'uniform vec3 uEye, uSun, uSunCol, uSkyHi, uSkyLo, uEmis;',
+  'uniform float uSpec, uFireGlow, uShadowOn, uGrime;',
+  'uniform vec2 uSh;',
+  'out vec4 o;',
+  FOG_FS,
+  'void main(){',
+  '  vec3 N = normalize(vN);',
+  '  vec3 V = normalize(uEye - vP);',
+  '  if (dot(N, V) < 0.0) N = -N;',                        /* LANDMINES: never cull */
+  '  float ndl = max(dot(N, uSun), 0.0);',
+  '  ndl *= 1.0 - uShadowOn * trainShadow(vP) * 0.92;',
+  '  float ao = 1.0 - 0.62 * uShadowOn * trainAO(vP);',
+  '  vec3 amb = mix(uSkyLo * 0.13, uSkyHi * 0.92, N.y * 0.5 + 0.5);',
+  '  vec3 bounce = uSkyLo * 0.10 * max(-N.y, 0.0);',
+  '  float grime = 1.0 - uGrime * (0.16 * n3(vP * 2.6) + 0.10 * n3(vP * 11.0) + 0.10 * (1.0 - smoothstep(0.9, 2.2, vP.y)));',
+  '  vec3 col = vC * grime * (amb * ao + bounce + uSunCol * ndl);',
+  '  col += vC * uSunCol * 0.13 * pow(1.0 - max(dot(N, V), 0.0), 4.0) * max(dot(N, uSun), 0.0);',
+  '  vec3 H = normalize(uSun + V);',
+  '  col += uSunCol * uSpec * pow(max(dot(N, H), 0.0), 42.0) * (0.3 + 0.7 * ndl);',
+  /* the firebox throws light forward and down onto the motion */
+  '  vec3 fp = vec3(-2.35, 1.95, 0.0);',
+  '  float fd = length(vP - fp);',
+  '  col += vec3(1.0, 0.38, 0.10) * uFireGlow * 0.85 / (1.0 + fd * fd * fd * 2.4);',
+  '  col += uEmis;',
+  '  o = vec4(tonemap(applyFog(col, vP, uEye)), 1.0);',
+  '}'].join('\n');
+
+/* the ground is one quad; ballast, grass and the shadow are all analytic, so
+   nothing has to stream. Its texture coordinate carries the train's distance,
+   which is what makes the sleeper-to-sleeper ground go by. */
+const GND_FS = ['#version 300 es', 'precision highp float;',
+  'in vec3 vP;',
+  'uniform vec3 uEye, uSun, uSunCol, uSkyHi, uSkyLo;',
+  'uniform float uRun;',
+  'uniform vec2 uSh;',
+  'out vec4 o;',
+  FOG_FS,
+  'float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }',
+  'float vnoise(vec2 p){',
+  '  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);',
+  '  return mix(mix(h21(i), h21(i + vec2(1,0)), f.x), mix(h21(i + vec2(0,1)), h21(i + vec2(1,1)), f.x), f.y);',
+  '}',
+  'void main(){',
+  '  vec2 q = vec2(vP.x + uRun, vP.z);',
+  '  float az = abs(vP.z);',
+  '  float ball = 1.0 - smoothstep(1.55, 2.45, az);',
+  '  float g1 = vnoise(q * 1.6), g2 = vnoise(q * 7.0), g3 = vnoise(q * 24.0);',
+  '  vec3 grass = mix(vec3(0.088, 0.115, 0.052), vec3(0.155, 0.175, 0.070), g1);',
+  '  grass = mix(grass, vec3(0.22, 0.20, 0.085), g2 * 0.45);',
+  '  grass *= 0.72 + 0.55 * g3;',
+  '  vec3 stone = mix(vec3(0.115, 0.108, 0.100), vec3(0.26, 0.24, 0.215), g3);',
+  '  stone = mix(stone, vec3(0.055, 0.050, 0.046), step(0.72, vnoise(q * 42.0)) * 0.6);',
+  '  vec3 col = mix(grass, stone, ball);',
+  '  vec3 N = vec3(0.0, 1.0, 0.0);',
+  '  float ndl = max(dot(N, uSun), 0.0);',
+  '  vec3 amb = uSkyHi * 0.95;',
+  '  col *= (amb * (1.0 - 0.82 * trainAO(vP)) + uSunCol * ndl * (1.0 - trainShadow(vP) * 0.92));',
+  '  o = vec4(tonemap(applyFog(col, vP, uEye)), 1.0);',
+  '}'].join('\n');
+
+const GND_VS = ['#version 300 es', 'precision highp float;',
+  'layout(location=0) in vec3 aPos;',
+  'uniform mat4 uVP;',
+  'out vec3 vP;',
+  'void main(){ vP = aPos; gl_Position = uVP * vec4(aPos, 1.0); }'].join('\n');
+
+const SKY_VS = ['#version 300 es', 'precision highp float;',
+  'uniform mat4 uInvVP; uniform vec3 uEye;',
+  'out vec3 vD;',
+  'void main(){',
+  '  vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2) * 2.0 - 1.0;',
+  '  vec4 f = uInvVP * vec4(p, 1.0, 1.0); vD = f.xyz / f.w - uEye;',
+  '  gl_Position = vec4(p, 1.0, 1.0);',
+  '}'].join('\n');
+const SKY_FS = ['#version 300 es', 'precision highp float;',
+  'in vec3 vD;',
+  'uniform vec3 uSun, uSunCol, uSkyHi, uSkyLo, uEye;',
+  'uniform vec2 uSh;',
+  'out vec4 o;',
+  FOG_FS,
+  'float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }',
+  'void main(){',
+  '  vec3 d = normalize(vD);',
+  '  vec3 c = skyAt(d);',
+  /* a few streaks of high cloud catching the last of it */
+  '  float b = smoothstep(0.01, 0.22, d.y);',
+  '  vec2 uv = d.xz / max(d.y, 0.05);',
+  '  float f = 0.5 * h21(floor(uv * vec2(0.35, 1.6))) + 0.5 * h21(floor(uv * vec2(1.1, 4.2) + 17.0));',
+  '  float band = smoothstep(0.62, 1.0, f) * b * (1.0 - b) * 4.2;',
+  '  c = mix(c, mix(vec3(0.13, 0.09, 0.12), uSunCol * 0.34, pow(max(dot(d, uSun), 0.0), 2.0)), band * 0.42);',
+  '  o = vec4(tonemap(c), 1.0);',
+  '}'].join('\n');
+
+/* steam: point sprites, composited with ABSORPTION, not addition */
+const STM_VS = ['#version 300 es', 'precision highp float;',
+  'layout(location=0) in vec4 aPR;',          /* xyz, radius */
+  'layout(location=1) in vec4 aCA;',          /* rgb tint scale, alpha */
+  'uniform mat4 uVP; uniform vec3 uEye; uniform float uH, uTanHalf;',
+  'out float vA; out vec3 vC; out vec3 vP;',
+  'void main(){',
+  '  vec4 cs = uVP * vec4(aPR.xyz, 1.0);',
+  '  gl_Position = cs;',
+  '  float d = length(aPR.xyz - uEye);',
+  '  gl_PointSize = max(2.0, aPR.w * uH / (d * uTanHalf));',
+  '  vA = aCA.w; vC = aCA.xyz; vP = aPR.xyz;',
+  '}'].join('\n');
+const STM_FS = ['#version 300 es', 'precision highp float;',
+  'in float vA; in vec3 vC; in vec3 vP;',
+  'uniform vec3 uEye, uSun, uSunCol, uSkyHi, uSkyLo;',
+  'uniform vec2 uSh;',
+  'out vec4 o;',
+  FOG_FS,
+  'void main(){',
+  '  vec2 q = gl_PointCoord * 2.0 - 1.0;',
+  '  float r2 = dot(q, q);',
+  '  if (r2 > 1.0) discard;',
+  '  float a = vA * pow(1.0 - r2, 1.6);',
+  '  vec3 V = normalize(vP - uEye);',
+  '  float fw = max(dot(V, uSun), 0.0);',
+  /* a cloud is a participating medium: scatter, never Lambert (LANDMINES) */
+  '  vec3 lit = uSkyHi * 2.4 + uSunCol * (0.55 + 1.35 * pow(fw, 3.0));',
+  '  vec3 c = vC * lit;',
+  '  c = applyFog(c, vP, uEye);',
+  '  o = vec4(tonemap(c) * a, a);',
+  '}'].join('\n');
+
+const pLit = prog(LIT_VS, LIT_FS), uLit = U(pLit);
+const pGnd = prog(GND_VS, GND_FS), uGnd = U(pGnd);
+const pSky = prog(SKY_VS, SKY_FS), uSky = U(pSky);
+const pStm = prog(STM_VS, STM_FS), uStm = U(pStm);
+
+/* ════════════════════════════════════════════════════════════════════════════
+   5 · BUILD THE WORLD
+   ═══════════════════════════════════════════════════════════════════════════ */
+const ROD_W = 1.35;
+const MESH = {
+  body: bodyMesh(),
+  wheelDrv: wheelMesh(true),
+  wheelCpl: wheelMesh(false),
+  mainRod: rodMesh(SPEC.rodLen, 0.052, 0.088),
+  cplRod: rodMesh(AXLES[1] - AXLES[0], 0.046, 0.074),
+  crosshead: crossheadMesh(),
+  wagon: wagonMesh(),
+  wagonWheel: wagonWheelMesh(),
+  track: trackMesh(),
+  rail: railMesh(),
+  poles: poleMesh(),
+  scenery: sceneryMesh(),
+};
+{
+  const m = new Mesh();
+  m.quad([-500, 0, -400], [500, 0, -400], [500, 0, 240], [-500, 0, 240], [0, 1, 0], [1, 1, 1]);
+  MESH.ground = m.build();
+}
+
+/* ── steam ─────────────────────────────────────────────────────────────────── */
+const MAXP = 2600;
+const P = {
+  x: new Float32Array(MAXP), y: new Float32Array(MAXP), z: new Float32Array(MAXP),
+  vx: new Float32Array(MAXP), vy: new Float32Array(MAXP), vz: new Float32Array(MAXP),
+  r0: new Float32Array(MAXP), grow: new Float32Array(MAXP),
+  age: new Float32Array(MAXP), life: new Float32Array(MAXP),
+  op: new Float32Array(MAXP), dark: new Float32Array(MAXP),
+  n: 0,
+};
+const stmPR = new Float32Array(MAXP * 4), stmCA = new Float32Array(MAXP * 4);
+let stmVAO, stmBufPR, stmBufCA;
+{
+  stmVAO = gl.createVertexArray(); gl.bindVertexArray(stmVAO);
+  stmBufPR = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, stmBufPR);
+  gl.bufferData(gl.ARRAY_BUFFER, stmPR.byteLength, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0);
+  stmBufCA = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, stmBufCA);
+  gl.bufferData(gl.ARRAY_BUFFER, stmCA.byteLength, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 0, 0);
+  gl.bindVertexArray(null);
+}
+function emit(x, y, z, vx, vy, vz, r0, grow, life, op, dark) {
+  let i = P.n;
+  if (i >= MAXP) {                                  /* recycle the oldest */
+    let best = 0, bo = -1;
+    for (let k = 0; k < MAXP; k++) { const o = P.age[k] / P.life[k]; if (o > bo) { bo = o; best = k; } }
+    i = best;
+  } else P.n++;
+  P.x[i] = x; P.y[i] = y; P.z[i] = z;
+  P.vx[i] = vx; P.vy[i] = vy; P.vz[i] = vz;
+  P.r0[i] = r0; P.grow[i] = grow; P.age[i] = 0; P.life[i] = life;
+  P.op[i] = op; P.dark[i] = dark;
+}
+function stepSteam(dt, windX) {
+  for (let i = 0; i < P.n; i++) {
+    P.age[i] += dt;
+    if (P.age[i] >= P.life[i]) {
+      const last = --P.n;
+      if (i !== last) {
+        for (const k of ['x','y','z','vx','vy','vz','r0','grow','age','life','op','dark']) P[k][i] = P[k][last];
+      }
+      i--; continue;
+    }
+    /* the air the engine is driving through blows the plume back over the train,
+       and a puff of steam sheds its ejection speed in well under a second */
+    const k = 1 - Math.exp(-dt * 2.9);
+    P.vx[i] += (-windX - P.vx[i]) * k;
+    P.vy[i] += (0.62 - P.vy[i]) * k;
+    P.vz[i] += (0 - P.vz[i]) * k * 0.7;
+    P.x[i] += P.vx[i] * dt; P.y[i] += P.vy[i] * dt; P.z[i] += P.vz[i] * dt;
+  }
+}
+const order = new Int32Array(MAXP), depth = new Float32Array(MAXP);
+function uploadSteam(eye) {
+  for (let i = 0; i < P.n; i++) {
+    order[i] = i;
+    depth[i] = (P.x[i]-eye[0])**2 + (P.y[i]-eye[1])**2 + (P.z[i]-eye[2])**2;
+  }
+  const idx = Array.prototype.slice.call(order, 0, P.n).sort((a, b) => depth[b] - depth[a]);
+  for (let k = 0; k < idx.length; k++) {
+    const i = idx[k], u = P.age[i] / P.life[i];
+    const r = P.r0[i] + P.grow[i] * u;
+    const fade = Math.min(1, u * 7.0) * (1 - u) * (1 - u);
+    stmPR[k*4] = P.x[i]; stmPR[k*4+1] = P.y[i]; stmPR[k*4+2] = P.z[i]; stmPR[k*4+3] = r;
+    const d = P.dark[i];
+    stmCA[k*4] = 0.90 - 0.80 * d; stmCA[k*4+1] = 0.88 - 0.79 * d; stmCA[k*4+2] = 0.86 - 0.77 * d;
+    stmCA[k*4+3] = P.op[i] * fade;
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, stmBufPR); gl.bufferSubData(gl.ARRAY_BUFFER, 0, stmPR, 0, P.n * 4);
+  gl.bindBuffer(gl.ARRAY_BUFFER, stmBufCA); gl.bufferSubData(gl.ARRAY_BUFFER, 0, stmCA, 0, P.n * 4);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   6 · SOUND — every chuff is a crank angle, scheduled to the fraction of a step
+   ═══════════════════════════════════════════════════════════════════════════ */
+let actx = null, master = null, rumbleGain = null, rumbleFilt = null, blowGain = null, hissGain = null;
+const BANK = [];                       /* pre-rendered chuffs: [sharpness][seed] */
+const SHARPS = [0.08, 0.34, 0.60, 0.86];
+function initAudio() {
+  if (actx) return;
+  actx = new (window.AudioContext || window.webkitAudioContext)();
+  master = actx.createGain(); master.gain.value = WS.muted() ? 0 : 0.85;
+  master.connect(actx.destination);
+  const sr = actx.sampleRate;
+  for (let s = 0; s < SHARPS.length; s++) {
+    BANK[s] = [];
+    for (let k = 0; k < 3; k++) {
+      const f = chuff(sr, 1.0, SHARPS[s], 1000 + s * 37 + k * 911);
+      const buf = actx.createBuffer(1, f.length, sr);
+      buf.copyToChannel(f, 0);
+      BANK[s].push(buf);
+    }
+  }
+  /* rolling stock rumble: a looping noise bed through a lowpass */
+  const nlen = sr * 2, nb = actx.createBuffer(1, nlen, sr), nd = nb.getChannelData(0);
+  const rnd = lcg(31337);
+  let z1 = 0;
+  for (let i = 0; i < nlen; i++) { z1 = z1 * 0.88 + rnd() * 0.12; nd[i] = z1 * 3.2; }
+  const src = actx.createBufferSource(); src.buffer = nb; src.loop = true;
+  rumbleFilt = actx.createBiquadFilter(); rumbleFilt.type = 'lowpass'; rumbleFilt.frequency.value = 220;
+  rumbleGain = actx.createGain(); rumbleGain.gain.value = 0;
+  src.connect(rumbleFilt); rumbleFilt.connect(rumbleGain); rumbleGain.connect(master);
+  src.start();
+  /* safety-valve blow-off: white noise through a high bandpass */
+  const src2 = actx.createBufferSource(); src2.buffer = nb; src2.loop = true;
+  const bp = actx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2800; bp.Q.value = 0.7;
+  blowGain = actx.createGain(); blowGain.gain.value = 0;
+  src2.connect(bp); bp.connect(blowGain); blowGain.connect(master); src2.start();
+  /* the hiss of steam standing in the pipes */
+  const src3 = actx.createBufferSource(); src3.buffer = nb; src3.loop = true;
+  const bp3 = actx.createBiquadFilter(); bp3.type = 'bandpass'; bp3.frequency.value = 1400; bp3.Q.value = 0.5;
+  hissGain = actx.createGain(); hissGain.gain.value = 0;
+  src3.connect(bp3); bp3.connect(hissGain); hissGain.connect(master); src3.start();
+}
+function playChuff(when, strength, sharp) {
+  if (!actx || WS.muted()) return;
+  let si = 0, bd = 9;
+  for (let i = 0; i < SHARPS.length; i++) { const d = Math.abs(SHARPS[i] - sharp); if (d < bd) { bd = d; si = i; } }
+  const s = actx.createBufferSource();
+  s.buffer = BANK[si][(Math.random() * 3) | 0];
+  s.playbackRate.value = 0.93 + Math.random() * 0.14;
+  const g = actx.createGain();
+  g.gain.value = Math.min(1, 0.10 + 0.95 * strength);
+  s.connect(g); g.connect(master);
+  s.start(Math.max(actx.currentTime, when));
+}
+let whistleBuf = null;
+function blowWhistle() {
+  if (!actx || WS.muted()) return;
+  if (!whistleBuf) {
+    const f = whistle(actx.sampleRate, 1.7, 372);
+    whistleBuf = actx.createBuffer(1, f.length, actx.sampleRate);
+    whistleBuf.copyToChannel(f, 0);
+  }
+  const s = actx.createBufferSource(); s.buffer = whistleBuf;
+  const g = actx.createGain(); g.gain.value = 0.34;
+  s.connect(g); g.connect(master); s.start();
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   7 · STATE, CONTROLS, THE LOOP
+   ═══════════════════════════════════════════════════════════════════════════ */
+const st = newState({ wagons: 5 });
+const ctl = { regulator: 0, cutoff: 0.75, brake: 0, sand: false, wagons: 5, quarterErr: 0 };
+let cam = { yaw: 0.94, pitch: 0.105, dist: 13.0 };
+const beatLog = [];                    /* sim times of scheduled beats */
+let poleLog = [];                      /* sim times a pole went by */
+let lastPoleIdx = 0;
+
+function fmt1(v) { return (Math.round(v * 10) / 10).toFixed(1); }
+
+const setLbl = (id, s) => { $(id).textContent = s; };
+$('reg').addEventListener('input', (e) => {
+  ctl.regulator = +e.target.value / 100;
+  setLbl('regv', ctl.regulator === 0 ? 'shut' : Math.round(ctl.regulator * 100) + '%');
+  if (ctl.regulator > 0) startIt();
+});
+$('cut').addEventListener('input', (e) => {
+  ctl.cutoff = +e.target.value / 100; setLbl('cutv', e.target.value + '%');
+});
+$('brk').addEventListener('input', (e) => {
+  ctl.brake = +e.target.value / 100;
+  setLbl('brkv', ctl.brake === 0 ? 'off' : Math.round(ctl.brake * 100) + '%');
+});
+$('wag').addEventListener('input', (e) => {
+  ctl.wagons = +e.target.value; setLbl('wagv', e.target.value);
+});
+$('sand').addEventListener('click', () => {
+  ctl.sand = !ctl.sand; $('sand').classList.toggle('on', ctl.sand);
+  $('sand').textContent = ctl.sand ? 'sanding' : 'sand the rail';
+});
+let whistleUntil = 0;
+$('whistle').addEventListener('click', () => {
+  startIt(); blowWhistle();
+  whistleUntil = performance.now() / 1000 + 1.5;
+});
+$('quarter').addEventListener('click', () => {
+  ctl.quarterErr = ctl.quarterErr ? 0 : 0.24;
+  $('quarter').classList.toggle('on', !!ctl.quarterErr);
+  $('quarter').textContent = ctl.quarterErr ? 'quartering 13.7° out' : 'knock the quartering out';
+});
+function syncHush() {
+  const m = WS.muted();
+  $('hush').textContent = m ? 'sound off' : 'sound on';
+  $('hush').classList.toggle('on', !m);
+  if (master) master.gain.value = m ? 0 : 0.85;
+}
+$('hush').addEventListener('click', () => { WS.setMuted(!WS.muted()); syncHush(); });
+WS.onMuteChange(syncHush); syncHush();
+
+let started = false;
+function startIt() {
+  if (started) return;
+  started = true;
+  $('gate').classList.add('gone');
+  initAudio();
+  if (actx && actx.state === 'suspended') actx.resume();
+}
+$('gate').addEventListener('click', startIt);
+
+/* orbit */
+let drag = null;
+canvas.addEventListener('pointerdown', (e) => {
+  startIt();
+  drag = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId);
+  canvas.classList.add('grabbing');
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  cam.yaw   = clamp(cam.yaw   - (e.clientX - drag.x) * 0.006, -0.55, 2.35);
+  cam.pitch = clamp(cam.pitch + (e.clientY - drag.y) * 0.004, -0.06, 0.86);
+  drag = { x: e.clientX, y: e.clientY };
+});
+const endDrag = () => { drag = null; canvas.classList.remove('grabbing'); };
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  cam.dist = clamp(cam.dist * Math.exp(e.deltaY * 0.0011), 5.2, 42);
+}, { passive: false });
+
+/* ── the dial ──────────────────────────────────────────────────────────────── */
+const dial = $('dial'), dctx = dial.getContext('2d');
+function drawDial(barGauge) {
+  const W = dial.width, R = W / 2, cx = R, cy = R;
+  dctx.clearRect(0, 0, W, W);
+  dctx.save(); dctx.translate(cx, cy);
+  /* bezel */
+  const bez = dctx.createLinearGradient(-R, -R, R, R);
+  bez.addColorStop(0, '#e8c682'); bez.addColorStop(0.45, '#8a6a2f'); bez.addColorStop(1, '#f1dcae');
+  dctx.fillStyle = bez; dctx.beginPath(); dctx.arc(0, 0, R - 3, 0, 7); dctx.fill();
+  dctx.fillStyle = '#0f0d0b'; dctx.beginPath(); dctx.arc(0, 0, R - 15, 0, 7); dctx.fill();
+  dctx.fillStyle = '#efe4cc'; dctx.beginPath(); dctx.arc(0, 0, R - 19, 0, 7); dctx.fill();
+  const A0 = Math.PI * 0.75, A1 = Math.PI * 2.25, PMAX = 14;
+  const ang = (p) => A0 + (A1 - A0) * clamp(p / PMAX, 0, 1);
+  /* red sector above the blowing-off pressure */
+  dctx.strokeStyle = '#b3261e'; dctx.lineWidth = 7;
+  dctx.beginPath(); dctx.arc(0, 0, R - 27, ang(12.4), ang(PMAX)); dctx.stroke();
+  dctx.strokeStyle = '#1b1a18'; dctx.fillStyle = '#1b1a18';
+  dctx.font = '600 15px ui-monospace, monospace'; dctx.textAlign = 'center'; dctx.textBaseline = 'middle';
+  for (let p = 0; p <= PMAX; p += 1) {
+    const a = ang(p), big = p % 2 === 0;
+    dctx.lineWidth = big ? 2.6 : 1.2;
+    dctx.beginPath();
+    dctx.moveTo(Math.cos(a) * (R - 24), Math.sin(a) * (R - 24));
+    dctx.lineTo(Math.cos(a) * (R - (big ? 38 : 32)), Math.sin(a) * (R - (big ? 38 : 32)));
+    dctx.stroke();
+    if (big) dctx.fillText(String(p), Math.cos(a) * (R - 54), Math.sin(a) * (R - 54));
+  }
+  dctx.font = '400 15px Georgia, serif';
+  dctx.fillStyle = '#5c5348';
+  dctx.fillText('lb / in²  ×  14.5', 0, 42);
+  dctx.fillText('BAR', 0, -46);
+  /* needle */
+  const a = ang(barGauge);
+  dctx.strokeStyle = '#8c1a12'; dctx.lineWidth = 5; dctx.lineCap = 'round';
+  dctx.beginPath(); dctx.moveTo(-Math.cos(a) * 16, -Math.sin(a) * 16);
+  dctx.lineTo(Math.cos(a) * (R - 34), Math.sin(a) * (R - 34)); dctx.stroke();
+  dctx.fillStyle = '#3a3128'; dctx.beginPath(); dctx.arc(0, 0, 9, 0, 7); dctx.fill();
+  dctx.restore();
+}
+
+/* ── the beat ruler ────────────────────────────────────────────────────────── */
+const ruler = $('ruler'), rctx = ruler.getContext('2d');
+function drawRuler(now) {
+  const W = ruler.width, H = ruler.height, SPAN = 3.2;
+  rctx.clearRect(0, 0, W, H);
+  rctx.fillStyle = 'rgba(224,180,99,.07)'; rctx.fillRect(0, H * 0.30, W, H * 0.40);
+  rctx.strokeStyle = 'rgba(224,180,99,.28)'; rctx.lineWidth = 1;
+  rctx.beginPath(); rctx.moveTo(0, H * 0.70); rctx.lineTo(W, H * 0.70); rctx.stroke();
+  for (let i = 0; i < beatLog.length; i++) {
+    const dtn = now - beatLog[i].t;
+    if (dtn > SPAN || dtn < 0) continue;
+    const x = W * (1 - dtn / SPAN);
+    const a = 0.26 + 0.74 * (1 - dtn / SPAN);
+    const top = beatLog[i].phase === 0;      /* once per turn of the wheel */
+    rctx.strokeStyle = (top ? 'rgba(255,220,160,' : 'rgba(214,186,140,') + a.toFixed(3) + ')';
+    rctx.lineWidth = top ? 2.6 : 1.7;
+    rctx.beginPath(); rctx.moveTo(x, top ? H * 0.08 : H * 0.30); rctx.lineTo(x, H * 0.70); rctx.stroke();
+  }
+  rctx.fillStyle = 'rgba(141,127,104,.9)';
+  rctx.font = '600 15px ui-monospace, monospace';
+  rctx.textAlign = 'right'; rctx.fillText('now', W - 3, H - 5);
+  rctx.textAlign = 'left'; rctx.fillText('3.2 s ago', 3, H - 5);
+}
+
+/* ── the loop ──────────────────────────────────────────────────────────────── */
+let last = performance.now() / 1000, acc = 0, fpsT = 0, fpsN = 0, fpsShown = 0;
+const SUB = 1 / 480;
+let chuffFrac = 0;
+
+function frame(tms) {
+  const nowS = tms / 1000;
+  let dt = clamp(nowS - last, 0, 0.05);       /* clamp BOTH ends — LANDMINES */
+  last = nowS;
+  fpsT += dt; fpsN++;
+  if (fpsT > 0.5) { fpsShown = fpsN / fpsT; fpsT = 0; fpsN = 0; }
+
+  /* ── simulate, and schedule every beat at the instant it happened ───────── */
+  if (started) {
+    const audioBase = actx ? actx.currentTime + 0.055 : 0;
+    acc += dt;
+    let sim = 0;
+    let guard = 0;
+    while (acc >= SUB && guard++ < 240) {
+      const fired = step(st, SUB, ctl);
+      for (const b of fired) {
+        const tHit = sim + b.frac * SUB;
+        const strength = clamp(b.strength / 70000, 0, 1);
+        playChuff(audioBase + tHit, strength, 1 - clamp(ctl.cutoff / 0.85, 0, 1));
+        beatLog.push({ t: st.t - (SUB - b.frac * SUB), phase: b.phase });
+        /* every beat also throws a puff up the chimney */
+        const rev = Math.abs(st.omega) / (2 * Math.PI);
+        const up = 3.2 + 7.5 * strength + Math.min(5.0, rev * 1.1);
+        const nP = rev > 3.2 ? 3 : 6;
+        for (let k = 0; k < nP; k++) {
+          const a = (k / nP) * Math.PI * 2 + Math.random();
+          const spread = 0.9 + 1.5 * strength;
+          emit(3.46 + Math.cos(a) * 0.13, 3.78, Math.sin(a) * 0.13,
+               Math.cos(a) * spread, up * (0.80 + Math.random() * 0.40), Math.sin(a) * spread,
+               0.20 + Math.random() * 0.09, 0.85 + 1.15 * strength,
+               1.5 + Math.random() * 1.3, 0.62 + 0.30 * strength, 0.03 + 0.11 * Math.random());
+        }
+      }
+      sim += SUB; acc -= SUB;
+    }
+    if (guard >= 240) acc = 0;
+    while (beatLog.length && st.t - beatLog[0].t > 6) beatLog.shift();
+
+    /* the fire's own smoke, and the drain cocks, and the safety valves */
+    chuffFrac += dt;
+    if (chuffFrac > 0.09) {
+      chuffFrac = 0;
+      emit(3.46 + (Math.random() - 0.5) * 0.14, 3.78, (Math.random() - 0.5) * 0.14,
+           (Math.random() - 0.5) * 0.4, 1.2 + st.fire * 1.1, (Math.random() - 0.5) * 0.4,
+           0.24, 1.5, 3.0, 0.05 + 0.06 * st.fire, 0.55 + 0.35 * st.fire);
+      if (performance.now() / 1000 < whistleUntil) for (let k = 0; k < 3; k++) {
+        emit(-1.55, 3.22, 0.16, (Math.random() - 0.5) * 1.2, 3.4 + Math.random() * 2.0,
+             0.6 + Math.random() * 1.4, 0.06, 1.1, 1.1, 0.30, 0.02);
+      }
+      if (st.blowoff > 0.15) for (const s of [1, -1]) {
+        emit(-1.10 + s * 0.06, 3.18, 0, s * 1.1, 4.5 + Math.random() * 2.5, (Math.random() - 0.5) * 0.5,
+             0.09, 1.3, 1.3, 0.34 * st.blowoff, 0.02);
+      }
+      if (ctl.regulator > 0.02 && st.v < 3.2) for (const s of [1, -1]) for (const xx of [3.20, 3.80]) {
+        emit(xx, 0.30, s * Z_PIN, (Math.random() - 0.4) * 2.0, 1.4 + Math.random() * 2.0,
+             s * (2.6 + Math.random() * 2.4), 0.14, 2.1, 1.5, 0.24, 0.03);
+      }
+      if (ctl.sand && st.v > 0.2) for (const ax of AXLES) {
+        emit(ax + 0.5, 0.10, (Math.random() < 0.5 ? 1 : -1) * GAUGE, -st.v * 0.3, 0.5, 0, 0.05, 0.35, 0.45, 0.20, 0.62);
+      }
+    }
+    stepSteam(dt, st.v);
+
+    /* the rumble, and the standing hiss */
+    if (actx && !WS.muted()) {
+      const sp = Math.abs(st.v);
+      rumbleGain.gain.value = Math.min(0.34, sp * 0.020);
+      rumbleFilt.frequency.value = 110 + sp * 22;
+      blowGain.gain.value = st.blowoff * 0.10;
+      hissGain.gain.value = 0.012 + ctl.regulator * 0.012;
+    }
+  }
+
+  /* ── camera ─────────────────────────────────────────────────────────────── */
+  const asp = canvas.width / canvas.height || 1;
+  const target = [0.35, 2.95, 0];
+  const cp = Math.cos(cam.pitch), sp2 = Math.sin(cam.pitch);
+  /* a tall screen has to stand further back to hold the same engine */
+  const dEff = cam.dist * Math.max(1, Math.min(2.4, 1.62 / asp));
+  const eye = add(target, [Math.cos(cam.yaw) * cp * dEff, sp2 * dEff + 0.5, Math.sin(cam.yaw) * cp * dEff]);
+  const FOVY = 0.80;
+  const proj = M4.persp(FOVY, asp, 0.15, 1400);
+  const view = M4.look(eye, target, [0, 1, 0]);
+  const VP = M4.mul(proj, view);
+
+  /* ── draw ───────────────────────────────────────────────────────────────── */
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.disable(gl.CULL_FACE);
+  gl.enable(gl.DEPTH_TEST); gl.depthMask(true);
+  gl.clearColor(0.03, 0.035, 0.055, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  /* sky */
+  const inv = invert(VP);
+  gl.useProgram(pSky); gl.depthMask(false);
+  gl.uniformMatrix4fv(uSky.uInvVP, false, inv);
+  setEnv(uSky, eye);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.depthMask(true);
+
+  /* ground */
+  gl.useProgram(pGnd);
+  gl.uniformMatrix4fv(uGnd.uVP, false, VP);
+  setEnv(uGnd, eye);
+  gl.uniform1f(uGnd.uRun, st.x);
+  gl.bindVertexArray(MESH.ground.vao); gl.drawArrays(gl.TRIANGLES, 0, MESH.ground.count);
+
+  /* everything lit */
+  gl.useProgram(pLit);
+  gl.uniformMatrix4fv(uLit.uVP, false, VP);
+  setEnv(uLit, eye);
+  gl.uniform3f(uLit.uEmis, 0, 0, 0);
+  gl.uniform1f(uLit.uSpec, 0.12);
+  gl.uniform1f(uLit.uFireGlow, started ? 0.30 + 0.75 * st.fire * (0.9 + 0.1 * Math.sin(nowS * 11)) : 0.22);
+
+  const wrap = (pitch) => -(((st.x % pitch) + pitch) % pitch);
+  gl.uniform1f(uLit.uShadowOn, 1);
+  gl.uniform1f(uLit.uGrime, 0);
+  drawMesh(MESH.scenery, M4.trans(wrap(700), 0, 0));
+  drawMesh(MESH.poles, M4.trans(wrap(POLE_PITCH), 0, 0));
+  drawMesh(MESH.track, M4.trans(wrap(SLEEPER_PITCH), 0, 0));
+  drawMesh(MESH.rail, M4.ident());
+
+  /* the engine — it makes the shadow, so it is not in it */
+  gl.uniform1f(uLit.uShadowOn, 0);
+  gl.uniform1f(uLit.uGrime, 1);
+  gl.uniform1f(uLit.uSpec, 0.30);
+  drawMesh(MESH.body, M4.ident());
+  const th = st.theta;
+  for (let i = 0; i < AXLES.length; i++) {
+    const isDrv = (i === 1);
+    for (const s of [1, -1]) {
+      /* the left side is quartered a quarter-turn from the right */
+      const ang = -(th + (s < 0 ? Math.PI / 2 + st.quarterErr : 0));
+      const M = M4.mul(M4.trans(AXLES[i], Y_AX, s * (GAUGE - 0.05)),
+                       M4.mul(s < 0 ? M4.rotY(Math.PI) : M4.ident(), M4.rotZ(s < 0 ? -ang : ang)));
+      drawMesh(isDrv ? MESH.wheelDrv : MESH.wheelCpl, M);
+    }
+  }
+  /* rods and crossheads */
+  gl.uniform1f(uLit.uSpec, 0.55);
+  for (const s of [1, -1]) {
+    const ang = th + (s < 0 ? Math.PI / 2 + st.quarterErr : 0);
+    const pin = (ax) => [ax + R_CR * Math.cos(-ang), Y_AX + R_CR * Math.sin(-ang)];
+    /* main rod: from the driving pin to the crosshead */
+    const p = pin(AXLES[1]);
+    const cx = AXLES[1] + pistonPos(ang);
+    const dxr = cx - p[0], dyr = Y_AX - p[1];
+    const rot = Math.atan2(dyr, dxr);
+    drawMesh(MESH.mainRod, M4.mul(M4.trans(p[0], p[1], s * Z_PIN), M4.rotZ(rot)));
+    drawMesh(MESH.crosshead, M4.trans(cx, Y_AX, s * Z_PIN));
+    /* coupling rods: pin to pin, so they simply translate */
+    for (let k = 0; k < AXLES.length - 1; k++) {
+      const q = pin(AXLES[k]);
+      drawMesh(MESH.cplRod, M4.trans(q[0], q[1], s * Z_CPL));
+    }
+  }
+
+  /* the train */
+  gl.uniform1f(uLit.uSpec, 0.10);
+  for (let w = 0; w < ctl.wagons; w++) {
+    const wx = -5.55 - w * 5.90;
+    if (wx < -46) break;
+    drawMesh(MESH.wagon, M4.trans(wx, 0, 0));
+    for (const dx of [-1.75, 1.75]) for (const s of [1, -1]) {
+      drawMesh(MESH.wagonWheel, M4.mul(M4.trans(wx + dx, 0.47, s * (GAUGE - 0.05)),
+                                       M4.rotZ(-st.x / 0.47 + w)));
+    }
+  }
+
+  /* steam, last, with absorption */
+  if (P.n > 0) {
+    uploadSteam(eye);
+    gl.useProgram(pStm);
+    gl.uniformMatrix4fv(uStm.uVP, false, VP);
+    setEnv(uStm, eye);
+    gl.uniform1f(uStm.uH, canvas.height);
+    gl.uniform1f(uStm.uTanHalf, Math.tan(FOVY / 2));
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);      /* premultiplied "over" */
+    gl.depthMask(false);
+    gl.bindVertexArray(stmVAO);
+    gl.drawArrays(gl.POINTS, 0, P.n);
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+  }
+  gl.bindVertexArray(null);
+
+  readouts(nowS);
+  requestAnimationFrame(frame);
+}
+function drawMesh(mesh, M, skip) {
+  if (skip) return;
+  gl.uniformMatrix4fv(uLit.uM, false, M);
+  gl.bindVertexArray(mesh.vao);
+  gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
+}
+let SHADOW_SPAN = [-4.44, 4.30];
+function setEnv(u, eye) {
+  gl.uniform2f(u.uSh, SHADOW_SPAN[0], SHADOW_SPAN[1]);
+  gl.uniform3f(u.uEye, eye[0], eye[1], eye[2]);
+  gl.uniform3f(u.uSun, SUN_DIR[0], SUN_DIR[1], SUN_DIR[2]);
+  gl.uniform3f(u.uSunCol, SUN_COL[0], SUN_COL[1], SUN_COL[2]);
+  gl.uniform3f(u.uSkyHi, SKY_COL_HI[0], SKY_COL_HI[1], SKY_COL_HI[2]);
+  gl.uniform3f(u.uSkyLo, SKY_COL_LO[0], SKY_COL_LO[1], SKY_COL_LO[2]);
+}
+function invert(m) {
+  const a = m, o = new Float32Array(16);
+  const b00=a[0]*a[5]-a[1]*a[4], b01=a[0]*a[6]-a[2]*a[4], b02=a[0]*a[7]-a[3]*a[4];
+  const b03=a[1]*a[6]-a[2]*a[5], b04=a[1]*a[7]-a[3]*a[5], b05=a[2]*a[7]-a[3]*a[6];
+  const b06=a[8]*a[13]-a[9]*a[12], b07=a[8]*a[14]-a[10]*a[12], b08=a[8]*a[15]-a[11]*a[12];
+  const b09=a[9]*a[14]-a[10]*a[13], b10=a[9]*a[15]-a[11]*a[13], b11=a[10]*a[15]-a[11]*a[14];
+  let det = b00*b11-b01*b10+b02*b09+b03*b08-b04*b07+b05*b06;
+  if (!det) return M4.ident();
+  det = 1 / det;
+  o[0]=(a[5]*b11-a[6]*b10+a[7]*b09)*det;  o[1]=(a[2]*b10-a[1]*b11-a[3]*b09)*det;
+  o[2]=(a[13]*b05-a[14]*b04+a[15]*b03)*det; o[3]=(a[10]*b04-a[9]*b05-a[11]*b03)*det;
+  o[4]=(a[6]*b08-a[4]*b11-a[7]*b07)*det;  o[5]=(a[0]*b11-a[2]*b08+a[3]*b07)*det;
+  o[6]=(a[14]*b02-a[12]*b05-a[15]*b01)*det; o[7]=(a[8]*b05-a[10]*b02+a[11]*b01)*det;
+  o[8]=(a[4]*b10-a[5]*b08+a[7]*b06)*det;  o[9]=(a[1]*b08-a[0]*b10-a[3]*b06)*det;
+  o[10]=(a[12]*b04-a[13]*b02+a[15]*b00)*det; o[11]=(a[9]*b02-a[8]*b04-a[11]*b00)*det;
+  o[12]=(a[5]*b07-a[4]*b09-a[6]*b06)*det; o[13]=(a[0]*b09-a[1]*b07+a[2]*b06)*det;
+  o[14]=(a[13]*b01-a[12]*b03-a[14]*b00)*det; o[15]=(a[8]*b03-a[9]*b01+a[10]*b00)*det;
+  return o;
+}
+
+/* ── the numbers ───────────────────────────────────────────────────────────── */
+let poleCount = 0, poleWindow = [];
+function readouts() {
+  const kmh = st.v * 3.6;
+  $('spd').innerHTML = Math.round(kmh) + '<small> km/h</small>';
+  const rev = Math.abs(st.omega) / (2 * Math.PI);
+  $('spdsub').textContent = st.slipping
+    ? 'slipping — the rim is ' + fmt1(Math.abs(st.slipSpeed) * 3.6) + ' km/h ahead of the rail'
+    : fmt1(rev) + ' rev/s  ·  ' + Math.round(st.distance) + ' m run';
+
+  /* measured beat rate, from the times we actually SCHEDULED sound at: the
+     mean of the last few INTERVALS, so it answers as fast as the engine does */
+  let heard = 0;
+  {
+    const N = beatLog.length;
+    let i0 = N - 1;
+    while (i0 > 0 && N - i0 < 24 && st.t - beatLog[i0 - 1].t < 3.0) i0--;
+    const span = N > 1 ? beatLog[N - 1].t - beatLog[i0].t : 0;
+    if (N - i0 >= 2 && span > 1e-6 && st.t - beatLog[N - 1].t < 1.5) heard = (N - 1 - i0) / span;
+  }
+  const track = beatsPerSecFromSpeed(st.v);
+  const wheel = beatsPerSecFromWheel(st.omega);
+  $('rHeard').textContent = fmt1(heard) + ' /s';
+  $('rTrack').textContent = fmt1(track) + ' /s';
+  $('rWheel').textContent = fmt1(wheel) + ' /s';
+
+  /* poles: count the ones that have gone by, over a window */
+  const idx = Math.floor(st.x / POLE_PITCH);
+  if (idx !== lastPoleIdx) { lastPoleIdx = idx; poleWindow.push(st.t); }
+  while (poleWindow.length > 6 || (poleWindow.length && st.t - poleWindow[0] > 26)) poleWindow.shift();
+  let poleTxt = '—';
+  if (poleWindow.length >= 2) {
+    const span = poleWindow[poleWindow.length - 1] - poleWindow[0];
+    const vp = (poleWindow.length - 1) * POLE_PITCH / span;
+    poleTxt = fmt1(4 * vp / (Math.PI * SPEC.wheelD)) + ' /s';
+  }
+  $('rPole').textContent = poleTxt;
+
+  const gap = Math.abs(heard - wheel);
+  const agree = st.v > 0.4 || st.slipping;
+  const el = $('rHeard');
+  el.className = 'v ' + (!agree ? 'gold' : gap < Math.max(0.35, wheel * 0.06) ? 'ok' : 'bad');
+  $('rTrack').className = 'v ' + (st.slipping ? 'bad' : '');
+  $('rWheel').className = 'v ' + (st.slipping ? 'ok' : '');
+
+  const util = st.adhLimit > 0 ? Math.abs(st.fRail) / st.adhLimit : 0;
+  $('rAdh').textContent = (st.fRail / 1000).toFixed(1) + ' / ' + (st.adhLimit / 1000).toFixed(1) + ' kN';
+  $('rAdh').className = 'v ' + (st.slipping ? 'bad' : util > 0.9 ? 'gold' : '');
+  $('rSteam').textContent = st.steamGen.toFixed(2) + ' / ' + st.steamUse.toFixed(2) + ' kg/s';
+  $('rSteam').className = 'v ' + (st.steamUse > st.steamGen * 1.02 ? 'bad' : 'ok');
+  const wPerRev = 4 * endWork(ctl.cutoff, st.pAdm, st.pBack, 1200);
+  const kgPerRev = steamPerRev(ctl.cutoff, st.pAdm);
+  $('rEcon').textContent = ctl.regulator > 0.01 && kgPerRev > 0
+    ? Math.round(wPerRev / kgPerRev / 1000) + ' kJ/kg' : '—';
+
+  const v = $('verdict');
+  if (st.slipping) {
+    v.className = 'verdict bad';
+    v.textContent = 'SLIPPING · the beat is the WHEEL, never the railway';
+  } else if (st.v > 0.4) {
+    const ok = gap < Math.max(0.35, wheel * 0.06);
+    v.className = 'verdict' + (ok ? '' : ' bad');
+    v.textContent = (ok ? 'heard = 4v/piD to ' : 'heard vs 4v/piD off by ')
+      + fmt1(gap) + ' beats/s' + (ok ? ' ✓' : '');
+  } else {
+    v.className = 'verdict';
+    v.textContent = 'at rest — open the regulator';
+  }
+
+  const barG = (st.p - ATM) / BAR;
+  drawDial(barG);
+  if (innerWidth <= 920) {
+    $('spdsub').textContent = barG.toFixed(1) + ' bar · ' + fmt1(rev) + ' rev/s'
+      + (st.slipping ? ' · SLIPPING' : '');
+  }
+  drawRuler(st.t);
+  $('fps').textContent = Math.round(fpsShown) + ' fps · ' + P.n + ' puffs';
+}
+
+/* ── size ──────────────────────────────────────────────────────────────────── */
+function resize() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  canvas.width = Math.round(innerWidth * dpr);
+  canvas.height = Math.round(innerHeight * dpr);
+}
+addEventListener('resize', resize); resize();
+requestAnimationFrame(frame);
+
+try { const k = 'ws:seen:four-beats-to-a-turn'; if (!localStorage.getItem(k)) localStorage.setItem(k, String(Date.now())); } catch (e) {}
+
+/* the liveness hook the browser check drives — it calls the real entry points,
+   never a synthetic click (LANDMINES) */
+window.__probe = () => ({
+  started, t: st.t, v: st.v, beats: st.beats, slipping: st.slipping,
+  heard: $('rHeard').textContent, track: $('rTrack').textContent,
+  puffs: P.n, fps: Math.round(fpsShown), err: window.__err || null,
+  audio: actx ? actx.state : 'none', muted: WS.muted(), voices: BANK.length,
+});
+</script>
+</body>
+</html>

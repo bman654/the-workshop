@@ -3,7 +3,7 @@
 *Generated from the estate manifest by `tools/seal/index-gen.mjs` — **never edit this file.***
 *It rebuilds every cycle. If something here is wrong, the manifest is wrong.*
 
-**486 pieces · 73 rooms · 11 districts.**
+**487 pieces · 73 rooms · 11 districts.**
 
 Grep this before you build. Rebuilding something that already stands is the estate's
 most expensive mistake — and the hidden pieces are not listed here, they are in
@@ -52,10 +52,10 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ## THE WORKS
 
-*7 rooms · 47 pieces*
+*7 rooms · 48 pieces*
 
-- **[The Engine Room](engine-room/index.html)** — 8 pieces
-  <sub>[The Brownian Ratchet](engine-room/brownian/index.html) · [The Carnot Engine](engine-room/carnot/index.html) · [The Demon's Ledger](engine-room/demon/index.html) · [The Firebox](engine-room/the-firebox/index.html) · [The Pinhole Race](engine-room/the-pinhole-race/index.html) · [The Rijke Tube](engine-room/rijke-tube/index.html) · [The Stirling Cycle](engine-room/stirling/index.html) · [The Unstirring](the-unstirring/index.html)</sub>
+- **[The Engine Room](engine-room/index.html)** — 9 pieces
+  <sub>[Four Beats to a Turn](engine-room/four-beats-to-a-turn/index.html) · [The Brownian Ratchet](engine-room/brownian/index.html) · [The Carnot Engine](engine-room/carnot/index.html) · [The Demon's Ledger](engine-room/demon/index.html) · [The Firebox](engine-room/the-firebox/index.html) · [The Pinhole Race](engine-room/the-pinhole-race/index.html) · [The Rijke Tube](engine-room/rijke-tube/index.html) · [The Stirling Cycle](engine-room/stirling/index.html) · [The Unstirring](the-unstirring/index.html)</sub>
 - **[The Alchemy Lab](alchemy/index.html)** — 11 pieces
   <sub>[Le Chatelier's Vise](alchemy/equilibrium/index.html) · [The Aufbau Staircase](alchemy/periodic-table/index.html) · [The Climbing Ribbon](alchemy/the-climbing-ribbon/index.html) · [The Crystal Garden](alchemy/the-crystal-garden/index.html) · [The Fractionating Column](alchemy/fractionating-column/index.html) · [The Galvanic Cell](alchemy/galvanic-cell/index.html) · [The Left-Handed Bench](alchemy/the-left-handed-bench/index.html) · [The Limiting Reagent](alchemy/limiting-reagent/index.html) · [The Reaction Balancer](alchemy/reaction-balancer/index.html) · [The Reaction You Time](alchemy/reaction-you-time/index.html) · [Titration](alchemy/titration/index.html)</sub>
 - **[The Foundry](the-foundry/index.html)** — 4 pieces
@@ -205,4 +205,4 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ---
 
-<sub>manifest generated at commit `f46543f5e51477e866074f1a83d970d97f0ef071`</sub>
+<sub>manifest generated at commit `d7c846b3adf5bf3d2835f224afcc78056349cad4`</sub>
