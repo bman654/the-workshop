@@ -3,7 +3,7 @@
 *Generated from the estate manifest by `tools/seal/index-gen.mjs` — **never edit this file.***
 *It rebuilds every cycle. If something here is wrong, the manifest is wrong.*
 
-**477 pieces · 72 rooms · 11 districts.**
+**478 pieces · 73 rooms · 11 districts.**
 
 Grep this before you build. Rebuilding something that already stands is the estate's
 most expensive mistake — and the hidden pieces are not listed here, they are in
@@ -52,7 +52,7 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ## THE WORKS
 
-*6 rooms · 45 pieces*
+*7 rooms · 46 pieces*
 
 - **[The Engine Room](engine-room/index.html)** — 8 pieces
   <sub>[The Brownian Ratchet](engine-room/brownian/index.html) · [The Carnot Engine](engine-room/carnot/index.html) · [The Demon's Ledger](engine-room/demon/index.html) · [The Firebox](engine-room/the-firebox/index.html) · [The Pinhole Race](engine-room/the-pinhole-race/index.html) · [The Rijke Tube](engine-room/rijke-tube/index.html) · [The Stirling Cycle](engine-room/stirling/index.html) · [The Unstirring](the-unstirring/index.html)</sub>
@@ -66,6 +66,7 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
   <sub>[The Melting Floor](the-deep-hearth/melting-floor/index.html) · [The Same Vent, Two Tempers](the-deep-hearth/conduit/index.html) · [The Settling Melt](the-deep-hearth/settling-melt/index.html)</sub>
 - **[The Stoneyard](the-keystone-arch/index.html)** — 4 pieces
   <sub>[As Hangs the Chain](hung-line/index.html) · [The Catenary](catenary/index.html) · [The Column That Decides to Bend](the-bending-column/index.html) · [The Infinite Overhang](overhang/index.html)</sub>
+- **[The Washhouse](the-washhouse/index.html)** — 0 pieces
 
 ## THE GLASSHOUSE GARDENS
 
@@ -203,4 +204,4 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ---
 
-<sub>manifest generated at commit `7ac59d37bc9e52311f38cfa76db6ee8491635168`</sub>
+<sub>manifest generated at commit `27280660a3fa17eab9b66829fe438b2950fb59b6`</sub>

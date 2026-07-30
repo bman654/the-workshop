@@ -59,7 +59,7 @@ var Contract = (function () {
       layoutFn: 'court',
       frame: { w: 300, h: 220 },
       capacity: 12,
-      clusters: ['works', 'induction', 'foundry', 'the-deep-hearth', 'statics']
+      clusters: ['works', 'induction', 'foundry', 'the-deep-hearth', 'statics', 'washhouse']
     },
     gardens: {
       tier: 1, angle: 217,   // the tight fit: 1.8°/5.8° road+lane margins
@@ -184,6 +184,7 @@ var Contract = (function () {
     processions:             { label: 'THE PROCESSIONAL GROUND', accent: '#c9a24a' },
     statics:                 { label: 'STATICS',                accent: '#c9974c' },
     'the-deep-hearth':       { label: 'THE DEEP HEARTH',        accent: '#e24a2a' },
+    washhouse:               { label: 'THE WASHHOUSE',          accent: '#bfe6ef' },
     // NEW (§2.6 gather) — kept in the observatory's / manor's own idiom:
     'celestial-mechanics':   { label: 'CELESTIAL MECHANICS',    accent: '#9db4ff' },
     exoplanets:              { label: 'EXOPLANETS',             accent: '#9db4ff' },

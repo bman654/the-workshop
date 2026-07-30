@@ -351,7 +351,45 @@ Nothing else is required reading.
   `node tools/manifest/manifest.mjs` and re-forge**, or the door's twelfth claim fails
   with "promenades register 8 ≠ 7 declared" from the stale tallies you baked in.
 
+### Solvers with constraints in them
+
+- **A massless node is a CONSTRAINT, and no diagonal preconditioner will save you.**
+  A triple junction in a soap foam has no inertia — it is an instantaneous force
+  balance, which is what "120 degrees" means — so its row of the implicit system is
+  exactly weakly diagonally dominant. Give it a mass instead and the physics goes
+  wrong (the corners lag and the measured law came out a fifth shallow); set the mass
+  to zero and CG needs 400 iterations, and *capping* the iterations does not merely
+  slow the room, it changes the answer (the fitted constant fell 30%). Block-Jacobi
+  over the obvious blocks bought almost nothing. The fix is to **eliminate the easy
+  half exactly**: whatever part of your graph is a PATH has a tridiagonal block that
+  Thomas's algorithm inverts in two sweeps, and the Schur complement over what remains
+  is small and nearly diagonal — ten iterations instead of four hundred, 21 ms/step to
+  1.1. (`the-washhouse/foam.mjs`, `solveSchur`.) The trap inside the trap: an edge
+  short enough to hold no interior node joins two junctions DIRECTLY, so it never gets
+  eliminated and must stay as an off-diagonal of the reduced system. Forgetting that
+  case reads a stale scratch value with no error at all.
+- **Refining one knob is a cancellation study, not a convergence study.** If a scheme
+  has two discretisation errors of OPPOSITE sign — here a coarse mesh reads a
+  junction's tensions off chords and comes out steep, a long time step lags the lengths
+  and comes out shallow — then halving the mesh alone makes the answer *worse* and
+  halving the step alone makes it worse the other way, while the un-refined pair looks
+  excellent. Refine both together and quote the ladder.
+- **A chord is not a tangent, and at a corner that is the whole error.** Any force
+  assembled from unit vectors to a node's nearest neighbours (a Herring balance, a
+  discrete curvature) is built from chords, and a chord leans off the true tangent by
+  about half the turning it spans — kappa*h/2, which is five degrees at an unremarkable
+  spacing. Crowding the mesh toward the corner (a raised-cosine spacing map) cost
+  nothing and removed the single largest error in the room.
+
 ### Estate-wide conventions
+
+- **A wing slug must be DECLARED, or the front door goes red with no error you can
+  find.** Adding a new `wing:"…"` to a PLACES row that the district's contract does not
+  list turns the door pill red with *0 structures placed* and nothing in the browser
+  console (the throw is caught and shown only in the pill's subtitle). The legal
+  cluster list per district lives in `tools/layout/contract.js` (plus a label/accent in
+  the same file). `node tools/layout/door.test.cjs` names the fault in one line — run
+  it after any PLACES edit, before you go hunting.
 
 - **One mute for the whole estate:** the single shared key `ws:pref:muted` via `WS`. Never
   invent a per-page mute. (Companion sound prefs: `ws:pref:air`, `ws:pref:air-bg`.)

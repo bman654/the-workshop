@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Washhouse — a foam left alone</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  THE WASHHOUSE  ·  the-washhouse/
+
+  A copper of soap left standing in the works yard. What is on it is a DRY FOAM
+  — bubbles pressed flat between two panes, which is how foam has been studied
+  since Plateau — and it is doing the one thing a foam left alone does: getting
+  coarser. Big bubbles eat small ones. Nobody is blowing.
+
+  THE ONE THING THIS ROOM IS ABOUT
+
+    John von Neumann, at a Metals Interfaces seminar in 1952, said this in a
+    page and a half:
+
+        dA/dt  =  (pi/3) (n - 6)
+
+    A bubble's area changes at a rate set ONLY by how many neighbours it has.
+    Not its size. Not its shape. Not its age, its pressure, or what is
+    happening to it. A seven-sided bubble grows at exactly the rate a
+    five-sided one shrinks, and a five-sided bubble a thousand times bigger
+    dies at exactly the same speed as a small one.
+
+    And a SIX-SIDED bubble does not change at all, however much it writhes.
+    That is why this room opens on a perfect honeycomb doing nothing.
+
+  WHAT IS ACTUALLY RUNNING  (all of it in foam.mjs, all of it in the twin)
+
+    Three sentences, and no more:
+      1. every film moves sideways at a speed equal to how sharply it is curved
+      2. a junction of three films slides downhill on total film length
+      3. a film that gets short swaps its ends; a bubble that gets tiny goes
+
+    THERE IS NO PRESSURE IN THE MODEL, no gas law, no area target, and the
+    number six appears nowhere in the motion. The 120 degrees at a junction is
+    not typed in either — it is where rule 2 comes to rest. Everything the room
+    claims falls out of Gauss-Bonnet once it does:
+
+        dA/dt = -∮kappa ds,   ∮kappa ds + sum(exterior angles) = 2 pi,
+        and every exterior angle at a 120-degree corner is pi/3.
+
+  THE SWITCH THAT TURNS IT OFF
+    HOLD THE CORNERS. The films still flow by curvature; only the junctions are
+    no longer free to find their 120 degrees. The rate per side collapses by a
+    factor of about 170, R-squared falls from 0.998 to 0.19, and the foam stops
+    dead. Everything a foam does, it does at the corners.
+
+  MACHINERY WORTH KNOWING ABOUT
+    · The domain is a TORUS, so there are no walls and Euler's formula pins the
+      mean side count at EXACTLY six forever (3V = 2E and V - E + F = 0).
+      The room prints it; it is 6.000000 at every instant of every run.
+    · The whole network is one graph and its motion is the L2 gradient flow of
+      total film length, stepped semi-implicitly. A junction is given ZERO
+      MASS, because it is a force balance and not a particle.
+    · That makes the system a saddle point, which no diagonal preconditioner
+      can help with. So the solve is done in two storeys: the nodes along one
+      film are a PATH, so their block is tridiagonal and Thomas's algorithm
+      eliminates them exactly; what is left is a small system over the
+      junctions alone, and conjugate gradients finishes it in about ten
+      iterations instead of four hundred.
+    · The node spacing along a film is crowded toward the junctions, because
+      the force holding a junction open is built from CHORDS, and a chord leans
+      off the tangent by half the turning it spans.
+
+  THE PICTURE
+    One WebGL2 pass over a few hundred thousand triangles: bubbles as fans,
+    films as glowing strips, Plateau borders as blobs at the junctions, the
+    whole seamless torus tiled to fill the frame. Cool tint = losing area,
+    warm = gaining, and a six-sided bubble sits at the middle of the ramp.
+    No textures, no libraries, no sound.
+
+  ENGINES (inlined byte-for-byte by the forge, never forked)
+    · tools/ws/ws.js    the estate-wide breadcrumbs
+    · ./foam.mjs        the foam: topology, flow, T1/T2, the measurement
+  Node twin: `node the-washhouse/foam.test.mjs`  (50 checks)
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root{
+    --ink:#eef4f6; --dim:#a3b8bf; --faint:#71878f; --brass:#d8b070; --warm:#ffd39a;
+    --soap:#bfe6ef; --cool:#7fb3e8; --hot:#f0b070; --good:#8fd8b0; --bad:#f0977f;
+    --bg0:#04070a; --panel:rgba(7,12,16,.90); --line:rgba(191,230,239,.18);
+    --brassline:rgba(216,176,112,.28);
+    --ui:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg0);color:var(--ink);
+    font-family:var(--ui);overflow:hidden;-webkit-font-smoothing:antialiased}
+  #gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+  .scrim{position:fixed;inset:0;pointer-events:none;
+    background:
+      linear-gradient(to top,rgba(2,5,8,.80) 0,rgba(2,5,8,0) 130px),
+      radial-gradient(125% 95% at 50% 42%,transparent 24%,rgba(2,5,8,.74) 100%)}
+
+  a{color:var(--brass);text-decoration:none}
+  a:hover{text-decoration:underline}
+  h1{font-size:26px;margin:6px 0 8px;letter-spacing:.4px;font-weight:600}
+  .topleft{position:fixed;left:18px;top:14px;max-width:min(31vw,392px);z-index:6;
+    padding:10px 15px 13px;border-radius:12px;
+    background:rgba(4,8,11,.66);backdrop-filter:blur(7px)}
+  .back{font-size:13px;letter-spacing:.09em;text-transform:uppercase;opacity:.85}
+  .say{font-size:14.5px;line-height:1.55;color:var(--dim);margin:0}
+  .say b{color:var(--ink);font-weight:600}
+  .epi{margin:13px 0 0;font-size:13px;line-height:1.5;color:var(--faint);font-style:italic;
+    border-left:2px solid var(--brassline);padding-left:11px}
+
+  /* ── the instrument ─────────────────────────────────────────────── */
+  .rig{position:fixed;right:20px;top:18px;width:352px;z-index:6;
+    background:var(--panel);border:1px solid var(--brassline);border-radius:11px;
+    padding:13px 14px 11px;backdrop-filter:blur(9px);
+    box-shadow:0 22px 60px rgba(0,0,0,.66)}
+  .chead{font-size:11px;letter-spacing:.19em;text-transform:uppercase;color:var(--brass);
+    margin-bottom:8px;display:flex;justify-content:space-between;align-items:baseline}
+  .chead i{font-style:normal;color:var(--faint);letter-spacing:.04em;text-transform:none;font-size:11.5px}
+  .law{font-family:var(--mono);font-size:16px;color:var(--warm);text-align:center;
+    padding:7px 0 8px;letter-spacing:.02em}
+  #scat{width:100%;height:172px;display:block;border-radius:6px;background:#050a0d;cursor:default}
+  #hist{width:100%;height:52px;display:block;margin-top:6px;border-radius:5px;background:#050a0d}
+  .cap2{font-size:10.5px;line-height:1.42;color:var(--faint);margin:5px 0 0}
+  .rows{margin-top:8px;border-top:1px solid var(--line);padding-top:7px}
+  .row{display:flex;justify-content:space-between;align-items:baseline;
+    font-size:13px;padding:2px 0;color:var(--dim)}
+  .row b{color:var(--ink);font-weight:600;font-family:var(--mono);font-size:12.5px}
+  .row b.hi{color:var(--soap)}
+  .row b.ok{color:var(--good)}
+
+  /* ── the bubble you are watching ───────────────────────────────── */
+  .watch{position:fixed;left:18px;bottom:16px;z-index:6;width:326px;
+    background:rgba(5,9,12,.94);border:1px solid var(--line);border-radius:11px;
+    padding:11px 13px 10px;backdrop-filter:blur(9px);box-shadow:0 18px 50px rgba(0,0,0,.6)}
+  .watch.none{opacity:.62}
+  .wtop span.wn{font-family:var(--mono);font-size:30px;line-height:1;color:var(--soap)}
+  .wtop{display:flex;align-items:baseline;gap:10px}
+  .wtop span{font-size:12.5px;color:var(--faint)}
+  .wsay{font-size:12.5px;line-height:1.45;color:var(--dim);margin:7px 0 0}
+  .wsay b{color:var(--ink)}
+
+  /* ── controls ───────────────────────────────────────────────────── */
+  .dock{position:fixed;right:20px;bottom:16px;z-index:7;display:flex;gap:6px;flex-wrap:wrap;
+    justify-content:flex-end;max-width:min(52vw,560px)}
+  button{font-family:var(--ui);font-size:12.5px;color:var(--ink);cursor:pointer;
+    background:rgba(191,230,239,.07);border:1px solid var(--line);border-radius:6px;
+    padding:6px 10px;transition:background .13s,border-color .13s,color .13s}
+  button:hover{background:rgba(191,230,239,.17);border-color:rgba(191,230,239,.42)}
+  button.key{border-color:var(--brassline);color:var(--warm);background:rgba(216,176,112,.10)}
+  button.key:hover{background:rgba(216,176,112,.22)}
+  button.on{background:rgba(216,176,112,.26);border-color:var(--brass);color:var(--warm)}
+  button[disabled]{opacity:.36;cursor:default}
+
+  /* ── the opening card ───────────────────────────────────────────── */
+  .open{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9;
+    background:rgba(6,11,15,.93);border:1px solid var(--brassline);border-radius:13px;
+    padding:22px 26px;text-align:center;max-width:min(90vw,540px);
+    backdrop-filter:blur(11px);box-shadow:0 30px 80px rgba(0,0,0,.8);transition:opacity .5s}
+  .open h2{margin:0 0 6px;font-size:19px;color:var(--warm);font-weight:600}
+  .open p{margin:0 0 14px;font-size:14px;line-height:1.55;color:var(--dim)}
+  .open p b{color:var(--ink)}
+  .open button{font-size:14px;padding:9px 18px}
+  .open.gone{opacity:0;pointer-events:none}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(216,176,112,.42)}50%{box-shadow:0 0 0 9px rgba(216,176,112,0)}}
+  .open button.key{animation:pulse 2.2s infinite}
+
+  /* ── the drawer ─────────────────────────────────────────────────── */
+  .proofbtn{position:fixed;right:20px;bottom:56px;z-index:7}
+  .drawer{position:fixed;right:20px;bottom:16px;width:min(600px,calc(100vw - 40px));
+    max-height:calc(100vh - 40px);overflow-y:auto;z-index:8;
+    background:var(--panel);border:1px solid var(--brassline);border-radius:11px;
+    padding:16px 18px;backdrop-filter:blur(11px);display:none;
+    box-shadow:0 26px 70px rgba(0,0,0,.75)}
+  .drawer.shown{display:block}
+  .drawer h2{font-size:16px;margin:0 0 4px;color:var(--warm);font-weight:600}
+  .drawer h3{font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--brass);margin:15px 0 6px;font-weight:600}
+  .drawer p{font-size:13px;line-height:1.6;color:var(--dim);margin:6px 0}
+  .drawer p b{color:var(--ink)}
+  .drawer pre{font-family:var(--mono);font-size:11px;line-height:1.55;color:var(--dim);
+    background:rgba(0,0,0,.42);border:1px solid var(--line);border-radius:7px;
+    padding:9px 11px;overflow-x:auto;margin:7px 0 0;white-space:pre}
+  .drawer pre b{color:var(--warm);font-weight:400}
+  #size{width:100%;height:186px;display:block;border-radius:6px;background:#050a0d;margin-top:6px}
+  .close{position:absolute;right:12px;top:11px;font-size:18px;color:var(--faint);
+    cursor:pointer;line-height:1;padding:2px 6px}
+  .close:hover{color:var(--ink)}
+  .bar{height:3px;background:rgba(191,230,239,.12);border-radius:2px;overflow:hidden;margin-top:9px}
+  .bar i{display:block;height:100%;width:0;background:var(--brass);transition:width .1s}
+
+  .hint{position:fixed;left:50%;bottom:19px;transform:translateX(-50%);z-index:5;
+    font-size:12.5px;color:var(--dim);letter-spacing:.03em;pointer-events:none;
+    transition:opacity .5s;text-align:center;
+    padding:5px 14px;border-radius:20px;background:rgba(4,8,11,.7);backdrop-filter:blur(6px)}
+  .key0{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:5;
+    display:flex;gap:0;align-items:center;font-size:10.5px;color:var(--dim);
+    letter-spacing:.06em;pointer-events:none;
+    padding:5px 11px;border-radius:20px;background:rgba(4,8,11,.72);backdrop-filter:blur(6px)}
+  .key0 i{display:block;width:26px;height:8px;font-style:normal}
+  .key0 em{font-style:normal;padding:0 8px}
+
+  @media (max-width:1320px){
+    .topleft{max-width:min(30vw,320px)}
+    .topleft .epi{display:none}
+    .watch{width:280px}
+  }
+  @media (max-width:960px){
+    .topleft{max-width:none;right:16px;left:16px;top:10px}
+    .topleft .say,.topleft .epi{display:none}
+    h1{font-size:19px;margin:3px 0 0}
+    .rig{position:fixed;left:8px;right:8px;top:auto;bottom:60px;width:auto;
+      max-height:52vh;overflow-y:auto;padding:10px 11px}
+    #scat{height:130px} #hist{height:40px} .cap2{display:none}
+    .rows{display:grid;grid-template-columns:1fr 1fr;column-gap:14px}
+    .watch{display:none}
+    .dock{left:8px;right:8px;bottom:8px;max-width:none;justify-content:center}
+    .proofbtn{bottom:auto;top:8px;right:10px}
+    .drawer{left:8px;right:8px;width:auto;bottom:8px;max-height:88vh;padding:13px 14px}
+    .hint{display:none} .key0{display:none}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+<div class="scrim"></div>
+
+<div class="topleft">
+  <a class="back" href="../index.html">&larr; The Estate</a>
+  <h1>The Washhouse</h1>
+  <p class="say">A copper of soap, left standing. The bubbles are pressed flat
+  between two panes, and they are doing the only thing a foam left alone ever does
+  &mdash; getting coarser. <b>Click any bubble to watch it.</b> Its area changes at a
+  rate that depends on <b>nothing but how many neighbours it has</b>: not its size,
+  not its shape, not its age.</p>
+  <p class="epi">&ldquo;dA/dt = (&pi;/3)(n &minus; 6).&rdquo;<br>
+  &mdash; John von Neumann, on the back of a page and a half, 1952</p>
+</div>
+
+<div class="key0">
+  <em>losing</em>
+  <i id="ramp0"></i><i id="ramp1"></i><i id="ramp2"></i><i id="ramp3"></i><i id="ramp4"></i>
+  <em>gaining</em>
+</div>
+
+<div class="rig">
+  <div class="chead"><span>what the foam is doing</span><i id="clock">t = 0.00</i></div>
+  <div class="law">dA/dt = (&pi;/3)(n &minus; 6)</div>
+  <canvas id="scat" width="704" height="344"></canvas>
+  <p class="cap2">every bubble the room has been able to watch for a clear window,
+  measured &mdash; area change per unit time, against side count. The line is
+  &pi;/3 per side. Nothing in the model knows it is there.</p>
+  <canvas id="hist" width="704" height="104"></canvas>
+  <div class="rows">
+    <div class="row"><span>measured rate per side</span><b id="slope" class="hi">&mdash;</b></div>
+    <div class="row"><span>&pi;/3</span><b>1.04720</b></div>
+    <div class="row"><span>R&sup2; about that line</span><b id="r2">&mdash;</b></div>
+    <div class="row"><span>bubbles &middot; windows</span><b id="cnt">&mdash;</b></div>
+    <div class="row"><span>mean sides &lang;n&rang;</span><b id="meann" class="ok">&mdash;</b></div>
+    <div class="row"><span>total area drift</span><b id="adrift" class="ok">&mdash;</b></div>
+  </div>
+</div>
+
+<div class="watch none" id="watch">
+  <div class="wtop"><span class="wn" id="wn">&mdash;</span><span id="wlab">no bubble picked &mdash; click one</span></div>
+  <p class="wsay" id="wsay">Pick a bubble and this card follows it: how many sides it
+  has, how fast it is really changing, and what the law says it should be. Wait for a
+  neighbour to swap and watch the sign turn over.</p>
+</div>
+
+<div class="dock">
+  <button id="bslow">slower</button>
+  <button id="bpause">pause</button>
+  <button id="bfast">faster</button>
+  <button id="bpop">break a film</button>
+  <button id="bhold">hold the corners</button>
+  <button id="bagain" class="key">start again</button>
+</div>
+
+<button class="proofbtn" id="proofbtn">prove it &rarr;</button>
+
+<div class="drawer" id="drawer">
+  <span class="close" id="close">&times;</span>
+  <h2>Where the number comes from, and how to break it</h2>
+  <p>The whole model is three sentences and none of them mentions a number of
+  sides. <b>Every film moves sideways at a speed equal to its curvature.</b>
+  <b>A junction of three films slides downhill on total film length.</b> And when a
+  film gets short its ends swap, when a bubble gets tiny it goes. There is no
+  pressure in it, no gas law, no area target.</p>
+
+  <h3>the page and a half</h3>
+  <pre>for a bubble bounded by n arcs meeting at corners
+
+  dA/dt  =  -<b>&#8750;</b>&#954; ds            each film moves at &#954;
+  <b>&#8750;</b>&#954; ds  =  2&#960; - &#931;(ext. angles)   Gauss-Bonnet, any closed curve
+  ext. angle  =  &#960;/3           IF that corner is 120&deg;
+
+  =>  dA/dt  =  n&#183;&#960;/3 - 2&#960;  =  (&#960;/3)(n - 6)</pre>
+  <p>The 120&deg; is the only place the 3 comes from, and it is <b>not typed in
+  anywhere</b> &mdash; it is where the junction rule comes to rest, because three unit
+  tensions can only sum to zero at 120&deg;. This foam's corners find it on their own,
+  to about one degree.</p>
+
+  <h3>it really does not care how big the bubble is</h3>
+  <canvas id="size" width="1160" height="372"></canvas>
+  <p class="cap2" id="sizecap">rate against area, on a log scale, coloured by side
+  count. The dashed lines are (&pi;/3)(n&minus;6). They are flat, which is the whole
+  surprise: a five-sided bubble a thousand times larger dies just as fast.</p>
+
+  <h3>hold the corners and it stops</h3>
+  <p id="holdsay">Press <b>hold the corners</b> and the junctions are frozen where
+  they stand. The films still flow by curvature &mdash; nothing else changed &mdash; but
+  the corners can no longer find their 120&deg;, and the exterior angles are no longer
+  &pi;/3. Watch the fit collapse. In the twin's run the rate per side falls from
+  1.0507 to 0.00596, R&sup2; from 0.998 to 0.19, and the whole foam goes still.</p>
+
+  <h3>what is exactly true, and what is measured</h3>
+  <p><b>Exact, at every instant, to machine precision:</b> the bubbles tile a torus,
+  so their areas sum to the same number forever (drift below 10&#8315;&#185;&#8309;
+  relative across a whole run), and Euler's formula forces the mean side count to be
+  <b>exactly six</b> &mdash; 3V = 2E and V &minus; E + F = 0 give F = V/2. Not
+  approximately six. Six.</p>
+  <p><b>Measured, with a discretisation error:</b> the rate per side. The two errors
+  point opposite ways &mdash; a coarse film mesh reads the junction's tensions off
+  chords and comes out steep, a long time step lags and comes out shallow &mdash; so
+  the twin refines <b>both together</b>: (h, dt) = (0.20, 0.004) gives 1.043&times;&pi;/3,
+  (0.10, 0.002) gives 1.009, (0.05, 0.001) gives 1.008, against a seed-to-seed spread
+  of &plusmn;0.007. The room runs the middle one.</p>
+  <p>And before any foam is asked anything, the same solver is pointed at a bare
+  closed loop with no junctions in it at all, where the answer is exactly
+  &minus;2&pi; whatever the shape &mdash; that is von Neumann's law at n = 0. It gets
+  &minus;6.2756 for a circle and &minus;6.2662 for an ellipse.</p>
+  <p class="cap2">50 checks in <span style="font-family:var(--mono)">the-washhouse/foam.test.mjs</span>,
+  in three separate parts: the machinery at machine precision, the calibration on a
+  loop with a known answer, and the claim.</p>
+</div>
+
+<div class="hint" id="hint">click a bubble to watch it &mdash; it will change its mind about growing</div>
+
+<div class="open" id="opencard">
+  <h2>A perfect honeycomb is frozen.</h2>
+  <p>Every bubble on this copper has <b>exactly six neighbours</b>, and by the law
+  in the corner of the room that means not one of them can change its area. It will
+  sit like this forever. Nothing is wrong.</p>
+  <p>Give it a shove &mdash; swap a few neighbours, change nothing else, not one
+  bubble's size &mdash; and it comes apart.</p>
+  <button class="key" id="bstart">break the symmetry</button>
+</div>
+
+<script type="module">
+<!-- forge:include ../tools/ws/ws.js -->
+<!-- forge:include ./foam.mjs -->
+
+const $ = id => document.getElementById(id);
+addEventListener('error', e => { window.__foamErr = (e.error && e.error.stack) || e.message; });
+
+/* ═══ the foam ═══════════════════════════════════════════════════════════════ */
+const NX = 18, NY = 12, DT = 0.002;
+let FO = null, running = false, speed = 1, held = false, popMode = false, watched = -1;
+let sim = 0;                                     /* seconds of wall clock spent stepping */
+const scatter = [];                              /* every measured (n, rate, A), running free */
+const heldPts = [];                              /* and the same, with the corners held */
+const SCATMAX = 4200;
+let winOpen = false, holdUntil = 0, settled = false;
+
+function fresh() {
+  FO = honeycomb(NX, NY, 1);
+  FO.h0 = 0.10; FO.grade = 0.6;
+  scatter.length = 0; heldPts.length = 0; watched = -1; held = false; FO.pinJunctions = false;
+  settled = false; winOpen = false; running = false; speed = 1;
+  $('bhold').classList.remove('on'); $('bhold').textContent = 'hold the corners';
+  $('bpause').textContent = 'pause';
+  paintWatch();
+}
+function breakSymmetry() {
+  const rnd = mulberry(1 + ((Date.now() / 7) | 0) % 100000);
+  shuffle(FO, Math.round(0.9 * NX * NY), rnd);
+  running = true;
+}
+
+/* ═══ the view: one period of the torus, covering the frame ══════════════════ */
+const cv = $('gl');
+let W = 1, H = 1, DPR = 1, SC = 1, OX = 0, OY = 0, TILES = [];
+function layout() {
+  DPR = Math.min(2, devicePixelRatio || 1);
+  W = cv.clientWidth; H = cv.clientHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  SC = Math.max(W / FO.Lx, H / FO.Ly) * 1.02;
+  OX = FO.Lx / 2; OY = FO.Ly / 2;
+  /* the foam is seamless, so the frame is filled by drawing the one period as
+     many times as it takes. A cell is unwrapped about its own first corner and
+     so can hang a little past the period; one tile of margin covers it. */
+  const hw = (W / SC) / 2, hh = (H / SC) / 2;
+  const i0 = Math.floor((OX - hw) / FO.Lx) - 1, i1 = Math.floor((OX + hw) / FO.Lx) + 1;
+  const j0 = Math.floor((OY - hh) / FO.Ly) - 1, j1 = Math.floor((OY + hh) / FO.Ly) + 1;
+  const off = [];
+  for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) off.push(i * FO.Lx, j * FO.Ly);
+  TILES = off;
+  if (gl) {
+    gl.viewport(0, 0, cv.width, cv.height);
+    gl.bindBuffer(gl.ARRAY_BUFFER, tileVBO);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(off), gl.STATIC_DRAW);
+  }
+}
+const toScreen = (wx, wy) => [(wx - OX) * SC + W / 2, H / 2 - (wy - OY) * SC];
+const toWorld = (sx, sy) => [(sx - W / 2) / SC + OX, (H / 2 - sy) / SC + OY];
+
+/* ═══ WebGL ══════════════════════════════════════════════════════════════════ */
+const gl = cv.getContext('webgl2', { antialias: true, alpha: false, premultipliedAlpha: false });
+if (!gl) {
+  document.body.innerHTML = '<div style="padding:40px;font:16px Georgia,serif;color:#a3b8bf">' +
+    '<a href="../index.html" style="color:#d8b070">&larr; The Estate</a><h1>The Washhouse</h1>' +
+    '<p>This copper needs WebGL2, and this browser has not got it.</p></div>';
+  throw new Error('no webgl2');
+}
+function shader(type, src) {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+function program(vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, shader(gl.VERTEX_SHADER, vs)); gl.attachShader(p, shader(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  return p;
+}
+const HEAD = '#version 300 es\nprecision highp float;\n';
+
+/* the bubbles: flat fans, tinted by how many sides they have */
+const progCell = program(HEAD + `
+layout(location=0) in vec2 aPos;
+layout(location=1) in vec3 aCol;
+layout(location=2) in float aRim;
+layout(location=3) in vec2 aOff;
+uniform vec2 uCam, uRes; uniform float uSc;
+out vec3 vCol; out float vRim;
+void main(){
+  vec2 p = (aPos + aOff - uCam) * uSc;
+  gl_Position = vec4(2.0*p.x/uRes.x, 2.0*p.y/uRes.y, 0.0, 1.0);
+  vCol = aCol; vRim = aRim;
+}`, HEAD + `
+in vec3 vCol; in float vRim; out vec4 o;
+void main(){ o = vec4(vCol * mix(0.30, 1.0, vRim), 1.0); }`);
+
+/* the films and the Plateau borders: glow, added on top */
+const progFilm = program(HEAD + `
+layout(location=0) in vec2 aPos;
+layout(location=1) in vec2 aUV;
+layout(location=2) in vec3 aCol;
+layout(location=3) in vec2 aOff;
+uniform vec2 uCam, uRes; uniform float uSc;
+out vec2 vUV; out vec3 vCol;
+void main(){
+  vec2 p = (aPos + aOff - uCam) * uSc;
+  gl_Position = vec4(2.0*p.x/uRes.x, 2.0*p.y/uRes.y, 0.0, 1.0);
+  vUV = aUV; vCol = aCol;
+}`, HEAD + `
+in vec2 vUV; in vec3 vCol; out vec4 o;
+void main(){
+  float r2 = dot(vUV, vUV);
+  float glow = exp(-3.1 * r2);
+  float core = exp(-26.0 * r2);
+  o = vec4(vCol * (glow * 0.42 + core * 1.15), 1.0);
+}`);
+
+function loc(p) {
+  return { cam: gl.getUniformLocation(p, 'uCam'),
+           res: gl.getUniformLocation(p, 'uRes'), sc: gl.getUniformLocation(p, 'uSc') };
+}
+const LC = loc(progCell), LF = loc(progFilm);
+
+const tileVBO = gl.createBuffer();
+function mkBuf(strideFloats, sizes) {
+  const b = { vbo: gl.createBuffer(), vao: gl.createVertexArray(), arr: new Float32Array(1024 * strideFloats), n: 0, stride: strideFloats };
+  gl.bindVertexArray(b.vao); gl.bindBuffer(gl.ARRAY_BUFFER, b.vbo);
+  let off = 0;
+  sizes.forEach((sz, i) => {
+    gl.enableVertexAttribArray(i);
+    gl.vertexAttribPointer(i, sz, gl.FLOAT, false, strideFloats * 4, off * 4);
+    off += sz;
+  });
+  gl.bindBuffer(gl.ARRAY_BUFFER, tileVBO);         /* slot 3: one torus offset per instance */
+  gl.enableVertexAttribArray(3);
+  gl.vertexAttribPointer(3, 2, gl.FLOAT, false, 8, 0);
+  gl.vertexAttribDivisor(3, 1);
+  gl.bindVertexArray(null);
+  return b;
+}
+const cellB = mkBuf(6, [2, 3, 1]);       /* pos, col, rim */
+const filmB = mkBuf(7, [2, 2, 3]);       /* pos, uv, col  */
+function grow(b, needVerts) {
+  if (b.arr.length >= needVerts * b.stride) return;
+  let n = b.arr.length; while (n < needVerts * b.stride) n *= 2;
+  b.arr = new Float32Array(n);
+}
+function upload(b) {
+  gl.bindBuffer(gl.ARRAY_BUFFER, b.vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, b.arr.subarray(0, b.n * b.stride), gl.DYNAMIC_DRAW);
+}
+
+/* ── the tint ramp: cool when losing area, warm when gaining ─────────────── */
+function tint(n) {
+  const t = Math.max(-1, Math.min(1, (n - 6) / 2.6));
+  const cool = [0.26, 0.56, 0.98], mid = [0.40, 0.50, 0.56], hot = [1.00, 0.68, 0.30];
+  const a = t < 0 ? cool : hot, u = Math.abs(t);
+  return [mid[0] + (a[0] - mid[0]) * u, mid[1] + (a[1] - mid[1]) * u, mid[2] + (a[2] - mid[2]) * u];
+}
+(function ramp() {
+  for (let i = 0; i < 5; i++) {
+    const c = tint(4 + i); const el = $('ramp' + i);
+    el.style.background = `rgb(${c.map(v => Math.min(255, Math.round(v * 340))).join(',')})`;
+  }
+})();
+
+/* ── build one frame's geometry ─────────────────────────────────────────── */
+function buildGeometry() {
+  const cs = cells(FO);
+  /* cells */
+  let need = 0; for (const c of cs) need += 3 * c.pts.nodes.length;
+  grow(cellB, need); cellB.n = 0;
+  const CA = cellB.arr;
+  let k = 0;
+  for (const c of cs) {
+    const P = c.pts.xy, m = P.length / 2;
+    let cx = 0, cy = 0; for (let i = 0; i < m; i++) { cx += P[2 * i]; cy += P[2 * i + 1]; }
+    cx /= m; cy /= m;
+    const col = tint(c.n);
+    const boost = (c.id === watched) ? 3.4 : 1;
+    const r = col[0] * 0.40 * boost, g = col[1] * 0.40 * boost, b = col[2] * 0.40 * boost;
+    for (let i = 0; i < m; i++) {
+      const j = (i + 1) % m;
+      CA[k++] = cx; CA[k++] = cy; CA[k++] = r * 0.55; CA[k++] = g * 0.55; CA[k++] = b * 0.55; CA[k++] = 0;
+      CA[k++] = P[2 * i]; CA[k++] = P[2 * i + 1]; CA[k++] = r; CA[k++] = g; CA[k++] = b; CA[k++] = 1;
+      CA[k++] = P[2 * j]; CA[k++] = P[2 * j + 1]; CA[k++] = r; CA[k++] = g; CA[k++] = b; CA[k++] = 1;
+    }
+  }
+  cellB.n = k / cellB.stride;
+
+  /* films + Plateau borders */
+  const hw = Math.max(0.0055, 3.1 / SC);          /* half-width of the glow, in world */
+  let segs = 0, jn = 0;
+  for (let f = 0; f < FO.E.length; f++) if (FO.E[f]) segs += FO.E[f].m.length + 1;
+  for (let v = 0; v < FO.V.length; v++) if (FO.V[v]) jn++;
+  grow(filmB, 6 * (segs + jn)); filmB.n = 0;
+  const FA = filmB.arr; let q = 0;
+  const quad = (ax, ay, bx, by, cx2, cy2, dx2, dy2, uv, col) => {
+    const push = (x, y, u, v) => { FA[q++] = x; FA[q++] = y; FA[q++] = u; FA[q++] = v; FA[q++] = col[0]; FA[q++] = col[1]; FA[q++] = col[2]; };
+    push(ax, ay, uv[0], uv[1]); push(bx, by, uv[2], uv[3]); push(cx2, cy2, uv[4], uv[5]);
+    push(ax, ay, uv[0], uv[1]); push(cx2, cy2, uv[4], uv[5]); push(dx2, dy2, uv[6], uv[7]);
+  };
+  const UVFILM = [1, 0, 1, 0, -1, 0, -1, 0];
+  const soap = [0.86, 0.96, 1.0], pool = [0.62, 0.74, 0.80];
+  const lit = [1.0, 0.86, 0.55];
+  for (let f = 0; f < FO.E.length; f++) {
+    const e = FO.E[f]; if (!e) continue;
+    const on = (e.L === watched || e.R === watched);
+    const col = on ? lit : soap;
+    const ch = [FO.V[e.a].n, ...e.m, FO.V[e.b].n];
+    let x0 = FO.X[ch[0]], y0 = FO.Y[ch[0]];
+    for (let i = 0; i + 1 < ch.length; i++) {
+      const x1 = x0 + mi(FO.X[ch[i + 1]] - x0, FO.Lx), y1 = y0 + mi(FO.Y[ch[i + 1]] - y0, FO.Ly);
+      let dx = x1 - x0, dy = y1 - y0; const L = Math.hypot(dx, dy) || 1e-9;
+      dx /= L; dy /= L;
+      const px = -dy * hw, py = dx * hw, ex = dx * hw, ey = dy * hw;
+      quad(x0 - ex + px, y0 - ey + py, x1 + ex + px, y1 + ey + py,
+           x1 + ex - px, y1 + ey - py, x0 - ex - px, y0 - ey - py, UVFILM, col);
+      x0 = x1; y0 = y1;
+    }
+  }
+  /* the Plateau borders: where three films meet, the liquid pools and it is brighter */
+  const jw = hw * 1.55;
+  for (let v = 0; v < FO.V.length; v++) {
+    const V = FO.V[v]; if (!V) continue;
+    const x = FO.X[V.n], y = FO.Y[V.n];
+    quad(x - jw, y - jw, x + jw, y - jw, x + jw, y + jw, x - jw, y + jw,
+         [-1, -1, 1, -1, 1, 1, -1, 1], pool);
+  }
+  filmB.n = q / filmB.stride;
+  upload(cellB); upload(filmB);
+}
+
+function draw() {
+  gl.viewport(0, 0, cv.width, cv.height);
+  gl.clearColor(0.014, 0.026, 0.036, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.disable(gl.DEPTH_TEST);
+  const res = [cv.width, cv.height], sc = SC * DPR, cam = [OX, OY];
+
+  const inst = TILES.length / 2;
+
+  gl.disable(gl.BLEND);
+  gl.useProgram(progCell); gl.bindVertexArray(cellB.vao);
+  gl.uniform2fv(LC.res, res); gl.uniform2fv(LC.cam, cam); gl.uniform1f(LC.sc, sc);
+  gl.drawArraysInstanced(gl.TRIANGLES, 0, cellB.n, inst);
+
+  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+  gl.useProgram(progFilm); gl.bindVertexArray(filmB.vao);
+  gl.uniform2fv(LF.res, res); gl.uniform2fv(LF.cam, cam); gl.uniform1f(LF.sc, sc);
+  gl.drawArraysInstanced(gl.TRIANGLES, 0, filmB.n, inst);
+  gl.bindVertexArray(null);
+}
+
+/* ═══ the measurement ════════════════════════════════════════════════════════ */
+const WINDOW = 0.16;
+let winT = 0;
+function measure() {
+  /* holding the corners does not stop the foam instantly — the films still have
+     to straighten out. Give it a moment before billing anything to the control. */
+  if (held && !settled && FO.t >= holdUntil) settled = true;
+  if (!winOpen) { openWindow(FO); winT = FO.t; winOpen = true; return; }
+  if (FO.t - winT < WINDOW) return;
+  const pts = readWindow(FO);
+  const bin = held ? (settled ? heldPts : null) : scatter;
+  if (bin) { for (const p of pts) bin.push(p); while (bin.length > SCATMAX) bin.shift(); }
+  openWindow(FO); winT = FO.t;
+}
+function currentFit() {
+  const use = held ? heldPts : scatter;
+  return [fitThroughSix(use), use];
+}
+
+/* ═══ the panels ═════════════════════════════════════════════════════════════ */
+function fitCanvas(c) {
+  const r = c.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1);
+  if (c.width !== Math.round(r.width * d)) { c.width = Math.round(r.width * d); c.height = Math.round(r.height * d); }
+  const g = c.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0);
+  return [g, r.width, r.height];
+}
+function drawScatter() {
+  const [g, w, h] = fitCanvas($('scat'));
+  g.clearRect(0, 0, w, h);
+  const [fit, use] = currentFit();
+  const pad = { l: 34, r: 8, t: 8, b: 18 };
+  const nlo = 2.6, nhi = 10.4, rlo = -2.2, rhi = 2.2;
+  const X = n => pad.l + (n - nlo) / (nhi - nlo) * (w - pad.l - pad.r);
+  const Y = r => pad.t + (rhi - r) / (rhi - rlo) * (h - pad.t - pad.b);
+  g.strokeStyle = 'rgba(191,230,239,.10)'; g.lineWidth = 1;
+  for (let n = 3; n <= 10; n++) { g.beginPath(); g.moveTo(X(n), pad.t); g.lineTo(X(n), h - pad.b); g.stroke(); }
+  g.strokeStyle = 'rgba(191,230,239,.22)';
+  g.beginPath(); g.moveTo(pad.l, Y(0)); g.lineTo(w - pad.r, Y(0)); g.stroke();
+  /* the law */
+  g.strokeStyle = 'rgba(216,176,112,.85)'; g.lineWidth = 1.6; g.setLineDash([5, 4]);
+  g.beginPath(); g.moveTo(X(nlo), Y(VN * (nlo - 6))); g.lineTo(X(nhi), Y(VN * (nhi - 6))); g.stroke();
+  g.setLineDash([]);
+  /* the points */
+  for (let i = Math.max(0, use.length - 2600); i < use.length; i++) {
+    const p = use[i];
+    const c = tint(p.n);
+    g.fillStyle = `rgba(${(c[0] * 255) | 0},${(c[1] * 255) | 0},${(c[2] * 255) | 0},.30)`;
+    const jitter = ((i * 2654435761) % 1000) / 1000 - 0.5;
+    g.fillRect(X(p.n + jitter * 0.62) - 1, Y(Math.max(rlo, Math.min(rhi, p.r))) - 1, 2.2, 2.2);
+  }
+  /* the fit */
+  if (use.length > 30 && isFinite(fit.slope)) {
+    g.strokeStyle = 'rgba(143,216,176,.95)'; g.lineWidth = 1.4;
+    g.beginPath(); g.moveTo(X(nlo), Y(fit.slope * (nlo - 6))); g.lineTo(X(nhi), Y(fit.slope * (nhi - 6))); g.stroke();
+  }
+  g.fillStyle = 'rgba(113,135,143,.95)'; g.font = '10px ui-monospace,Menlo,monospace';
+  for (let n = 4; n <= 10; n++) g.fillText(String(n), X(n) - 3, h - 6);
+  g.fillText('+2', 4, Y(2) + 3); g.fillText(' 0', 6, Y(0) + 3); g.fillText('-2', 4, Y(-2) + 3);
+  if (w > 420) { g.fillStyle = 'rgba(113,135,143,.55)'; g.fillText('sides', w - 34, h - 6); }
+}
+function drawHist() {
+  const [g, w, h] = fitCanvas($('hist'));
+  g.clearRect(0, 0, w, h);
+  const c = census(FO);
+  let mx = 1; for (const v of c.hist.values()) mx = Math.max(mx, v);
+  const lo = 3, hi = 11, bw = (w - 10) / (hi - lo + 1);
+  for (let n = lo; n <= hi; n++) {
+    const v = c.hist.get(n) || 0;
+    const bh = (h - 16) * v / mx;
+    const t = tint(n);
+    g.fillStyle = `rgba(${(t[0] * 255) | 0},${(t[1] * 255) | 0},${(t[2] * 255) | 0},.72)`;
+    g.fillRect(5 + (n - lo) * bw + 1.5, h - 13 - bh, bw - 3, bh);
+    g.fillStyle = 'rgba(113,135,143,.9)'; g.font = '9.5px ui-monospace,Menlo,monospace';
+    g.fillText(String(n), 5 + (n - lo) * bw + bw / 2 - 3, h - 3);
+  }
+  g.fillStyle = 'rgba(163,184,191,.65)'; g.font = '9.5px ui-monospace,Menlo,monospace';
+  g.fillText('bubbles by side count', 6, 10);
+}
+function drawSize() {
+  const [g, w, h] = fitCanvas($('size'));
+  g.clearRect(0, 0, w, h);
+  const [, use] = currentFit();
+  const pts = use.filter(p => p.n >= 4 && p.n <= 8 && p.A > 0);
+  if (!pts.length) { g.fillStyle = 'rgba(113,135,143,.9)'; g.font = '12px serif'; g.fillText('let the foam run a while first', 12, 22); return; }
+  let amin = Infinity, amax = 0;
+  for (const p of pts) { amin = Math.min(amin, p.A); amax = Math.max(amax, p.A); }
+  const pad = { l: 34, r: 10, t: 10, b: 20 };
+  const X = a => pad.l + (Math.log10(a) - Math.log10(amin)) / Math.max(0.3, Math.log10(amax / amin)) * (w - pad.l - pad.r);
+  const rlo = -2.6, rhi = 2.6;
+  const Y = r => pad.t + (rhi - r) / (rhi - rlo) * (h - pad.t - pad.b);
+  g.strokeStyle = 'rgba(191,230,239,.10)';
+  g.beginPath(); g.moveTo(pad.l, Y(0)); g.lineTo(w - pad.r, Y(0)); g.stroke();
+  for (let n = 4; n <= 8; n++) {
+    const t = tint(n);
+    g.strokeStyle = `rgba(${(t[0] * 255) | 0},${(t[1] * 255) | 0},${(t[2] * 255) | 0},.55)`;
+    g.setLineDash([5, 4]); g.lineWidth = 1.2;
+    g.beginPath(); g.moveTo(pad.l, Y(VN * (n - 6))); g.lineTo(w - pad.r, Y(VN * (n - 6))); g.stroke();
+    g.setLineDash([]);
+    g.fillStyle = `rgba(${(t[0] * 255) | 0},${(t[1] * 255) | 0},${(t[2] * 255) | 0},.9)`;
+    g.font = '10px ui-monospace,Menlo,monospace';
+    g.fillText('n=' + n, w - pad.r - 26, Y(VN * (n - 6)) - 3);
+  }
+  for (const p of pts) {
+    const t = tint(p.n);
+    g.fillStyle = `rgba(${(t[0] * 255) | 0},${(t[1] * 255) | 0},${(t[2] * 255) | 0},.34)`;
+    g.fillRect(X(p.A) - 1, Y(Math.max(rlo, Math.min(rhi, p.r))) - 1, 2.2, 2.2);
+  }
+  g.fillStyle = 'rgba(113,135,143,.95)'; g.font = '10px ui-monospace,Menlo,monospace';
+  g.fillText('area  ' + amin.toPrecision(2) + '  →  ' + amax.toPrecision(2) +
+             '   (×' + (amax / amin).toPrecision(3) + ')', pad.l, h - 6);
+  g.fillText('dA/dt', 4, pad.t + 8);
+}
+
+/* The watched bubble's rate is MEASURED over a rolling window, not read off the
+   instantaneous node velocities. The velocity field carries a tangential part
+   that slides nodes along the film without moving the film — it is invisible in
+   the true area and very visible in the polygon's, so instant-by-instant the
+   number is honest noise. Over a tenth of a time unit it settles. */
+const wm = { id: -1, n: -1, A0: 0, t0: 0, r: NaN, lost: false };
+function watchTick() {
+  const C = watched >= 0 ? FO.C[watched] : null;
+  if (!C) { if (wm.id >= 0) { wm.lost = true; wm.id = -1; } return; }
+  wm.lost = false;
+  if (C.id !== wm.id || C.n !== wm.n) { wm.id = C.id; wm.n = C.n; wm.A0 = C.A; wm.t0 = FO.t; wm.r = NaN; return; }
+  const dt = FO.t - wm.t0;
+  if (dt >= 0.09) {
+    wm.r = (C.A - wm.A0) / dt;
+    if (dt > 0.55) { wm.A0 = C.A; wm.t0 = FO.t; }
+  }
+}
+function paintWatch() {
+  const el = $('watch');
+  const C = watched >= 0 ? FO.C[watched] : null;
+  if (!C) {
+    el.classList.add('none'); $('wn').textContent = wm.lost ? '·' : '—';
+    $('wlab').textContent = wm.lost ? 'that bubble is gone' : 'no bubble picked — click one';
+    $('wsay').innerHTML = wm.lost
+      ? 'It got down to three sides, and a three-sided bubble loses area at &pi; per unit time whatever else it does. Its three neighbours took what was left. Click another.'
+      : 'Pick a bubble and this card follows it: how many sides it has, how fast it is really changing, and what the law says it should be. Wait for a neighbour to swap and watch the sign turn over.';
+    return;
+  }
+  el.classList.remove('none');
+  $('wn').textContent = C.n;
+  $('wlab').textContent = (C.n === 1 ? 'side' : 'sides');
+  const want = VN * (C.n - 6);
+  const verb = C.n > 6 ? 'growing' : C.n < 6 ? 'shrinking' : 'holding still';
+  const got = isFinite(wm.r) ? `${wm.r >= 0 ? '+' : ''}${wm.r.toFixed(3)}` : 'measuring…';
+  $('wsay').innerHTML =
+    `area <b>${C.A.toFixed(3)}</b> &middot; ${verb}<br>` +
+    `measured dA/dt &nbsp;<b>${got}</b><br>` +
+    `(&pi;/3)(n&minus;6) &nbsp;<b>${want >= 0 ? '+' : ''}${want.toFixed(3)}</b>` +
+    (C.n === 6 ? '<br><span style="color:var(--warm)">six sides: the law says it cannot change at all</span>' : '');
+}
+
+let lastPanel = 0;
+function paintPanels(now) {
+  if (now - lastPanel < 220) return;
+  lastPanel = now;
+  const c = census(FO);
+  $('clock').textContent = 't = ' + FO.t.toFixed(2);
+  const [fit, use] = currentFit();
+  const settling = held && (!settled || use.length <= 30);
+  $('slope').textContent = settling ? 'settling…' : (use.length > 30 && isFinite(fit.slope) ? fit.slope.toFixed(5) : '—');
+  $('r2').textContent = settling ? '' : (use.length > 30 && isFinite(fit.r2) ? fit.r2.toFixed(4) : '—');
+  $('cnt').textContent = c.N + ' · ' + use.length;
+  $('meann').textContent = c.meanN.toFixed(6);
+  $('adrift').textContent = (Math.abs(c.area - c.areaShould) / c.areaShould).toExponential(1);
+  drawScatter(); drawHist();
+  if ($('drawer').classList.contains('shown')) drawSize();
+  paintWatch();
+}
+
+/* ═══ picking ════════════════════════════════════════════════════════════════ */
+function cellAt(sx, sy) {
+  const [wx0, wy0] = toWorld(sx, sy);
+  for (const C of cells(FO)) {
+    const P = C.pts.xy, m = P.length / 2;
+    /* bring the query point into this cell's own unwrapped frame */
+    const wx = P[0] + mi(wx0 - P[0], FO.Lx), wy = P[1] + mi(wy0 - P[1], FO.Ly);
+    let inside = false;
+    for (let i = 0, j = m - 1; i < m; j = i++) {
+      const xi = P[2 * i], yi = P[2 * i + 1], xj = P[2 * j], yj = P[2 * j + 1];
+      if ((yi > wy) !== (yj > wy) && wx < (xj - xi) * (wy - yi) / (yj - yi) + xi) inside = !inside;
+    }
+    if (inside) return C.id;
+  }
+  return -1;
+}
+function filmAt(sx, sy) {
+  const [wx0, wy0] = toWorld(sx, sy);
+  let best = -1, bd = (14 / SC) ** 2;
+  for (let f = 0; f < FO.E.length; f++) {
+    const e = FO.E[f]; if (!e) continue;
+    const ch = [FO.V[e.a].n, ...e.m, FO.V[e.b].n];
+    for (let i = 0; i + 1 < ch.length; i++) {
+      const ax = FO.X[ch[i]], ay = FO.Y[ch[i]];
+      const bx = ax + mi(FO.X[ch[i + 1]] - ax, FO.Lx), by = ay + mi(FO.Y[ch[i + 1]] - ay, FO.Ly);
+      const px = ax + mi(wx0 - ax, FO.Lx), py = ay + mi(wy0 - ay, FO.Ly);
+      const vx = bx - ax, vy = by - ay, L2 = vx * vx + vy * vy || 1e-12;
+      let t = ((px - ax) * vx + (py - ay) * vy) / L2; t = Math.max(0, Math.min(1, t));
+      const dx = px - (ax + t * vx), dy = py - (ay + t * vy);
+      const d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = f; }
+    }
+  }
+  return best;
+}
+
+cv.addEventListener('pointerup', ev => {
+  const r = cv.getBoundingClientRect();
+  const sx = ev.clientX - r.left, sy = ev.clientY - r.top;
+  if (popMode) {
+    const f = filmAt(sx, sy);
+    if (f >= 0 && popFilm(FO, f)) {
+      popMode = false; $('bpop').classList.remove('on');
+      $('hint').textContent = 'two bubbles just became one — watch its side count, and the rate that follows from it';
+    }
+    return;
+  }
+  const c = cellAt(sx, sy);
+  watched = (c === watched) ? -1 : c;
+  paintWatch();
+  if (watched >= 0) $('hint').textContent = 'wait for a neighbour to swap sides — the sign turns over the instant n does';
+});
+
+/* ═══ the loop ═══════════════════════════════════════════════════════════════ */
+let lastT = 0;
+function frame(now) {
+  const dtWall = Math.max(0, Math.min(0.05, (now - lastT) / 1000)); lastT = now;
+  if (running && !document.hidden) {
+    const budget = 9;                              /* ms of stepping per frame, hard cap */
+    const t0 = performance.now();
+    let want = Math.max(1, Math.round(speed * dtWall * 60));
+    while (want-- > 0) {
+      step(FO, DT);
+      if (performance.now() - t0 > budget) break;
+    }
+    sim = performance.now() - t0;
+    measure(); watchTick();
+    if (census(FO).N <= 14) { running = false; $('bpause').textContent = 'run'; $('hint').textContent = 'the copper is nearly one bubble — press START AGAIN'; }
+  }
+  buildGeometry();
+  draw();
+  paintPanels(now);
+  requestAnimationFrame(frame);
+}
+
+/* ═══ controls ═══════════════════════════════════════════════════════════════ */
+$('bstart').addEventListener('click', () => {
+  $('opencard').classList.add('gone');
+  breakSymmetry();
+  $('hint').textContent = 'click a bubble to watch it — it will change its mind about growing';
+});
+$('bpause').addEventListener('click', () => {
+  running = !running; $('bpause').textContent = running ? 'pause' : 'run';
+});
+$('bslow').addEventListener('click', () => { speed = Math.max(0.15, speed / 2); flash(); });
+$('bfast').addEventListener('click', () => { speed = Math.min(16, speed * 2); flash(); });
+function flash() { $('hint').textContent = 'speed ×' + (speed < 1 ? speed.toFixed(2) : speed); }
+$('bpop').addEventListener('click', () => {
+  popMode = !popMode; $('bpop').classList.toggle('on', popMode);
+  $('hint').textContent = popMode ? 'click a film to break it — the two bubbles it separates become one'
+                                  : 'click a bubble to watch it';
+});
+$('bhold').addEventListener('click', () => {
+  held = !held; FO.pinJunctions = held;
+  $('bhold').classList.toggle('on', held);
+  $('bhold').textContent = held ? 'let them go' : 'hold the corners';
+  heldPts.length = 0; settled = false; holdUntil = FO.t + 0.7;
+  if (held) { winOpen = false; $('hint').textContent = 'the corners are held — the films still flow, and the foam is stopping'; }
+  else { winOpen = false; $('hint').textContent = 'let go — the corners find 120° again and it starts back up'; }
+});
+$('bagain').addEventListener('click', () => {
+  fresh(); layout();
+  $('opencard').classList.remove('gone');
+});
+$('proofbtn').addEventListener('click', () => { $('drawer').classList.add('shown'); $('proofbtn').style.display = 'none'; drawSize(); });
+$('close').addEventListener('click', () => { $('drawer').classList.remove('shown'); $('proofbtn').style.display = ''; });
+
+addEventListener('resize', () => layout());
+
+/* ═══ go ═════════════════════════════════════════════════════════════════════ */
+fresh();
+layout();
+requestAnimationFrame(frame);
+
+/* the breadcrumb the sky's survey eats */
+try { WS.seen('the-washhouse'); } catch (e) {}
+
+/* for headless verification: drive the room without a pointer */
+window.__foam = {
+  start() { $('bstart').click(); },
+  run(n) { for (let i = 0; i < n; i++) step(FO, DT), measure(); },
+  hold(v) { if (!!v !== held) $('bhold').click(); },
+  pick(id) { watched = id; paintWatch(); },
+  pickAt(x, y) { watched = cellAt(x, y); paintWatch(); return watched; },
+  pop() { for (let f = 0; f < FO.E.length; f++) if (FO.E[f] && popFilm(FO, f)) return f; return -1; },
+  state() {
+    const c = census(FO);
+    const [fit, use] = currentFit();
+    return {
+      t: FO.t, N: c.N, meanN: c.meanN, euler: c.euler,
+      areaDrift: Math.abs(c.area - c.areaShould) / c.areaShould,
+      slope: fit.slope, ratio: fit.slope / VN, r2: fit.r2, pts: use.length,
+      ev: JSON.parse(JSON.stringify(FO.ev)),
+      audit: audit(FO), watched, held, running,
+      verts: cellB.n, filmVerts: filmB.n, tiles: TILES.length / 2, simMs: sim,
+      err: window.__foamErr || null
+    };
+  }
+};
+</script>
+</body>
+</html>
