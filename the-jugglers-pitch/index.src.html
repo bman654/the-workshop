@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Juggler's Pitch — the pattern is a number, and the number is the balls</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  THE JUGGLER'S PITCH  ·  the-jugglers-pitch/
+
+  A pitch on the fairground green at dusk, two poles, a string of bulbs, and
+  one juggler under them with lit balls.  Type a number and she juggles it.
+
+  THE WHOLE IDEA, IN THREE SENTENCES
+    Number the beats.  On beat t she throws the ball that is due, and the DIGIT
+    at that beat says how many beats later it comes down.  The hands strictly
+    alternate.
+
+  Everything the room shows is downstream of that:
+
+    · A ball thrown at beat t is caught at beat t+s by hand (t+s) mod 2 — the
+      OTHER hand exactly when s is odd.  So 3 is a crossing figure of eight and
+      4 is two separate circles, and the only difference between them is the
+      parity of one digit.  You can watch that.
+
+    · Two balls may not land on the same beat and a hand may not throw what it
+      has not got.  For a period-n pattern that is exactly "i + s[i] mod n hits
+      every residue once".  Type 43 and the room refuses it, and says why.
+
+    · THE AVERAGE OF THE DIGITS IS THE NUMBER OF BALLS.  (5+3+1)/3 = 3.  A
+      pattern whose digits do not average to a whole number cannot be juggled
+      at all — the room counts the balls it is actually holding and puts the
+      count next to the arithmetic.
+
+    · A throw of s is airborne for (s − dwell) beats, so its apex is
+      g(s−d)²T²/8.  A 5 is not 5/3 the height of a 3; it is 3.61 times, and the
+      room prints both in metres.
+
+  THE CLAIMS, AND HOW THEY ARE TESTED (juggle.test.mjs — 50 checks, green)
+    1. Two tests of validity that know nothing about each other — the residue
+       permutation, and a dumb simulation that throws the pattern for 120 beats
+       and watches what lands where — agree on ALL 111,110 sequences of period
+       ≤ 5 with throws 0..9.  5,088 of them are juggleable.
+    2. For every one of those 5,088, the balls COUNTED by the simulation equal
+       the mean of the digits, and no juggleable pattern has a fractional mean.
+    3. The counting law of Buhler, Eisenbud, Graham & Wright: the number of
+       period-n patterns using at most b balls is exactly (b+1)^n.  Two
+       independent counts — brute force over every sequence, and a sum over the
+       permutations of Z_n — hit all 30 cells of the table on the nose, and the
+       second keeps hitting it out to period 8.
+    4. Odd crosses and even does not: measured off several thousand real
+       scheduled throws, not asserted.
+    5. Each drawn arc peaks at exactly hand height + g(s−d)²T²/8, measured by
+       sampling the trajectory the renderer actually draws.
+    6. Negative controls that bite: the engine REFUSES to animate 43; the reach
+       test returns nothing for a hand a metre from the shoulder.
+
+  WHAT IS A CHOICE AND NOT A CLAIM, SAID OUT LOUD ON THE PAGE
+    · The dwell fraction (0.78 of a beat), the hand geometry, the small forward
+      bow that keeps crossing arcs out of one plane, and the figure's
+      proportions.  They are the difference between a diagram and a juggler.
+    · The tune.  Each catch sings a note chosen by the height of the throw that
+      is landing.  That is an instrument, not a measurement, and the page says
+      so.
+    · The suggested tempo per ball count (rate ≈ 1.73·√b) is shaped after what
+      real jugglers do, not derived.
+
+  ENGINES (inlined byte-for-byte by the forge, never forked):
+    · ./juggle.mjs   notation, validity, counting, ballistics, the running
+                     pattern, the two-bone arm.  Node twin: juggle.test.mjs
+    · ./render.js    WebGL2 — ray-marched figure, analytic poles, catenary of
+                     bulbs, additive trails, two-octave bloom, hue-safe tonemap
+    · tools/ws/ws.js the estate-wide mute and the visit breadcrumb
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root{
+    --ink:#f2e7d3; --dim:#b0a48c; --faint:#7a7161;
+    --amber:#f0b45c; --amber-soft:rgba(240,180,92,.14);
+    --sky:#8fc7e8; --good:#8fe0a8; --bad:#ff8b7a;
+    --panel:rgba(16,14,20,.82); --line:rgba(240,180,92,.22);
+    --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,monospace;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; background:#080a10; color:var(--ink);
+    font-family:var(--ui); overflow:hidden; -webkit-font-smoothing:antialiased; }
+  canvas#gl{ position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  a{ color:var(--amber); text-decoration:none; }
+  a:hover{ text-decoration:underline; }
+
+  .crumbs{ position:fixed; top:0; left:0; right:0; z-index:20; display:flex; gap:16px;
+    padding:13px 20px; font:12.5px/1 var(--ui); align-items:center; flex-wrap:wrap;
+    background:linear-gradient(180deg, rgba(6,7,12,.78), rgba(6,7,12,0)); pointer-events:none; }
+  .crumbs a{ pointer-events:auto; color:var(--dim); }
+  .crumbs a:hover{ color:var(--amber); }
+  .crumbs .sp{ flex:1 1 auto; }
+  .crumbs button{ pointer-events:auto; }
+
+  .title{ position:fixed; left:26px; top:52px; z-index:15; max-width:min(430px, 42vw);
+    transition:opacity .6s; }
+  .title h1{ font:600 33px/1.08 var(--serif); margin:0 0 8px; letter-spacing:.2px;
+    text-shadow:0 1px 4px rgba(0,0,0,.95), 0 2px 26px rgba(0,0,0,.9); }
+  .title p{ font:14px/1.6 var(--serif); margin:0; color:var(--dim); opacity:.96;
+    text-shadow:0 1px 3px rgba(0,0,0,.95), 0 2px 18px rgba(0,0,0,.95); }
+  .title p b{ color:var(--ink); font-weight:600; }
+  .title.hid{ opacity:0; pointer-events:none; }
+
+  /* ── the reading rail, upper right ── */
+  .rail{ position:fixed; right:16px; top:50px; z-index:16; width:326px; max-width:44vw;
+    background:var(--panel); border:1px solid var(--line); border-radius:11px;
+    padding:14px 15px 13px; backdrop-filter:blur(11px); -webkit-backdrop-filter:blur(11px); }
+  .rail h2{ font:600 10.5px/1 var(--mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--faint); margin:0 0 11px; }
+  .verdict{ font:15px/1.42 var(--serif); margin:0 0 11px; }
+  .verdict.ok{ color:var(--good); } .verdict.no{ color:var(--bad); }
+  .sum{ font:13.5px/1.5 var(--mono); color:var(--ink); margin:0 0 4px; }
+  .sum b{ color:var(--amber); }
+  .subtle{ font:11.5px/1.55 var(--ui); color:var(--faint); margin:2px 0 0; }
+  table.throws{ width:100%; border-collapse:collapse; margin:11px 0 2px;
+    font:11.5px/1.35 var(--mono); }
+  table.throws th{ text-align:left; color:var(--faint); font-weight:400; padding:0 12px 5px 0;
+    font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
+  table.throws th:last-child{ padding-right:0; }
+  table.throws td{ padding:2.5px 0; border-top:1px solid rgba(240,180,92,.10); }
+  table.throws td.d{ color:var(--amber); font-size:14px; width:1.9em; }
+  table.throws td.x{ color:var(--sky); }
+  table.throws td.n{ color:var(--faint); }
+  table.throws td.h{ text-align:right; color:var(--dim); }
+
+  /* ── the ladder ── */
+  .ladder{ position:fixed; right:16px; z-index:16; width:326px; max-width:44vw;
+    background:var(--panel); border:1px solid var(--line); border-radius:11px;
+    padding:11px 13px 9px; backdrop-filter:blur(11px); -webkit-backdrop-filter:blur(11px); }
+  .ladder h2{ font:600 10.5px/1 var(--mono); letter-spacing:.16em; text-transform:uppercase;
+    color:var(--faint); margin:0 0 8px; }
+  .ladder canvas{ width:100%; height:96px; display:block; }
+  .ladder p{ font:11px/1.5 var(--ui); color:var(--faint); margin:6px 0 0; }
+
+  /* ── the console ── */
+  .console{ position:fixed; left:0; right:0; bottom:0; z-index:18;
+    background:linear-gradient(180deg, rgba(8,9,14,0), rgba(8,9,14,.90) 34%);
+    padding:26px 20px 15px; display:flex; flex-direction:column; align-items:center; gap:11px; }
+  .board{ display:flex; gap:6px; flex-wrap:wrap; justify-content:center; max-width:1100px; }
+  .chip{ font:12px/1 var(--mono); padding:6px 10px; border-radius:7px; cursor:pointer;
+    background:rgba(240,180,92,.07); border:1px solid rgba(240,180,92,.22); color:var(--ink);
+    transition:.16s; letter-spacing:.04em; }
+  .chip:hover{ background:rgba(240,180,92,.19); border-color:rgba(240,180,92,.5); }
+  .chip.on{ background:var(--amber); color:#150f06; border-color:var(--amber); font-weight:600; }
+  .chip .nm{ color:var(--faint); margin-left:7px; font-size:10.5px; }
+  .chip.on .nm{ color:rgba(21,15,6,.68); }
+
+  .row{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; justify-content:center; }
+  .entry{ display:flex; align-items:center; gap:9px;
+    background:rgba(0,0,0,.42); border:1px solid var(--line); border-radius:9px; padding:5px 6px 5px 12px; }
+  .entry label{ font:10px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--faint); }
+  .entry input{ width:150px; background:transparent; border:none; outline:none; color:var(--amber);
+    font:600 21px/1.2 var(--mono); letter-spacing:.13em; }
+  .entry input::placeholder{ color:rgba(240,180,92,.25); }
+  .ctl{ display:flex; align-items:center; gap:8px; font:11px/1 var(--mono); color:var(--dim);
+    letter-spacing:.06em; }
+  .ctl input[type=range]{ width:108px; accent-color:var(--amber); }
+  .ctl .val{ color:var(--amber); min-width:4.2em; display:inline-block; }
+  button.tog{ font:11px/1 var(--mono); letter-spacing:.08em; text-transform:uppercase;
+    padding:7px 11px; border-radius:7px; cursor:pointer; color:var(--dim);
+    background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.13); transition:.16s; }
+  button.tog:hover{ color:var(--ink); border-color:rgba(240,180,92,.45); }
+  button.tog.on{ background:var(--amber-soft); border-color:var(--amber); color:var(--amber); }
+  button.prove{ font:600 11px/1 var(--mono); letter-spacing:.12em; text-transform:uppercase;
+    padding:8px 15px; border-radius:7px; cursor:pointer; color:#150f06; background:var(--amber);
+    border:1px solid var(--amber); }
+  button.prove:hover{ filter:brightness(1.12); }
+  .hint{ font:11px/1.5 var(--ui); color:var(--faint); text-align:center; max-width:680px; }
+
+  /* ── the proof sheet ── */
+  .sheet{ position:fixed; inset:0; z-index:40; background:rgba(4,5,9,.90); display:none;
+    align-items:flex-start; justify-content:center; overflow:auto; padding:44px 18px; }
+  .sheet.open{ display:flex; }
+  .sheet .card{ width:min(820px,100%); background:rgba(14,13,18,.97);
+    border:1px solid var(--line); border-radius:13px; padding:26px 28px 22px; }
+  .sheet h2{ font:600 22px/1.2 var(--serif); margin:0 0 4px; }
+  .sheet .lede{ font:13.5px/1.65 var(--serif); color:var(--dim); margin:0 0 18px; }
+  .sheet .blk{ margin:0 0 17px; }
+  .sheet .blk h3{ font:600 10.5px/1 var(--mono); letter-spacing:.15em; text-transform:uppercase;
+    color:var(--faint); margin:0 0 7px; }
+  .sheet pre{ font:12px/1.55 var(--mono); color:var(--ink); background:rgba(0,0,0,.4);
+    border:1px solid rgba(240,180,92,.13); border-radius:8px; padding:11px 13px; margin:0;
+    overflow-x:auto; white-space:pre; }
+  .sheet .ok{ color:var(--good); } .sheet .no{ color:var(--bad); }
+  .sheet .close{ float:right; }
+  .sheet .note{ font:12px/1.6 var(--ui); color:var(--faint); margin:8px 0 0; }
+
+  .warn{ position:fixed; inset:0; display:none; place-items:center; z-index:60;
+    background:#080a10; padding:30px; text-align:center; font:15px/1.7 var(--serif); color:var(--dim); }
+  .warn.on{ display:grid; }
+
+  @media (max-width:1020px){
+    .rail,.ladder{ display:none; }
+    .title{ max-width:min(400px,66vw); }
+  }
+  @media (max-width:760px){
+    .title h1{ font-size:24px; } .title{ left:16px; top:66px; max-width:calc(100% - 32px); }
+    .title p{ font-size:13px; }
+    .console{ padding:18px 0 10px; gap:9px; }
+    .board{ flex-wrap:nowrap; overflow-x:auto; justify-content:flex-start;
+      padding:0 14px 2px; max-width:100%; scrollbar-width:none; }
+    .board::-webkit-scrollbar{ display:none; }
+    .chip{ flex:0 0 auto; }
+    .chip .nm{ display:none; }
+    .row{ gap:9px; padding:0 12px; }
+    .entry{ padding:4px 5px 4px 10px; }
+    .entry input{ width:96px; font-size:18px; }
+    .ctl input[type=range]{ width:76px; }
+    .hint{ font-size:10.5px; padding:0 14px; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+
+<div class="crumbs">
+  <a href="../index.html">&larr; The Estate</a>
+  <a href="../midway/index.html">The Midway</a>
+  <a href="../arcade/index.html">&nearr; The Arcade</a>
+  <a href="../catenary/index.html">&nearr; The Catenary</a>
+  <span class="sp"></span>
+  <button class="tog" id="mute" title="one mute for the whole estate">sound on</button>
+</div>
+
+<div class="title" id="title">
+  <h1>The Juggler's Pitch</h1>
+  <p>Every juggling pattern is a <b>number</b>. Number the beats; the digit at each beat
+     says how many beats later that throw comes down. Type one and she will do it —
+     and the <b>average of the digits</b> is how many balls she is holding.</p>
+</div>
+
+<div class="rail" id="rail">
+  <h2>the pattern</h2>
+  <p class="verdict" id="verdict">&nbsp;</p>
+  <p class="sum" id="sum">&nbsp;</p>
+  <p class="subtle" id="subtle">&nbsp;</p>
+  <table class="throws"><thead><tr>
+    <th>throw</th><th>goes</th><th>lands in</th><th style="text-align:right">apex</th>
+  </tr></thead><tbody id="throws"></tbody></table>
+</div>
+
+<div class="ladder" id="ladderBox">
+  <h2>the two hands, beat by beat</h2>
+  <canvas id="ladder" width="640" height="192"></canvas>
+  <p id="ladderNote">Top rail is the right hand, bottom the left. Each arc is one throw.</p>
+</div>
+
+<div class="console">
+  <div class="board" id="board"></div>
+  <div class="row">
+    <div class="entry">
+      <label for="pat">pattern</label>
+      <input id="pat" value="531" spellcheck="false" autocomplete="off" maxlength="24">
+    </div>
+    <div class="ctl"><span>tempo</span><input type="range" id="tempo" min="1.2" max="8.0" step="0.05" value="2.99"><span class="val" id="tempoV">2.99/s</span></div>
+    <div class="ctl"><span>dwell</span><input type="range" id="dwell" min="0.25" max="1.25" step="0.01" value="0.78"><span class="val" id="dwellV">0.78</span></div>
+    <button class="tog" id="expose">long exposure</button>
+    <button class="tog" id="lamps">lamps</button>
+    <button class="prove" id="proveBtn">Prove it</button>
+  </div>
+  <p class="hint" id="hint">Drag to walk round her · scroll to step nearer · the chips are patterns jugglers actually use</p>
+</div>
+
+<div class="sheet" id="sheet">
+  <div class="card">
+    <button class="tog close" id="sheetClose">close</button>
+    <h2>What this room claims</h2>
+    <p class="lede">Everything below is computed in your browser, now, by the same engine
+      that is juggling behind this sheet. Nothing is a stored answer.</p>
+    <div id="proofBody"></div>
+    <p class="note">The full battery — including all 111,110 sequences of period ≤ 5 and the
+      counting law out to period 8 — is <span class="mono">juggle.test.mjs</span>, 50 checks, run
+      in Node. This sheet runs the part that fits in a second.</p>
+  </div>
+</div>
+
+<div class="warn" id="warn"></div>
+
+<script type="module">
+<!-- forge:include ./juggle.mjs -->
+<!-- forge:include ./render.js -->
+<!-- forge:include ../tools/ws/ws.js -->
+
+try { WS.seen('the-jugglers-pitch'); } catch (e) {}
+
+const $ = (id) => document.getElementById(id);
+const canvas = $('gl');
+
+/* ── the renderer ─────────────────────────────────────────────────────────── */
+let R = null;
+try {
+  R = new Renderer(canvas);
+} catch (err) {
+  $('warn').classList.add('on');
+  $('warn').textContent = 'The Juggler’s Pitch needs WebGL2 with float render targets, and this browser did not give them: ' + err.message;
+}
+
+/* ── state ────────────────────────────────────────────────────────────────── */
+const state = {
+  text: '531',
+  seq: [5, 3, 1],
+  juggle: null,
+  beatT: DEFAULTS.beatT,
+  dwell: DEFAULTS.dwell,
+  expose: false,
+  lamps: true,
+  t0: performance.now() / 1000,
+  clock: 0,
+  yaw: 0.30, pitch: 0.075, dist: 4.6, distTarget: 4.6, aim: 1.45, aimTarget: 1.45,
+  lastEvent: 0,
+};
+
+function rebuild(keepClock) {
+  const a = analyse(state.seq);
+  if (!a.valid) { state.juggle = null; return a; }
+  const clock = keepClock ? state.clock : 0;
+  state.juggle = new Juggle(state.seq, { beatT: state.beatT, dwell: state.dwell });
+  state.t0 = performance.now() / 1000 - clock;
+  state.lastEvent = clock;
+  frameThePattern();
+  return a;
+}
+
+/* Put the camera where the whole pattern fits: from just under her feet to a
+   little above the tallest throw.  Half the vertical extent divided by
+   tan(fov/2) is the distance that exactly frames it. */
+const FOV = 0.78;
+function frameThePattern() {
+  const apex = state.juggle ? state.juggle.maxApex() : 0.7;
+  const top = HANDS.y + apex + 0.30;
+  const bot = -0.06;
+  /* The console covers the bottom of the glass, so the frame must be tall
+     enough to hide behind it: two passes, because how much world a panel
+     covers depends on how far away the camera is. */
+  const Hpx = Math.max(1, canvas.clientHeight);
+  const covered = Math.min(0.55, (document.querySelector('.console').offsetHeight || 0) / Hpx);
+  let d = ((top - bot) / 2) / Math.tan(FOV / 2);
+  for (let i = 0; i < 3; i++) {
+    const world = 2 * d * Math.tan(FOV / 2) * covered;
+    d = ((top - bot + world) / 2) / Math.tan(FOV / 2) * 0.98;
+  }
+  const world = 2 * d * Math.tan(FOV / 2) * covered;
+  state.aimTarget = (top + bot - world) / 2;
+  state.distTarget = Math.max(2.6, d);
+}
+
+/* ── the board of named patterns ──────────────────────────────────────────── */
+const board = $('board');
+for (const r of REPERTOIRE) {
+  const b = document.createElement('button');
+  b.className = 'chip';
+  b.dataset.pat = r.p;
+  b.innerHTML = '<span>' + r.p + '</span><span class="nm">' + r.name + '</span>';
+  b.title = r.note;
+  b.addEventListener('click', () => { setPattern(r.p, true); hideTitle(); });
+  board.appendChild(b);
+}
+
+function markBoard() {
+  for (const b of board.children) b.classList.toggle('on', b.dataset.pat === state.text);
+}
+
+/* ── entering a pattern ───────────────────────────────────────────────────── */
+function setPattern(text, autoTempo) {
+  $('pat').value = text;
+  applyPattern(text, autoTempo);
+}
+
+function applyPattern(text, autoTempo) {
+  state.text = text;
+  const p = parsePattern(text);
+  if (!p.ok) { state.seq = []; state.juggle = null; paintRail({ valid: false, reason: p.error, sum: 0, period: 0, balls: 0 }); markBoard(); return; }
+  state.seq = p.seq;
+  const a = analyse(state.seq);
+  if (a.valid && autoTempo) {
+    state.beatT = suggestBeatT(state.seq, state.dwell);
+    $('tempo').value = (1 / state.beatT).toFixed(2);
+    $('tempoV').textContent = (1 / state.beatT).toFixed(2) + '/s';
+  }
+  rebuild(false);
+  paintRail(a);
+  markBoard();
+  drawLadder();
+  layout();
+}
+
+let titleHidden = false;
+function hideTitle() {
+  if (titleHidden) return;
+  titleHidden = true;
+  setTimeout(() => $('title').classList.add('hid'), 400);
+}
+
+$('pat').addEventListener('input', (e) => { applyPattern(e.target.value.trim(), true); hideTitle(); });
+$('pat').addEventListener('focus', (e) => e.target.select());
+
+$('tempo').addEventListener('input', (e) => {
+  const rate = parseFloat(e.target.value);
+  state.beatT = 1 / rate;
+  $('tempoV').textContent = rate.toFixed(2) + '/s';
+  if (state.juggle) rebuild(true);
+});
+$('dwell').addEventListener('input', (e) => {
+  state.dwell = parseFloat(e.target.value);
+  $('dwellV').textContent = state.dwell.toFixed(2);
+  if (state.juggle) rebuild(true);
+  paintRail(analyse(state.seq));
+  hideTitle();
+});
+$('expose').addEventListener('click', () => {
+  state.expose = !state.expose;
+  $('expose').classList.toggle('on', state.expose);
+});
+$('lamps').addEventListener('click', () => {
+  state.lamps = !state.lamps;
+  $('lamps').classList.toggle('on', !state.lamps);
+  $('lamps').textContent = state.lamps ? 'lamps' : 'lamps out';
+});
+
+/* ── the reading rail ─────────────────────────────────────────────────────── */
+function paintRail(a) {
+  const v = $('verdict'), s = $('sum'), sub = $('subtle'), tb = $('throws');
+  if (!a || !a.period) {
+    v.className = 'verdict no'; v.textContent = a && a.reason ? a.reason : 'type a pattern';
+    s.textContent = ''; sub.textContent = ''; tb.innerHTML = '';
+    return;
+  }
+  const digits = state.seq.map(valueToDigit);
+  if (a.valid) {
+    v.className = 'verdict ok';
+    v.textContent = a.balls + (a.balls === 1 ? ' ball' : ' balls') + ', period ' + a.period + '.';
+    s.innerHTML = '(' + digits.join(' + ') + ') / ' + a.period + ' = <b>' + a.balls + '</b>';
+    sub.textContent = 'The engine counts ' + a.simBalls + ' ball' + (a.simBalls === 1 ? '' : 's')
+      + ' actually in play, which is what the average said it would be.';
+  } else {
+    v.className = 'verdict no';
+    v.textContent = 'Not juggleable.';
+    const mean = a.period ? (a.sum / a.period) : 0;
+    s.innerHTML = '(' + digits.join(' + ') + ') / ' + a.period + ' = <b>'
+      + (Number.isInteger(mean) ? mean : mean.toFixed(3)) + '</b>';
+    sub.textContent = a.reason + (Number.isInteger(mean) ? '' : ' — and the average is not a whole number, so there is no number of balls it could be.');
+  }
+  const rows = [];
+  state.seq.forEach((val, i) => {
+    if (val === 0) {
+      rows.push('<tr><td class="d">0</td><td class="n" colspan="2">nothing in that hand</td><td class="h">&mdash;</td></tr>');
+      return;
+    }
+    const cross = crosses(val);
+    const h = apexHeight(val, state.beatT, state.dwell);
+    rows.push('<tr><td class="d">' + valueToDigit(val) + '</td>'
+      + '<td class="' + (cross ? 'x' : 'n') + '">' + (cross ? 'across' : 'straight up') + '</td>'
+      + '<td class="' + (cross ? 'x' : 'n') + '">' + (cross ? 'the other hand' : 'the same hand') + '</td>'
+      + '<td class="h">' + (h < 0.006 ? 'flat' : h.toFixed(2) + ' m') + '</td></tr>');
+  });
+  tb.innerHTML = rows.join('');
+}
+
+/* ── the ladder diagram ───────────────────────────────────────────────────── */
+const lad = $('ladder');
+const lctx = lad.getContext('2d');
+function drawLadder(beatNow) {
+  const W = lad.width, H = lad.height;
+  lctx.clearRect(0, 0, W, H);
+  const n = state.seq.length;
+  if (!n) return;
+  const maxT = Math.max(...state.seq, 1);
+  const beats = Math.max(9, Math.min(20, n * (n <= 3 ? 4 : 2) + 2));
+  const padL = 30, padR = 16;
+  const dx = (W - padL - padR) / beats;
+  const yR = 62, yL = H - 50;
+  const valid = analyse(state.seq).valid;
+
+  lctx.strokeStyle = 'rgba(240,180,92,.30)'; lctx.lineWidth = 2;
+  for (const y of [yR, yL]) {
+    lctx.beginPath(); lctx.moveTo(padL - 8, y); lctx.lineTo(W - padR + 6, y); lctx.stroke();
+  }
+  lctx.font = '600 16px ui-monospace, Menlo, monospace';
+  lctx.fillStyle = 'rgba(240,180,92,.70)';
+  lctx.fillText('R', 4, yR + 6);
+  lctx.fillText('L', 4, yL + 6);
+
+  for (let t = 0; t <= beats; t++) {
+    const v = state.seq[t % n];
+    const x0 = padL + t * dx;
+    const y0 = (t % 2 === 0) ? yR : yL;
+    lctx.fillStyle = 'rgba(240,180,92,.42)';
+    lctx.beginPath(); lctx.arc(x0, y0, 3.0, 0, 7); lctx.fill();
+    /* the digit, once per cycle */
+    if (t < n) {
+      lctx.fillStyle = 'rgba(242,231,211,.72)';
+      lctx.font = '15px ui-monospace, Menlo, monospace';
+      lctx.fillText(valueToDigit(v), x0 - 4, (t % 2 === 0) ? 26 : H - 12);
+    }
+    if (v === 0 || t + v > beats) continue;
+    const x1 = padL + (t + v) * dx;
+    const y1 = ((t + v) % 2 === 0) ? yR : yL;
+    const bow = (t % 2 === 0 ? -1 : 1) * (10 + 26 * (v / maxT));
+    lctx.strokeStyle = valid
+      ? (crosses(v) ? 'rgba(143,199,232,.90)' : 'rgba(240,180,92,.90)')
+      : 'rgba(255,139,122,.85)';
+    lctx.lineWidth = 2.0;
+    lctx.beginPath();
+    lctx.moveTo(x0, y0);
+    lctx.bezierCurveTo(x0 + dx * 0.34, y0 + bow, x1 - dx * 0.34, y1 + bow, x1, y1);
+    lctx.stroke();
+  }
+  if (beatNow != null) {
+    const x = padL + (beatNow % beats) * dx;
+    lctx.strokeStyle = 'rgba(255,255,255,.42)'; lctx.lineWidth = 1.5;
+    lctx.beginPath(); lctx.moveTo(x, 6); lctx.lineTo(x, H - 6); lctx.stroke();
+  }
+}
+
+/* ── sound.  An INSTRUMENT, not a measurement: the pitch of each catch is
+      chosen from the height of the throw that is landing, because it makes the
+      pattern audible.  Nothing here is claimed to be a fact about juggling. ── */
+let actx = null;
+function audio() {
+  if (!actx) {
+    try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; }
+  }
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+function muted() { try { return WS.muted(); } catch (e) { return false; } }
+const PENT = [0, 3, 5, 7, 10];
+function noteFor(v) {
+  const d = Math.max(0, v - 1);
+  return 174.61 * Math.pow(2, (12 * Math.floor(d / 5) + PENT[d % 5]) / 12);
+}
+let noiseBuf = null;
+function slap(ac, when, gain) {
+  if (!noiseBuf) {
+    noiseBuf = ac.createBuffer(1, 2048, ac.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    let s = 12345;
+    for (let i = 0; i < d.length; i++) { s = (s * 1103515245 + 12345) & 0x7fffffff; d[i] = (s / 0x3fffffff - 1) * Math.exp(-i / 190); }
+  }
+  const src = ac.createBufferSource(); src.buffer = noiseBuf;
+  const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1750; bp.Q.value = 1.1;
+  const g = ac.createGain(); g.gain.value = gain * 0.30;
+  src.connect(bp); bp.connect(g); g.connect(ac.destination);
+  src.start(when);
+}
+function sing(v, when) {
+  const ac = audio(); if (!ac || muted()) return;
+  const f = noteFor(v);
+  const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
+  const o2 = ac.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2.0;
+  const g = ac.createGain(), g2 = ac.createGain();
+  const dur = 0.34 + 0.05 * v;
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(0.088, when + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  g2.gain.setValueAtTime(0.0001, when);
+  g2.gain.exponentialRampToValueAtTime(0.024, when + 0.006);
+  g2.gain.exponentialRampToValueAtTime(0.0001, when + dur * 0.4);
+  o.connect(g); g.connect(ac.destination);
+  o2.connect(g2); g2.connect(ac.destination);
+  o.start(when); o.stop(when + dur + 0.02);
+  o2.start(when); o2.stop(when + dur + 0.02);
+  slap(ac, when, 1);
+}
+
+/* one mute for the whole estate */
+(function () {
+  const b = $('mute');
+  const sync = () => {
+    let m = false; try { m = WS.muted(); } catch (e) {}
+    b.textContent = m ? 'sound off' : 'sound on';
+    b.classList.toggle('on', !m);
+  };
+  b.addEventListener('click', () => { try { WS.setMuted(!WS.muted()); } catch (e) {} audio(); sync(); });
+  try { WS.onMuteChange(sync); } catch (e) {}
+  sync();
+})();
+
+/* ── camera ───────────────────────────────────────────────────────────────── */
+let dragging = false, lastX = 0, lastY = 0;
+canvas.addEventListener('pointerdown', (e) => {
+  hideTitle();
+  dragging = true; lastX = e.clientX; lastY = e.clientY;
+  canvas.setPointerCapture(e.pointerId);
+  audio();
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  state.yaw -= (e.clientX - lastX) * 0.0062;
+  state.pitch = Math.max(-0.32, Math.min(0.68, state.pitch + (e.clientY - lastY) * 0.0035));
+  lastX = e.clientX; lastY = e.clientY;
+});
+const endDrag = (e) => { dragging = false; try { canvas.releasePointerCapture(e.pointerId); } catch (err) {} };
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  state.distTarget = Math.max(1.9, Math.min(22, state.distTarget * Math.exp(e.deltaY * 0.0011)));
+}, { passive: false });
+
+/* ── the proof sheet ──────────────────────────────────────────────────────── */
+$('proveBtn').addEventListener('click', () => { $('sheet').classList.add('open'); runProof(); });
+$('sheetClose').addEventListener('click', () => $('sheet').classList.remove('open'));
+$('sheet').addEventListener('click', (e) => { if (e.target === $('sheet')) $('sheet').classList.remove('open'); });
+
+function runProof() {
+  const body = $('proofBody');
+  body.innerHTML = '<p class="lede">working&hellip;</p>';
+  setTimeout(() => { body.innerHTML = proofHTML(); }, 24);
+}
+
+function proofHTML() {
+  const out = [];
+  const mark = (b) => b ? '<span class="ok">✓</span>' : '<span class="no">✗</span>';
+
+  /* 1 — the two tests agree, over every sequence of period <= 4 */
+  {
+    const t0 = performance.now();
+    let checked = 0, valid = 0, dis = 0;
+    const s = [];
+    const walk = (n, i) => {
+      if (i === n) {
+        const a = permutationTest(s).valid, b = simulationTest(s, 48).valid;
+        checked++; if (a !== b) dis++; if (a) valid++;
+        return;
+      }
+      for (let v = 0; v <= 9; v++) { s[i] = v; walk(n, i + 1); }
+    };
+    for (let n = 1; n <= 4; n++) { s.length = n; walk(n, 0); }
+    const ms = Math.round(performance.now() - t0);
+    out.push('<div class="blk"><h3>1 &middot; two tests that know nothing about each other</h3><pre>'
+      + 'the residue test   i + s[i] mod n is a permutation of Z_n\n'
+      + 'the dumb test      throw it for 96 beats; nothing may collide, and no\n'
+      + '                   hand may throw a ball it has not got\n\n'
+      + 'sequences tested   ' + checked.toLocaleString() + '   (every one of period 1..4, throws 0..9)\n'
+      + 'juggleable         ' + valid.toLocaleString() + '\n'
+      + 'disagreements      ' + dis + '  ' + mark(dis === 0) + '        [' + ms + ' ms]</pre></div>');
+  }
+
+  /* 2 — the average is the ball count */
+  {
+    let checked = 0, bad = 0, frac = 0;
+    const s = [];
+    const walk = (n, i) => {
+      if (i === n) {
+        const sim = simulationTest(s, 48);
+        if (sim.valid) {
+          const bc = ballCount(s);
+          checked++;
+          if (sim.balls !== bc.balls) bad++;
+          if (!bc.exact) frac++;
+        }
+        return;
+      }
+      for (let v = 0; v <= 9; v++) { s[i] = v; walk(n, i + 1); }
+    };
+    for (let n = 1; n <= 4; n++) { s.length = n; walk(n, 0); }
+    out.push('<div class="blk"><h3>2 &middot; the average of the digits IS the ball count</h3><pre>'
+      + 'juggleable patterns   ' + checked.toLocaleString() + '\n'
+      + 'balls COUNTED by the simulation != mean of the digits:  ' + bad + '  ' + mark(bad === 0) + '\n'
+      + 'juggleable patterns with a fractional average:          ' + frac + '  ' + mark(frac === 0) + '\n\n'
+      + 'so 43 (mean 3.5) cannot be juggled, and the room will not pretend.</pre></div>');
+  }
+
+  /* 3 — the counting law */
+  {
+    let cells = 0, hits = 0;
+    const rows = [];
+    for (let n = 1; n <= 4; n++) {
+      const row = [];
+      for (let b = 0; b <= 4; b++) {
+        const want = Math.pow(b + 1, n);
+        const br = countByBrute(n, b), or = countByOrbits(n, b);
+        cells++; if (br === want && or === want) hits++;
+        row.push(String(br).padStart(6));
+      }
+      rows.push('  n=' + n + '  ' + row.join('') + '      want (b+1)^' + n);
+    }
+    out.push('<div class="blk"><h3>3 &middot; the counting law, exactly</h3><pre>'
+      + 'the number of period-n patterns using at MOST b balls is (b+1)^n\n'
+      + 'counted twice: brute force over every sequence, and a sum over the\n'
+      + 'permutations of Z_n.  Both against the integer.\n\n'
+      + '       b=0   b=1   b=2   b=3   b=4\n'
+      + rows.join('\n') + '\n\n'
+      + 'cells hitting (b+1)^n exactly:  ' + hits + ' / ' + cells + '  ' + mark(hits === cells) + '</pre></div>');
+  }
+
+  /* 4 — odd crosses, measured off the running pattern */
+  {
+    const pats = ['3', '4', '531', '441', '423', '51', '552', '645', '97531', '55550'];
+    let throws = 0, wrong = 0;
+    for (const p of pats) {
+      const j = new Juggle(parsePattern(p).seq);
+      j.build(180);
+      for (const b of j.balls) for (const g of b.segs) {
+        if (g.kind !== 'fly' || g.beat < 0) continue;
+        throws++;
+        if ((g.hand !== g.toHand) !== crosses(g.v)) wrong++;
+      }
+    }
+    out.push('<div class="blk"><h3>4 &middot; odd crosses, even does not</h3><pre>'
+      + 'scheduled throws watched   ' + throws.toLocaleString() + '\n'
+      + 'throws whose catching hand disagreed with the parity of the digit:  '
+      + wrong + '  ' + mark(wrong === 0) + '\n\n'
+      + 'this is why 3 is a figure of eight and 4 is two circles.</pre></div>');
+  }
+
+  /* 5 — the arcs peak where ballistics says */
+  {
+    const j = state.juggle || new Juggle([9, 7, 5, 3, 1]);
+    let worst = 0, rows = [];
+    const seen = new Set();
+    for (const b of j.balls) for (const g of b.segs) {
+      if (g.kind !== 'fly' || g.beat < 0 || g.beat > 60) continue;
+      let hi = -1e9;
+      for (let k = 0; k <= 240; k++) hi = Math.max(hi, j._ballAt(b, g.t0 + (g.t1 - g.t0) * (k / 240)).pos[1]);
+      const want = HANDS.y + apexHeight(g.v, j.beatT, j.dwell);
+      worst = Math.max(worst, Math.abs(hi - want));
+      if (!seen.has(g.v)) { seen.add(g.v); rows.push({ v: g.v, drawn: hi - HANDS.y, want: want - HANDS.y }); }
+    }
+    rows.sort((a, b) => a.v - b.v);
+    out.push('<div class="blk"><h3>5 &middot; every arc peaks where ballistics says it must</h3><pre>'
+      + 'measured by sampling the trajectory the renderer actually draws,\n'
+      + 'against g(s - dwell)^2 T^2 / 8  with T = ' + j.beatT.toFixed(4) + ' s, dwell = ' + j.dwell.toFixed(2) + '\n\n'
+      + '  throw     drawn apex     formula\n'
+      + rows.map((r) => '    ' + valueToDigit(r.v) + '       '
+          + r.drawn.toFixed(4) + ' m     ' + r.want.toFixed(4) + ' m').join('\n')
+      + '\n\nworst disagreement   ' + worst.toExponential(2) + ' m  ' + mark(worst < 3e-4) + '</pre></div>');
+  }
+
+  /* 6 — the negative controls */
+  {
+    let refused = false, why = '';
+    try { new Juggle([4, 3]); } catch (e) { refused = true; why = e.message; }
+    const reach = solveElbow([0, 1.4, 0], [1.2, 1.4, 0], BODY.upperArm, BODY.foreArm, 1);
+    out.push('<div class="blk"><h3>6 &middot; the controls that bite</h3><pre>'
+      + '43 handed to the animator:   ' + (refused ? 'REFUSED' : 'ANIMATED ANYWAY') + '  ' + mark(refused) + '\n'
+      + '  ' + why + '\n\n'
+      + 'a hand held a metre from the shoulder:  '
+      + (reach === null ? 'no elbow exists' : 'solved (!)') + '  ' + mark(reach === null) + '\n'
+      + '  so the reach check the twin runs on every frame is not vacuous.</pre></div>');
+  }
+
+  /* 7 — the beat you hear */
+  {
+    const j = state.juggle || new Juggle([5, 5, 5, 5, 0]);
+    const evs = j.eventsIn(4 * j.beatT, 44 * j.beatT).filter((e) => e.type === 'catch');
+    const gaps = [];
+    for (let i = 1; i < evs.length; i++) gaps.push((evs[i].t - evs[i - 1].t) / j.beatT);
+    const uniq = [...new Set(gaps.map((g) => g.toFixed(4)))].sort();
+    const zeros = state.seq.filter((v) => v === 0).length;
+    out.push('<div class="blk"><h3>7 &middot; the beat you hear</h3><pre>'
+      + 'A catch is the sound a juggler makes.  Vanilla siteswap throws exactly\n'
+      + 'once per beat, so the catches must be metronomic -- EXCEPT on a beat\n'
+      + 'whose digit is 0, where the hand is empty and nothing lands.\n\n'
+      + 'catches over 40 beats of ' + state.text + ':   ' + evs.length + '\n'
+      + 'gaps between them, in beats:   ' + uniq.join(', ') + '\n'
+      + 'zeros in the pattern:          ' + zeros + '\n'
+      + (zeros === 0
+          ? 'no zeros, so every gap is exactly one beat:  ' + mark(uniq.length === 1 && uniq[0] === '1.0000')
+          : 'zeros, so some gaps are longer -- and they are whole beats:  '
+            + mark(gaps.every((g) => Math.abs(g - Math.round(g)) < 1e-9)))
+      + '</pre></div>');
+  }
+
+  out.push('<div class="blk"><h3>and what is NOT claimed</h3><pre>'
+    + 'the dwell fraction, the width of the hands, the forward bow on a crossing\n'
+    + 'arc, the figure herself, and the tune each catch sings.  Those are chosen,\n'
+    + 'not measured.  So is the tempo a pattern arrives at: the beat is picked so\n'
+    + 'the TALLEST throw peaks about ' + (0.24 + 0.145 * Math.max(1, ...state.seq)).toFixed(2) + ' m above the hands, which is what keeps\n'
+    + 'it in front of your eyes.  Drag the tempo slider and every height in the\n'
+    + 'table moves -- by the square law, which is not a choice.</pre></div>');
+
+  return out.join('');
+}
+
+/* ── the frame ────────────────────────────────────────────────────────────── */
+let fpsAvg = 60, lastFrame = performance.now();
+let ladderTick = 0;
+
+function frame() {
+  requestAnimationFrame(frame);
+  if (!R) return;
+  const now = performance.now();
+  const dt = Math.min(0.1, (now - lastFrame) / 1000);
+  lastFrame = now;
+  fpsAvg += ((dt > 0 ? 1 / dt : 60) - fpsAvg) * 0.06;
+
+  const dpr = Math.min(window.devicePixelRatio || 1, fpsAvg < 34 ? 1.0 : 1.6);
+  const W = Math.max(2, Math.round(canvas.clientWidth * dpr));
+  const H = Math.max(2, Math.round(canvas.clientHeight * dpr));
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+  R.resize(W, H);
+
+  state.dist += (state.distTarget - state.dist) * Math.min(1, dt * 3.2);
+  state.aim += (state.aimTarget - state.aim) * Math.min(1, dt * 3.2);
+
+  const J = state.juggle;
+  if (!J) {
+    R.draw(emptyScene());
+    return;
+  }
+  state.clock = now / 1000 - state.t0;
+  const t = state.clock;
+
+  /* sound the catches that have just happened */
+  const ac = actx;
+  const evs = J.eventsIn(state.lastEvent, t);
+  state.lastEvent = t;
+  if (ac && !muted()) {
+    for (const e of evs) {
+      if (e.type !== 'catch') continue;
+      const lead = e.t - t;
+      sing(e.v, ac.currentTime + Math.max(0, lead) + 0.004);
+    }
+  }
+
+  const pose = poseAt(J, t);
+  const s = pose.sample;
+
+  /* trails, sampled ANALYTICALLY from the engine so they never depend on
+     the frame rate */
+  const period = (2 * J.n) / gcd(2, J.n);
+  const trailSec = state.expose ? period * J.beatT : 0.115;
+  const N = state.expose ? Math.min(320, Math.round(period * 44)) : 22;
+  const trails = [];
+  for (let bi = 0; bi < J.balls.length; bi++) {
+    const pts = [];
+    for (let k = 0; k <= N; k++) {
+      const tt = t - trailSec * (1 - k / N);
+      if (tt < 0.02) continue;
+      pts.push(J._ballAt(J.balls[bi], tt).pos);
+    }
+    if (pts.length > 1) {
+      trails.push({
+        pts,
+        colour: BALL_COLOURS[bi % BALL_COLOURS.length],
+        width: state.expose ? 0.0080 : 0.0115,
+        gain: state.expose ? 0.60 : 0.85,
+      });
+    }
+  }
+
+  const balls = s.balls.map((b, i) => ({
+    pos: b.pos, colour: BALL_COLOURS[i % BALL_COLOURS.length], radius: 0.037,
+  }));
+
+  const eye = [
+    Math.sin(state.yaw) * Math.cos(state.pitch) * state.dist,
+    state.aim + Math.sin(state.pitch) * state.dist,
+    Math.cos(state.yaw) * Math.cos(state.pitch) * state.dist,
+  ];
+  R.draw({
+    joints: pose.joints, balls, trails, time: t,
+    camera: { eye, at: [0, state.aim, 0], fov: FOV },
+    glow: 1.0, bloom: state.expose ? 1.25 : 1.0, lampsOn: state.lamps,
+  });
+
+  ladderTick += dt;
+  if (ladderTick > 0.05) { ladderTick = 0; drawLadder(s.beat); }
+}
+function gcd(a, b) { return b ? gcd(b, a % b) : a; }
+
+function emptyScene() {
+  const j = {
+    head: [0, 1.62, 0], neck: [0, 1.51, 0], shoulderR: [0.185, 1.425, 0], shoulderL: [-0.185, 1.425, 0],
+    elbowR: [0.25, 1.14, -0.04], elbowL: [-0.25, 1.14, -0.04], handR: [0.23, 0.95, 0.06], handL: [-0.23, 0.95, 0.06],
+    hipR: [0.105, 0.94, 0], hipL: [-0.105, 0.94, 0], kneeR: [0.133, 0.489, 0.028], kneeL: [-0.133, 0.489, 0.028],
+    footR: [0.157, 0.036, -0.012], footL: [-0.157, 0.036, -0.012],
+  };
+  const eye = [
+    Math.sin(state.yaw) * Math.cos(state.pitch) * state.dist,
+    state.aim + Math.sin(state.pitch) * state.dist,
+    Math.cos(state.yaw) * Math.cos(state.pitch) * state.dist,
+  ];
+  return { joints: j, balls: [], trails: [], time: performance.now() / 1000,
+           camera: { eye, at: [0, state.aim, 0], fov: FOV }, glow: 1, bloom: 1, lampsOn: state.lamps };
+}
+
+/* keep the ladder box off the rail */
+function layout() {
+  const r = $('rail').getBoundingClientRect();
+  $('ladderBox').style.top = Math.round(r.bottom + 12) + 'px';
+}
+window.addEventListener('resize', () => { layout(); frameThePattern(); });
+
+/* ── liveness hooks — headless cannot deliver a pointer event to a canvas ── */
+window.__jp = {
+  set: (p) => setPattern(p, true),
+  tempo: (r) => { $('tempo').value = String(r); $('tempo').dispatchEvent(new Event('input')); },
+  expose: () => $('expose').click(),
+  prove: () => { $('sheet').classList.add('open'); $('proofBody').innerHTML = proofHTML(); return $('proofBody').textContent.length; },
+  spin: (d) => { state.yaw += d; },
+  state: () => {
+    const J = state.juggle;
+    const a = analyse(state.seq);
+    return {
+      pattern: state.text, valid: a.valid, balls: a.balls, reason: a.reason,
+      beatT: state.beatT, dwell: state.dwell, fps: Math.round(fpsAvg),
+      nBalls: J ? J.balls.length : 0,
+      clock: state.clock,
+      maxApex: J ? J.maxApex() : 0,
+      ballY: J ? J.sample(state.clock).balls.map((b) => +b.pos[1].toFixed(3)) : [],
+      handR: J ? J.sample(state.clock).hands[0].pos.map((x) => +x.toFixed(3)) : [],
+      expose: state.expose, dist: +state.dist.toFixed(2), yaw: +state.yaw.toFixed(3),
+      proofOpen: $('sheet').classList.contains('open'),
+    };
+  },
+};
+
+applyPattern('531', true);
+layout();
+requestAnimationFrame(frame);
+setTimeout(layout, 60);
+</script>
+</body>
+</html>

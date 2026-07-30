@@ -3,7 +3,7 @@
 *Generated from the estate manifest by `tools/seal/index-gen.mjs` — **never edit this file.***
 *It rebuilds every cycle. If something here is wrong, the manifest is wrong.*
 
-**487 pieces · 73 rooms · 11 districts.**
+**488 pieces · 74 rooms · 11 districts.**
 
 Grep this before you build. Rebuilding something that already stands is the estate's
 most expensive mistake — and the hidden pieces are not listed here, they are in
@@ -123,7 +123,7 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ## THE FAIRGROUND
 
-*16 rooms · 61 pieces*
+*17 rooms · 62 pieces*
 
 - **[The Midway](midway/index.html)** — 10 pieces
   <sub>[The Banked Curve](banked-curve/index.html) · [The Coaster](the-coaster/index.html) · [The Drop Tower](drop-tower/index.html) · [The Errand](the-errand/index.html) · [The Ferris Wheel](ferris-wheel/index.html) · [The Rotor](rotor/index.html) · [The Star Flyer](star-flyer/index.html) · [The Swing-Ship](swing-ship/index.html) · [The Teacups](teacups/index.html) · [Things That Won’t Fall Over](spin-cabinet/index.html)</sub>
@@ -137,6 +137,7 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 - **[The Hedge Maze](daedalus/index.html)** — 3 pieces
   <sub>[Ariadne](ariadne/index.html) · [The Provably Shortest Path](pathfinder/index.html) · [Theseus’s Thread](labyrinth/index.html)</sub>
 - **[The Level Ride](the-level-ride/index.html)** — 0 pieces
+- **[The Juggler's Pitch](the-jugglers-pitch/index.html)** — 0 pieces
 - **[The Warren](warren/the-crossing.html)** — 1 piece
   <sub>[The Homicidal Chauffeur](the-homicidal-chauffeur/index.html)</sub>
 - **[The Arcade · The Fold](the-shepherd/index.html)** — 0 pieces
@@ -205,4 +206,4 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ---
 
-<sub>manifest generated at commit `d7c846b3adf5bf3d2835f224afcc78056349cad4`</sub>
+<sub>manifest generated at commit `556d09b44c0c120fd6158f2f068a4def15034f7c`</sub>
