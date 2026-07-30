@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Headwaters — the tree the rain draws</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  THE HEADWATERS  ·  the-headwaters/
+
+  An island out of the sea with the rain on it, and a million years an hour.
+
+  WHAT IS ACTUALLY RUNNING
+    · a LANDSCAPE EVOLUTION MODEL — three lines of physics and nothing else:
+        dh/dt = U - K A^m S^n + D grad^2 h
+      the ground rises; the water cuts, harder where more water passes and
+      where it is steeper; and soil creeps downhill. n = 1, so the cutting term
+      is solved IMPLICITLY in one sweep from the sea upstream (Braun & Willett
+      2013), which is unconditionally stable and lets a step be a thousand
+      years.
+    · PRIORITY-FLOOD (Barnes et al. 2014) fills the pits, and the order it pops
+      cells in IS the ascending-elevation order the sweeps need, so the sort is
+      free.
+    · the whole thing lives in a WEB WORKER, so the geology never touches the
+      frame rate.  The terrain is WebGL2 with no vertex attributes at all —
+      each vertex derives its cell from gl_VertexID and fetches its own height
+      out of an R32F texture — and shadows are a horizon march over that same
+      texture, so there is no shadow map.
+
+  THE CLAIM, AND HOW TO FALSIFY IT
+    NOTHING IN THE RULE KNOWS WHAT A RIVER IS.  Every cell asks two questions:
+    how much water passes me, and how steep am I.  Yet what grows is a TREE,
+    and the tree has the statistics real rivers have:
+      HACK'S LAW    the length of a basin's main stream against its area,
+                    L = c A^h.  Hack measured h = 0.6 in Virginia in 1957.
+                    This island gives 0.6, and it stays there when you change
+                    the rock by 7x, the soil by 16x, the uplift by 3x, the
+                    seed, and the mesh.  It is never 0.5 — which is what you
+                    would get if a big basin were just a small basin scaled up.
+      HORTON'S LAW  the number of streams of each Strahler order falls as a
+                    geometric ladder, ratio near 4, R^2 better than 0.99.
+    Press PROVE IT.  Both are measured off the landscape in front of you and
+    neither quantity appears anywhere in the three lines above.
+
+    AND THE SWITCH THAT TURNS IT OFF.  Let each cell forget the water that came
+    from above — every cell erodes with its own rain only, one line changed —
+    and run the same seed, the same rock, the same clock.  There are no
+    valleys. There is no tree. There is a mesa. The room grows both in front of
+    you and puts them side by side.
+
+  HONEST ABOUT THE MODEL — the page says all of this on its own card:
+    the vertical is stretched (the slider says by how much); rivers are painted
+    wider than a real one would be at this scale or you could not see them;
+    n = 1 and m = 0.5 are a choice among several defensible ones; there is no
+    sediment transport, so no deltas and no aggradation; and the slope-area
+    law S ~ A^-m/n is NOT offered as a discovery — it is the steady state of
+    the rule, and the room says so.
+
+  ENGINES (inlined byte-for-byte by the forge, never forked):
+    · tools/ws/ws.js        the estate-wide mute and the visit breadcrumb
+    · ./erode.mjs           the land, the water, the measurements
+    · ./worker.js           the loop that runs them off the main thread
+    · ./render.js           WebGL2: sky, terrain, sea, drops
+  Node twin: `node the-headwaters/erode.test.mjs`  (41 checks)
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root{
+    --ink:#eef2f0; --dim:#a2b0ae; --faint:#75837f;
+    --blue:#8ec6dd; --pale:#d6ece9; --green:#93cf8b; --red:#ef9a7a; --amber:#e8c37a;
+    --bg0:#06090c; --panel:rgba(10,15,17,.90); --line:rgba(142,198,221,.20);
+    --font-ui:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --font-mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg0);color:var(--ink);
+    font:15px/1.55 var(--font-ui);overflow:hidden;-webkit-font-smoothing:antialiased}
+  canvas#gl{display:block;position:fixed;inset:0;width:100%;height:100%;
+    touch-action:none;cursor:grab}
+  canvas#gl.grabbing{cursor:grabbing}
+  canvas#gl.picking{cursor:crosshair}
+
+  .scrim{position:fixed;top:0;left:0;width:min(66vw,820px);height:400px;z-index:2;pointer-events:none;
+    background:radial-gradient(115% 100% at 0% 0%, rgba(3,6,8,.94), rgba(3,6,8,0) 76%)}
+  .scrim2{position:fixed;bottom:0;left:0;width:min(52vw,620px);height:330px;z-index:2;pointer-events:none;
+    background:radial-gradient(105% 100% at 0% 100%, rgba(3,6,8,.86), rgba(3,6,8,0) 72%)}
+  .topleft{position:fixed;top:15px;left:20px;z-index:5;pointer-events:none;max-width:30em}
+  .topleft a{pointer-events:auto}
+  .back{display:inline-block;font:600 10px/1 var(--font-mono);letter-spacing:.22em;
+    text-transform:uppercase;color:var(--dim);text-decoration:none;opacity:.85}
+  .back:hover{color:var(--blue);opacity:1}
+  h1{font:400 clamp(22px,2.9vw,34px)/1.1 var(--font-ui);margin:.4em 0 .1em;
+    text-shadow:0 2px 26px rgba(0,0,0,.9)}
+  .say{color:var(--dim);font-size:13.5px;margin:.35em 0 0;text-shadow:0 1px 18px rgba(0,0,0,.95)}
+  .say b{color:var(--pale);font-weight:600}
+
+  /* ── the clock, centre-left ────────────────────────────────────────────── */
+  .clock{position:fixed;left:24px;bottom:118px;z-index:4;pointer-events:none}
+  .clock .big{font:300 clamp(30px,5vw,62px)/1 var(--font-ui);color:var(--pale);
+    text-shadow:0 0 40px rgba(120,200,220,.28),0 2px 30px rgba(0,0,0,.9);letter-spacing:.02em}
+  .clock .sub{font:600 10px/1.5 var(--font-mono);letter-spacing:.2em;text-transform:uppercase;
+    color:var(--faint);margin-top:.4em;max-width:24em}
+  .clock .sub b{color:var(--blue);font-weight:600}
+
+  /* ── the drop readout ──────────────────────────────────────────────────── */
+  .drop{position:fixed;left:24px;bottom:236px;z-index:4;pointer-events:none;opacity:0;
+    transition:opacity .4s;font:11.5px/1.6 var(--font-mono);color:var(--dim);
+    text-shadow:0 1px 14px rgba(0,0,0,.95)}
+  .drop.on{opacity:1}
+  .drop b{color:var(--pale);font-weight:600}
+
+  /* ── the card ──────────────────────────────────────────────────────────── */
+  .card{position:fixed;top:15px;right:16px;z-index:6;width:318px;max-height:calc(100vh - 140px);
+    overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:12px 14px 13px;box-shadow:0 10px 44px rgba(0,0,0,.7);backdrop-filter:blur(3px)}
+  .chead{font:600 9.5px/1 var(--font-mono);letter-spacing:.2em;text-transform:uppercase;
+    color:var(--faint);margin:0 0 8px}
+  .claim{font:400 14.5px/1.45 var(--font-ui);color:var(--pale);margin:0 0 10px}
+  .claim b{color:#fff;font-weight:600}
+  .rows{font:11.5px/1.62 var(--font-mono);color:var(--dim)}
+  .row{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dotted rgba(142,198,221,.13);padding:1px 0}
+  .row span:last-child{color:var(--ink);white-space:nowrap}
+  .row.hl span:last-child{color:var(--amber)}
+  .row.good span:last-child{color:var(--green)}
+  .sect{font:600 9px/1 var(--font-mono);letter-spacing:.18em;text-transform:uppercase;
+    color:var(--faint);margin:12px 0 5px}
+  .note{font:10.5px/1.5 var(--font-mono);color:var(--faint);margin-top:9px}
+  .note b{color:var(--dim);font-weight:600}
+  canvas.plot{width:100%;height:118px;display:block;border-radius:5px;background:rgba(0,0,0,.42);
+    border:1px solid rgba(142,198,221,.13);margin-top:4px}
+  .legend{display:flex;gap:11px;font:9.5px/1.4 var(--font-mono);color:var(--faint);margin-top:3px;flex-wrap:wrap}
+  .legend i{display:inline-block;width:16px;height:2px;vertical-align:middle;margin-right:4px}
+  .verdict{margin-top:9px;font:11px/1.5 var(--font-mono);color:var(--dim);
+    border-top:1px solid var(--line);padding-top:8px}
+  .verdict .good{color:var(--green)} .verdict .bad{color:var(--red)}
+  .fold{display:none} .fold.on{display:block}
+  .ab{display:flex;gap:7px;margin-top:5px}
+  .ab figure{margin:0;flex:1}
+  .ab canvas{width:100%;aspect-ratio:1;display:block;border-radius:5px;background:#05080a;
+    border:1px solid rgba(142,198,221,.13)}
+  .ab figcaption{font:9.5px/1.35 var(--font-mono);color:var(--faint);margin-top:4px;text-align:center}
+  .ab figcaption b{color:var(--pale);display:block;font-weight:600;letter-spacing:.05em}
+  .abrow{font:10.5px/1.55 var(--font-mono);color:var(--dim);margin-top:6px}
+  .abrow span{color:var(--ink)}
+
+  /* ── the console ───────────────────────────────────────────────────────── */
+  .console{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:6;
+    display:flex;gap:11px;align-items:center;flex-wrap:wrap;justify-content:center;
+    background:var(--panel);border:1px solid var(--line);border-radius:13px;
+    padding:9px 14px;max-width:min(96vw,1180px);box-shadow:0 8px 34px rgba(0,0,0,.7)}
+  .grp{display:flex;align-items:center;gap:8px}
+  .sep{width:1px;height:24px;background:var(--line)}
+  .lbl{font:600 9.5px/1 var(--font-mono);letter-spacing:.15em;text-transform:uppercase;
+    color:var(--faint);white-space:nowrap}
+  .val{font:12px/1 var(--font-mono);color:var(--pale);min-width:3.6em;white-space:nowrap}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:3px;border-radius:2px;
+    background:linear-gradient(90deg,rgba(142,198,221,.8),rgba(142,198,221,.18));
+    outline:none;width:96px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;
+    border-radius:50%;background:#dcefef;border:1px solid #3f6470;cursor:pointer;
+    box-shadow:0 1px 5px rgba(0,0,0,.7)}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;
+    background:#dcefef;border:1px solid #3f6470;cursor:pointer}
+  button{font:600 10px/1 var(--font-mono);letter-spacing:.13em;text-transform:uppercase;
+    color:var(--ink);background:rgba(142,198,221,.12);border:1px solid var(--line);
+    border-radius:8px;padding:9px 11px;cursor:pointer;transition:background .15s,color .15s}
+  button:hover{background:rgba(142,198,221,.25)}
+  button:active{background:rgba(210,240,240,.42);color:#06090c}
+  button.hot{color:#dcf1f5;border-color:rgba(160,215,230,.5);background:rgba(70,150,175,.24)}
+  button.on{background:rgba(150,210,225,.55);color:#06090c}
+  button:disabled{opacity:.4;cursor:default}
+
+  .err{position:fixed;inset:0;z-index:30;display:none;align-items:center;justify-content:center;
+    background:var(--bg0);padding:30px;text-align:center}
+  .err.on{display:flex}
+
+  @media (max-width:1000px){
+    .card{width:262px;font-size:13px} .topleft{max-width:19em}
+  }
+  #bCard{display:none}
+  @media (max-width:760px){
+    h1{font-size:21px;margin:.3em 0 .05em} .say{font-size:12px} .topleft{max-width:none;right:14px;top:11px;left:14px}
+    .scrim{height:250px;width:100%}
+    .scrim2{height:250px;width:100%}
+    .card{left:7px;right:7px;top:auto;bottom:120px;width:auto;max-height:44vh;padding:9px 11px;font-size:12.5px}
+    .claim{font-size:12.5px;margin-bottom:8px} .rows{font-size:10.5px;line-height:1.5}
+    body.cardhid .card{display:none}
+    .clock{left:14px;bottom:112px;transform:none;text-align:left}
+    .clock .big{font-size:34px} .clock .sub{font-size:8.5px;letter-spacing:.14em}
+    .drop{left:14px;bottom:182px;font-size:10px}
+    .console{gap:5px 8px;padding:6px 8px;bottom:7px;left:7px;right:7px;transform:none;max-width:none;
+      border-radius:11px}
+    .console .sep{display:none}
+    .console .lbl{font-size:8.5px;letter-spacing:.1em}
+    button{padding:7px 8px;font-size:9px;letter-spacing:.08em}
+    input[type=range]{width:56px}
+    .val{font-size:10px;min-width:2.8em}
+    #bCard{display:inline-block}
+    .ab canvas{aspect-ratio:1}
+  }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div class="scrim"></div>
+<div class="scrim2"></div>
+
+<div class="topleft">
+  <a class="back" href="../index.html">&larr; The Estate</a>
+  <h1>The Headwaters</h1>
+  <p class="say">An island rises out of the sea and it rains on it. Every cell of
+     the ground asks two questions — <b>how much water passes me</b>, and
+     <b>how steep am I</b> — and nothing else. Watch what grows.
+     <b>Click anywhere on the land</b> to put a drop down and follow it home.</p>
+</div>
+
+<div class="clock" id="clock">
+  <div class="big" id="clockBig">0 kyr</div>
+  <div class="sub" id="clockSub">since the island began to rise</div>
+</div>
+
+<div class="drop" id="dropOut"></div>
+
+<div class="card">
+  <p class="chead">the claim</p>
+  <p class="claim">Nothing in the rule knows what a river is. What grows is a
+     <b>tree</b>, and it has the measurements real rivers have.</p>
+
+  <div class="rows">
+    <div class="row"><span>highest ground</span><span id="rMax">—</span></div>
+    <div class="row"><span>erosion vs uplift</span><span id="rBal">—</span></div>
+    <div class="row"><span>channel heads</span><span id="rHeads">—</span></div>
+    <div class="row"><span>Strahler orders</span><span id="rOrd">—</span></div>
+    <div class="row"><span>drainage density</span><span id="rDens">—</span></div>
+    <div class="row hl"><span>Hack's <i>h</i> &nbsp;(L = c A<sup>h</sup>)</span><span id="rHack">—</span></div>
+    <div class="row hl"><span>Horton's R<sub>b</sub></span><span id="rRb">—</span></div>
+    <div class="row"><span>Horton's R<sub>l</sub></span><span id="rRl">—</span></div>
+  </div>
+  <p class="note" id="ripe">Give it a minute — the numbers mean nothing until
+     erosion has caught up with uplift.</p>
+
+  <div id="fold" class="fold">
+    <p class="sect">Hack's law · every point of the network as its own basin</p>
+    <canvas class="plot" id="plotHack"></canvas>
+    <div class="legend"><span><i style="background:#8ec6dd"></i>binned medians</span>
+      <span><i style="background:#e8c37a"></i>the fit</span>
+      <span><i style="background:#75837f"></i>h = 0.5, if basins were similar</span></div>
+
+    <p class="sect">Horton's ladder · streams of each Strahler order</p>
+    <canvas class="plot" id="plotHorton"></canvas>
+    <div class="legend"><span><i style="background:#8ec6dd"></i>counted</span>
+      <span><i style="background:#e8c37a"></i>a geometric fit</span></div>
+
+    <p class="sect">the switch · take the memory out of the water</p>
+    <div class="ab">
+      <figure><canvas id="abA"></canvas>
+        <figcaption><b>remembers</b>A = all the rain upstream</figcaption></figure>
+      <figure><canvas id="abB"></canvas>
+        <figcaption><b>forgets</b>A = this cell's rain only</figcaption></figure>
+    </div>
+    <div class="abrow" id="abOut">Same seed, same rock, same rain, same clock —
+      one line of code apart.</div>
+    <button id="bAB" style="width:100%;margin-top:7px">grow both</button>
+
+    <div class="verdict" id="verdict"></div>
+  </div>
+
+  <p class="note"><b>Honest:</b> the vertical is stretched (the slider says by
+     how much) and the rivers are painted wider than a real river would be at
+     this scale, or you could not see one. There is no sediment transport in
+     the model, so no deltas and no infilled valleys. And the slope&ndash;area
+     law <i>S</i> ∝ <i>A</i><sup>−m/n</sup> is <b>not</b> a discovery here — it
+     is the steady state of the rule, by construction. Hack and Horton are not.</p>
+</div>
+
+<div class="console">
+  <div class="grp"><button id="bPlay" class="hot">pause</button></div>
+  <div class="grp"><span class="lbl">clock</span>
+    <input type="range" id="sClock" min="0" max="100" step="1" value="100">
+    <span class="val" id="vClock">fast</span></div>
+  <div class="sep"></div>
+  <div class="grp"><span class="lbl">rock</span>
+    <input type="range" id="sRock" min="0" max="100" step="1" value="50">
+    <span class="val" id="vRock">—</span></div>
+  <div class="grp"><span class="lbl">uplift</span>
+    <input type="range" id="sUp" min="0" max="100" step="1" value="46">
+    <span class="val" id="vUp">—</span></div>
+  <div class="grp"><span class="lbl">creep</span>
+    <input type="range" id="sCreep" min="0" max="100" step="1" value="50">
+    <span class="val" id="vCreep">—</span></div>
+  <div class="sep"></div>
+  <div class="grp"><span class="lbl">sun</span>
+    <input type="range" id="sSun" min="0" max="100" step="1" value="14">
+    <span class="val" id="vSun">—</span></div>
+  <div class="grp"><span class="lbl">relief</span>
+    <input type="range" id="sVX" min="10" max="35" step="1" value="20">
+    <span class="val" id="vVX">2.0&times;</span></div>
+  <div class="sep"></div>
+  <div class="grp"><button id="bRain" class="hot">make it rain</button>
+    <button id="bOrder">stream order</button>
+    <button id="bNew">new island</button>
+    <button id="bProve">prove it</button>
+    <button id="bCard" class="on">readings</button>
+    <button id="bMute">mute</button></div>
+</div>
+
+<div class="err" id="err"><div>
+  <h2 style="font:400 24px var(--font-ui)">This room needs WebGL2.</h2>
+  <p style="color:#9aa7b8" id="errMsg"></p>
+</div></div>
+
+<script type="javascript/worker" id="wsrc">
+<!-- forge:include ./erode.mjs -->
+<!-- forge:include ./worker.js -->
+</script>
+
+<script type="module">
+<!-- forge:include ../tools/ws/ws.js -->
+<!-- forge:include ./render.js -->
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE ROOM
+   ═══════════════════════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+addEventListener('error', e => { window.__err = (e.error && e.error.stack) || String(e.message); });
+
+let R;
+try { R = makeRenderer($('gl')); }
+catch (e) { $('err').classList.add('on'); $('errMsg').textContent = String(e.message || e); throw e; }
+
+try { WS.seen('the-headwaters'); } catch (e) {}
+
+/* ── the worker ───────────────────────────────────────────────────────────── */
+const blob = new Blob([$('wsrc').textContent], { type: 'text/javascript' });
+const W = new Worker(URL.createObjectURL(blob));
+
+const GRID = { N: 256, dx: 40 };
+let latest = null, stats = null, running = true;
+
+W.onmessage = ev => {
+  const d = ev.data;
+  if (d.type === 'grid') {
+    GRID.N = d.N; GRID.dx = d.dx; R.setGrid(d.N, d.dx);
+    /* a portrait window sees a narrower slice of the world: stand further back */
+    const asp = innerWidth / Math.max(1, innerHeight);
+    if (asp < 1.4) R.cam.dist *= Math.pow(1.4 / asp, 0.55);
+  }
+  else if (d.type === 'frame') onFrame(d);
+  else if (d.type === 'stats') onStats(d);
+  else if (d.type === 'path') onPath(d);
+  else if (d.type === 'rain') onRain(d);
+  else if (d.type === 'ab-begin' || d.type === 'ab-frame' || d.type === 'ab-done') onAB(d);
+};
+
+function onFrame(d) {
+  latest = d;
+  R.setFields(d.h, d.w, d.o, d.maxH, d.omax);
+  W.postMessage({ type: 'recycle', h: d.h, w: d.w, o: d.o }, [d.h.buffer, d.w.buffer, d.o.buffer]);
+  const kyr = d.t / 1000;
+  $('clockBig').textContent = kyr >= 1000
+    ? (kyr / 1000).toFixed(2) + ' Myr' : Math.round(kyr).toLocaleString() + ' kyr';
+  audioTick(d);
+}
+
+function fmtN(v, d) { return (v === undefined || v === null || !isFinite(v)) ? '—' : v.toFixed(d); }
+
+function onStats(d) {
+  stats = d;
+  $('rMax').textContent = Math.round(d.maxH) + ' m';
+  const bal = 100 * (1 - Math.min(1, d.balance));
+  $('rBal').textContent = fmtN(bal, 1) + ' % balanced';
+  $('rBal').parentElement.classList.toggle('good', bal > 94);
+  $('rHeads').textContent = d.horton.heads;
+  $('rOrd').textContent = d.horton.omax + (d.horton.counts.length
+    ? '  (' + d.horton.counts.map(c => c).join(' · ') + ')' : '');
+  $('rDens').textContent = fmtN(d.horton.density * 1000, 2) + ' km/km²';
+  $('rHack').textContent = isFinite(d.hack.h)
+    ? fmtN(d.hack.h, 3) + '   R² ' + fmtN(d.hack.r2, 3) : '—';
+  $('rRb').textContent = isFinite(d.horton.Rb)
+    ? fmtN(d.horton.Rb, 2) + '   R² ' + fmtN(d.horton.RbR2, 3) : '—';
+  $('rRl').textContent = fmtN(d.horton.Rl, 2);
+  const ripe = bal > 90;
+  $('ripe').style.display = ripe ? 'none' : 'block';
+  $('clockSub').innerHTML = ripe
+    ? 'the island is <b>in balance</b> — it wears away as fast as it rises'
+    : 'since the island began to rise';
+  if ($('fold').classList.contains('on')) { drawHack(); drawHorton(); writeVerdict(); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE CONTROLS
+   ═══════════════════════════════════════════════════════════════════════════ */
+const lerp = (a, b, t) => a + (b - a) * t;
+const logLerp = (a, b, t) => a * Math.pow(b / a, t);
+
+function pushParams() {
+  const t = +$('sRock').value / 100, u = +$('sUp').value / 100, c = +$('sCreep').value / 100;
+  const K = logLerp(7.2e-5, 8e-6, t);
+  const U = logLerp(3.0e-4, 3.5e-3, u);
+  const D = logLerp(0.004, 0.09, c);
+  $('vRock').textContent = t < 0.28 ? 'soft' : t > 0.72 ? 'hard' : 'middling';
+  $('vUp').textContent = (U * 1000).toFixed(2) + ' mm/yr';
+  $('vCreep').textContent = c < 0.28 ? 'stony' : c > 0.72 ? 'soily' : 'middling';
+  W.postMessage({ type: 'params', K, U, D });
+}
+function pushClock() {
+  const v = +$('sClock').value / 100;
+  let sps;
+  if (v <= 0.001) { sps = 0; $('vClock').textContent = 'held'; }
+  else if (v >= 0.999) { sps = 1e9; $('vClock').textContent = 'fast'; }
+  else {
+    sps = logLerp(1.2, 60, v);
+    const kyrPerSec = sps * 900 / 1000;
+    $('vClock').textContent = kyrPerSec < 10 ? kyrPerSec.toFixed(1) + ' kyr/s'
+      : Math.round(kyrPerSec) + ' kyr/s';
+  }
+  W.postMessage({ type: 'params', stepsPerSec: sps, running });
+}
+for (const id of ['sRock', 'sUp', 'sCreep']) $(id).oninput = pushParams;
+$('sClock').oninput = pushClock;
+$('sVX').oninput = () => { R.vx = +$('sVX').value / 10; $('vVX').textContent = (+$('sVX').value / 10).toFixed(1) + '×'; };
+$('sSun').oninput = () => {
+  const t = +$('sSun').value / 100;
+  R.sunEl = 3 + 56 * Math.sin(Math.PI * Math.min(0.999, t));
+  R.sunAz = 58 + 250 * t;
+  $('vSun').textContent = t < 0.2 ? 'early' : t < 0.42 ? 'morning' : t < 0.62 ? 'noon'
+    : t < 0.84 ? 'afternoon' : 'evening';
+};
+$('bPlay').onclick = () => {
+  running = !running;
+  $('bPlay').textContent = running ? 'pause' : 'run';
+  $('bPlay').classList.toggle('hot', running);
+  W.postMessage({ type: 'params', running });
+};
+const ORDER_COLS = ['#2957a0', '#40c7db', '#8ceb99', '#ffdb5c', '#ff7347', '#ff4f7a'];
+$('bOrder').onclick = () => {
+  R.orderMode = !R.orderMode;
+  $('bOrder').classList.toggle('on', !!R.orderMode);
+  if (R.orderMode) {
+    const om = (stats && stats.horton.omax) || 4;
+    let html = 'STRAHLER ORDER &nbsp;';
+    for (let o = 1; o <= om; o++) {
+      const c = ORDER_COLS[Math.round((o - 1) / Math.max(1, om - 1) * (ORDER_COLS.length - 1))];
+      html += '<span style="color:' + c + '">&#9632; ' + o + '</span>&nbsp; ';
+    }
+    html += '<br>a stream is order n+1 only where two of order n meet. ' +
+      'Nothing in the model counts.';
+    $('dropOut').innerHTML = html;
+    $('dropOut').classList.add('on');
+  } else $('dropOut').classList.remove('on');
+};
+$('bNew').onclick = () => {
+  drops.length = 0; R.setDrops(drops);
+  $('dropOut').classList.remove('on');
+  W.postMessage({ type: 'reset', opts: { seed: (Math.random() * 2 ** 31) | 0 } });
+};
+$('bProve').onclick = () => {
+  const f = $('fold');
+  const on = !f.classList.contains('on');
+  f.classList.toggle('on', on);
+  $('bProve').classList.toggle('on', on);
+  /* a canvas inside display:none has clientWidth 0 and draws nothing: reveal
+     the panel FIRST, then plot into it (LANDMINES). */
+  if (on) requestAnimationFrame(() => { drawHack(); drawHorton(); writeVerdict(); paintAB(); });
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CAMERA — drag to orbit, wheel to close in
+   ═══════════════════════════════════════════════════════════════════════════ */
+const cv = $('gl');
+let drag = null, moved = 0;
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId);
+  drag = { x: e.clientX, y: e.clientY, id: e.pointerId };
+  moved = 0;
+  cv.classList.add('grabbing');
+  startAudio();
+});
+cv.addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  drag.x = e.clientX; drag.y = e.clientY;
+  moved += Math.abs(dx) + Math.abs(dy);
+  const c = R.cam;
+  c.yaw -= dx * 0.0055;
+  c.pitch = Math.max(0.035, Math.min(1.45, c.pitch + dy * 0.0042));
+});
+cv.addEventListener('pointerup', e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  cv.classList.remove('grabbing');
+  const wasClick = moved < 6;
+  drag = null;
+  if (wasClick) putDrop(e.clientX, e.clientY);
+});
+cv.addEventListener('pointercancel', () => { drag = null; cv.classList.remove('grabbing'); });
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const c = R.cam;
+  c.dist = Math.max(GRID.N * GRID.dx * 0.18, Math.min(GRID.N * GRID.dx * 3.4,
+    c.dist * Math.exp(e.deltaY * 0.0011)));
+}, { passive: false });
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   A DROP OF RAIN
+   ═══════════════════════════════════════════════════════════════════════════ */
+const drops = [];
+let dropId = 0;
+function putDrop(px, py) {
+  const rect = cv.getBoundingClientRect();
+  const cell = R.pickCell(px - rect.left, py - rect.top);
+  if (cell < 0) return;
+  startAudio();
+  W.postMessage({ type: 'drop', cell, id: ++dropId });
+}
+const FLOW = 620;                  /* metres of map a drop covers per second */
+
+/* Pack one or many flow paths into a single buffer of
+   (x, y, z, tArrive) — the absolute second at which the head reaches that
+   point — so a whole shower is one draw call and one uniform. */
+function packPaths(cells, counts, t0, stagger) {
+  let total = 0;
+  for (let c = 0; c < counts.length; c++) total += counts[c];
+  const data = new Float32Array(total * 4);
+  let k = 0, v = 0, last = null;
+  for (let c = 0; c < counts.length; c++) {
+    const n = counts[c];
+    const birth = t0 + (stagger ? Math.random() * stagger : 0);
+    let arc = 0; last = null;
+    for (let i = 0; i < n; i++) {
+      const w = R.cellWorld(cells[k++], 14);
+      if (last) arc += Math.hypot(w[0] - last[0], w[2] - last[2]);
+      last = w;
+      data[v++] = w[0]; data[v++] = w[1]; data[v++] = w[2];
+      data[v++] = birth + arc / FLOW;
+    }
+  }
+  return { data, n: total };
+}
+
+function onPath(d) {
+  const cells = d.cells;
+  if (cells.length < 2) return;
+  const p = packPaths(cells, [cells.length], tAcc, 0);
+  drops.push({ data: p.data, n: p.n, head: tAcc, expire: tAcc + 34, rad: 70, fade: 0.75 });
+  while (drops.length > 6) drops.shift();
+  R.setDrops(drops);
+  $('dropOut').innerHTML =
+    'this drop runs <b>' + (d.length / 1000).toFixed(2) + ' km</b> to the sea' +
+    (d.order ? ', down a stream of <b>order ' + d.order + '</b>' : ', without ever joining a channel') +
+    '<br>it leaves by a mouth that drains <b>' + (d.mouthArea / 1e6).toFixed(2) + ' km²</b> — ' +
+    'every drop that falls in there ends in the same water';
+  $('dropOut').classList.add('on');
+  plink();
+}
+
+function onRain(d) {
+  const p = packPaths(d.cells, Array.from(d.counts), tAcc + 0.2, 3.2);
+  drops.push({ data: p.data, n: p.n, head: tAcc, expire: tAcc + 40, rad: 52, fade: 0.24 });
+  R.setDrops(drops);
+  $('dropOut').innerHTML =
+    '<b>' + d.counts.length + ' drops</b>, put down at random all over the island. ' +
+    'Nobody told them where the rivers are.';
+  $('dropOut').classList.add('on');
+}
+$('bRain').onclick = () => {
+  startAudio();
+  W.postMessage({ type: 'rain', n: 420, seed: (Math.random() * 2 ** 31) | 0 });
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE PLOTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+function fitCanvas(c) {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = c.clientWidth, h = c.clientHeight;
+  if (!w || !h) return null;
+  if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const g = c.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  return { g, w, h };
+}
+function drawHack() {
+  const fc = fitCanvas($('plotHack')); if (!fc || !stats) return;
+  const { g, w, h } = fc, hk = stats.hack;
+  const bx = hk.bins.x, by = hk.bins.y;
+  if (!bx || bx.length < 3) return;
+  const pad = { l: 30, r: 8, t: 8, b: 16 };
+  const x0 = bx[0] - 0.1, x1 = bx[bx.length - 1] + 0.1;
+  let y0 = Math.min(...by), y1 = Math.max(...by);
+  const yc = (y0 + y1) / 2, ys = Math.max(0.35, (y1 - y0) * 0.75);
+  y0 = yc - ys; y1 = yc + ys;
+  const X = v => pad.l + (v - x0) / (x1 - x0) * (w - pad.l - pad.r);
+  const Y = v => h - pad.b - (v - y0) / (y1 - y0) * (h - pad.t - pad.b);
+  g.strokeStyle = 'rgba(142,198,221,.14)'; g.lineWidth = 1;
+  for (let e = Math.ceil(x0); e <= x1; e++) {
+    g.beginPath(); g.moveTo(X(e), pad.t); g.lineTo(X(e), h - pad.b); g.stroke();
+    g.fillStyle = '#75837f'; g.font = '9px ui-monospace,monospace';
+    g.fillText('10' + sup(e), X(e) - 8, h - 5);
+  }
+  g.fillStyle = '#75837f'; g.font = '9px ui-monospace,monospace';
+  g.save(); g.translate(9, h / 2); g.rotate(-Math.PI / 2);
+  g.textAlign = 'center'; g.fillText('main-stream length  L (m)', 0, 0); g.restore();
+  g.textAlign = 'left';
+  g.fillText('drainage area  A (m²)', pad.l + 2, pad.t + 9);
+
+  /* the h = 1/2 reference, pinned at the left-hand bin */
+  g.strokeStyle = '#75837f'; g.setLineDash([3, 3]); g.beginPath();
+  g.moveTo(X(x0), Y(by[0] + 0.5 * (x0 - bx[0])));
+  g.lineTo(X(x1), Y(by[0] + 0.5 * (x1 - bx[0])));
+  g.stroke(); g.setLineDash([]);
+
+  /* the fit */
+  const a = by.reduce((s, v, i) => s + v, 0) / by.length;
+  const mx = bx.reduce((s, v) => s + v, 0) / bx.length;
+  g.strokeStyle = '#e8c37a'; g.lineWidth = 1.6; g.beginPath();
+  g.moveTo(X(x0), Y(a + hk.h * (x0 - mx)));
+  g.lineTo(X(x1), Y(a + hk.h * (x1 - mx)));
+  g.stroke();
+
+  g.fillStyle = '#8ec6dd';
+  for (let i = 0; i < bx.length; i++) {
+    g.beginPath(); g.arc(X(bx[i]), Y(by[i]), 2.4, 0, 7); g.fill();
+  }
+  g.fillStyle = '#d6ece9'; g.font = '10px ui-monospace,monospace';
+  g.fillText('h = ' + hk.h.toFixed(3), w - 74, pad.t + 11);
+}
+function sup(n) {
+  const m = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+  return String(n).split('').map(c => m[c] || c).join('');
+}
+function drawHorton() {
+  const fc = fitCanvas($('plotHorton')); if (!fc || !stats) return;
+  const { g, w, h } = fc, ho = stats.horton;
+  const c = ho.counts.filter(v => v >= 1);
+  if (c.length < 2) return;
+  const pad = { l: 30, r: 8, t: 10, b: 18 };
+  const y1 = Math.log10(Math.max(...c)) + 0.25, y0 = -0.12;
+  const X = i => pad.l + (i + 0.5) / c.length * (w - pad.l - pad.r);
+  const Y = v => h - pad.b - (v - y0) / (y1 - y0) * (h - pad.t - pad.b);
+  const bw = (w - pad.l - pad.r) / c.length * 0.5;
+  g.strokeStyle = 'rgba(142,198,221,.14)';
+  for (let e = 0; e <= Math.ceil(y1); e++) {
+    g.beginPath(); g.moveTo(pad.l, Y(e)); g.lineTo(w - pad.r, Y(e)); g.stroke();
+    g.fillStyle = '#75837f'; g.font = '9px ui-monospace,monospace';
+    g.fillText('10' + sup(e), 4, Y(e) + 3);
+  }
+  for (let i = 0; i < c.length; i++) {
+    const v = Math.log10(c[i]);
+    g.fillStyle = 'rgba(142,198,221,.55)';
+    g.fillRect(X(i) - bw / 2, Y(v), bw, Y(y0) - Y(v));
+    g.fillStyle = '#d6ece9'; g.font = '9.5px ui-monospace,monospace';
+    g.textAlign = 'center';
+    g.fillText(String(c[i]), X(i), Y(v) - 3);
+    g.fillStyle = '#75837f';
+    g.fillText('order ' + (i + 1), X(i), h - 5);
+  }
+  g.textAlign = 'left';
+  /* the geometric fit, drawn from Rb alone */
+  if (isFinite(ho.Rb) && ho.Rb > 1) {
+    g.strokeStyle = '#e8c37a'; g.lineWidth = 1.6; g.beginPath();
+    const l0 = Math.log10(c[0]);
+    for (let i = 0; i < c.length; i++) {
+      const v = l0 - i * Math.log10(ho.Rb);
+      if (i === 0) g.moveTo(X(i), Y(v)); else g.lineTo(X(i), Y(v));
+    }
+    g.stroke();
+    g.fillStyle = '#d6ece9'; g.font = '10px ui-monospace,monospace';
+    g.fillText('Rʙ = ' + ho.Rb.toFixed(2), w - 76, pad.t + 8);
+  }
+}
+function writeVerdict() {
+  if (!stats) return;
+  const hk = stats.hack, ho = stats.horton;
+  const ripe = stats.balance < 0.10;
+  const good = v => '<span class="good">' + v + '</span>';
+  const bad = v => '<span class="bad">' + v + '</span>';
+  if (!ripe) {
+    $('verdict').innerHTML = 'The island is still rising faster than it is being cut. ' +
+      'Let the clock run — the numbers settle once erosion catches up.';
+    return;
+  }
+  const hOK = hk.h > 0.52 && hk.h < 0.72 && hk.r2 > 0.98;
+  const rOK = ho.Rb > 3 && ho.Rb < 6.5 && ho.RbR2 > 0.97;
+  $('verdict').innerHTML =
+    'Hack: <b>h = ' + hk.h.toFixed(3) + '</b> over ' + hk.decades.toFixed(1) +
+    ' decades of area, R² ' + hk.r2.toFixed(3) + ' — ' +
+    (hOK ? good('a power law, and not 1/2') : bad('outside the natural band')) +
+    '.<br>Horton: <b>Rʙ = ' + (isFinite(ho.Rb) ? ho.Rb.toFixed(2) : '—') + '</b>, R² ' +
+    (isFinite(ho.RbR2) ? ho.RbR2.toFixed(3) : '—') + ' — ' +
+    (rOK ? good('the ladder really is geometric') : bad('not a clean ladder yet')) +
+    '.<br><span style="color:var(--faint)">Neither number is anywhere in the model. ' +
+    'The unbinned fit over all ' + hk.n.toLocaleString() + ' basins gives ' +
+    hk.hPoint.toFixed(3) + '.</span>';
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE SWITCH — two islands, one line of code apart
+   ═══════════════════════════════════════════════════════════════════════════ */
+let abState = null;
+$('bAB').onclick = () => {
+  if (abState && abState.running) { W.postMessage({ type: 'ab-cancel' }); abState.running = false; $('bAB').textContent = 'grow both'; return; }
+  $('bAB').textContent = 'growing…';
+  W.postMessage({ type: 'ab', N: 128, steps: 1150 });
+};
+function onAB(d) {
+  if (d.type === 'ab-begin') { abState = { running: true, N: d.N }; return; }
+  abState = abState || {};
+  abState.a = d.a; abState.b = d.b; abState.N = d.N;
+  paintAB();
+  const pct = Math.round(100 * d.done / d.target);
+  if (d.type === 'ab-done') {
+    abState.running = false;
+    $('bAB').textContent = 'grow both again';
+    const s = d.stats;
+    $('abOut').innerHTML =
+      'After <span>' + (d.t / 1e6).toFixed(2) + ' Myr</span> apiece — same seed, same rock, ' +
+      'same rain, same clock.<br>' +
+      'channel heads <span>' + s.A.heads + '</span> vs <span>' + s.B.heads + '</span> · ' +
+      'highest ground <span>' + Math.round(s.A.relief) + ' m</span> vs <span>' +
+      Math.round(s.B.relief) + ' m</span><br>' +
+      'mean height / peak <span>' + s.A.hyp.toFixed(2) + '</span> vs <span>' +
+      s.B.hyp.toFixed(2) + '</span> (1.0 is a mesa) · ' +
+      'Hack R² <span>' + s.A.r2.toFixed(2) + '</span> vs <span>' + s.B.r2.toFixed(2) +
+      '</span><br><span style="color:var(--faint)">The blind mountain is taller because ' +
+      'nothing is cutting it down: with no accumulation, the biggest river on the island ' +
+      'bites no harder than a puddle.</span>';
+  } else {
+    $('abOut').innerHTML = 'growing both… <span>' + pct + '%</span>';
+  }
+}
+function paintAB() {
+  if (!abState || !abState.a) return;
+  hillshade($('abA'), abState.a, abState.N);
+  hillshade($('abB'), abState.b, abState.N);
+}
+function hillshade(cvs, f, N) {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = Math.max(1, Math.round(cvs.clientWidth * dpr));
+  if (!w) return;
+  if (cvs.width !== w) { cvs.width = w; cvs.height = w; }
+  const g = cvs.getContext('2d');
+  const img = g.createImageData(N, N);
+  let mx = 1;
+  for (let i = 0; i < f.length; i++) if (f[i] > mx) mx = f[i];
+  const lx = -0.62, ly = -0.55, lz = 0.56;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const i = y * N + x, o = i * 4;
+    if (f[i] < -9000) { img.data[o] = 8; img.data[o + 1] = 18; img.data[o + 2] = 30; img.data[o + 3] = 255; continue; }
+    const gx = (f[Math.min(N - 1, x + 1) + y * N] - f[Math.max(0, x - 1) + y * N]);
+    const gy = (f[x + Math.min(N - 1, y + 1) * N] - f[x + Math.max(0, y - 1) * N]);
+    const sc = 0.035;
+    let nx = -gx * sc, ny = -gy * sc, nz = 1;
+    const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
+    let sh = Math.max(0, nx * lx + ny * ly + nz * lz);
+    sh = 0.20 + 0.95 * sh;
+    const t = Math.min(1, Math.max(0, f[i] / mx));
+    const r = (58 + 150 * t) * sh, gg = (78 + 128 * t) * sh, b = (52 + 118 * t) * sh;
+    img.data[o] = Math.min(255, r); img.data[o + 1] = Math.min(255, gg);
+    img.data[o + 2] = Math.min(255, b); img.data[o + 3] = 255;
+  }
+  const tmp = document.createElement('canvas');
+  tmp.width = N; tmp.height = N;
+  tmp.getContext('2d').putImageData(img, 0, 0);
+  g.imageSmoothingEnabled = true;
+  g.clearRect(0, 0, cvs.width, cvs.height);
+  g.drawImage(tmp, 0, 0, cvs.width, cvs.height);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SOUND — the island's own noise: surf all the time, and running water that
+   grows as the network does. Nothing here is a claim; it is weather.
+   ═══════════════════════════════════════════════════════════════════════════ */
+let AC = null, master = null, riverGain = null, surfGain = null, started = false;
+function noiseBuf(ctx, secs) {
+  const b = ctx.createBuffer(1, ctx.sampleRate * secs, ctx.sampleRate);
+  const d = b.getChannelData(0);
+  let v = 0;
+  for (let i = 0; i < d.length; i++) { v = 0.94 * v + 0.06 * (Math.random() * 2 - 1); d[i] = v * 3.2; }
+  return b;
+}
+function startAudio() {
+  if (started) return;
+  started = true;
+  try {
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    master = AC.createGain();
+    master.gain.value = WS.muted() ? 0 : 0.5;
+    master.connect(AC.destination);
+
+    const mk = (freq, q, type, gainVal) => {
+      const src = AC.createBufferSource();
+      src.buffer = noiseBuf(AC, 4); src.loop = true;
+      const f = AC.createBiquadFilter();
+      f.type = type; f.frequency.value = freq; f.Q.value = q;
+      const g = AC.createGain(); g.gain.value = gainVal;
+      src.connect(f); f.connect(g); g.connect(master);
+      src.start();
+      return g;
+    };
+    surfGain = mk(320, 0.7, 'lowpass', 0.16);
+    riverGain = mk(1500, 0.6, 'bandpass', 0.0);
+    /* a slow swell on the surf */
+    const lfo = AC.createOscillator(), lg = AC.createGain();
+    lfo.frequency.value = 0.09; lg.gain.value = 0.07;
+    lfo.connect(lg); lg.connect(surfGain.gain); lfo.start();
+    if (AC.state === 'suspended') AC.resume();
+  } catch (e) { started = false; }
+}
+function audioTick(d) {
+  if (!riverGain || !AC) return;
+  const heads = d.heads || 0;
+  const target = Math.min(0.26, heads / 900 * 0.26);
+  riverGain.gain.setTargetAtTime(target, AC.currentTime, 0.6);
+}
+function plink() {
+  if (!AC || WS.muted()) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(880 + Math.random() * 260, AC.currentTime);
+  o.frequency.exponentialRampToValueAtTime(320, AC.currentTime + 0.12);
+  g.gain.setValueAtTime(0.0001, AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.11, AC.currentTime + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + 0.22);
+  o.connect(g); g.connect(master); o.start(); o.stop(AC.currentTime + 0.25);
+}
+function applyMute() {
+  const m = WS.muted();
+  if (master && AC) master.gain.setTargetAtTime(m ? 0 : 0.5, AC.currentTime, 0.08);
+  $('bMute').textContent = m ? 'unmute' : 'mute';
+  $('bMute').classList.toggle('on', m);
+}
+$('bCard').onclick = () => {
+  const hid = document.body.classList.toggle('cardhid');
+  $('bCard').classList.toggle('on', !hid);
+};
+if (matchMedia('(max-width: 760px)').matches) {
+  document.body.classList.add('cardhid');
+  $('bCard').classList.remove('on');
+}
+$('bMute').onclick = () => { startAudio(); WS.setMuted(!WS.muted()); };
+WS.onMuteChange(applyMute);
+applyMute();
+addEventListener('keydown', e => {
+  if (e.target && /input|textarea/i.test(e.target.tagName)) return;
+  const k = e.key.toLowerCase();
+  if (k === 'm') { startAudio(); WS.setMuted(!WS.muted()); }
+  if (k === ' ') { e.preventDefault(); $('bPlay').click(); }
+  if (k === 'o') $('bOrder').click();
+  if (k === 'r') $('bRain').click();
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE FRAME
+   ═══════════════════════════════════════════════════════════════════════════ */
+let last = performance.now(), tAcc = 0;
+function frame(now) {
+  /* the first rAF dt can be NEGATIVE — clamp both ends (LANDMINES) */
+  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
+  last = now;
+  tAcc += dt;
+  let dirty = false;
+  for (let i = drops.length - 1; i >= 0; i--) {
+    drops[i].head = tAcc;
+    if (tAcc > drops[i].expire) { drops.splice(i, 1); dirty = true; }
+  }
+  if (dirty) R.setDrops(drops);
+  try { R.draw(tAcc); } catch (e) { window.__err = String(e && e.stack || e); }
+  requestAnimationFrame(frame);
+}
+
+R.vx = 2.0;
+$('sSun').oninput();
+$('sVX').oninput();
+pushParams();
+pushClock();
+R.cam.pitch = 0.245;
+R.cam.yaw = 0.62;
+R.cam.cy = 235;
+W.postMessage({ type: 'init', opts: { N: GRID.N, dx: GRID.dx } });
+requestAnimationFrame(frame);
+
+/* let the estate's tooling see the room's state without a click */
+window.__headwaters = {
+  get stats() { return stats; },
+  get frame() { return latest; },
+  drop: (cell) => W.postMessage({ type: 'drop', cell, id: ++dropId }),
+  prove: () => $('bProve').click(),
+  ab: () => $('bAB').click(),
+  R
+};
+</script>
+</body>
+</html>

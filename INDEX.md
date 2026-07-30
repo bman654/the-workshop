@@ -3,7 +3,7 @@
 *Generated from the estate manifest by `tools/seal/index-gen.mjs` — **never edit this file.***
 *It rebuilds every cycle. If something here is wrong, the manifest is wrong.*
 
-**474 pieces · 71 rooms · 11 districts.**
+**475 pieces · 72 rooms · 11 districts.**
 
 Grep this before you build. Rebuilding something that already stands is the estate's
 most expensive mistake — and the hidden pieces are not listed here, they are in
@@ -69,7 +69,7 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ## THE GLASSHOUSE GARDENS
 
-*5 rooms · 68 pieces*
+*6 rooms · 69 pieces*
 
 - **[The Aviary](aviary/index.html)** — 0 pieces
 - **[The Conservatory](conservatory/index.html)** — 16 pieces
@@ -78,6 +78,7 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
   <sub>[Kirigami](kirigami/index.html) · [The Aquarium](the-aquarium/index.html) · [The Arctic Circle](arctic-circle/index.html) · [The Cartesian Diver](the-cartesian-diver/index.html) · [The Fortune-Teller](fortune-teller/index.html) · [The Hexaflexagon](hexaflexagon/index.html) · [Weather You Can Make](weather-you-can-make/index.html)</sub>
 - **[The Gardens · Glasshouse](strange-garden/index.html)** — 40 pieces
   <sub>[Boids](strange-garden/pieces/boids.html) · [Bz Reaction](strange-garden/pieces/bz-reaction.html) · [Chladni](strange-garden/pieces/chladni.html) · [Cloth](strange-garden/pieces/cloth.html) · [Cyclic Ca](strange-garden/pieces/cyclic-ca.html) · [Dla](strange-garden/pieces/dla.html) · [Double Pendulum](strange-garden/pieces/double-pendulum.html) · [Falling Sand](strange-garden/pieces/falling-sand.html) · [Field Notes from the Strange Garden](strange-garden/field-notes.html) · [Flow Field](strange-garden/pieces/flow-field.html) · [Fourier Epicycles](strange-garden/pieces/fourier-epicycles.html) · [Game Of Life](strange-garden/pieces/game-of-life.html) · [Harmonograph](strange-garden/pieces/harmonograph.html) · [Julia](strange-garden/pieces/julia.html) · [Kuramoto](strange-garden/pieces/kuramoto.html) · [L System](strange-garden/pieces/l-system.html) · [Langtons Ant](strange-garden/pieces/langtons-ant.html) · [Lenia](strange-garden/pieces/lenia.html) · [Lorenz](strange-garden/pieces/lorenz.html) · [Magnetic Pendulum](strange-garden/pieces/magnetic-pendulum.html) · [Mandelbrot](strange-garden/pieces/mandelbrot.html) · [Metaballs](strange-garden/pieces/metaballs.html) · [N Body](strange-garden/pieces/n-body.html) · [Particle Life](strange-garden/pieces/particle-life.html) · [Penrose](strange-garden/pieces/penrose.html) · [Phyllotaxis](strange-garden/pieces/phyllotaxis.html) · [Physarum](strange-garden/pieces/physarum.html) · [Reaction Diffusion](strange-garden/pieces/reaction-diffusion.html) · [Ripple Tank](strange-garden/pieces/ripple-tank.html) · [Sandpile](strange-garden/pieces/sandpile.html) · [Strange Attractors](strange-garden/pieces/strange-attractors.html) · [Tessellarium](tessellarium/index.html) · [Tesseract](strange-garden/pieces/tesseract.html) · [The Aperiodic Patch](aperiodic-patch/index.html) · [The Elementary Garden](elementary-garden/index.html) · [The Marbling Bath](strange-garden/pieces/the-marbling-bath.html) · [The Raked Garden](strange-garden/pieces/the-raked-garden.html) · [Truchet](strange-garden/pieces/truchet.html) · [Voronoi](strange-garden/pieces/voronoi.html) · [Wfc](strange-garden/pieces/wfc.html)</sub>
+- **[The Headwaters](the-headwaters/index.html)** — 0 pieces
 - **[The Snow Cabinet](the-snow-cabinet/index.html)** — 0 pieces
 
 ## THE OBSERVATORY RISE
@@ -202,4 +203,4 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ---
 
-<sub>manifest generated at commit `436200f52c79e8c49cb404ba85d332efde3ecdcd`</sub>
+<sub>manifest generated at commit `9436299256c35b12c240b45c3715cc09b8327a08`</sub>

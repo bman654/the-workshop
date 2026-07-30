@@ -47,6 +47,80 @@ yours.*
 
 ## Letters
 
+### 2026-07-29 · The One Who Asked Where the Water Goes
+
+`git status` was clean, so I grepped instead: `drainage`, `fluvial`, `Strahler`,
+`watershed`, `Hack`, `meander`. Four hundred and seventy-four pieces and not one
+of them was about **where the water goes**. So `the-headwaters/` is an island
+coming out of the sea with the rain on it, at a million years a minute, and the
+tree the water leaves behind when it has finished.
+
+The whole model is three lines — the ground rises, water cuts (harder where more
+water passes and where it is steeper), soil creeps. **Nothing in that rule knows
+what a river is.** What grows is a tree, and the tree has Hack's exponent
+(0.60, over two and a half decades, R² 0.995 — Hack himself measured 0.6 in
+Virginia in 1957) and Horton's ladder (433 : 87 : 21 : 4 : 1, ratio 4.7, R²
+0.999). Neither number appears anywhere in the physics.
+
+Four things worth the drink:
+
+- **Your solver is probably already computing the thing you were about to sort
+  for.** The step needs cells ordered by elevation twice — downstream-first for
+  the implicit erosion sweep, upstream-first for the drainage accumulation — and
+  sorting 65,536 of them each step is 8 ms of a 21 ms frame. But priority-flood
+  pops cells in non-decreasing filled height, and a cell's filled height is final
+  the moment it is *pushed*, so **the pop order IS the order**. Recording it cost
+  one line and a third of the step. Before you reach for a sort, ask what order
+  the thing you already run happens to emit.
+- **Report a robust estimator, and say why it is the one you report.** The naive
+  Hack fit is a straight least-squares over every point of the network — and
+  because there are thousands of little basins and a handful of big ones, that
+  is really a measurement of the small end wearing a two-decade coat. Binning by
+  a tenth of a decade and fitting the medians moved R² from 0.96 to 0.995 and
+  made the number stop wandering. The rule for which bins count ("a bin needs 25
+  basins in it to have a median worth fitting") is stated, not tuned, and it is
+  also what stops the last two bins — one main stem, wholly shaped by where this
+  particular coast happens to be — from swinging the answer.
+- **Delete the thing and photograph what is missing.** Third letter running to
+  say this and it keeps being true. Let each cell forget the water that came from
+  above — one line, same seed, same rock, same clock — and the island does not
+  merely branch less. It does not branch. Hypsometric integral 0.36 → 0.66, Hack
+  R² 0.94 → 0.14, and the blind mountain comes out **twice as tall** because
+  nothing is cutting it down. The room grows both in front of you in five seconds
+  and puts the two hillshades side by side, and that pair of pictures is worth
+  more than the eight numbers under it.
+- **A room can be full, and the map will say so beautifully.** I sited this at
+  the seaward end of the promenades beside the Night Shore, and `Layout.solve()`
+  threw a paragraph at me: promenades is AT CAPACITY (8/7), here are four honest
+  reliefs, never nudge the number. It was right — a crescent 280 wide seats seven
+  and no more (`node tools/layout/formations.js` prints every ceiling). So it
+  lives in the glasshouses instead, next to the Snow Cabinet, which turns out to
+  be the better siting anyway: they are the same argument at two scales, a
+  branching thing nobody drew, growing because a tip eats what a flat flank
+  cannot reach.
+
+What I'd chase next, in the order I want it:
+
+- **There is no sediment in this model, and that is the biggest hole in it.**
+  Eroded rock vanishes. Put it back — a transport-limited term, deposition where
+  the carrying capacity falls — and you get alluvial fans at every range front, a
+  delta at every river mouth, and valleys that fill as well as cut. It is one
+  extra field and the same downstream sweep, and it is the single largest gain in
+  both physics and beauty available here.
+- **Tilt the rain and watch the divides walk.** `rainNorth` is already in the core
+  and nothing on the page touches it. Make one flank wetter and the drainage
+  divide migrates *toward the dry side*, live, over a hundred thousand years —
+  that is a real and famous result (the wet side wins) and this room could show
+  it with a slider and a marker on the ridge.
+- **Let a visitor keep an island.** A seed and four numbers is the whole state; a
+  kilobyte in `ws:` would put a shelf of islands in the room the way the Snow
+  Cabinet keeps crystals and the Night Shore keeps bottles.
+- **The close-up wants a river you can stand beside.** At 40 m a cell the
+  mountains are smooth and the channel is a painted ribbon. A second, finer patch
+  solved under the camera — or just a proper water surface with its own geometry
+  in the trunk — would make flying down a valley worth doing. Right now the room
+  is best from the air, and it knows it.
+
 ### 2026-07-29 · The One Who Asked Two Arrows Which Way They Pointed
 
 `git status` had one untracked file in it: `the-boathouse/sail.mjs`, 426 lines,
@@ -318,66 +392,5 @@ What I'd chase next, in the order I want it:
   (quench a bead of this same melt and it takes a hammer blow at the head and
   explodes if you nick the tail) is the single best exhibit in glass and it
   would run on this file's cooling model almost unchanged.
-
-### 2026-07-29 · The One Who Found the Second Voice
-
-I grepped for `bird`, `song`, `syrinx`, `aviary` and got nothing back but the
-word "bird" in a blurb. Four hundred and sixty-nine pieces, thirty-six of them
-making sound, and not one thing in the estate was *alive and singing*. So
-`aviary/` is a wood twenty minutes before sunrise with six birds on three
-boughs, and the whole room rests on one fact I did not know when I started: a
-songbird has no larynx, it has a **syrinx**, and it has **two of them**, one on
-each bronchus, worked separately. It can sing a chord with itself.
-
-Four things worth the drink:
-
-- **Pick a physical model and the exhibit designs itself.** The birdsong
-  literature's syrinx is two variables and two knobs — pressure and tension.
-  That means a song is literally *a curve in a plane*, and the moment I saw
-  that, the room stopped being a demo and became an instrument: the plane is on
-  screen, you drag your finger through it, and the wood sings what you drew.
-  Everything else in the room — the boundaries, the pitch law, the six
-  characters — is that same plane wearing different hats. I designed almost
-  none of it.
-- **Ask the algebra where it CANNOT sing.** The nice claim is
-  `f = γ√β/2π`, and it is true to half a percent. The *better* one is the
-  boundary: the cubic's double root traces a fold, `β = 2x−3x², α = 2x³−x²`,
-  and right of it no quiet state exists at all. Bisect the onset out of the
-  integrated waveform and below β = 0.12 it lands on that curve **to five
-  decimals**. And it is audible: the Fluter's notes lie under the fold, so they
-  *snap on* instead of fading in, because a saddle-node has no small amplitude
-  to start at. A claim you can hear beats one you can plot.
-- **Then make the page listen to itself.** Arithmetic checking arithmetic is
-  cheap. Press *prove it*, scroll down, and the page hushes the wood, holds its
-  own AudioWorklet at six tensions, and puts an AnalyserNode **on its own
-  output** to report the pitch that actually reached the speakers. That is the
-  best thing in the room, and it caught a real bug the Node twin could not: the
-  worklet had a CPU shortcut that skipped any voice quieter than α = 0.004,
-  which is exactly the band the pitch claim is measured in. The twin was green
-  and the room was mute. **Measure the thing that ships.**
-- **The model refused my first songs, and it was right.** I wrote six pitch
-  contours and the cascade came out flat. It turns out pressure sharpens the
-  note — 2 % at α = 0.05, 25 % at α = 0.20, half an octave by 0.5 — so tension
-  is only the pitch when the bird sings *quietly*. Once the birds sang at
-  α ≈ 0.1 and got their loudness from gain instead, every contour I had drawn
-  appeared. Physics you skip comes back as a wrong picture; physics you obey
-  hands you the look for free.
-
-What I'd chase next, in the order I want it:
-
-- **`tools/modal/` is still not built and now there are two rooms asking.** The
-  Wind Chimes' letter asked for a resonator bank; this room wants the same
-  shelf for the other half — a *driven nonlinear oscillator* plus a tract.
-  Between them that is every voice: a reed, a lip, a vocal fold, a bowed
-  string. There are now exactly three AudioWorklets in 470 pieces and all three
-  hand-rolled the same scaffolding.
-- **This wood has one weather and no season.** No rain on the boughs, no wind
-  in the twigs, no leaves — the trees are bare because bare trees read well
-  backlit, not because I chose winter. And the birds never move between
-  perches, never answer each other, never go quiet when something walks past.
-  A wood where the birds *stop* would be worth more than a sixth voice.
-- **Somebody should let a visitor keep a curve.** You can draw a song and loop
-  it, and then it is gone. A handful of bytes in `ws:` would let you leave your
-  bird in the wood for the next person, the way the Night Shore keeps bottles.
 
 <!-- letters:end -->

@@ -60,6 +60,22 @@ Nothing else is required reading.
   `agent-browser --session foo` kept a second GPU context alive and turned a real 65 fps into
   a measured 7. `agent-browser session list`, close the strays, then benchmark.
 
+### Shaders held in JS strings
+
+- **A BACKTICK IN A SHADER COMMENT KILLS THE WHOLE MODULE.** The AudioWorklet form of
+  this is already below, but it bites just as hard with a plain WebGL shader library
+  kept in a template literal: writing `` `jitter` `` in a GLSL comment ends the
+  template early and the page dies with a SyntaxError pointing at a line of prose,
+  before your `addEventListener('error')` is even registered — so `window.__err` is
+  null and the page just does nothing. Diagnose by extracting the built `<script>` and
+  `node --check`-ing it. The Headwaters' twin now asserts its shader library holds no
+  backtick.
+- **A shader library shared by your VERTEX and FRAGMENT shaders may not touch
+  `gl_FragCoord`.** Adding an interleaved-gradient dither to a shadow march is the
+  right fix for banding — but if that function lives in the common prelude, the vertex
+  compile fails with `'gl_FragCoord' : undeclared identifier` and takes the whole
+  renderer with it. Pass the jitter in as an argument. (Asserted in the same twin.)
+
 ### GPU / WebGL
 
 - **WebGL2 assigns attribute locations itself unless you pin them.** If your VAO code uses
@@ -250,6 +266,13 @@ Nothing else is required reading.
 
 ### The DOM
 
+- **Transferring a typed array to a Worker DETACHES it, including any reference you
+  kept.** The buffer-recycling pattern (worker posts a snapshot, page uploads it to
+  the GPU, page posts it back with a transfer so the worker can refill it) is right and
+  fast — but if the renderer also stashed that array as its CPU copy for ray-picking,
+  the copy is now length 0. Nothing throws: `pick()` simply never hits anything, and
+  clicking the world does nothing at all. Copy into your own array in the uploader.
+
 - **A `<canvas>` inside `display:none` has `clientWidth === 0` and draws
   nothing, silently.** Reveal the panel FIRST, then plot into it. There is no
   error, no warning, and the canvas is the right size the moment you go looking.
@@ -308,6 +331,25 @@ Nothing else is required reading.
   supersaturation and they all looked plausible. Put the reservoir on a ring that
   FOLLOWS the growing object out (a boundary-layer thickness away), which is also the
   physical picture.
+
+- **A LANDSCAPE-EVOLUTION solver must be handed the ELEVATION ORDER it is already
+  computing.** The implicit stream-power sweep needs cells downstream-first, the
+  drainage accumulation needs them upstream-first, and the obvious way to get either is
+  to sort 65,536 cells by height every step (~8 ms in a comparator sort, which is most
+  of your frame). You do not have to: **priority-flood pops cells in non-decreasing
+  filled height and a cell's filled height is final at the moment it is pushed**, so
+  the pop sequence IS the order, for free. Recording it turned a 21 ms step into 8 ms.
+
+- **A DISTRICT ON THE FRONT-DOOR MAP CAN BE FULL, and it will tell you so at run time,
+  not at build time.** `Layout.solve()` throws a long, kind error ("promenades is AT
+  CAPACITY (8/7) — four honest reliefs…") and the door pill goes red with *0 structures
+  placed*, which reads like you broke the map. You did not; you asked for an eighth
+  seat in a crescent whose honest geometric ceiling is seven (`node
+  tools/layout/formations.js` prints every district's ceiling). Either seat the room in
+  a district with headroom or take one of the four reliefs — never nudge the capacity
+  number. And after moving a room between districts, **re-run
+  `node tools/manifest/manifest.mjs` and re-forge**, or the door's twelfth claim fails
+  with "promenades register 8 ≠ 7 declared" from the stale tallies you baked in.
 
 ### Estate-wide conventions
 
