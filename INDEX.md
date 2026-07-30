@@ -3,7 +3,7 @@
 *Generated from the estate manifest by `tools/seal/index-gen.mjs` — **never edit this file.***
 *It rebuilds every cycle. If something here is wrong, the manifest is wrong.*
 
-**484 pieces · 73 rooms · 11 districts.**
+**485 pieces · 73 rooms · 11 districts.**
 
 Grep this before you build. Rebuilding something that already stands is the estate's
 most expensive mistake — and the hidden pieces are not listed here, they are in
@@ -70,11 +70,11 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ## THE GLASSHOUSE GARDENS
 
-*6 rooms · 71 pieces*
+*6 rooms · 72 pieces*
 
 - **[The Aviary](aviary/index.html)** — 0 pieces
-- **[The Conservatory](conservatory/index.html)** — 17 pieces
-  <sub>[Logistic Growth](conservatory/logistic/index.html) · [Predator & Prey](conservatory/predator-prey/index.html) · [Schelling’s Tipping Town](conservatory/schelling/index.html) · [The Drift Jar](conservatory/the-drift-jar/index.html) · [The First Integral](first-integral/index.html) · [The Gene Jar](conservatory/the-gene-jar/index.html) · [The Orb Weaver](conservatory/the-orb-weaver/index.html) · [The Pond](conservatory/the-pond/index.html) · [The Replicator](conservatory/replicator/index.html) · [The Road Into Chaos](bifurcation/index.html) · [The SIR Epidemic](conservatory/sir/index.html) · [The Selection Jar](conservatory/selection-jar/index.html) · [The Soap Film](soap-film/index.html) · [The Soap-Film Surveyor](soap-film/surveyor/index.html) · [The Spiral Meadow](conservatory/the-spiral-meadow/index.html) · [The Wrinkling](the-wrinkling/index.html) · [Uphill With Their Eyes Closed](conservatory/uphill/index.html)</sub>
+- **[The Conservatory](conservatory/index.html)** — 18 pieces
+  <sub>[Logistic Growth](conservatory/logistic/index.html) · [Predator & Prey](conservatory/predator-prey/index.html) · [Schelling’s Tipping Town](conservatory/schelling/index.html) · [The Dark Orchard](conservatory/the-dark-orchard/index.html) · [The Drift Jar](conservatory/the-drift-jar/index.html) · [The First Integral](first-integral/index.html) · [The Gene Jar](conservatory/the-gene-jar/index.html) · [The Orb Weaver](conservatory/the-orb-weaver/index.html) · [The Pond](conservatory/the-pond/index.html) · [The Replicator](conservatory/replicator/index.html) · [The Road Into Chaos](bifurcation/index.html) · [The SIR Epidemic](conservatory/sir/index.html) · [The Selection Jar](conservatory/selection-jar/index.html) · [The Soap Film](soap-film/index.html) · [The Soap-Film Surveyor](soap-film/surveyor/index.html) · [The Spiral Meadow](conservatory/the-spiral-meadow/index.html) · [The Wrinkling](the-wrinkling/index.html) · [Uphill With Their Eyes Closed](conservatory/uphill/index.html)</sub>
 - **[The Glasshouse Range](glasshouse-range/index.html)** — 8 pieces
   <sub>[Kirigami](kirigami/index.html) · [The Aquarium](the-aquarium/index.html) · [The Arctic Circle](arctic-circle/index.html) · [The Cartesian Diver](the-cartesian-diver/index.html) · [The Fortune-Teller](fortune-teller/index.html) · [The Hexaflexagon](hexaflexagon/index.html) · [The Sand Sea](the-sand-sea/index.html) · [Weather You Can Make](weather-you-can-make/index.html)</sub>
 - **[The Gardens · Glasshouse](strange-garden/index.html)** — 40 pieces
@@ -205,4 +205,4 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ---
 
-<sub>manifest generated at commit `4600c2e84179addf8f7b62c3892488571cd5bef6`</sub>
+<sub>manifest generated at commit `e4346cd8e95609cfb8bf54b99539756d7e30bb5f`</sub>

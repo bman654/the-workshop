@@ -64,6 +64,12 @@ Nothing else is required reading.
   the probe point in clear canvas — `elementFromPoint` will tell you in one line — or
   parameterise the thing you are aiming at and pick a fraction that lands away from the
   chrome. (Cost a debug cycle in The Wake.)
+- **Hard-coded pixel targets for your own UI rot the moment you add a button.** A CDP
+  click at the coordinates you read off yesterday's screenshot lands on whatever moved
+  into that spot — in the Dark Orchard it hit "back to the aisle" (which resets the
+  scene) instead of "fly", and the symptom was "my flight code does nothing", twice.
+  Ask the page: `getBoundingClientRect()` on the element, aim at its centre, then click.
+  One extra `eval` and the test survives every layout change.
 - **Another browser session on the same machine steals your frame rate.** A forgotten
   `agent-browser --session foo` kept a second GPU context alive and turned a real 65 fps into
   a measured 7. `agent-browser session list`, close the strays, then benchmark.
@@ -186,6 +192,17 @@ Nothing else is required reading.
   because a facet tilted towards a low sun lets more light in and throws more back — so
   give the body colour a `max(dot(n, sun), 0)` term and the plan view comes alive at every
   angle. Any room with a "look straight down" button needs this before that button works.
+- **A PERFECT CIRCULAR PISTON HAS EXACT NULLS, AND ONE OF THEM WILL LAND INSIDE
+  YOUR FIELD OF VIEW.** `[2 J1(ka sinθ)/(ka sinθ)]²` is the right directivity for a
+  mouth, a speaker or a transducer, and it goes to **exactly zero** at sinθ = 3.83/ka.
+  For a 7 mm bat mouth at 60 kHz that is 30° off axis — which in a 34°-half-angle
+  camera is precisely where the ground three metres ahead is drawn. The result is a
+  black screen that looks like a gain bug, an absorption bug or a tonemap bug, and you
+  will try all three. Two fixes, both physical: **floor the pattern** (a real aperture
+  is not a perfect circle and has sidelobes; −17 dB is generous), and do not use the
+  same pattern twice — a two-way system is *emitter × receiver*, and a receiver
+  (an ear, a hydrophone) is almost always far broader than the emitter. Squaring the
+  piston halves the usable beam and doubles your chances of hitting this.
 - **Normalising a drawn field by its MAXIMUM prints a bright speck and a black sea.** The
   steepness of a wake spans decades between the bow and the far arms (the same shape of
   problem as the orb web's 10⁸), so `gain = target / max` exposes for the one hot texel at
@@ -292,6 +309,13 @@ Nothing else is required reading.
   number and say what actually happened to the object (in that case: the string was
   pinned every 4.65 mm and stopped being a string). Cross-check any pitch you intend
   to *claim* with a second estimator; agreement is the licence to quote it.
+- **If your model says a sound is inaudible, SYNTHESISE SILENCE — never let it
+  alias.** A room that slows ultrasound down to hear it has a dial, and at the top of
+  that dial the call is back above Nyquist. Rendering it anyway does not produce
+  nothing: it folds back into the audible band as a perfectly pleasant tone at the
+  wrong frequency, which is a lie with a nice timbre on it and reads as a *feature*.
+  Guard on `f_max / N < 0.45 * sampleRate`, go quiet, and put the reason on screen
+  ("82 kHz: silent, because it really is"). The silence is the honest output.
 - **An AudioContext that never got a REAL user gesture is suspended, and its
   clock does not tick.** So anything slaved to `ctx.currentTime` — an animation
   that follows a playing buffer, a state machine waiting for a sound to arrive —

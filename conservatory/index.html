@@ -428,6 +428,30 @@
       </div>
     </a>
 
+    <a class="bed" href="the-dark-orchard/index.html" style="margin-top:14px">
+      <div class="bedgrid">
+        <div class="bedglass"><canvas id="beddo" width="520" height="460"></canvas></div>
+        <div class="bedbody">
+          <div class="tagrow"><span class="glyph">&#129415;</span><span class="kind">an animal that hunts in the dark, and the one that hears it coming</span></div>
+          <h2>The Dark Orchard</h2>
+          <p>Not a population and not a web &mdash; <b>a night, and two animals in it</b>. You are the bat, and
+          there is <b>no light in this orchard at all</b>: every single thing you will ever see, you have to
+          <b>shout</b> for, and it arrives late &mdash; 5.8 milliseconds for every metre. The screen is not a
+          picture, it is a plot of <i>arrival time</i>, painted in the <b>colour of the pitch that came back</b>,
+          because the air eats the top of your sweep first. And the moth you are chasing
+          <b>can hear you long before you can hear it</b>: your voice spreads once, your echo spreads twice.
+          Turn yourself down and watch the gap close.</p>
+          <div class="proof">ISO 9613-1 absorption against its published table (1.32 dB/m at 40 kHz) &middot;
+          range resolution c/2B <i>measured</i> by matched-filtering the room's own echoes &mdash; the sweep
+          separates 15.6 mm and fails at 1.3 mm, the tone fails at two metres &middot; a 45 Hz wingbeat read
+          back as 43.9 Hz inside one long call, and aliased to 5 Hz by a bat that samples ten times a second
+          &middot; the crossover shout 2L&#8348;&minus;L&#8341;+TS+20 = 80.0 dB, closed form and by bisection
+          &middot; 92 green, and the GPU's distance field checked against the twin's live, sixteen rays a second.</div>
+          <span class="enter">&#8627; enter the bed</span>
+        </div>
+      </div>
+    </a>
+
     <!-- ===== CROSS-WING BRIDGE ===== -->
     <div class="bridge">
       <span class="bglyph">&#9851;</span>
@@ -496,6 +520,8 @@ import { runSelfTest as schSelfTest, makeTown as schMakeTown, stepOnce as schSte
   segregationIndex as schSegIndex, P as schP, EMPTY as schEMPTY, A as schA, B as schB }
   from './schelling/core.mjs';
 import { buildWeb as owBuildWeb, spiderAt as owSpiderAt } from './the-orb-weaver/weave.mjs';
+import { GROUPS as doGroups, POST_BASE as doPost, CALLS as doCalls, returnCentroid as doCentroid,
+         absorptionDbPerM as doAlpha, speedOfSound as doC } from './the-dark-orchard/orchard.mjs';
 
 // ---- breadcrumb: matches the front-door id EXACTLY (the Survey's food) ----
 try{ var k='ws:seen:conservatory'; if(!localStorage.getItem(k)) localStorage.setItem(k,String(Date.now())); }catch(e){}
@@ -1301,7 +1327,93 @@ function layout(){
   dgeo = fitCanvas(beddrift, dctx);
   schgeo = fitCanvas(bedsch, schctx);
   owgeo = fitCanvas(bedow, owctx);
+  dogeo = fitCanvas(beddo, doctx);
 }
+// ============================================================================
+//  BED — THE DARK ORCHARD.  A plan of the same orchard, from above, with one
+//  chirp going out across it.  The ring's COLOUR is the room's own
+//  returnCentroid() and its brightness is the room's own ISO-9613-1
+//  absorption, so the depth of the world in this thumbnail is the depth of
+//  the world in the room — it cannot drift.
+// ============================================================================
+const beddo = document.getElementById('beddo');
+const doctx = beddo.getContext('2d');
+let dogeo, doT = 0;
+const DO_BAT = [0.4, 4.4], DO_RMAX = 13.0;
+const DO_ALPHA = doAlpha(60000, 20, 50);
+function doPitchColour(fHz){
+  const f = fHz*1e-3;
+  const S=[[45,255,92,33],[49,255,184,84],[53,247,242,224],[58,158,207,255]];
+  if(f<=S[0][0]) return S[0].slice(1);
+  for(let i=1;i<S.length;i++){ if(f<=S[i][0]||i===S.length-1){
+    const a=S[i-1], b=S[i], u=Math.max(0,Math.min(1,(f-a[0])/(b[0]-a[0])));
+    return [a[1]+(b[1]-a[1])*u, a[2]+(b[2]-a[2])*u, a[3]+(b[3]-a[3])*u]; } }
+  return S[3].slice(1);
+}
+function doEcho(r){                       // relative echo strength at range r
+  return Math.exp(-2*DO_ALPHA*Math.LN10/10*r) / Math.max(r*r, 0.25);
+}
+function drawBedDo(advance){
+  const W=dogeo.w, H=dogeo.h;
+  if(advance && !reduce){ doT += 0.075; if(doT > DO_RMAX*1.55) doT = 0; }
+  const r = doT;
+  doctx.clearRect(0,0,W,H);
+  const bg = doctx.createRadialGradient(W*0.5,H*0.74,0,W*0.5,H*0.74,Math.max(W,H)*0.8);
+  bg.addColorStop(0,'rgba(18,15,11,0.8)'); bg.addColorStop(1,'rgba(3,4,6,0)');
+  doctx.fillStyle=bg; doctx.fillRect(0,0,W,H);
+  /* a plan: the bat near the bottom, its forward (-z) running up the card */
+  const sc = H*0.048, ox = W*0.5, oy = H*0.80;
+  const X = x => ox + (x-DO_BAT[0])*sc, Y = z => oy + (z-DO_BAT[1])*sc;
+  const ref = doEcho(2.0);
+  /* a thumbnail exposure: the ROOM's absorption law, on a gentle curve so the
+     far half of the world is dim rather than gone.  The room itself is linear. */
+  const lit = d => Math.min(1, Math.pow(Math.max(doEcho(d)/ref, 1e-12), 0.30));
+  const rgba = (d, a) => { const c = doPitchColour(doCentroid(doCalls.fm, d, 20, 50));
+    return 'rgba('+(c[0]|0)+','+(c[1]|0)+','+(c[2]|0)+','+a.toFixed(3)+')'; };
+
+  // the chalk survey rings round the peg at the origin, each SEGMENT lit when
+  // the front reaches it, in the colour its own range gives back
+  const pegD = Math.hypot(0-DO_BAT[0], 0-DO_BAT[1]);
+  doctx.lineWidth = 1.6;
+  for(let m=1;m<=11;m++){
+    for(let k=0;k<64;k++){
+      const t0 = k/64*6.2832, t1 = (k+1.03)/64*6.2832;
+      const mx = Math.cos((t0+t1)/2)*m, mz = Math.sin((t0+t1)/2)*m;
+      const d = Math.hypot(mx-DO_BAT[0], mz-DO_BAT[1]);
+      if(d > r) continue;
+      const a = lit(d) * Math.exp(-(r-d)/DO_RMAX*2.1) * 0.85;
+      if(a < 0.008) continue;
+      doctx.strokeStyle = rgba(d, a);
+      doctx.beginPath(); doctx.arc(X(0), Y(0), m*sc, t0, t1); doctx.stroke();
+    }
+  }
+  // the trees, as the plan sees them
+  for(const g of doGroups){
+    const d = Math.hypot(g.cx-DO_BAT[0], g.cz-DO_BAT[1]);
+    if(d > r) continue;
+    const a = lit(d) * Math.exp(-(r-d)/DO_RMAX*2.1);
+    if(a < 0.008) continue;
+    doctx.fillStyle = rgba(d, a*0.95);
+    doctx.beginPath(); doctx.arc(X(g.cx), Y(g.cz), Math.max(3.0, g.rad*sc*0.52), 0, 6.2832); doctx.fill();
+  }
+  // the two fence posts, forty centimetres apart, which is what the sweep is for
+  for(const sx of [-0.2, 0.2]){
+    const d = Math.hypot(doPost[0]+sx-DO_BAT[0], doPost[2]-DO_BAT[1]);
+    if(d > r) continue;
+    const a = lit(d) * Math.exp(-(r-d)/DO_RMAX*2.1);
+    doctx.fillStyle = 'rgba(252,248,238,'+Math.min(1,a*1.1).toFixed(3)+')';
+    doctx.beginPath(); doctx.arc(X(doPost[0]+sx), Y(doPost[2]), 3.2, 0, 6.2832); doctx.fill();
+  }
+  // the front itself
+  if(r > 0.1 && r < DO_RMAX){
+    doctx.strokeStyle = rgba(r, Math.min(0.95, lit(r)*1.15));
+    doctx.lineWidth = 2.4;
+    doctx.beginPath(); doctx.arc(X(DO_BAT[0]), Y(DO_BAT[1]), r*sc, 0, 6.2832); doctx.stroke();
+  }
+  doctx.fillStyle = 'rgba(255,196,107,0.92)';
+  doctx.beginPath(); doctx.arc(X(DO_BAT[0]), Y(DO_BAT[1]), 3.2, 0, 6.2832); doctx.fill();
+}
+
 let tphase = 0;
 function loop(){
   // step the orbits forward a few samples per frame (downsampled, slow drift)
@@ -1320,6 +1432,7 @@ function loop(){
   drawBedDrift(true);
   drawBedSch(true);
   drawBedOw(true);
+  drawBedDo(true);
   raf = requestAnimationFrame(loop);
 }
 let raf = 0;
@@ -1345,14 +1458,14 @@ function schStatic(){ schIdx = 0; schFresh(); for(let g=0;g<60000 && !schTown.ha
 function drawStatics(){ drawFloor(0); drawBed(0); drawBedLog(LOG_TMAX*0.62); drawBedSir(SIR_STATIC); drawBedRep(REP_TR.xs.length*0.55); drawBedGj(0);
   // reduced-motion: grow the coral headlessly to a rich still, then paint once
   if(!wrSeeded) seedWrinkling(); for(let i=0;i<900;i++) wrStep(wrState,wrHash,wrParams,wrRng); drawBedWr(false);
-  meadowStep(mdField, 90); drawBedMeadow(false); pondStatic(); upStatic(); selStatic(); driftStatic(); schStatic(); }
+  meadowStep(mdField, 90); drawBedMeadow(false); pondStatic(); upStatic(); selStatic(); driftStatic(); schStatic(); doT = DO_RMAX*0.72; drawBedDo(false); }
 window.addEventListener('resize', function(){ layout(); if(reduce){ drawStatics(); } }, {passive:true});
 layout();
 // eagerly seed the wrinkling preview so wrState exists (and is simple) before the self-test runs
 if(!wrSeeded) seedWrinkling();
 if (reduce){ drawFloor(ORB.pts.length*0.12); drawBed(bedOrb.pts.length*0.3); drawBedLog(LOG_TMAX*0.62); drawBedSir(SIR_STATIC); drawBedRep(REP_TR.xs.length*0.55); drawBedGj(0);
   if(!wrSeeded) seedWrinkling(); for(let i=0;i<900;i++) wrStep(wrState,wrHash,wrParams,wrRng); drawBedWr(false);
-  meadowStep(mdField, 90); drawBedMeadow(false); pondStatic(); upStatic(); selStatic(); driftStatic(); schStatic(); }
+  meadowStep(mdField, 90); drawBedMeadow(false); pondStatic(); upStatic(); selStatic(); driftStatic(); schStatic(); doT = DO_RMAX*0.72; drawBedDo(false); }
 else raf = requestAnimationFrame(loop);
 
 // ============================================================================
@@ -1425,7 +1538,7 @@ function runSelfTest(){
   ok('the Schelling bench link is bare-relative (no leading slash)', benchSch && !/^\//.test(benchSch.getAttribute('href')) && !/^\.\.\//.test(benchSch.getAttribute('href')));
 
   // live beds + ZERO empty planters (the wing has grown a twelfth bed — Uphill)
-  ok('thirteen live beds present (.bed)', document.querySelectorAll('.bed').length === 13);
+  ok('fourteen live beds present (.bed)', document.querySelectorAll('.bed').length === 14);
   ok('zero empty planters (the wing is fully planted)', document.querySelectorAll('.planter').length === 0);
 
   // the orbit-light canvas is mounted and sized
@@ -1455,6 +1568,11 @@ function runSelfTest(){
   ok('the Drift Jar planter-light canvas mounted', beddrift instanceof HTMLCanvasElement && beddrift.width > 0);
   // the Schelling planter-light canvas is mounted and sized
   ok('the Schelling planter-light canvas mounted', bedsch instanceof HTMLCanvasElement && bedsch.width > 0);
+  // the Dark Orchard planter-light canvas is mounted, and reads the ROOM's own air
+  ok('the Dark Orchard planter-light canvas mounted', beddo instanceof HTMLCanvasElement && beddo.width > 0);
+  ok('the Dark Orchard preview prices the air the way the room does',
+     Math.abs(DO_ALPHA - doAlpha(60000, 20, 50)) < 1e-12 && DO_ALPHA > 1.5 && DO_ALPHA < 2.5);
+  ok('the Dark Orchard preview plans the room\'s own orchard', doGroups.length === 13);
 
   // the cross-wing bridge points to ../first-integral/index.html
   const bridge = [...document.querySelectorAll('a')].find(a=>(a.getAttribute('href')||'')==='../first-integral/index.html');
@@ -1490,6 +1608,7 @@ function runSelfTest(){
   ok('the Schelling core self-test all green ('+schCore.pass+'/'+schCore.total+')', schCore.pass === schCore.total);
 
   const pass = checks.filter(c=>c.pass).length;
+  window.__conservatoryChecks = checks;
   return { pass, total: checks.length, checks };
 }
 
