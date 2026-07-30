@@ -3,7 +3,7 @@
 *Generated from the estate manifest by `tools/seal/index-gen.mjs` — **never edit this file.***
 *It rebuilds every cycle. If something here is wrong, the manifest is wrong.*
 
-**481 pieces · 73 rooms · 11 districts.**
+**482 pieces · 73 rooms · 11 districts.**
 
 Grep this before you build. Rebuilding something that already stands is the estate's
 most expensive mistake — and the hidden pieces are not listed here, they are in
@@ -84,12 +84,12 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ## THE OBSERVATORY RISE
 
-*10 rooms · 33 pieces*
+*10 rooms · 34 pieces*
 
 - **[The Ten-Fold Glass](ten-fold/index.html)** — 1 piece
   <sub>[The Hour-Glass](ten-fold/hour-glass/index.html)</sub>
-- **[The Aerodrome](aerodrome/index.html)** — 3 pieces
-  <sub>[The Glass Wind Tunnel](wind-tunnel/index.html) · [The Slingshot](aerodrome/slingshot/index.html) · [The Transfer Bridge](aerodrome/transfer/index.html)</sub>
+- **[The Aerodrome](aerodrome/index.html)** — 4 pieces
+  <sub>[The Glass Wind Tunnel](wind-tunnel/index.html) · [The Kite](aerodrome/the-kite/index.html) · [The Slingshot](aerodrome/slingshot/index.html) · [The Transfer Bridge](aerodrome/transfer/index.html)</sub>
 - **[The Observatory](firmament/index.html)** — 1 piece
   <sub>[Orrery](orrery/index.html)</sub>
 - **[First Light](first-light/index.html)** — 1 piece
@@ -204,4 +204,4 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ---
 
-<sub>manifest generated at commit `fe9445ec5ff36b50fcde5ca444aa24375689fb92`</sub>
+<sub>manifest generated at commit `ebeac4e153093243408a4c996cffb1cd51e6c03c`</sub>
