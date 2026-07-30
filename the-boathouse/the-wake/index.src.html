@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Wake — every boat opens the same wedge</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  THE WAKE  ·  the-boathouse/the-wake/
+
+  Every wake on deep water opens at the same angle: 19.4712 degrees, which is
+  asin(1/3).  A duckling and a supertanker draw the same wedge.  Neither the
+  boat nor its speed is anywhere in that number — it is a statement about
+  WATER, and it comes out of one fact: a deep-water wave carries its energy at
+  HALF the speed its crests move.
+
+  Turn the depth down and the law dies in front of you.  In water shallow
+  enough that every wave runs at sqrt(g h) there is no dispersion left, the
+  wedge swings open to a right angle at the critical speed, and past it the
+  wake is a sonic boom: a Mach cone of half angle asin(1/Fr).  One slider walks
+  the whole way.  That is the room.
+
+  WHAT IS ON THE SCREEN
+    · A stretch of open water.  It is not a texture and it is not a loop: every
+      pixel is the Havelock superposition — the residue of the linearised
+      free-surface problem at the pole c(k) = U cos(theta) — summed over 2400
+      wave directions in a WebGL2 fragment shader, accumulated over 24 passes
+      so you watch it come in.  Elevation AND both exact slopes are carried, so
+      the light on the water is the light on the real surface, not on a
+      finite-difference guess.
+    · The wedge, drawn where the theorem says it is.
+    · A brass protractor hinged at the bow.  Drag it.
+    · Behind them, chop and glitter on the physical scale of ordinary wind
+      waves — which is how you feel that a fast boat's wake is enormous and a
+      swan's is the size of the ripples it sits in.
+
+  THE CLAIMS, AND HOW THE ROOM SETTLES THEM
+    1. The wedge is max over theta of the ray angle, using the EXACT dispersion
+       relation c^2 = (g/k) tanh(k h).  On deep water that is asin(1/3) for
+       every craft (the twin runs nine, from a duckling to a supertanker).
+    2. It is MEASURED off the drawn water, not read off the theorem.  Sweep an
+       arc, find the widest angle still carrying 5% of the profile's peak
+       steepness, do it at five radii.  A caustic does not stop dead — it decays
+       through an Airy tail whose angular width falls like R^(-2/3) — so every
+       reading is too wide, and the readings are a straight line in R^(-2/3).
+       The intercept is the wedge.  Both numbers are on the panel, always.
+    3. Above the critical speed the front is not a caustic but a shock-like
+       edge, so it reads true at EVERY radius with no fit at all.  That
+       difference is visible in the ladder.
+    4. Nothing is claimed about wave HEIGHT.  The amplitude is a linear model
+       for a Gaussian pressure patch and is labelled as one; the room
+       normalises it away and never quotes a height.  Every angle it does claim
+       comes from the phase alone.
+
+  ENGINES (inlined byte-for-byte by the forge, never forked):
+    · tools/ws/ws.js         the estate-wide mute + breadcrumbs
+    · tools/scene3d/core.mjs the camera — the SAME basis the shader builds its
+                             rays from, which is the only way to be sure the
+                             boat sits where the water says it does
+    · ./wake.mjs             the dispersion, the wedge, the field, the rulers
+  Node twin: `node the-boathouse/the-wake/wake.test.mjs`   (46 checks)
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root{
+    --ink:#eaf2f8; --dim:#9fb4c6; --faint:#6b8095;
+    --brass:#d9b473; --gold:#f0c987; --warm:#ffd9a0;
+    --cusp:#ffca6b; --meas:#7fe0c8; --hot:#ff8a5c;
+    --panel:rgba(7,14,22,0.80); --line:rgba(150,190,220,0.18);
+    --brassline:rgba(217,180,115,0.32);
+    --ui:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:#04080e;color:var(--ink);
+    font-family:var(--sans);-webkit-font-smoothing:antialiased;overflow:hidden;
+    touch-action:none;}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  #ov{pointer-events:none}
+
+  .topleft{position:fixed;left:24px;top:16px;z-index:5;max-width:min(44vw,520px);
+    pointer-events:none}
+  .topleft a,.topleft button{pointer-events:auto}
+  .back{font:600 10.5px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;
+    color:var(--dim);text-decoration:none;opacity:.85}
+  .back:hover{color:var(--gold);opacity:1}
+  h1{font-family:var(--ui);font-size:clamp(28px,4.2vw,50px);font-weight:600;
+    margin:7px 0 2px;letter-spacing:.4px;text-shadow:0 2px 20px rgba(0,0,0,.65)}
+  .say{font:13.5px/1.62 var(--sans);color:#cadbe8;margin:4px 0 0;max-width:450px;
+    text-shadow:0 1px 10px rgba(0,0,0,.8)}
+  .say b{color:#fff;font-weight:600}
+
+  .card{position:fixed;z-index:6;background:var(--panel);border:1px solid var(--line);
+    border-radius:13px;box-shadow:0 12px 40px rgba(0,0,0,.45);
+    backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}
+  .hd{font:600 9.5px/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;
+    color:var(--faint);margin:0 0 8px}
+
+  /* ── the dial: the wedge ──────────────────────────────────────────────── */
+  #wedge{right:22px;top:16px;width:302px;padding:12px 14px 11px}
+  #wedge canvas{position:static;width:100%;height:132px;display:block}
+  .nums{display:grid;grid-template-columns:1fr auto;gap:2px 10px;margin-top:9px;
+    font:11.5px/1.55 var(--mono)}
+  .nums .k{color:var(--dim)}
+  .nums .v{text-align:right;font-weight:600}
+  .nums .v.cusp{color:var(--cusp)}
+  .nums .v.meas{color:var(--meas)}
+  .nums .v.hot{color:var(--hot)}
+  .note{font:10.5px/1.55 var(--sans);color:var(--dim);margin:9px 0 0;
+    border-top:1px solid var(--line);padding-top:7px}
+  .note b{color:var(--ink)}
+
+  /* ── the controls ─────────────────────────────────────────────────────── */
+  #ctl{left:24px;bottom:20px;width:326px;padding:12px 14px 12px}
+  .row{display:grid;grid-template-columns:74px 1fr 64px;align-items:center;
+    gap:9px;margin:6px 0}
+  .row label{font:11.5px/1.2 var(--sans);color:var(--dim)}
+  .row .rv{font:11.5px/1.2 var(--mono);text-align:right;color:var(--ink)}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:3px;
+    background:rgba(190,215,235,.26);border-radius:2px;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;
+    border-radius:50%;background:var(--brass);cursor:pointer;
+    box-shadow:0 0 0 1px rgba(0,0,0,.45)}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border:0;border-radius:50%;
+    background:var(--brass);cursor:pointer}
+  .btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  button{font:11px/1 var(--sans);color:var(--ink);background:rgba(255,255,255,.06);
+    border:1px solid var(--brassline);border-radius:7px;padding:6px 9px;cursor:pointer}
+  button:hover{background:rgba(217,180,115,.17);color:#fff}
+  button.on{background:rgba(217,180,115,.26);border-color:var(--brass);color:#fff}
+  .pre{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px;
+    border-top:1px solid var(--line);padding-top:9px}
+  .pre button{font-size:10.5px;padding:5px 8px}
+
+  /* ── the ladder: the measurement ──────────────────────────────────────── */
+  #meas{right:22px;bottom:20px;width:302px;padding:12px 14px 11px}
+  #meas canvas{position:static;width:100%;height:104px;display:block}
+  .lad{font:10.5px/1.5 var(--mono);color:var(--dim);margin-top:7px;
+    display:grid;grid-template-columns:repeat(5,1fr);gap:2px;text-align:center}
+  .lad span{color:var(--meas)}
+  .lad i{display:block;color:var(--faint);font-style:normal;font-size:9px}
+
+  /* ── the chip ─────────────────────────────────────────────────────────── */
+  #chip{position:fixed;left:24px;top:calc(50% - 16px);z-index:7;
+    font:11px/1.35 var(--mono);color:var(--dim);background:var(--panel);
+    border:1px solid var(--line);border-radius:9px;padding:7px 10px;cursor:pointer;
+    max-width:250px}
+  #chip:hover{border-color:var(--brassline);color:var(--ink)}
+  #chip.ok{color:var(--meas);border-color:rgba(127,224,200,.4)}
+  #chip.bad{color:var(--hot);border-color:rgba(255,138,92,.5)}
+
+  #load{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:8;
+    font:12px/1.4 var(--mono);color:var(--dim);letter-spacing:.1em;
+    background:rgba(4,8,14,.7);padding:10px 16px;border-radius:9px;display:none}
+
+  @media (max-width:1080px){
+    #wedge,#meas{width:262px}
+    #ctl{width:280px}
+    .topleft{max-width:56vw}
+  }
+  /* a short window has to give something up: the chip is a bonus, the two
+     cards are the room.  Condense them rather than dropping one. */
+  @media (max-width:1240px), (max-height:900px){ #chip{display:none} }
+  @media (max-height:900px){
+    #wedge{width:272px;padding:10px 12px 9px}
+    #wedge canvas{height:96px}
+    #meas{width:272px;padding:10px 12px 9px}
+    #meas canvas{height:78px}
+    .nums{font-size:11px;gap:1px 8px;margin-top:7px}
+    .note{font-size:10px;line-height:1.45;margin-top:7px;padding-top:6px}
+    .lad{font-size:10px;margin-top:5px}
+    h1{font-size:clamp(26px,3.6vw,40px)}
+    .say{font-size:12.5px}
+  }
+  @media (max-height:760px){
+    #wedge .note{display:none}
+  }
+  @media (max-width:840px){
+    #meas{display:none}
+    #wedge{top:auto;bottom:20px;right:16px;width:250px}
+    #ctl{left:16px;width:250px;bottom:auto;top:calc(50% - 40px)}
+    #chip{display:none}
+    .topleft{max-width:80vw}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+<canvas id="ov"></canvas>
+
+<div class="topleft">
+  <a class="back" href="../index.html">&larr; the boathouse</a>
+  <h1>The Wake</h1>
+  <p class="say">Every boat on deep water opens the <b>same wedge</b> — 19.47&deg;, whatever it
+     is and however fast it goes. <b>Drag to walk around it.</b> Swing the brass arm to
+     measure. Then take the water away from under it.</p>
+</div>
+
+<div id="chip">checking&hellip;</div>
+<div id="load">drawing the water&hellip;</div>
+
+<div class="card" id="wedge">
+  <div class="hd">the wedge</div>
+  <canvas id="cAlpha"></canvas>
+  <div class="nums">
+    <span class="k">the wedge, exactly</span><span class="v cusp" id="nCusp">&mdash;</span>
+    <span class="k">measured off the water</span><span class="v meas" id="nMeas">&mdash;</span>
+    <span class="k">brightest water at</span><span class="v" id="nBright">&mdash;</span>
+    <span class="k">the arm reads</span><span class="v" id="nArm">&mdash;</span>
+    <span class="k">wavelength astern</span><span class="v" id="nLam">&mdash;</span>
+    <span class="k">depth Froude, U/&radic;gh</span><span class="v" id="nFrh">&mdash;</span>
+  </div>
+  <p class="note" id="nNote"></p>
+</div>
+
+<div class="card" id="ctl">
+  <div class="hd">the boat, and the water under it</div>
+  <div class="row"><label>speed</label><input type="range" id="sU" min="1.5" max="14" step="0.1" value="6"><span class="rv" id="vU"></span></div>
+  <div class="row"><label>hull, for its speed</label><input type="range" id="sF" min="0.40" max="3.00" step="0.01" value="1.00"><span class="rv" id="vF"></span></div>
+  <div class="row"><label>depth</label><input type="range" id="sH" min="0" max="100" step="1" value="100"><span class="rv" id="vH"></span></div>
+  <div class="btns">
+    <button id="bDown">look down</button>
+    <button id="bWedge" class="on">the wedge</button>
+    <button id="bArm" class="on">the arm</button>
+    <button id="bSound">sound</button>
+  </div>
+  <div class="pre">
+    <button data-p="swan">a swan</button>
+    <button data-p="eight">a rowing eight</button>
+    <button data-p="ferry">a harbour ferry</button>
+    <button data-p="tanker">a supertanker</button>
+    <button data-p="canal">a canal, 1.2 m deep</button>
+    <button data-p="bank">over a sandbank</button>
+  </div>
+</div>
+
+<div class="card" id="meas">
+  <div class="hd">the edge, at five radii</div>
+  <canvas id="cLad"></canvas>
+  <div class="lad" id="ladNums"></div>
+  <p class="note" id="mNote"></p>
+  <p class="note" style="opacity:.72">No wave <b>height</b> is claimed anywhere in this
+  room. The drawn steepness is linear theory for a Gaussian pressure patch, normalised for
+  exposure and soft-clipped so the far arms stay visible. Every <i>angle</i> comes from the
+  phase alone — from c(k) = U cos&thinsp;&theta; and from the exact
+  c&sup2; = (g/k)&thinsp;tanh&thinsp;kh, and from nothing else.</p>
+</div>
+
+<script type="module">
+/* ═══ ENGINES ═════════════════════════════════════════════════════════════ */
+<!-- forge:include ../../tools/scene3d/core.mjs -->
+<!-- forge:include ./wake.mjs -->
+<!-- forge:include ../../tools/ws/ws.js -->
+
+try { WS.seen('the-wake'); } catch (e) {}
+window.addEventListener('error', (e) => { try { window.__err = (e.error && e.error.stack) || e.message; } catch (_) {} });
+
+/* ═══ CONSTANTS ═══════════════════════════════════════════════════════════ */
+const TEX = 1024;                       // wake field resolution
+const NSAMP = 2400;                     // wave directions in the superposition
+const PASSES = 24;                      // accumulation passes (stratified)
+const DOM = { x0: -44, x1: 8, y0: -26, y1: 26 };    // scaled domain, units of 1/k0
+const TARGET_SLOPE = 0.30;             // the drawn steepness (amplitude is a MODEL)
+const DEG = 180 / Math.PI;
+
+const glc = document.getElementById('gl');
+const ovc = document.getElementById('ov');
+const octx = ovc.getContext('2d');
+const gl = glc.getContext('webgl2', { antialias: false, alpha: false, powerPreference: 'high-performance' });
+if (!gl) { document.getElementById('load').style.display = 'block';
+  document.getElementById('load').textContent = 'this room needs WebGL2'; }
+const extCBF = gl && gl.getExtension('EXT_color_buffer_float');
+
+/* ═══ STATE ═══════════════════════════════════════════════════════════════ */
+const st = {
+  U: 6, Frb: 1.0, h: Infinity,
+  cam: { yaw: Math.PI / 2, pitch: 0.46, roll: 0, dolly: 1 },
+  showWedge: true, showArm: true, arm: 0.34,
+  sound: false,
+  S: null, k0: 1, B: 1, H: Infinity,
+  theory: 0, measured: null, bright: null, ladder: null,
+  pass: 0, norm: 1, dirty: true, tween: null,
+};
+
+/* ═══ GL PLUMBING ═════════════════════════════════════════════════════════ */
+function sh(type, src) {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) + '\n' + src);
+  return s;
+}
+function prog(vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, sh(gl.VERTEX_SHADER, vs));
+  gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+  gl.bindAttribLocation(p, 0, 'aPos');
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {};
+  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) { const info = gl.getActiveUniform(p, i);
+    u[info.name.replace('[0]', '')] = gl.getUniformLocation(p, info.name); }
+  return { p, u };
+}
+const VS = `#version 300 es
+layout(location=0) in vec2 aPos;
+void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+let quadVAO;
+function initQuad() {
+  quadVAO = gl.createVertexArray(); gl.bindVertexArray(quadVAO);
+  const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  gl.bindVertexArray(null);
+}
+function fbo(w, h, internal) {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texStorage2D(gl.TEXTURE_2D, 1, internal, w, h);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const f = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { tex: t, fb: f, w, h };
+}
+
+/* the shared GLSL for evaluating the superposition — one copy, three shaders */
+const FIELD_GLSL = `
+uniform sampler2D uSamp;      // (cos, sin, kappa, amp) per wave direction
+uniform int  uN;              // how many directions
+uniform int  uPass;           // stratified slice index
+uniform int  uPasses;
+uniform float uSigma;
+vec3 fieldAt(vec2 P, int p0, int stride){
+  float z = 0.0, zx = 0.0, zy = 0.0;
+  for (int i = 0; i < 4096; i++) {
+    int j = p0 + i * stride;
+    if (j >= uN) break;
+    vec4 s = texelFetch(uSamp, ivec2(j, 0), 0);
+    float ss = P.x * s.x + P.y * s.y;
+    float q  = ss / uSigma;
+    if (q > 12.0) continue;
+    float qq = max(q, -12.0);
+    float W  = 0.5 * (1.0 - tanh(qq));
+    float ch = 1.0 / cosh(qq);
+    float dW = -0.5 * ch * ch / uSigma;
+    float ph = s.z * ss;
+    float sp = sin(ph), cp = cos(ph);
+    float g  = s.w * (dW * sp + W * s.z * cp);
+    z  += s.w * W * sp;
+    zx += s.x * g;
+    zy += s.y * g;
+  }
+  return vec3(z, zx, zy);
+}`;
+
+/* ═══ PROGRAMS ════════════════════════════════════════════════════════════ */
+let pAccum, pReduce, pProbe, pSea;
+function initPrograms() {
+  pAccum = prog(VS, `#version 300 es
+precision highp float; precision highp sampler2D;
+${FIELD_GLSL}
+uniform vec4 uDom;            // x0, y0, x1, y1
+uniform float uTex;
+out vec4 o;
+void main(){
+  vec2 uv = gl_FragCoord.xy / uTex;
+  vec2 P  = mix(uDom.xy, uDom.zw, uv);
+  o = vec4(fieldAt(P, uPass, uPasses), 1.0);
+}`);
+
+  pReduce = prog(VS, `#version 300 es
+precision highp float; precision highp sampler2D;
+uniform sampler2D uSrc;
+uniform int uBlock;
+out vec4 o;
+void main(){
+  ivec2 base = ivec2(gl_FragCoord.xy) * uBlock;
+  float m = 0.0;
+  for (int j = 0; j < 64; j++) {
+    if (j >= uBlock) break;
+    for (int i = 0; i < 64; i++) {
+      if (i >= uBlock) break;
+      vec3 v = texelFetch(uSrc, base + ivec2(i, j), 0).xyz;
+      m = max(m, length(v.yz));
+    }
+  }
+  o = vec4(m, 0.0, 0.0, 1.0);
+}`);
+
+  // the ruler: evaluate the SAME superposition on polar probe points
+  pProbe = prog(VS, `#version 300 es
+precision highp float; precision highp sampler2D;
+${FIELD_GLSL}
+uniform float uAMax;
+uniform float uMAng;
+uniform float uRadii[5];
+uniform int   uBand;
+uniform float uSpread;
+out vec4 o;
+void main(){
+  int ai = int(gl_FragCoord.x);
+  int ri = int(gl_FragCoord.y);
+  float al = uAMax * (float(ai) / uMAng);
+  float R  = uRadii[ri];
+  float m = 0.0;
+  for (int j = 0; j < 24; j++) {
+    if (j >= uBand) break;
+    float r = R * (1.0 - uSpread * 0.5 + uSpread * (float(j) / float(uBand - 1)));
+    vec3 f = fieldAt(vec2(-r * cos(al), r * sin(al)), 0, 1);
+    m = max(m, length(f.yz));
+  }
+  o = vec4(m, 0.0, 0.0, 1.0);
+}`);
+
+  pSea = prog(VS, SEA_FS);
+}
+
+/* ═══ THE SEA ═════════════════════════════════════════════════════════════ */
+const SEA_FS = `#version 300 es
+precision highp float; precision highp sampler2D;
+uniform sampler2D uWake;
+uniform vec4  uDom;
+uniform float uTex;
+uniform vec3  uEye, uFwd, uRight, uUp;
+uniform vec2  uRes;
+uniform float uFocal, uScale;
+uniform float uK0;            // 1/metre: scaled = k0 * metres
+uniform vec2  uCentre;        // world offset of the camera target, metres
+uniform float uAmp;           // slope normalisation
+uniform float uSat;           // soft-saturation knee for the DRAWN steepness
+uniform float uTime;
+uniform float uSpeed;         // m/s, for the chop drift
+uniform vec3  uSun;
+out vec4 frag;
+
+vec3 wakeAt(vec2 XY){
+  vec2 uv = (XY - uDom.xy) / (uDom.zw - uDom.xy);
+  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return vec3(0.0);
+  vec2 t = uv * uTex - 0.5;
+  vec2 f = fract(t);
+  ivec2 i0 = ivec2(floor(t));
+  ivec2 mx = ivec2(int(uTex) - 1);
+  vec3 a = texelFetch(uWake, clamp(i0 + ivec2(0,0), ivec2(0), mx), 0).xyz;
+  vec3 b = texelFetch(uWake, clamp(i0 + ivec2(1,0), ivec2(0), mx), 0).xyz;
+  vec3 c = texelFetch(uWake, clamp(i0 + ivec2(0,1), ivec2(0), mx), 0).xyz;
+  vec3 d = texelFetch(uWake, clamp(i0 + ivec2(1,1), ivec2(0), mx), 0).xyz;
+  vec3 v = mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
+  float fd = smoothstep(0.0,0.05,uv.x) * smoothstep(0.0,0.05,1.0-uv.x)
+           * smoothstep(0.0,0.05,uv.y) * smoothstep(0.0,0.05,1.0-uv.y);
+  return v * fd;
+}
+
+/* ordinary wind chop, on the physical scale it really has: half a metre to
+   five.  It is what makes a fast boat's wake feel enormous. */
+float hashn(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
+vec2 chopSlope(vec2 w, float foot){
+  vec2 s = vec2(0.0);
+  float drift = uTime * uSpeed;
+  for (int i = 0; i < 5; i++) {
+    float fi = float(i);
+    float lam = 0.55 * pow(2.05, fi);
+    /* a half-metre ripple at seven hundred metres is not a ripple, it is
+       aliasing.  Drop a train once its wavelength is inside a few pixels. */
+    float lod = smoothstep(1.6 * foot, 5.5 * foot, lam);
+    if (lod <= 0.0) continue;
+    float k = 6.28318 / lam;
+    float ang = 0.35 + fi * 2.399;
+    vec2 d = vec2(cos(ang), sin(ang));
+    float sp = sqrt(9.80665 / k);
+    float amp = 0.0031 * lam;
+    float ph = k * (dot(w, d) + d.x * drift) - sp * k * uTime;
+    s += d * (amp * k * cos(ph) * lod);
+  }
+  return s;
+}
+
+/* a low sun, an hour before it goes: warm at the water line, deep overhead */
+vec3 skyAt(vec3 d){
+  float t = clamp(d.z * 1.5 + 0.03, -0.3, 1.0);
+  vec3 low  = vec3(0.300, 0.330, 0.370);
+  vec3 mid  = vec3(0.120, 0.205, 0.315);
+  vec3 high = vec3(0.028, 0.070, 0.180);
+  vec3 c = mix(low, mid, smoothstep(-0.02, 0.16, t));
+  c = mix(c, high, smoothstep(0.13, 0.70, t));
+  float sd = max(dot(normalize(d), uSun), 0.0);
+  c += vec3(1.00, 0.79, 0.50) * pow(sd, 2400.0) * 9.0;       // the sun itself
+  c += vec3(0.90, 0.52, 0.26) * pow(sd, 190.0) * 0.20;       // the glow round it
+  c += vec3(0.72, 0.40, 0.22) * pow(sd, 14.0) * 0.075;       // the warm quarter
+  return c;
+}
+
+void main(){
+  vec2 sxy = (gl_FragCoord.xy - 0.5 * uRes) / uScale;
+  vec3 dir = normalize(uFwd * uFocal + uRight * sxy.x + uUp * sxy.y);
+  vec3 col;
+  if (dir.z > -0.0012 || uEye.z <= 0.0) {
+    col = skyAt(dir);
+  } else {
+    float t = -uEye.z / dir.z;
+    vec3 hit = uEye + t * dir;                    // camera-centred metres
+    vec2 w = hit.xy + uCentre;                    // world metres, boat at origin
+    float far0 = clamp(t * uK0 / 280.0, 0.0, 1.0);
+    vec3 fz = wakeAt(w * uK0);
+    vec2 ws = uAmp * fz.yz;
+    float wl = length(ws);
+    // soft-saturate the DRAWN steepness (exposure only — see normalise())
+    ws *= inversesqrt(1.0 + (wl * wl) / (uSat * uSat));
+    float foot = t / (uScale * uFocal * max(0.10, -dir.z));   // metres per pixel
+    vec2 slope = ws + chopSlope(w, foot) * (1.0 - smoothstep(0.20, 0.85, far0));
+    vec3 n = normalize(vec3(-slope, 1.0));
+    vec3 v = -dir;
+    vec3 r = reflect(dir, n);
+    r.z = abs(r.z) * 0.55 + r.z * 0.45;           // keep reflections off the seabed
+    float fres = 0.021 + 0.979 * pow(1.0 - max(dot(v, n), 0.0), 5.0);
+    vec3 sky = skyAt(normalize(r));
+    /* the body of the water.  Looking straight down, Fresnel is 2% and a pure
+       mirror model shows NOTHING — but a real wake is perfectly visible from a
+       drone, because a face tilted towards a low sun lets more light in and
+       throws more back.  So the body brightens with the sun on the facet. */
+    float sunN = max(dot(n, uSun), 0.0);
+    vec3 deep = vec3(0.014, 0.058, 0.070) * (0.34 + 3.4 * sunN);
+    // GLITTER is what a wake actually is, to look at: a field of little facets
+    // tilted just enough to swing the sun into your eye.  Two lobes — a hard
+    // one for the sparkle and a broad one for the sheen down the sun's path.
+    float sd2 = max(dot(normalize(r), uSun), 0.0);
+    float spec = pow(sd2, 130.0) * 3.6 + pow(sd2, 26.0) * 0.28;
+    col = mix(deep, sky, clamp(fres, 0.0, 1.0)) + vec3(1.0, 0.85, 0.60) * spec;
+    // haze, over a distance set by the wake's own size
+    float far = far0;
+    col = mix(col, skyAt(vec3(dir.xy, 0.008)), pow(far, 1.15) * 0.94);
+  }
+  col = col / (col + vec3(0.60)) * 1.24;          // gentle tonemap
+  col = pow(max(col, 0.0), vec3(1.0 / 2.2));
+  frag = vec4(col, 1.0);
+}`;
+
+/* ═══ TARGETS ═════════════════════════════════════════════════════════════ */
+let wakeFB, redFB, probeFB, sampTex;
+const RED = 32, PROBE_M = 256, PROBE_R = 5, PROBE_BAND = 16;
+function initTargets() {
+  wakeFB = fbo(TEX, TEX, gl.RGBA32F);
+  redFB = fbo(RED, RED, gl.RGBA32F);
+  probeFB = fbo(PROBE_M, PROBE_R, gl.RGBA32F);
+  sampTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, sampTex);
+  gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, NSAMP, 1);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+}
+
+/* ═══ RECOMPUTE ═══════════════════════════════════════════════════════════ */
+function uploadSamples() {
+  const S = st.S;
+  const buf = new Float32Array(NSAMP * 4);
+  for (let i = 0; i < NSAMP; i++) {
+    const j = i < S.n ? i : S.n - 1;
+    const t = S.theta[j];
+    buf[i * 4 + 0] = Math.cos(t);
+    buf[i * 4 + 1] = Math.sin(t);
+    buf[i * 4 + 2] = S.kappa[j];
+    buf[i * 4 + 3] = i < S.n ? S.amp[j] : 0;
+  }
+  gl.bindTexture(gl.TEXTURE_2D, sampTex);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, NSAMP, 1, gl.RGBA, gl.FLOAT, buf);
+}
+function recompute() {
+  st.k0 = G / (st.U * st.U);
+  st.H = isFinite(st.h) ? st.k0 * st.h : Infinity;
+  st.B = 1 / (st.Frb * st.Frb);
+  st.S = thetaSamples(st.H, st.B, NSAMP);
+  st.theory = halfAngle(st.H).alpha;
+  uploadSamples();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, wakeFB.fb);
+  gl.viewport(0, 0, TEX, TEX);
+  gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  st.pass = 0; st.measured = null; st.bright = null; st.ladder = null;
+  st.norm = 1;
+  drawAlphaCurve();
+  syncPanel();
+}
+function bindField(P) {
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sampTex);
+  gl.uniform1i(P.u.uSamp, 1);
+  gl.uniform1i(P.u.uN, st.S.n);
+  gl.uniform1f(P.u.uSigma, SIGMA);
+}
+function runPass() {
+  gl.useProgram(pAccum.p); gl.bindVertexArray(quadVAO);
+  bindField(pAccum);
+  gl.uniform1i(pAccum.u.uPass, st.pass);
+  gl.uniform1i(pAccum.u.uPasses, PASSES);
+  gl.uniform4f(pAccum.u.uDom, DOM.x0, DOM.y0, DOM.x1, DOM.y1);
+  gl.uniform1f(pAccum.u.uTex, TEX);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, wakeFB.fb);
+  gl.viewport(0, 0, TEX, TEX);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.disable(gl.BLEND);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  st.pass++;
+  normalise();                                   // keep a partial accumulation lit right
+  if (st.pass >= PASSES) measure();
+}
+function normalise() {
+  gl.useProgram(pReduce.p); gl.bindVertexArray(quadVAO);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, wakeFB.tex);
+  gl.uniform1i(pReduce.u.uSrc, 1);
+  gl.uniform1i(pReduce.u.uBlock, TEX / RED);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, redFB.fb);
+  gl.viewport(0, 0, RED, RED);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  const px = new Float32Array(RED * RED * 4);
+  gl.readPixels(0, 0, RED, RED, gl.RGBA, gl.FLOAT, px);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  // A wake's steepness spans decades between the bow and the far arms, so
+  // normalising on the MAXIMUM prints a bright speck at the boat and a black
+  // sea everywhere else.  Take a robust statistic of the field AWAY from the
+  // hull instead — the 80th percentile outside eight lengths — and let the
+  // shader soft-saturate whatever overshoots.  This is exposure, not physics:
+  // the ruler reads the raw field, never this.
+  const outer = [];
+  for (let j = 0; j < RED; j++) {
+    for (let i = 0; i < RED; i++) {
+      const X = DOM.x0 + (DOM.x1 - DOM.x0) * ((i + 0.5) / RED);
+      const Y = DOM.y0 + (DOM.y1 - DOM.y0) * ((j + 0.5) / RED);
+      if (Math.hypot(X, Y) < 8) continue;
+      outer.push(px[(j * RED + i) * 4]);
+    }
+  }
+  outer.sort((a, b) => a - b);
+  const p88 = outer.length ? outer[Math.floor(0.80 * (outer.length - 1))] : 0;
+  st.norm = p88 > 1e-12 ? TARGET_SLOPE / p88 : 1;
+}
+
+/* ═══ THE RULER ═══════════════════════════════════════════════════════════ */
+function measure() {
+  const aMax = 1.15;
+  gl.useProgram(pProbe.p); gl.bindVertexArray(quadVAO);
+  bindField(pProbe);
+  gl.uniform1f(pProbe.u.uAMax, aMax);
+  gl.uniform1f(pProbe.u.uMAng, PROBE_M - 1);
+  gl.uniform1fv(pProbe.u.uRadii, new Float32Array(EDGE_RADII));
+  gl.uniform1i(pProbe.u.uBand, PROBE_BAND);
+  gl.uniform1f(pProbe.u.uSpread, 0.3);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, probeFB.fb);
+  gl.viewport(0, 0, PROBE_M, PROBE_R);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  const px = new Float32Array(PROBE_M * PROBE_R * 4);
+  gl.readPixels(0, 0, PROBE_M, PROBE_R, gl.RGBA, gl.FLOAT, px);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+  const ladder = [];
+  let brightRow = null;
+  for (let r = 0; r < PROBE_R; r++) {
+    const prof = new Float64Array(PROBE_M);
+    for (let a = 0; a < PROBE_M; a++) prof[a] = px[(r * PROBE_M + a) * 4];
+    const p = { profile: prof, aMax, M: PROBE_M - 1 };
+    ladder.push(edgeAngle(p, EDGE_FRAC));
+    if (r === 1) brightRow = p;
+  }
+  st.ladder = ladder;
+  st.measured = extrapolateEdge(EDGE_RADII, ladder).alpha;
+  st.bright = peakAngle(brightRow);
+  drawLadder();
+  syncPanel();
+}
+
+/* ═══ CAMERA ══════════════════════════════════════════════════════════════ */
+function domMetres() { return (DOM.x1 - DOM.x0) / st.k0; }
+function centre() { return [((DOM.x0 + DOM.x1) / 2) * 0.62 / st.k0, 0]; }
+function camBasis() {
+  const c = st.cam;
+  const cy = Math.cos(c.yaw), sy = Math.sin(c.yaw);
+  const cp = Math.cos(c.pitch), sp = Math.sin(c.pitch);
+  const right = [cy, -sy, 0];
+  const fwd = [sy * cp, cy * cp, -sp];
+  const up = [sy * sp, cy * sp, cp];
+  const eye = [-c.dolly * fwd[0], -c.dolly * fwd[1], -c.dolly * fwd[2]];
+  return { right, fwd, up, eye };
+}
+function vp() { return { cx: ovc.width / 2, cy: ovc.height / 2, scale: ovc.height / 2 }; }
+/* world metres (boat at origin) -> camera-centred metres */
+function toCam(p) { const C = centre(); return [p[0] - C[0], p[1] - C[1], p[2] || 0]; }
+function proj(p) { return toScreen(project(toCam(p), st.cam), vp()); }
+function autoDolly() { return 0.58 * domMetres(); }
+
+/* ═══ RENDER ══════════════════════════════════════════════════════════════ */
+let t0 = performance.now();
+function renderSea() {
+  const bs = camBasis();
+  const C = centre();
+  gl.useProgram(pSea.p); gl.bindVertexArray(quadVAO);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, wakeFB.tex);
+  gl.uniform1i(pSea.u.uWake, 2);
+  gl.uniform4f(pSea.u.uDom, DOM.x0, DOM.y0, DOM.x1, DOM.y1);
+  gl.uniform1f(pSea.u.uTex, TEX);
+  gl.uniform3fv(pSea.u.uEye, bs.eye);
+  gl.uniform3fv(pSea.u.uFwd, bs.fwd);
+  gl.uniform3fv(pSea.u.uRight, bs.right);
+  gl.uniform3fv(pSea.u.uUp, bs.up);
+  gl.uniform2f(pSea.u.uRes, glc.width, glc.height);
+  gl.uniform1f(pSea.u.uFocal, FOCAL);
+  gl.uniform1f(pSea.u.uScale, glc.height / 2);
+  gl.uniform1f(pSea.u.uK0, st.k0);
+  gl.uniform2f(pSea.u.uCentre, C[0], C[1]);
+  // the accumulation is complete only after PASSES; scale a partial one up
+  gl.uniform1f(pSea.u.uAmp, st.norm);
+  gl.uniform1f(pSea.u.uSat, 0.30);
+  gl.uniform1f(pSea.u.uTime, (performance.now() - t0) / 1000);
+  gl.uniform1f(pSea.u.uSpeed, st.U);
+  const sunA = -0.62, sunEl = 0.245;
+  gl.uniform3f(pSea.u.uSun, Math.cos(sunA) * Math.cos(sunEl), Math.sin(sunA) * Math.cos(sunEl), Math.sin(sunEl));
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, glc.width, glc.height);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+/* ── the boat, painter-sorted through the SAME camera ─────────────────── */
+function hullScene() {
+  const b = st.U * st.U / (G * st.Frb * st.Frb);     // the patch radius, metres
+  const L = 2.5 * b, W = 0.62 * b, Dh = 0.42 * b;
+  const items = [];
+  const P = (x, y, z) => [x, y, z];
+  // deck outline: pointed bow at +x
+  const deck = [P(L * 0.55, 0, Dh * 0.30), P(L * 0.22, W * 0.5, Dh * 0.30),
+                P(-L * 0.36, W * 0.46, Dh * 0.30), P(-L * 0.45, W * 0.34, Dh * 0.30),
+                P(-L * 0.45, -W * 0.34, Dh * 0.30), P(-L * 0.36, -W * 0.46, Dh * 0.30),
+                P(L * 0.22, -W * 0.5, Dh * 0.30)];
+  const keel = [P(L * 0.52, 0, -Dh * 0.55), P(L * 0.18, W * 0.30, -Dh * 0.55),
+                P(-L * 0.34, W * 0.28, -Dh * 0.55), P(-L * 0.43, W * 0.20, -Dh * 0.55),
+                P(-L * 0.43, -W * 0.20, -Dh * 0.55), P(-L * 0.34, -W * 0.28, -Dh * 0.55),
+                P(L * 0.18, -W * 0.30, -Dh * 0.55)];
+  for (let i = 0; i < deck.length; i++) {
+    const j = (i + 1) % deck.length;
+    items.push(face([deck[i], deck[j], keel[j], keel[i]], '#241b14', '#0d0906'));
+  }
+  items.push(face(deck.slice().reverse(), '#c6b08e', '#544230'));
+  // a low cabin
+  const cx0 = -L * 0.30, cx1 = L * 0.02, cy = W * 0.26, cz = Dh * 0.30, ch = Dh * 0.52;
+  const cA = [P(cx1, cy, cz), P(cx1, -cy, cz), P(cx0, -cy, cz), P(cx0, cy, cz)];
+  const cB = cA.map((p) => P(p[0], p[1], cz + ch));
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4;
+    items.push(face([cA[i], cA[j], cB[j], cB[i]], '#e6ddcc', '#7a6f60'));
+  }
+  items.push(face(cB, '#f6f1e6', '#8a8071'));
+  return items.map((it) => ({ ...it, pts: it.pts.map(toCam) }));
+}
+/* one face, shaded by the scene3d painter (which hands us `near` in [0,1]) */
+function face(pts, fill, stroke) {
+  return { k: 'face', pts, cull: false,
+    shade(ctx, sp, near) {
+      ctx.beginPath();
+      ctx.moveTo(sp[0].x, sp[0].y);
+      for (let i = 1; i < sp.length; i++) ctx.lineTo(sp[i].x, sp[i].y);
+      ctx.closePath();
+      ctx.fillStyle = fill; ctx.fill();
+      ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke();
+    } };
+}
+
+function drawOverlay() {
+  const w = ovc.width, h = ovc.height;
+  octx.clearRect(0, 0, w, h);
+  const V = vp();
+  const on = (p) => { const s = proj(p); return s; };
+
+  // ── the wedge, drawn on the water ───────────────────────────────────
+  if (st.showWedge && st.theory > 0) {
+    const RL = wedgeReach(st.theory);
+    for (const sgn of [1, -1]) {
+      const a = st.theory * sgn;
+      const pts = [];
+      for (let i = 0; i <= 40; i++) {
+        const r = RL * (i / 40);
+        pts.push([-r * Math.cos(a), r * Math.sin(a), 0]);
+      }
+      strokePath(pts, 'rgba(255,202,107,0.82)', 1.6, [7, 6]);
+    }
+    // the label at the end of the upper arm
+    const e = on([-RL * 0.72 * Math.cos(st.theory), RL * 0.72 * Math.sin(st.theory), 0]);
+    if (e.depth > NEAR_EPS) {
+      octx.font = '600 13px ui-monospace,Menlo,monospace';
+      octx.fillStyle = 'rgba(255,202,107,0.95)';
+      octx.textAlign = 'left';
+      octx.fillText((st.theory * DEG).toFixed(2) + '°', e.x + 8, e.y - 6);
+    }
+  }
+
+  // ── the measured edge, if we have it ────────────────────────────────
+  if (st.showWedge && st.measured != null && isFinite(st.measured)) {
+    const RL = 0.68 * wedgeReach(st.measured);
+    for (const sgn of [1, -1]) {
+      const a = st.measured * sgn;
+      const pts = [];
+      for (let i = 0; i <= 24; i++) {
+        const r = RL * (i / 24);
+        pts.push([-r * Math.cos(a), r * Math.sin(a), 0]);
+      }
+      strokePath(pts, 'rgba(127,224,200,0.55)', 1.2, [3, 5]);
+    }
+  }
+
+  // ── the brass arm ───────────────────────────────────────────────────
+  if (st.showArm) {
+    const RA = 0.90 * wedgeReach(st.arm);
+    const a = st.arm;
+    const pts = [];
+    for (let i = 0; i <= 30; i++) {
+      const r = RA * (i / 30);
+      pts.push([-r * Math.cos(a), r * Math.sin(a), 0]);
+    }
+    strokePath(pts, 'rgba(217,180,115,0.95)', 2.4, null);
+    // the arc from the track to the arm
+    const arc = [];
+    for (let i = 0; i <= 26; i++) {
+      const t = a * (i / 26);
+      arc.push([-RA * 0.30 * Math.cos(t), RA * 0.30 * Math.sin(t), 0]);
+    }
+    strokePath(arc, 'rgba(217,180,115,0.55)', 1.3, [4, 4]);
+    const tip = on([-RA * Math.cos(a), RA * Math.sin(a), 0]);
+    if (tip.depth > NEAR_EPS) {
+      octx.beginPath(); octx.arc(tip.x, tip.y, 5.5, 0, 7);
+      octx.fillStyle = '#d9b473'; octx.fill();
+      octx.font = '600 13px ui-monospace,Menlo,monospace';
+      octx.fillStyle = '#f0c987'; octx.textAlign = 'left';
+      octx.fillText((a * DEG).toFixed(2) + '°', tip.x + 9, tip.y + 4);
+    }
+    // the track itself
+    const tr = [];
+    for (let i = 0; i <= 20; i++) tr.push([-RA * 1.05 * (i / 20), 0, 0]);
+    strokePath(tr, 'rgba(217,180,115,0.30)', 1.1, [2, 7]);
+  }
+
+  // ── a ruler on the water: one transverse wavelength per tick ────────
+  {
+    const lam = 2 * Math.PI / st.k0;
+    const n = Math.min(8, Math.floor(0.92 * (-DOM.x0) / st.k0 / lam));
+    for (let i = 1; i <= n; i++) {
+      const x = -i * lam;
+      const a = on([x, 0, 0]), b2 = on([x, lam * 0.05, 0]);
+      if (a.depth <= NEAR_EPS) continue;
+      octx.beginPath(); octx.moveTo(a.x, a.y); octx.lineTo(b2.x, b2.y);
+      octx.strokeStyle = 'rgba(230,240,250,0.35)'; octx.lineWidth = 1; octx.stroke();
+      if (i === n) {
+        octx.font = '10px ui-monospace,Menlo,monospace';
+        octx.fillStyle = 'rgba(230,240,250,0.6)'; octx.textAlign = 'center';
+        octx.fillText((i * lam).toFixed(i * lam < 10 ? 1 : 0) + ' m', a.x, a.y + 15);
+      }
+    }
+  }
+
+  // ── the boat ────────────────────────────────────────────────────────
+  render(octx, hullScene(), st.cam, V);
+}
+/* how far an arm at angle a can run before it leaves the drawn water */
+function wedgeReach(a) {
+  const sa = Math.max(1e-3, Math.sin(a));
+  return 0.94 * Math.min(-DOM.x0 / Math.max(0.05, Math.cos(a)), DOM.y1 / sa) / st.k0;
+}
+function strokePath(worldPts, colour, width, dash) {
+  const V = vp();
+  octx.save();
+  octx.setLineDash(dash || []);
+  octx.strokeStyle = colour; octx.lineWidth = width;
+  octx.beginPath();
+  let started = false;
+  for (const p of worldPts) {
+    const pr = project(toCam(p), st.cam);
+    if (pr.depth <= NEAR_EPS) { started = false; continue; }
+    const s = toScreen(pr, V);
+    if (!started) { octx.moveTo(s.x, s.y); started = true; } else octx.lineTo(s.x, s.y);
+  }
+  octx.stroke();
+  octx.restore();
+}
+
+/* ═══ THE ALPHA CURVE — the picture of the answer ═════════════════════════ */
+function drawAlphaCurve() {
+  const c = document.getElementById('cAlpha');
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  const W = c.clientWidth, H = c.clientHeight;
+  if (!W) return;
+  c.width = W * dpr; c.height = H * dpr;
+  const g = c.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, W, H);
+  const L = 30, R = 8, T = 8, Bm = 20;
+  const aTop = Math.max(24 / DEG, Math.min(Math.PI / 2, st.theory * 1.45));
+  const px = (t) => L + (W - L - R) * (t / (Math.PI / 2));
+  const py = (a) => T + (H - T - Bm) * (1 - a / aTop);
+  // axes
+  g.strokeStyle = 'rgba(150,190,220,0.22)'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(L, T); g.lineTo(L, H - Bm); g.lineTo(W - R, H - Bm); g.stroke();
+  g.font = '9px ui-monospace,Menlo,monospace'; g.fillStyle = 'rgba(159,180,198,0.8)';
+  g.textAlign = 'center';
+  g.fillText('0°', L, H - 7); g.fillText('45°', px(Math.PI / 4), H - 7);
+  g.fillText('90°', W - R, H - 7);
+  g.save(); g.translate(9, (T + H - Bm) / 2); g.rotate(-Math.PI / 2);
+  g.fillText('ray angle', 0, 0); g.restore();
+  // the deep-water 19.47 reference
+  if (st.theory > 0) {
+    const yk = py(KELVIN);
+    if (yk > T && yk < H - Bm) {
+      g.setLineDash([2, 4]); g.strokeStyle = 'rgba(255,202,107,0.30)';
+      g.beginPath(); g.moveTo(L, yk); g.lineTo(W - R, yk); g.stroke(); g.setLineDash([]);
+    }
+  }
+  // the curve
+  const t0f = thetaFloor(st.H);
+  g.beginPath(); let started = false;
+  for (let i = 0; i <= 300; i++) {
+    const t = t0f + (Math.PI / 2 - t0f) * (i / 300);
+    const a = rayAngle(t, st.H);
+    if (a === null) { started = false; continue; }
+    const X = px(t), Y = py(Math.min(a, aTop));
+    if (!started) { g.moveTo(X, Y); started = true; } else g.lineTo(X, Y);
+  }
+  g.strokeStyle = '#9fd7f0'; g.lineWidth = 1.8; g.stroke();
+  // the maximum
+  const hm = halfAngle(st.H);
+  const mx = px(hm.theta), my = py(Math.min(hm.alpha, aTop));
+  g.setLineDash([2, 3]); g.strokeStyle = 'rgba(255,202,107,0.7)';
+  g.beginPath(); g.moveTo(mx, my); g.lineTo(mx, H - Bm); g.stroke();
+  g.beginPath(); g.moveTo(L, my); g.lineTo(mx, my); g.stroke();
+  g.setLineDash([]);
+  g.beginPath(); g.arc(mx, my, 4, 0, 7); g.fillStyle = '#ffca6b'; g.fill();
+  g.textAlign = mx > W * 0.6 ? 'right' : 'left';
+  g.fillStyle = '#ffca6b'; g.font = '600 10.5px ui-monospace,Menlo,monospace';
+  g.fillText((hm.alpha * DEG).toFixed(2) + '°', mx + (mx > W * 0.6 ? -7 : 7), my - 6);
+}
+
+/* ═══ THE LADDER ══════════════════════════════════════════════════════════ */
+function drawLadder() {
+  const c = document.getElementById('cLad');
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  const W = c.clientWidth, H = c.clientHeight;
+  if (!W || !st.ladder) return;
+  c.width = W * dpr; c.height = H * dpr;
+  const g = c.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, W, H);
+  const L = 34, R = 10, T = 9, Bm = 17;
+  const xs = EDGE_RADII.map((r) => Math.pow(r, -2 / 3));
+  const xmax = Math.max(...xs) * 1.13;
+  const ys = st.ladder.map((a) => a * DEG);
+  const lo = Math.min(st.theory * DEG, ...ys) - 2.2;
+  const hi = Math.max(st.theory * DEG, ...ys) + 2.2;
+  const px = (x) => L + (W - L - R) * (x / xmax);
+  const py = (y) => T + (H - T - Bm) * (1 - (y - lo) / (hi - lo));
+  g.strokeStyle = 'rgba(150,190,220,0.22)'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(L, T); g.lineTo(L, H - Bm); g.lineTo(W - R, H - Bm); g.stroke();
+  // the exact wedge
+  g.setLineDash([3, 4]); g.strokeStyle = 'rgba(255,202,107,0.75)';
+  g.beginPath(); g.moveTo(L, py(st.theory * DEG)); g.lineTo(W - R, py(st.theory * DEG));
+  g.stroke(); g.setLineDash([]);
+  // the fit
+  const fit = extrapolateEdge(EDGE_RADII, st.ladder);
+  g.strokeStyle = 'rgba(127,224,200,0.55)'; g.lineWidth = 1.2;
+  g.beginPath();
+  g.moveTo(px(0), py(fit.alpha * DEG));
+  g.lineTo(px(xmax), py((fit.alpha + fit.slope * xmax) * DEG));
+  g.stroke();
+  // the points
+  for (let i = 0; i < xs.length; i++) {
+    g.beginPath(); g.arc(px(xs[i]), py(ys[i]), 3.2, 0, 7);
+    g.fillStyle = '#7fe0c8'; g.fill();
+  }
+  // the intercept
+  g.beginPath(); g.arc(px(0), py(fit.alpha * DEG), 4.5, 0, 7);
+  g.strokeStyle = '#7fe0c8'; g.lineWidth = 1.6; g.stroke();
+  g.font = '9px ui-monospace,Menlo,monospace'; g.fillStyle = 'rgba(159,180,198,0.85)';
+  g.textAlign = 'left'; g.fillText('R → ∞', L - 2, H - 5);
+  g.textAlign = 'right'; g.fillText('R = ' + EDGE_RADII[0], W - R, H - 5);
+  g.textAlign = 'left'; g.fillStyle = 'rgba(159,180,198,0.7)';
+  g.fillText(hi.toFixed(0) + '°', 3, T + 7);
+  g.fillText(lo.toFixed(0) + '°', 3, H - Bm);
+  const nums = document.getElementById('ladNums');
+  nums.innerHTML = EDGE_RADII.map((r, i) =>
+    `<div><span>${(st.ladder[i] * DEG).toFixed(1)}°</span><i>${r}</i></div>`).join('');
+}
+
+/* ═══ PANEL ═══════════════════════════════════════════════════════════════ */
+function syncPanel() {
+  const sc = scales(st.U, st.h, st.U * st.U / (G * st.Frb * st.Frb));
+  const q = (id) => document.getElementById(id);
+  q('nCusp').textContent = (st.theory * DEG).toFixed(2) + '°';
+  q('nMeas').textContent = st.measured == null ? 'measuring…' : (st.measured * DEG).toFixed(2) + '°';
+  q('nBright').textContent = st.bright == null ? '—'
+    : (st.bright * DEG < 1.2 ? 'dead astern' : (st.bright * DEG).toFixed(1) + '°');
+  q('nArm').textContent = (st.arm * DEG).toFixed(2) + '°';
+  q('nLam').textContent = sc.lambda0.toFixed(sc.lambda0 < 10 ? 2 : 1) + ' m';
+  q('nFrh').textContent = isFinite(st.h) ? sc.Frh.toFixed(2) : '0 (deep)';
+  q('vU').textContent = st.U.toFixed(1) + ' m/s';
+  const b = st.U * st.U / (G * st.Frb * st.Frb);
+  q('vF').textContent = 'b ' + (b < 10 ? b.toFixed(2) : b.toFixed(0)) + ' m';
+  q('vH').textContent = isFinite(st.h) ? (st.h < 10 ? st.h.toFixed(1) : st.h.toFixed(0)) + ' m' : 'deep';
+
+  let note;
+  if (!isFinite(st.h) || sc.Frh < 0.35) {
+    note = '<b>Deep water.</b> The wedge is asin(1/3) = 19.4712° and nothing about the '
+         + 'boat can move it — the only ingredient is that a deep-water wave carries its '
+         + 'energy at <b>half</b> the speed of its own crests.';
+  } else if (sc.Frh < 0.94) {
+    note = '<b>Feeling the bottom.</b> The long waves have slowed down, so the wedge is '
+         + 'opening. It reaches a right angle exactly at the critical speed, U = √gh.';
+  } else if (sc.Frh < 1.06) {
+    note = '<b>At the critical speed.</b> The boat is running with its own longest wave and '
+         + 'the wedge has swung open to a wall across the channel. This is why a narrowboat '
+         + 'at hull speed drags the whole canal with it.';
+  } else {
+    note = '<b>Supercritical.</b> No wave can keep up, so the wake is a sonic boom: a Mach '
+         + 'cone of half angle asin(√gh / U) = ' + (Math.asin(1 / sc.Frh) * DEG).toFixed(2)
+         + '°. There is no dispersion left to make a Kelvin wedge out of.';
+  }
+  q('nNote').innerHTML = note;
+
+  const mn = q('mNote');
+  if (st.measured == null) { mn.textContent = 'sweeping arcs…'; }
+  else {
+    const d = Math.abs(st.measured - st.theory) * DEG;
+    const shock = isFinite(st.h) && sc.Frh > 1.02;
+    mn.innerHTML = 'Widest angle still carrying <b>' + (EDGE_FRAC * 100).toFixed(0)
+      + '%</b> of the peak steepness, at five radii in units of U²/g. '
+      + (shock
+        ? 'Above the critical speed the front is a <b>shock-like edge</b>, not a cusped caustic — so it reads true at every radius and the fit is flat. '
+        : 'Outside a caustic the water does not stop dead: it decays through an Airy tail whose angular width falls like <b>R<sup>−2/3</sup></b>. Every reading is too wide by that much, so they lie on a line — and the intercept is the wedge. ')
+      + 'Here: <b>' + (st.measured * DEG).toFixed(2) + '°</b> against '
+      + (st.theory * DEG).toFixed(2) + '°, off by ' + d.toFixed(2) + '°.';
+  }
+}
+
+/* ═══ INPUT ═══════════════════════════════════════════════════════════════ */
+let dragging = null;
+function planeHit(px, py) {
+  const V = vp();
+  const sx = (px - V.cx) / V.scale, sy = (V.cy - py) / V.scale;
+  const bs = camBasis();
+  const d = [bs.fwd[0] * FOCAL + bs.right[0] * sx + bs.up[0] * sy,
+             bs.fwd[1] * FOCAL + bs.right[1] * sx + bs.up[1] * sy,
+             bs.fwd[2] * FOCAL + bs.right[2] * sx + bs.up[2] * sy];
+  if (d[2] >= -1e-6 || bs.eye[2] <= 0) return null;
+  const t = -bs.eye[2] / d[2];
+  if (t <= 0) return null;
+  const C = centre();
+  return [bs.eye[0] + t * d[0] + C[0], bs.eye[1] + t * d[1] + C[1]];
+}
+function armFromPointer(px, py) {
+  const w = planeHit(px, py);
+  if (!w) return false;
+  if (w[0] >= -1e-6) return false;                 // only behind the boat
+  const a = Math.atan2(Math.abs(w[1]), -w[0]);
+  st.arm = Math.max(0, Math.min(1.45, a));
+  return true;
+}
+function nearArm(px, py) {
+  const RA = 0.90 * wedgeReach(st.arm);
+  let best = 1e9;
+  for (let i = 4; i <= 30; i++) {
+    const r = RA * (i / 30);
+    const s = proj([-r * Math.cos(st.arm), r * Math.sin(st.arm), 0]);
+    if (s.depth <= NEAR_EPS) continue;
+    best = Math.min(best, Math.hypot(s.x - px, s.y - py));
+  }
+  return best < 26;
+}
+ovc.style.pointerEvents = 'none';
+glc.addEventListener('pointerdown', (e) => {
+  glc.setPointerCapture(e.pointerId);
+  const r = glc.getBoundingClientRect();
+  const px = (e.clientX - r.left) * (ovc.width / r.width);
+  const py = (e.clientY - r.top) * (ovc.height / r.height);
+  if (st.showArm && nearArm(px, py)) { dragging = { mode: 'arm' }; armFromPointer(px, py); }
+  else dragging = { mode: 'orbit', x: e.clientX, y: e.clientY };
+  st.tween = null;
+});
+glc.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  const r = glc.getBoundingClientRect();
+  if (dragging.mode === 'arm') {
+    armFromPointer((e.clientX - r.left) * (ovc.width / r.width),
+                   (e.clientY - r.top) * (ovc.height / r.height));
+    syncPanel();
+  } else {
+    // drag DOWN to rise over the water (the scene falls away under the pointer)
+    applyDrag(st.cam, (e.clientX - dragging.x), (e.clientY - dragging.y),
+              { speed: 0.0055 });
+    st.cam.pitch = Math.max(0.12, Math.min(1.45, st.cam.pitch));
+    dragging.x = e.clientX; dragging.y = e.clientY;
+  }
+});
+addEventListener('pointerup', () => { dragging = null; });
+glc.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  st.cam.dolly = Math.max(0.28 * domMetres(), Math.min(2.4 * domMetres(),
+    st.cam.dolly * Math.exp(e.deltaY * 0.0012)));
+}, { passive: false });
+
+/* ═══ CONTROLS ════════════════════════════════════════════════════════════ */
+const depthOf = (v) => (v >= 100 ? Infinity : 0.4 * Math.pow(1500, v / 99));
+const depthSlider = (h) => (!isFinite(h) ? 100 : Math.round(99 * Math.log(h / 0.4) / Math.log(1500)));
+let recomputeTimer = null;
+function scheduleRecompute() {
+  clearTimeout(recomputeTimer);
+  recomputeTimer = setTimeout(() => { recompute(); }, 110);
+  syncPanel(); drawAlphaCurve();
+}
+function bindSlider(id, set) {
+  const el = document.getElementById(id);
+  el.addEventListener('input', () => { set(parseFloat(el.value)); scheduleRecompute(); });
+  return el;
+}
+const elU = bindSlider('sU', (v) => { st.U = v; st.cam.dolly = autoDollyFor(v); });
+const elF = bindSlider('sF', (v) => { st.Frb = v; });
+const elH = bindSlider('sH', (v) => { st.h = depthOf(v); });
+function autoDollyFor(U) { return 0.58 * (DOM.x1 - DOM.x0) / (G / (U * U)); }
+
+document.getElementById('bWedge').addEventListener('click', (e) => {
+  st.showWedge = !st.showWedge; e.currentTarget.classList.toggle('on', st.showWedge);
+});
+document.getElementById('bArm').addEventListener('click', (e) => {
+  st.showArm = !st.showArm; e.currentTarget.classList.toggle('on', st.showArm);
+});
+document.getElementById('bDown').addEventListener('click', () => {
+  const down = st.cam.pitch < 1.2;
+  st.tween = { from: st.cam.pitch, to: down ? 1.44 : 0.46, t: 0 };
+});
+const PRESETS = {
+  swan:   { U: 1.6, Frb: 1.15, h: Infinity },
+  eight:  { U: 5.4, Frb: 1.00, h: Infinity },
+  ferry:  { U: 9.0, Frb: 0.75, h: Infinity },
+  tanker: { U: 7.7, Frb: 0.55, h: Infinity },
+  canal:  { U: 3.2, Frb: 0.95, h: 1.2 },
+  bank:   { U: 8.0, Frb: 1.10, h: 2.2 },
+};
+for (const btn of document.querySelectorAll('.pre button')) {
+  btn.addEventListener('click', () => {
+    const p = PRESETS[btn.dataset.p];
+    st.U = p.U; st.Frb = p.Frb; st.h = p.h;
+    elU.value = p.U; elF.value = p.Frb; elH.value = depthSlider(p.h);
+    st.cam.dolly = autoDollyFor(p.U);
+    recompute();
+  });
+}
+
+/* ═══ SOUND — the wash, mute-gated by the estate's one key ════════════════ */
+let actx = null, noiseNode = null, washGain = null;
+function startSound() {
+  if (actx) return;
+  try {
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    const len = Math.floor(actx.sampleRate * 2.2);
+    const buf = actx.createBuffer(1, len, actx.sampleRate);
+    const d = buf.getChannelData(0);
+    let b0 = 0, b1 = 0;
+    for (let i = 0; i < len; i++) {
+      const w = Math.random() * 2 - 1;
+      b0 = 0.99 * b0 + w * 0.06; b1 = 0.86 * b1 + w * 0.24;
+      d[i] = (b0 + b1 + w * 0.28) * 0.42;
+    }
+    noiseNode = actx.createBufferSource();
+    noiseNode.buffer = buf; noiseNode.loop = true;
+    const bp = actx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 520; bp.Q.value = 0.55;
+    const lp = actx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 1400;
+    washGain = actx.createGain(); washGain.gain.value = 0.0;
+    noiseNode.connect(bp); bp.connect(lp); lp.connect(washGain);
+    washGain.connect(actx.destination);
+    noiseNode.start();
+  } catch (e) { actx = null; }
+}
+function updateSound() {
+  const muted = (() => { try { return WS.muted(); } catch (e) { return false; } })();
+  if (!washGain || !actx) return;
+  const want = (st.sound && !muted) ? Math.min(0.22, 0.016 * st.U) : 0;
+  washGain.gain.setTargetAtTime(want, actx.currentTime, 0.25);
+}
+document.getElementById('bSound').addEventListener('click', (e) => {
+  st.sound = !st.sound;
+  e.currentTarget.classList.toggle('on', st.sound);
+  if (st.sound) { startSound(); if (actx && actx.state === 'suspended') actx.resume(); }
+  updateSound();
+});
+
+/* ═══ THE CHIP — the room's own proofs, here, now ═════════════════════════ */
+function runChecks() {
+  const out = [];
+  const add = (n, c, d) => out.push({ n, c, d });
+  add('deep wedge = asin(1/3)', Math.abs(halfAngle(Infinity).alpha - KELVIN) < 1e-9,
+      (halfAngle(Infinity).alpha * DEG).toFixed(4) + '°');
+  let worst = 0;
+  for (const [U, b] of [[0.35, 0.06], [5.4, 17], [11.5, 366], [17, 150]]) {
+    worst = Math.max(worst, Math.abs(halfAngle(scales(U, Infinity, b).H).alpha - KELVIN));
+  }
+  add('four craft, same wedge', worst < 1e-12, (worst * DEG).toExponential(1) + '° apart');
+  let mw = 0;
+  for (const Frh of [1.3, 2, 4]) mw = Math.max(mw, Math.abs(halfAngle(1 / (Frh * Frh)).alpha - Math.asin(1 / Frh)));
+  add('supercritical = Mach cone', mw < 1e-9, (mw * DEG).toExponential(1) + '°');
+  const S = st.S;
+  let ahead = 0, behind = 0;
+  for (let i = 1; i <= 24; i++) {
+    ahead = Math.max(ahead, Math.abs(fieldAt(2 * Math.PI + i, 0, S).z));
+    behind = Math.max(behind, Math.abs(fieldAt(-2 - i, 0, S).z));
+  }
+  add('no waves ahead of the bow', ahead / behind < 1e-5, (ahead / behind).toExponential(1));
+  let sym = 0;
+  for (const [X, Y] of [[-9, 3], [-21, 7]]) {
+    const a = fieldAt(X, Y, S).z, b = fieldAt(X, -Y, S).z;
+    sym = Math.max(sym, Math.abs(a - b) / (Math.abs(a) + 1e-9));
+  }
+  add('the field is symmetric', sym < 1e-9, sym.toExponential(1));
+  if (st.measured != null) {
+    const d = Math.abs(st.measured - st.theory) * DEG;
+    add('drawn water vs the theorem', d < 1.6, d.toFixed(2) + '° apart');
+  }
+  const bad = out.filter((o) => !o.c);
+  const chip = document.getElementById('chip');
+  chip.classList.toggle('ok', bad.length === 0);
+  chip.classList.toggle('bad', bad.length > 0);
+  chip.innerHTML = (bad.length === 0
+    ? '<b>' + out.length + '/' + out.length + ' green</b><br>'
+    : '<b>' + bad.length + ' FAILED</b><br>')
+    + out.map((o) => (o.c ? '✓ ' : '✗ ') + o.n + ' &middot; ' + o.d).join('<br>');
+}
+document.getElementById('chip').addEventListener('click', runChecks);
+
+/* ═══ RESIZE + LOOP ═══════════════════════════════════════════════════════ */
+function resize() {
+  const dpr = Math.min(1.9, devicePixelRatio || 1);
+  const w = Math.round(innerWidth * dpr), h = Math.round(innerHeight * dpr);
+  for (const c of [glc, ovc]) { if (c.width !== w || c.height !== h) { c.width = w; c.height = h; } }
+  drawAlphaCurve(); drawLadder();
+}
+addEventListener('resize', resize);
+
+let lastT = performance.now();
+function loop(now) {
+  const dt = Math.max(0, Math.min(0.05, (now - lastT) / 1000));
+  lastT = now;
+  if (st.tween) {
+    st.tween.t = Math.min(1, st.tween.t + dt * 1.6);
+    const e = st.tween.t < 0.5 ? 2 * st.tween.t * st.tween.t : 1 - Math.pow(-2 * st.tween.t + 2, 2) / 2;
+    st.cam.pitch = st.tween.from + (st.tween.to - st.tween.from) * e;
+    if (st.tween.t >= 1) st.tween = null;
+  }
+  if (st.pass < PASSES) {
+    runPass();
+    document.getElementById('load').style.display = st.pass < PASSES ? 'block' : 'none';
+    document.getElementById('load').textContent =
+      'drawing the water… ' + Math.round(100 * st.pass / PASSES) + '%';
+  }
+  renderSea();
+  drawOverlay();
+  requestAnimationFrame(loop);
+}
+
+/* ═══ BOOT ════════════════════════════════════════════════════════════════ */
+function boot() {
+  if (!gl || !extCBF) {
+    document.getElementById('load').style.display = 'block';
+    document.getElementById('load').textContent = gl
+      ? 'this room needs float render targets (EXT_color_buffer_float)'
+      : 'this room needs WebGL2';
+    return;
+  }
+  initQuad(); initPrograms(); initTargets();
+  resize();
+  st.cam.dolly = autoDollyFor(st.U);
+  recompute();
+  requestAnimationFrame(loop);
+  setTimeout(runChecks, 900);
+}
+window.__wake = { st, recompute, runChecks, planeHit, measure, gl, wakeFB, proj,
+                  armScreen(f){ const R=0.90*wedgeReach(st.arm)*f;
+                    return proj([-R*Math.cos(st.arm), R*Math.sin(st.arm), 0]); },
+                  peek(n){ const o=new Float32Array(n*n*4);
+                    gl.bindFramebuffer(gl.FRAMEBUFFER, wakeFB.fb);
+                    gl.readPixels(TEX/2-n/2, TEX/2-n/2, n, n, gl.RGBA, gl.FLOAT, o);
+                    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+                    let mz=0,ms=0; for(let i=0;i<n*n;i++){mz=Math.max(mz,Math.abs(o[i*4]));
+                      ms=Math.max(ms,Math.hypot(o[i*4+1],o[i*4+2]));}
+                    return {maxZ:mz, maxSlope:ms, norm:st.norm, drawn:ms*st.norm}; },
+                  setArm: (a) => { st.arm = a; syncPanel(); } };
+boot();
+</script>
+</body>
+</html>

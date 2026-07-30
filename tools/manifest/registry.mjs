@@ -103,6 +103,12 @@ export const INTERNAL = [
   // stones/the-sluice-gate/) — the fairground is at its 16-tile capacity, so the Drover's third star rides
   // WITHIN its closest kin (the §2.6 gather / "lodestone-hall absorbs curie-dial" pattern) rather than
   // minting a lonely 17th footprint. Presented via the `.gate-link` first-class idiom on the room page.
+  // The Boathouse GATHERS The Wake as a nested exhibit (the-boathouse/the-wake/) —
+  // the same slipway, the other half of a hull: this room is the two forces that
+  // DRIVE a boat, the Wake is what it leaves behind.  A DEEPEN (one room, one
+  // shell, no second front-door footprint), presented off the landing in the
+  // `slip-link` first-class idiom.
+  { hub: 'the-boathouse', rule: 'internal-links', file: 'the-boathouse/index.html', firstClass: ['slip-link'], kind: 'exhibit' },
   { hub: 'the-standing-stones', rule: 'internal-links', file: 'the-standing-stones/index.html', firstClass: ['gate-link'], kind: 'exhibit' },
   // In the Round holds its solids as HALLS: hall one (the armillary) is the room
   // page itself, hall two (in-the-round/trefoil/) a nested exhibit presented off

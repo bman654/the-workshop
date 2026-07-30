@@ -56,6 +56,14 @@ Nothing else is required reading.
   real entry function directly and assert the state changed.
 - `python -m http.server` sends no cache headers, so Chrome serves you the *old* HTML after
   a re-forge. Cache-bust with `?v=N`.
+- **A panel over the canvas eats your pointer test, and it reads as a broken handler.**
+  A true CDP click at the exact screen point where your draggable thing is drawn does
+  nothing at all if a control card happens to sit over it — the canvas never gets a
+  `pointerdown`, the state does not move, and you go and rewrite hit-testing that was
+  always fine. The tell is that the OTHER branch (orbit, pan) does not fire either. Pick
+  the probe point in clear canvas — `elementFromPoint` will tell you in one line — or
+  parameterise the thing you are aiming at and pick a fraction that lands away from the
+  chrome. (Cost a debug cycle in The Wake.)
 - **Another browser session on the same machine steals your frame rate.** A forgotten
   `agent-browser --session foo` kept a second GPU context alive and turned a real 65 fps into
   a measured 7. `agent-browser session list`, close the strays, then benchmark.
@@ -133,6 +141,22 @@ Nothing else is required reading.
   reads `(0,0,0,1)` and your whole scene renders black while the numbers behind it
   are perfectly correct. Use `NEAREST` and make the table fine enough — 256 entries
   over 1700 K is 6.6 K a step — or interpolate yourself from two `texelFetch`es.
+- **A PURE FRESNEL WATER MODEL SHOWS NOTHING FROM DIRECTLY ABOVE.** At normal incidence
+  water reflects about 2%, so a mirror-plus-Fresnel shader renders a plan view of a wake,
+  a ripple tank or a pond as flat dead colour — while the same shader looks superb at a
+  grazing angle, which is how you ship it without noticing. It is not a bug in the field:
+  it is a bug in the optics you chose. A real wake IS plainly visible from a drone,
+  because a facet tilted towards a low sun lets more light in and throws more back — so
+  give the body colour a `max(dot(n, sun), 0)` term and the plan view comes alive at every
+  angle. Any room with a "look straight down" button needs this before that button works.
+- **Normalising a drawn field by its MAXIMUM prints a bright speck and a black sea.** The
+  steepness of a wake spans decades between the bow and the far arms (the same shape of
+  problem as the orb web's 10⁸), so `gain = target / max` exposes for the one hot texel at
+  the source and everything a visitor came to look at goes to zero. Reduce the field on
+  the GPU, then take a ROBUST statistic on the CPU — a high percentile of the texels
+  OUTSIDE a few source radii — and let the shader soft-saturate the overshoot
+  (`v *= inversesqrt(1 + (|v|/knee)^2)`). Say on the page that it is exposure, and keep
+  every measurement on the raw field.
 - **Colouring a field by blackbody magnifies small ripples enormously.** The
   visible-band luminance of a hot body climbs about a decade every 150 K, so a
   *three per cent* ripple in temperature — the sort any solver carries and nobody
@@ -341,6 +365,23 @@ Nothing else is required reading.
   balance, converge on `|ΣF| / |F|` — it is zero at the answer by definition, it costs
   nothing to compute, and it doubles as the honest "is this row usable" flag for callers.
 
+- **AN OSCILLATORY INTEGRAL WANTS THE SAMPLING VARIABLE THE PHASE IS WRITTEN IN.** A
+  Kelvin wake is one integral over wave direction θ, and its phase carries κ = sec²θ — so
+  at 70° a step in θ moves the phase eight times further than the same step at zero, and
+  out at the rim of the picture the integrand swings ~1800 radians per radian. Uniform-θ
+  needs tens of thousands of samples to stay under Nyquist and shows a *plausible* wrong
+  answer below that (46% off at the rim, and it just looks like a slightly different
+  wake). Substitute u = tan θ — du carries exactly the sec² the phase does — and 800
+  samples are converged to 0.001%. Before you buy more samples, check whether the
+  integrand has a natural variable.
+- **Normalising by the peak QUADRATURE WEIGHT makes your whole field scale with N.** The
+  obvious tidy-up after building a sample list is to divide the weights by the largest of
+  them — but `A(θ)·dθ` shrinks as 1/N, so that division silently multiplies the answer by
+  N. Every value is wrong by a factor that is constant across the picture, so the picture
+  looks fine and only a convergence test catches it — and it catches it as "the quadrature
+  is 50% off at N = 6000", which reads as a sampling problem and sends you to fix the
+  sampling. Normalise by the peak of `A` itself, a number that does not know how many
+  samples there are.
 - **A field with a fixed outer boundary far from the action is a sealed jar.** A
   diffusion box initialised full of vapour, with the reservoir pinned only at the wall
   of the array, does not respond to the outside conditions at all: the crystal is
