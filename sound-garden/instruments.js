@@ -92,5 +92,11 @@ window.INSTRUMENTS = [
     name: "The Belfry",
     blurb: "up the ladder into the bell chamber while a band is ringing: six bells turning full circle as two coupled pendulums each, sounding when the clapper actually arrives — and six ringers who are one whole stroke behind every correction they make, because the arithmetic gives them no choice",
     accent: "#dfb264", timbre: "bell"
+  },
+  {
+    file: "the-spiral-ear/index.html",
+    name: "The Spiral Ear",
+    blurb: "thirty-five millimetres of membrane wound two and a half times, with water on both faces — slide a tone up and down it and watch the travelling wave crawl to the one place that answers, then pull the shell straight and find that the octave is three and a half millimetres wide wherever you put it",
+    accent: "#e0b46a", timbre: "breath"
   }
 ];
