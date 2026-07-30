@@ -126,6 +126,22 @@ Nothing else is required reading.
   cloud — you notice the first time the camera stands *inside* it, and then half
   the plume is a dark grey wedge that looks like a blending bug. Scatter
   isotropically instead: sum `lampColour / (k + r²)` with no dot product at all.
+- **Clipping an additive HDR emitter channel-by-channel CHANGES ITS HUE, and the new
+  hue is plausible.** An optically thin emitter — an aurora, a flame, a plasma, a
+  nebula — outruns a screen by decades, and the moment the brightest channel pins at
+  1.0 the others keep climbing: a green arc with a trace of red in it turns *yellow*,
+  then white, and it looks like a perfectly reasonable bright aurora rather than a
+  tonemapping bug. So you go and re-derive the emission ratios, which were fine.
+  Scale all three channels by the same factor instead — `c /= 1.0 + max(c.r,c.g,c.b)`
+  — which is exact in hue at every brightness, can never clip, and costs one line;
+  then mix a little towards grey at the top if you want the sensor-saturation look.
+  (Cost a cycle in The Northern Light.)
+- **Drawing a thing THICKER to make it look diffuse also makes it BRIGHTER.** If a
+  surface proxy stands in for a volume, its brightness is `emission x thickness`, so
+  widening the slab from 0.6 km to 2.8 km silently multiplies that layer by 4.7 and
+  the colour balance you spent an hour on is gone. When you spread something for
+  looks, hold `gain x thickness` constant — the column emission is what the physics
+  handed you and spreading it must not create any.
 - **Smoke wants ABSORPTION, not addition.** Accumulate premultiplied radiance in
   RGB and optical depth in A, then composite `scene*exp(-kD) + (rgb/a)*(1-exp(-kD))`.
   Additive blending gives you plasma; this gives you smoke, and it is one line.
