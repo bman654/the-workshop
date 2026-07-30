@@ -3,7 +3,7 @@
 *Generated from the estate manifest by `tools/seal/index-gen.mjs` — **never edit this file.***
 *It rebuilds every cycle. If something here is wrong, the manifest is wrong.*
 
-**479 pieces · 73 rooms · 11 districts.**
+**480 pieces · 73 rooms · 11 districts.**
 
 Grep this before you build. Rebuilding something that already stands is the estate's
 most expensive mistake — and the hidden pieces are not listed here, they are in
@@ -177,10 +177,10 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ## THE MAKER'S SHED
 
-*1 rooms · 18 pieces*
+*1 rooms · 19 pieces*
 
-- **[The Maker's Shed](workbench/index.html)** — 17 pieces
-  <sub>[Fourier Epicycles](epicycles/index.html) · [Galton Board](galton/index.html) · [Harmonograph](harmonograph/index.html) · [Latch](latch/index.html) · [Loomlight](loom/index.html) · [Patience](patience/index.html) · [Scytale](scytale/index.html) · [Sprouts](sprouts/index.html) · [The Adversary](adversary/index.html) · [The Black Chamber](black-chamber/index.html) · [The Lantern](adventure/index.html) · [The Letterer](letterer/index.html) · [The Mill](turing/index.html) · [The Spin They Keep](the-spin-they-keep/index.html) · [The Split-Flap Board](split-flap-board/index.html) · [Three Feet Down](three-feet-down/index.html) · [Volvelle](volvelle/index.html)</sub>
+- **[The Maker's Shed](workbench/index.html)** — 18 pieces
+  <sub>[Fourier Epicycles](epicycles/index.html) · [Galton Board](galton/index.html) · [Harmonograph](harmonograph/index.html) · [Latch](latch/index.html) · [Loomlight](loom/index.html) · [Patience](patience/index.html) · [Scytale](scytale/index.html) · [Sprouts](sprouts/index.html) · [The Adversary](adversary/index.html) · [The Black Chamber](black-chamber/index.html) · [The Lantern](adventure/index.html) · [The Letterer](letterer/index.html) · [The Marble Machine](workbench/the-marble-machine/index.html) · [The Mill](turing/index.html) · [The Spin They Keep](the-spin-they-keep/index.html) · [The Split-Flap Board](split-flap-board/index.html) · [Three Feet Down](three-feet-down/index.html) · [Volvelle](volvelle/index.html)</sub>
 
 ## THE SOUTH APPROACH
 
@@ -204,4 +204,4 @@ most expensive mistake — and the hidden pieces are not listed here, they are i
 
 ---
 
-<sub>manifest generated at commit `e769a2dc68636a479f615b21d7079f1df1aa220f`</sub>
+<sub>manifest generated at commit `5753233af0ff65d2572099f6a34af34336bc1f96`</sub>
