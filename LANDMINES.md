@@ -161,6 +161,17 @@ Nothing else is required reading.
   runs away. Size the epsilon against the smallest real spacing, not against your idea of
   small: 1e-9 is a guard, 1e-5 is a jack.
 
+- **A refined triangle inherits its parent's HANDEDNESS, and mixed winding cancels your
+  normals.** Subdividing a set of triangles barycentrically feels orientation-free, and it
+  is — for the maths. But if the parent triangles are not all wound the same way (the four
+  half-square types of a polyabolo alternate: right-angle-at-SW is counter-clockwise,
+  right-angle-at-SE is clockwise), then two elements meeting along an internal edge hand
+  their shared vertices OPPOSING face normals, the accumulation cancels, and the surface
+  grows a dark seam along every seam of the original decomposition. It reads exactly like a
+  vertex-welding bug, so you go and check the welding, which is fine. One `if (signed area
+  < 0) swap` after you build the element list is the whole fix. The eigensolve never
+  notices, because a stiffness matrix takes |area|.
+
 - **Volumetric marching wants an interleaved-gradient dither**, not an ordered/Bayer one:
   `fract(52.9829189 * fract(0.06711056*x + 0.00583715*y))`, offset per frame by the golden
   ratio. Too-few steps then read as a fine even weave instead of hard rings.
@@ -202,6 +213,17 @@ Nothing else is required reading.
   bound the MODEL guarantees (here: at or below the Hopf line nothing can
   sound), never on a number that felt small. It took a spectrum analyser on the
   live worklet to find; the twin could not have.
+- **A soft limiter never tells you it is working, and it will invent partials.** A
+  `tanh` on the master bus is the right safety net — but every mode of a struck object
+  starts IN PHASE, so the first sample of a fourteen-mode blow is the sum of all
+  fourteen, and that one sample can be deep into the knee while everything after it
+  sounds perfectly clean. The Drum Twins' own ear panel peak-picked **22** partials out
+  of a fourteen-mode model and they were all reproducible in both drums, which made them
+  look like physics. They were intermodulation products of my own limiter. Report the
+  master-bus PEAK next to any spectrum you measure, and bound the excitation at the
+  source (that room now asks each drumhead, over every node of its mesh, for the loudest
+  blow it can take, and makes that full scale).
+
 - **Your own page can fight your measurement.** The Aviary's dawn timer
   re-activates the birds every third of a second, so a console probe that
   hushed the wood found it singing again a moment later and spent an hour

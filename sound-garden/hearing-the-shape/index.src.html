@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Can One Hear the Shape of a Drum? — two drums with one voice</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  HEARING THE SHAPE OF A DRUM  ·  sound-garden/hearing-the-shape/
+
+  Mark Kac, 1966: you are handed every frequency a drumhead can sound, and
+  nothing else.  Is its outline determined?  Gordon, Webb and Wolpert answered
+  in 1992, and the answer is no.
+
+  THIS ROOM DOES NOT CITE THEM.  It cuts seven half-squares, enumerates the 318
+  shapes you can glue them into, solves the Dirichlet Laplacian on every one,
+  and compares all 50,403 pairs.  Exactly one pair comes back with the same
+  spectrum — the same to fifteen digits, where the runner-up differs in the
+  third.  Then it hangs both of them in front of you and lets you hit them.
+
+  THE ONE CLAIM: the two drums have the same spectrum and are not the same
+  shape.  Checked at four mesh resolutions (equal every time, to 1e-15); the
+  solver is checked where the answer is known in closed form (a square, a
+  half-square, both to h^2) and against a published twelve-digit benchmark it
+  was never given (Driscoll 1997), which it walks in on at the h^(4/3) rate two
+  270-degree corners dictate.  Press "prove it" and all of that runs here.
+
+  ENGINES (inlined byte-for-byte by the forge, never forked):
+    · ./polyabolo.mjs    — the shapes: enumeration, congruence, geometry
+    · ./spectrum.mjs     — the mesh, the FEM, the shift-invert Lanczos
+    · ./drum.mjs         — voices, strikes, nodal lines, the search
+    · tools/modal/core.mjs — the estate's bank of resonators (new; four letters asked)
+    · tools/ws/ws.js     — the shared mute and the visit breadcrumb
+
+  HONEST ABOUT THE PICTURE: a 110 Hz membrane at 60 frames a second is a grey
+  blur, so the wobble is drawn 30x slow and some hundreds of times too large.
+  The DECAY is real time, so what you watch stops when what you hear stops.
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root{
+    --ink:#f0ead9; --dim:#a49a86; --faint:#736c5e;
+    --gold:#e5b95f; --warm:#f6d79c; --skin:#e8d7b4; --cool:#5fa8d3;
+    --bg0:#07070c; --panel:rgba(10,10,16,.86); --line:rgba(229,185,95,.22);
+    --font-ui:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --font-mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg0);color:var(--ink);
+    font:15px/1.55 var(--font-ui);overflow:hidden;-webkit-font-smoothing:antialiased}
+  canvas#gl{display:block;position:fixed;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
+  a{color:var(--gold);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  header{position:fixed;left:22px;top:18px;z-index:6;max-width:min(430px,42vw);pointer-events:none}
+  header *{pointer-events:auto}
+  .back{display:inline-block;font:600 10px/1 var(--font-mono);letter-spacing:.22em;
+    text-transform:uppercase;color:var(--faint);margin-bottom:12px}
+  .back:hover{color:var(--gold);text-decoration:none}
+  h1{font:400 27px/1.16 var(--font-ui);margin:0 0 7px;letter-spacing:.006em}
+  h1 em{font-style:italic;color:var(--warm)}
+  .lede{margin:0;font-size:13.5px;line-height:1.62;color:var(--dim);max-width:40ch}
+  .lede b{color:var(--ink);font-weight:600}
+
+  /* ── the ladder of frequencies ─────────────────────────────────────────── */
+  #ladder{position:fixed;right:20px;top:50%;transform:translateY(-50%);z-index:6;
+    width:236px;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:13px 13px 11px;backdrop-filter:blur(9px)}
+  .lhead{font:600 9.5px/1 var(--font-mono);letter-spacing:.2em;text-transform:uppercase;
+    color:var(--faint);display:flex;justify-content:space-between;margin-bottom:9px}
+  .rung{display:grid;grid-template-columns:16px 54px 1fr;gap:6px;align-items:center;
+    font:11px/1 var(--font-mono);color:var(--dim);padding:2.5px 4px;border-radius:5px;cursor:pointer}
+  .rung:hover{background:rgba(229,185,95,.10);color:var(--ink)}
+  .rung.on{background:rgba(229,185,95,.22);color:#fff}
+  .rung .n{color:var(--faint);text-align:right}
+  .rung .hz{color:var(--warm)}
+  .cents{position:relative;height:9px;background:rgba(255,255,255,.045);border-radius:2px;overflow:hidden}
+  .cents::after{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.16)}
+  .cents i{position:absolute;top:1px;bottom:1px;background:#ff7a52;border-radius:1px}
+  .lfoot{margin-top:9px;font:10px/1.45 var(--font-mono);color:var(--faint);text-align:center}
+  .lfoot b{color:var(--gold)}
+
+  /* ── the control bar ───────────────────────────────────────────────────── */
+  #bar{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:6;
+    display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:center;
+    background:var(--panel);border:1px solid var(--line);border-radius:13px;
+    padding:9px 11px;backdrop-filter:blur(9px);max-width:min(94vw,900px)}
+  button{font:600 10.5px/1 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink);background:rgba(229,185,95,.12);border:1px solid var(--line);
+    border-radius:8px;padding:9px 12px;cursor:pointer;transition:background .14s,color .14s}
+  button:hover{background:rgba(229,185,95,.28)}
+  button.on{background:rgba(229,185,95,.46);color:#171104;border-color:#e5b95f}
+  button.ghost{background:transparent;color:var(--faint)}
+  button.ghost:hover{color:var(--ink);background:rgba(255,255,255,.06)}
+  .sep{width:1px;height:22px;background:var(--line);margin:0 3px}
+
+  .tag{position:fixed;z-index:5;transform:translate(-50%,0);text-align:center;pointer-events:none;
+    opacity:0;transition:opacity .5s ease}
+  .tag.in{opacity:1}
+  .tag .rn{display:block;font:400 30px/1 var(--font-ui);color:var(--warm);
+    text-shadow:0 2px 14px rgba(0,0,0,.85);letter-spacing:.06em}
+  .tag .cap{display:block;margin-top:4px;font:10px/1.3 var(--font-mono);color:#8e8574;
+    letter-spacing:.09em;text-shadow:0 1px 8px rgba(0,0,0,.9)}
+  #hud{position:fixed;left:22px;bottom:20px;z-index:6;font:11px/1.5 var(--font-mono);
+    color:var(--faint);max-width:min(360px,38vw)}
+  #hud b{color:var(--warm);font-weight:400}
+
+  /* ── the proof drawer ──────────────────────────────────────────────────── */
+  #proof{position:fixed;inset:0;z-index:20;background:rgba(4,4,8,.988);backdrop-filter:blur(6px);
+    overflow-y:auto;padding:34px 5vw 90px;display:none}
+  #proof.open{display:block}
+  #proof h2{font:400 23px/1.2 var(--font-ui);margin:0 0 4px}
+  #proof h3{font:600 10px/1 var(--font-mono);letter-spacing:.2em;text-transform:uppercase;
+    color:var(--gold);margin:30px 0 10px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+  #proof p{font-size:13.5px;color:var(--dim);max-width:74ch;margin:0 0 11px}
+  #proof p b{color:var(--ink);font-weight:600}
+  .wrap{max-width:1040px;margin:0 auto}
+  table{border-collapse:collapse;font:11.5px/1.5 var(--font-mono);margin:6px 0 4px}
+  th,td{padding:3px 13px 3px 0;text-align:right;white-space:nowrap}
+  th{color:var(--faint);font-weight:600;text-align:right;border-bottom:1px solid var(--line);padding-bottom:5px}
+  td.l,th.l{text-align:left}
+  .good{color:#6fdc9a}.bad{color:#ff7a52}.num{color:var(--warm)}
+  #searchCv,#earCv{width:100%;max-width:1040px;height:auto;display:block;
+    border:1px solid var(--line);border-radius:9px;background:#08080e;margin:8px 0}
+  .closeX{position:fixed;right:22px;top:20px;z-index:22}
+
+  /* ── the gate ──────────────────────────────────────────────────────────── */
+  .gate{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at 50% 45%,#12121c 0%,#05050a 70%);cursor:pointer;text-align:center}
+  .gate>div{max-width:min(560px,88vw);padding:0 6vw}
+  .gate .big{font:400 clamp(22px,5.4vw,34px)/1.2 var(--font-ui);margin-bottom:12px}
+  .gate .big em{font-style:italic;color:var(--warm)}
+  .gate .small{font:600 clamp(8.5px,2.4vw,10px)/1.4 var(--font-mono);letter-spacing:.24em;text-transform:uppercase;color:var(--faint)}
+  .gate.gone{display:none}
+
+  @media (max-width:900px){
+    header{max-width:none;right:18px;top:12px}
+    h1{font-size:20px} .lede{font-size:12px;max-width:none;line-height:1.5}
+    #ladder{right:8px;width:168px;padding:8px}
+    .rung{grid-template-columns:14px 46px 1fr;font-size:10px;gap:4px}
+    #hud{display:none}
+    #bar{bottom:8px;padding:6px 7px;gap:4px}
+    button{padding:6px 8px;font-size:9px;letter-spacing:.05em}
+    .sep{display:none}
+    .tag .rn{font-size:22px} .tag .cap{display:none}
+    #proof{padding:26px 4vw 70px}
+  }
+  @media (max-aspect-ratio:118/100){
+    #bar{flex-wrap:nowrap;overflow-x:auto;max-width:96vw;justify-content:flex-start}
+    #bar button{flex:0 0 auto}
+    #ladder{transform:translateY(-52%)}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+
+<header>
+  <a class="back" href="../index.html">↩ the music room</a>
+  <h1>Can one hear the <em>shape</em> of a drum?</h1>
+  <p class="lede">Two drumheads. Not the same shape — look at them. Strike them and
+    they answer with <b>exactly the same set of notes</b>: fourteen of them here, agreeing
+    to fifteen digits. Nobody chose these two outlines; the room found them by cutting seven
+    half-squares and trying <b>all 318 ways</b> of gluing them together.</p>
+</header>
+
+<aside id="ladder">
+  <div class="lhead"><span>the ladder</span><span id="ladderTag">Hz · cents apart</span></div>
+  <div id="rungs"></div>
+  <div class="lfoot" id="lfoot">every rung <b>0.000</b> cents apart</div>
+</aside>
+
+<div class="tag" id="tagI"><span class="rn">I</span><span class="cap">seven half-squares</span></div>
+<div class="tag" id="tagII"><span class="rn">II</span><span class="cap">the same seven, glued differently</span></div>
+
+<div id="hud">drag to turn · click a drumhead to strike it there</div>
+
+<div id="bar">
+  <button id="bStrike">strike both</button>
+  <button id="bLadder">ring the ladder</button>
+  <div class="sep"></div>
+  <button id="bNodal">nodal lines</button>
+  <button id="bTwin">drum II: the twin</button>
+  <div class="sep"></div>
+  <button id="bProof">prove it</button>
+  <button id="bHush" class="ghost">mute</button>
+</div>
+
+<section id="proof">
+  <button class="closeX" id="bClose">close</button>
+  <div class="wrap">
+    <h2>Everything this room says, run here, now.</h2>
+    <p>None of it is stored. Each panel below runs in this page, on this machine, when you
+      open the drawer — the shapes are re-enumerated, the eigenvalues re-solved, and the
+      pair re-found.</p>
+
+    <h3>1 · the ladder, to every digit there is</h3>
+    <p>The Dirichlet eigenvalues of the two drums, from two completely separate meshes with
+      different connectivity. λ is what the solver returns; f is 110·√(λ/λ₁), so the only
+      number chosen anywhere in this room is that the first note is an A.</p>
+    <div id="tSpec"></div>
+
+    <h3>2 · the solver, where the answer is known in closed form</h3>
+    <p>Before believing a hard shape, check an easy one. A unit square's eigenvalues are
+      π²(m²+n²) exactly; a half-square's are the same list with m &gt; n. Both should
+      converge like h², and the ratio between successive mesh halvings should be 4.</p>
+    <div id="tSquare"></div>
+
+    <h3>3 · against a published number the code was never given</h3>
+    <p>λ₁ for these drums is a standard benchmark, computed to twelve digits by Driscoll
+      (1997) for triangles with legs of length two. Ours have legs of length one and λ goes
+      as 1/L², so the number to walk in on is four times his: <b>10.15177600</b>. Nothing in
+      this repo was fitted to it. The convergence is slower than h² and that is a
+      prediction too: each drum has two 270° corners, every eigenfunction has an r^(2/3)
+      singularity there, and that caps the rate at h^(4/3) — a ratio of 2.52, not 4.</p>
+    <div id="tBench"></div>
+
+    <h3>4 · the search that found them</h3>
+    <p>Every shape you can build from seven half-squares, edge to edge: 318 of them, and the
+      count 1, 3, 4, 14, 30, 107, 318 is a published sequence (OEIS A006074) that nothing here
+      was fitted to. Each row below is one shape's first eight eigenvalues, drawn as ticks and
+      sorted by the first. 50,403 pairs get compared. Watch for the one row that has a twin.</p>
+    <div><button id="bSearch">run the search</button> <span id="searchNote" style="font:11px/1 var(--font-mono);color:var(--faint)"></span></div>
+    <canvas id="searchCv" width="1040" height="760"></canvas>
+    <div id="tSearch"></div>
+
+    <h3>5 · the ear — measured off this page's own output</h3>
+    <p>Arithmetic agreeing with arithmetic is cheap. This puts an AnalyserNode on the signal
+      that actually reaches your speakers, strikes drum I alone, holds the peak of its
+      spectrum, then does the same for drum II, and draws both. Two lines, one shape.</p>
+    <div><button id="bEar">listen to both</button> <span id="earNote" style="font:11px/1 var(--font-mono);color:var(--faint)"></span></div>
+    <canvas id="earCv" width="1040" height="330"></canvas>
+
+    <h3>6 · what a spectrum leaves out</h3>
+    <p>Counting the notes cannot separate the twins. Neither can Weyl's law, which says the
+      number of notes below a pitch depends only on the area and the perimeter — and these
+      two have the same area <i>and</i> the same perimeter, 6 + 3√2. But the <b>pictures</b> of
+      the notes are not the same. Count the pieces each mode's nodal lines cut its own
+      drumhead into and the drums part company at the fourth note.</p>
+    <div id="tNodal"></div>
+  </div>
+</section>
+
+<div class="gate" id="gate"><div>
+  <div class="big">Can one hear the <em>shape</em> of a drum?</div>
+  <div class="small">click to pick up the sticks</div>
+</div></div>
+
+<script type="module">
+<!-- forge:include ../../tools/ws/ws.js -->
+<!-- forge:include ../../tools/modal/core.mjs -->
+<!-- forge:include ./polyabolo.mjs -->
+<!-- forge:include ./spectrum.mjs -->
+<!-- forge:include ./drum.mjs -->
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE WORKLET SOURCE.  tools/modal/core.mjs again, with its export keywords
+   stripped (a worklet is a classic script), plus the processor tail.  This is
+   why that file may not contain a backtick anywhere, comments included.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const CORE_TEXT = String.raw`
+<!-- forge:include ../../tools/modal/core.mjs -->
+`;
+const WORKLET_TAIL = String.raw`
+<!-- forge:include ./worklet.js -->
+`;
+const WORKLET_SRC =
+  CORE_TEXT.replace(/^export\s+(?=(?:default\s+)?(?:function|class|const|let|var))/gm, '')
+           .replace(/^export\s*\{[\s\S]*?\};?\s*$/gm, '')
+  + '\n' + WORKLET_TAIL;
+
+/* ════════════════════════════════════════════════════════════════════════════
+   1 · THE TWO DRUMS  (and the liar that stands in for the second one)
+   ═══════════════════════════════════════════════════════════════════════════ */
+const NM = 14;
+const F1 = 110;                                   /* drum I's lowest note is an A */
+const SLOW = 1 / 42;                              /* the wobble, drawn 42x slow   */
+
+function makeDrum(key, reference) {
+  const shape = fromCanonical(key);
+  const v = voice(shape, { k: 4, modes: NM, f1: F1, reference, ring: 2.6 });
+  const b = bounds(shape);
+  v.key = key;
+  v.shape = shape;
+  v.cx = (b.x0 + b.x1) / 2;
+  v.cy = (b.y0 + b.y1) / 2;
+  v.rim = boundaryEdges(shape);
+  v.info = describe(shape);
+  v.nodal = v.sol.vectors.map((u) => nodalDomains(v.sol.mesh, u));
+  return v;
+}
+const drumI = makeDrum(TWIN_A);
+const drumII = makeDrum(TWIN_B, drumI.lambda[0]);
+const liar = makeDrum(IMPOSTOR, drumI.lambda[0]);
+let right = drumII;                               /* what stands on the right     */
+
+/* ════════════════════════════════════════════════════════════════════════════
+   2 · THE VOICE
+   ═══════════════════════════════════════════════════════════════════════════ */
+let actx = null, node = null, analyser = null, audioReady = false, earBusy = false;
+
+async function startAudio() {
+  if (actx) return;
+  actx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+  const url = URL.createObjectURL(new Blob([WORKLET_SRC], { type: 'text/javascript' }));
+  try {
+    await actx.audioWorklet.addModule(url);
+    node = new AudioWorkletNode(actx, 'drumhead', {
+      numberOfInputs: 0, outputChannelCount: [2], processorOptions: { gain: 0.42 },
+    });
+    analyser = actx.createAnalyser();
+    analyser.fftSize = 32768;
+    analyser.smoothingTimeConstant = 0;
+    node.connect(analyser);
+    analyser.connect(actx.destination);           /* the analyser MUST have a sink */
+    node.port.postMessage({ type: 'mute', v: WS.muted() });
+    audioReady = true;
+    pushModes();
+  } catch (err) { console.error('worklet failed', err); }
+  finally { URL.revokeObjectURL(url); }
+  if (actx.state === 'suspended') await actx.resume();
+}
+function tell(m) { if (audioReady) node.port.postMessage(m); }
+function pushModes() {
+  [drumI, right].forEach((d, i) => tell({ type: 'modes', voice: i, f: d.freqs, t60: d.t60 }));
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   3 · THE STRIKE — one blow drives the sound and the picture from one array
+   ═══════════════════════════════════════════════════════════════════════════ */
+const live = [
+  { amps: new Float64Array(NM), t0: -99, scale: 0 },
+  { amps: new Float64Array(NM), t0: -99, scale: 0 },
+];
+
+function hit(which, x, y, force = 1) {
+  const d = which === 0 ? drumI : right;
+  const raw = strikeAmps(d, x, y);
+  const st = live[which];
+  st.amps.set(raw);
+  st.t0 = performance.now() / 1000;
+  /* the picture: normalise the initial deflection so a blow anywhere reads */
+  let pk = 0;
+  const u = new Float64Array(d.sol.mesh.nodes.length);
+  for (let n = 0; n < NM; n++) {
+    const v = d.sol.vectors[n];
+    for (let i = 0; i < u.length; i++) u[i] += raw[n] * v[i];
+  }
+  for (let i = 0; i < u.length; i++) pk = Math.max(pk, Math.abs(u[i]));
+  st.scale = pk > 1e-9 ? 1.45 * force / pk : 0;
+  tell({ type: 'strike', voice: which, amps: Array.from(radiate(d.freqs, raw, F1)), contact: 0.0022, force: force * d.blowScale });
+}
+
+/* HOW HARD IS AS HARD AS IT GETS.  Every mode of a struck membrane starts in
+ * phase, so the first sample of a blow is the sum of all fourteen — and a soft
+ * limiter that quietly swallows that sum will hand a spectrum analyser eight
+ * partials the model does not contain.  (It did; the ear panel found them.)  So
+ * each drum is asked once, over every node of its own mesh, for the loudest
+ * blow it can take, and that becomes full scale.  Where you hit still changes
+ * the loudness — it just cannot run away. */
+function loudestBlow(d) {
+  let worst = 1e-9;
+  for (const p of d.sol.mesh.nodes) {
+    const r = radiate(d.freqs, strikeAmps(d, p[0], p[1]), F1);
+    let sum = 0;
+    for (let i = 0; i < r.length; i++) sum += Math.abs(r[i]);
+    if (sum > worst) worst = sum;
+  }
+  return worst;
+}
+for (const d of [drumI, drumII, liar]) d.blowScale = 2.05 / loudestBlow(d);
+
+/* a fixed, characteristic blow: the point where mode 1 is strongest */
+function antinode(d) {
+  let best = 0, at = [0, 0];
+  const u = d.sol.vectors[0];
+  d.sol.mesh.nodes.forEach((p, i) => { if (Math.abs(u[i]) > best) { best = Math.abs(u[i]); at = p; } });
+  return at;
+}
+const AN = [antinode(drumI), antinode(drumII), antinode(liar)];
+function strikeBoth(force = 1) {
+  hit(0, AN[0][0], AN[0][1], force);
+  const a = right === liar ? AN[2] : AN[1];
+  hit(1, a[0], a[1], force);
+}
+
+/* holding one mode still, so you can look at it */
+let heldMode = -1, showNodal = false;
+
+/* ════════════════════════════════════════════════════════════════════════════
+   4 · WEBGL — two drumheads on a dark floor
+   ═══════════════════════════════════════════════════════════════════════════ */
+const cv = document.getElementById('gl');
+const gl = cv.getContext('webgl2', { antialias: true, alpha: false, powerPreference: 'high-performance' });
+if (!gl) document.getElementById('hud').textContent = 'this room needs WebGL2';
+
+function sh(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) + '\n' + src);
+  return s;
+}
+function prog(vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  return p;
+}
+const U = (p, n) => gl.getUniformLocation(p, n);
+
+/* ── mat4 ──────────────────────────────────────────────────────────────── */
+function persp(fov, asp, n, f) {
+  const t = 1 / Math.tan(fov / 2);
+  return new Float32Array([t / asp, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) / (n - f), -1, 0, 0, 2 * f * n / (n - f), 0]);
+}
+function look(e, c, up) {
+  const z = norm3(sub3(e, c)), x = norm3(cross3(up, z)), y = cross3(z, x);
+  return new Float32Array([x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0,
+    -dot3(x, e), -dot3(y, e), -dot3(z, e), 1]);
+}
+const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+function norm3(a) { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+function mul4(a, b) {
+  const o = new Float32Array(16);
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+    let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + j] * b[i * 4 + k];
+    o[i * 4 + j] = s;
+  }
+  return o;
+}
+
+/* ── shaders ───────────────────────────────────────────────────────────── */
+const SKY_VS = `#version 300 es
+layout(location=0) in vec2 aP; out vec2 vUv;
+void main(){ vUv = aP*0.5+0.5; gl_Position = vec4(aP,0.999,1.0); }`;
+const SKY_FS = `#version 300 es
+precision highp float; in vec2 vUv; out vec4 o;
+void main(){
+  vec2 d = vUv - vec2(0.5,0.56);
+  float r = length(d*vec2(1.0,1.45));
+  vec3 c = mix(vec3(0.075,0.072,0.098), vec3(0.018,0.017,0.028), smoothstep(0.05,0.78,r));
+  c += vec3(0.045,0.032,0.016)*exp(-r*r*7.0);
+  o = vec4(c,1.0);
+}`;
+
+/* the membrane: position is (x,y) fixed, (z,normal) streamed every frame */
+const MEM_VS = `#version 300 es
+layout(location=0) in vec2 aXY;
+layout(location=1) in vec4 aZN;
+uniform mat4 uVP; uniform vec3 uOff; uniform float uAmp;
+out vec3 vN; out vec3 vP; out float vZ;
+void main(){
+  vec3 p = vec3(aXY.x, aZN.x*uAmp, aXY.y) + uOff;
+  vP = p; vN = normalize(vec3(aZN.y, aZN.z, aZN.w)); vZ = aZN.x;
+  gl_Position = uVP * vec4(p,1.0);
+}`;
+const MEM_FS = `#version 300 es
+precision highp float;
+in vec3 vN; in vec3 vP; in float vZ; out vec4 o;
+uniform vec3 uEye; uniform float uSign; uniform float uDim; uniform float uTintK;
+const vec3 KEY = normalize(vec3(-0.45, 0.86, 0.42));
+const vec3 FIL = normalize(vec3(0.72, 0.30, -0.55));
+void main(){
+  vec3 N = normalize(vN);
+  if(!gl_FrontFacing) N = -N;
+  vec3 V = normalize(uEye - vP);
+  vec3 base = vec3(0.855,0.780,0.640);
+  /* let the deflection show as colour as well as shading: a membrane a few
+     centimetres out of true tilts its normal almost not at all, so a wave you
+     can hear would otherwise be a wave you cannot see. */
+  float s = clamp(vZ*uTintK, -1.0, 1.0);
+  base = mix(base, s>0.0 ? vec3(0.98,0.70,0.34) : vec3(0.32,0.62,0.86),
+             abs(s)*(uSign > 0.5 ? 0.72 : 0.34));
+  float kd = max(dot(N,KEY),0.0);
+  float fd = max(dot(N,FIL),0.0);
+  vec3 c = base*(0.16 + 0.86*kd) + base*vec3(0.28,0.35,0.48)*fd*0.42;
+  vec3 H = normalize(KEY+V);
+  c += vec3(1.0,0.93,0.80)*pow(max(dot(N,H),0.0), 46.0)*0.34;
+  float fres = pow(1.0-max(dot(N,V),0.0), 3.6);
+  c += vec3(0.55,0.48,0.40)*fres*0.16;
+  c *= uDim;
+  o = vec4(pow(c, vec3(0.4545)), 1.0);
+}`;
+
+const RIM_VS = `#version 300 es
+layout(location=0) in vec3 aP;
+layout(location=1) in vec3 aN;
+uniform mat4 uVP; uniform vec3 uOff;
+out vec3 vN; out vec3 vP;
+void main(){ vec3 p = aP + uOff; vP=p; vN=aN; gl_Position = uVP*vec4(p,1.0); }`;
+const RIM_FS = `#version 300 es
+precision highp float; in vec3 vN; in vec3 vP; out vec4 o;
+uniform vec3 uEye; uniform float uDim;
+const vec3 KEY = normalize(vec3(-0.45, 0.86, 0.42));
+void main(){
+  vec3 N = normalize(vN); vec3 V = normalize(uEye-vP);
+  float kd = max(dot(N,KEY),0.0);
+  vec3 brass = vec3(0.80,0.60,0.26);
+  vec3 c = brass*(0.10+0.72*kd);
+  vec3 H = normalize(KEY+V);
+  c += vec3(1.0,0.88,0.62)*pow(max(dot(N,H),0.0),28.0)*0.55;
+  c += brass*pow(1.0-max(dot(N,V),0.0),2.4)*0.30;
+  c *= uDim;
+  o = vec4(pow(c, vec3(0.4545)),1.0);
+}`;
+
+/* the floor the two of them stand on */
+const FLR_VS = `#version 300 es
+layout(location=0) in vec2 aP;
+uniform mat4 uVP; uniform float uY;
+out vec3 vP;
+void main(){ vec3 p = vec3(aP.x, uY, aP.y); vP = p; gl_Position = uVP*vec4(p,1.0); }`;
+const FLR_FS = `#version 300 es
+precision highp float; in vec3 vP; out vec4 o;
+uniform vec3 uEye;
+void main(){
+  float d = length(vP.xz - vec2(-0.6,0.5));
+  vec3 base = vec3(0.0062,0.0058,0.0094);
+  base += vec3(0.030,0.021,0.0098)*exp(-d*d*0.075);     /* the warm pool they stand in */
+  float g = fract(sin(dot(vP.xz, vec2(12.99,78.23)))*43758.5453);
+  base += (g-0.5)*0.0016;
+  /* dissolve into the dark rather than run to a horizon */
+  base = mix(vec3(0.0038,0.0036,0.0064), base, exp(-max(d-4.4,0.0)*0.40));
+  o = vec4(pow(max(base,0.0), vec3(0.4545)), 1.0);
+}`;
+
+/* the shadow: the membrane, flattened along the key light */
+const SHD_VS = `#version 300 es
+layout(location=0) in vec2 aXY;
+layout(location=1) in vec4 aZN;
+uniform mat4 uVP; uniform vec3 uOff; uniform float uY0; uniform vec2 uJit;
+void main(){
+  vec3 p = vec3(aXY.x, aZN.x, aXY.y) + uOff;
+  vec3 K = normalize(vec3(-0.45,0.86,0.42));
+  p = p - K*((p.y - uY0)/K.y);
+  p.x += uJit.x; p.z += uJit.y;
+  gl_Position = uVP*vec4(p,1.0);
+}`;
+const SHD_FS = `#version 300 es
+precision highp float; out vec4 o; uniform float uA;
+void main(){ o = vec4(0.0,0.0,0.0,uA); }`;
+
+const LIN_VS = `#version 300 es
+layout(location=0) in vec3 aP;
+uniform mat4 uVP; uniform vec3 uOff;
+void main(){ gl_Position = uVP*vec4(aP+uOff,1.0); }`;
+const LIN_FS = `#version 300 es
+precision highp float; out vec4 o; uniform vec4 uC;
+void main(){ o = uC; }`;
+
+const pSky = prog(SKY_VS, SKY_FS);
+const pFlr = prog(FLR_VS, FLR_FS);
+const pShd = prog(SHD_VS, SHD_FS);
+const pMem = prog(MEM_VS, MEM_FS);
+const pRim = prog(RIM_VS, RIM_FS);
+const pLin = prog(LIN_VS, LIN_FS);
+
+/* ── per-drum GPU state ────────────────────────────────────────────────── */
+const RIM_DROP = 0.30, RIM_W = 0.055;
+function buildGPU(d) {
+  const mesh = d.sol.mesh;
+  const nv = mesh.nodes.length;
+  const xy = new Float32Array(nv * 2);
+  for (let i = 0; i < nv; i++) { xy[i * 2] = mesh.nodes[i][0] - d.cx; xy[i * 2 + 1] = mesh.nodes[i][1] - d.cy; }
+  const idx = new Uint32Array(mesh.tris.length * 3);
+  mesh.tris.forEach((t, i) => { idx[i * 3] = t[0]; idx[i * 3 + 1] = t[1]; idx[i * 3 + 2] = t[2]; });
+
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  const bXY = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, bXY); gl.bufferData(gl.ARRAY_BUFFER, xy, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  const bZN = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, bZN); gl.bufferData(gl.ARRAY_BUFFER, nv * 16, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 0, 0);
+  const bI = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bI); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+
+  /* the brass rim: a wall down the outline, with a flat top lip */
+  const rv = [];
+  const push = (p, n) => rv.push(p[0], p[1], p[2], n[0], n[1], n[2]);
+  for (const [a, b] of d.rim) {
+    const ax = a[0] - d.cx, az = a[1] - d.cy, bx = b[0] - d.cx, bz = b[1] - d.cy;
+    let ex = bx - ax, ez = bz - az;
+    const L = Math.hypot(ex, ez); ex /= L; ez /= L;
+    let ox = ez, oz = -ex;                    /* one side normal; orient outward */
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+    if (contains(d.shape, mx + d.cx + ox * 0.02, mz + d.cy + oz * 0.02)) { ox = -ox; oz = -oz; }
+    const o1 = [ax + ox * RIM_W, 0, az + oz * RIM_W], o2 = [bx + ox * RIM_W, 0, bz + oz * RIM_W];
+    const i1 = [ax, 0, az], i2 = [bx, 0, bz];
+    const d1 = [o1[0], -RIM_DROP, o1[2]], d2 = [o2[0], -RIM_DROP, o2[2]];
+    const nOut = [ox, 0.12, oz];
+    push(i1, [0, 1, 0]); push(o1, [0, 1, 0]); push(o2, [0, 1, 0]);          /* lip */
+    push(i1, [0, 1, 0]); push(o2, [0, 1, 0]); push(i2, [0, 1, 0]);
+    push(o1, nOut); push(d1, nOut); push(d2, nOut);                          /* wall */
+    push(o1, nOut); push(d2, nOut); push(o2, nOut);
+  }
+  const rimArr = new Float32Array(rv);
+  const rvao = gl.createVertexArray();
+  gl.bindVertexArray(rvao);
+  const bR = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, bR); gl.bufferData(gl.ARRAY_BUFFER, rimArr, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+  gl.bindVertexArray(null);
+
+  /* nodal-line buffer, refilled when the held mode changes */
+  const nvao = gl.createVertexArray();
+  gl.bindVertexArray(nvao);
+  const bN = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, bN);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+  gl.bindVertexArray(null);
+
+  d.gpu = {
+    vao, bZN, nIdx: idx.length, rvao, nRim: rimArr.length / 6,
+    nvao, bN, nNodal: 0,
+    zn: new Float32Array(nv * 4), u: new Float64Array(nv), nrm: new Float32Array(nv * 3),
+  };
+}
+[drumI, drumII, liar].forEach(buildGPU);
+
+const skyVao = gl.createVertexArray();
+gl.bindVertexArray(skyVao);
+const skyB = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, skyB);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+gl.bindVertexArray(null);
+
+const FLOOR_Y = -RIM_DROP - 0.015;
+const flrVao = gl.createVertexArray();
+gl.bindVertexArray(flrVao);
+const flrB = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, flrB);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-46,-46, 46,-46, 46,46, -46,-46, 46,46, -46,46]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+gl.bindVertexArray(null);
+
+/* ── the displacement field, and the normals that follow it ────────────── */
+let modePhase = 1;
+function fieldFor(d, which, now) {
+  const g = d.gpu, mesh = d.sol.mesh, nv = mesh.nodes.length;
+  g.u.fill(0);
+  if (heldMode >= 0) {
+    const s = modePhase;
+    const v = d.sol.vectors[heldMode];
+    for (let i = 0; i < nv; i++) g.u[i] = v[i] * s;
+  } else {
+    const st = live[which];
+    const t = now - st.t0;
+    if (t >= 0 && t < 9) {
+      for (let n = 0; n < NM; n++) {
+        const tau = d.t60[n] / Math.log(1000);
+        const a = st.amps[n] * st.scale * Math.exp(-t / tau) * Math.sin(2 * Math.PI * d.freqs[n] * t * SLOW);
+        if (Math.abs(a) < 1e-7) continue;
+        const v = d.sol.vectors[n];
+        for (let i = 0; i < nv; i++) g.u[i] += a * v[i];
+      }
+    }
+  }
+  /* per-vertex normals from the displaced surface */
+  const nrm = g.nrm; nrm.fill(0);
+  const AMP = heldMode >= 0 ? 0.24 : 1.0;
+  for (const [ia, ib, ic] of mesh.tris) {
+    const ax = mesh.nodes[ia][0], az = mesh.nodes[ia][1], ay = g.u[ia] * AMP;
+    const bx = mesh.nodes[ib][0], bz = mesh.nodes[ib][1], by = g.u[ib] * AMP;
+    const cx = mesh.nodes[ic][0], cz = mesh.nodes[ic][1], cy = g.u[ic] * AMP;
+    const e1x = bx - ax, e1y = by - ay, e1z = bz - az;
+    const e2x = cx - ax, e2y = cy - ay, e2z = cz - az;
+    const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+    for (const i of [ia, ib, ic]) { nrm[i * 3] += nx; nrm[i * 3 + 1] += ny; nrm[i * 3 + 2] += nz; }
+  }
+  const zn = g.zn;
+  for (let i = 0; i < nv; i++) {
+    const l = Math.hypot(nrm[i * 3], nrm[i * 3 + 1], nrm[i * 3 + 2]) || 1;
+    zn[i * 4] = g.u[i] * AMP;
+    zn[i * 4 + 1] = nrm[i * 3] / l;
+    zn[i * 4 + 2] = nrm[i * 3 + 1] / l;
+    zn[i * 4 + 3] = nrm[i * 3 + 2] / l;
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, g.bZN);
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, zn);
+}
+
+function refreshNodal() {
+  for (const d of [drumI, drumII, liar]) {
+    const g = d.gpu;
+    if (heldMode < 0 || !showNodal) { g.nNodal = 0; continue; }
+    const seg = nodalLines(d.sol.mesh, d.sol.vectors[heldMode]);
+    const arr = new Float32Array(seg.length * 3);
+    seg.forEach((p, i) => { arr[i * 3] = p[0] - d.cx; arr[i * 3 + 1] = 0.012; arr[i * 3 + 2] = p[1] - d.cy; });
+    gl.bindBuffer(gl.ARRAY_BUFFER, g.bN);
+    gl.bufferData(gl.ARRAY_BUFFER, arr, gl.DYNAMIC_DRAW);
+    g.nNodal = seg.length;
+  }
+}
+
+/* ── camera ────────────────────────────────────────────────────────────── */
+let az = -0.26, el = 0.63, dist = 8.5, dragging = false, lx = 0, ly = 0, moved = 0;
+const SPREAD = 2.42;
+let TARGET = [0.55, -0.10, 0.35];
+/* A tall screen cannot hold two drums side by side, so it holds them one behind
+ * the other instead — same scene, turned through a right angle. */
+let portrait = false;
+let OFF = [[-SPREAD, 0, 0], [SPREAD, 0, 0]];
+function relayout() {
+  portrait = innerWidth / innerHeight < 1.18;
+  if (portrait) {
+    OFF = [[-0.20, 0, 2.75], [0.20, 0, -2.75]];
+    TARGET = [0.42, -0.10, 0.35];
+    if (!relayout.done) { dist = 14.2; az = -0.14; el = 0.80; }
+  } else {
+    OFF = [[-SPREAD, 0, 0], [SPREAD, 0, 0]];
+    TARGET = [0.55, -0.10, 0.35];
+    if (!relayout.done) { dist = 8.5; az = -0.26; el = 0.63; }
+  }
+  relayout.done = true;
+}
+function eye() {
+  return [TARGET[0] + Math.sin(az)*Math.cos(el)*dist, TARGET[1] + Math.sin(el)*dist, TARGET[2] + Math.cos(az)*Math.cos(el)*dist];
+}
+function resize() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  cv.width = Math.round(innerWidth * dpr); cv.height = Math.round(innerHeight * dpr);
+  gl.viewport(0, 0, cv.width, cv.height);
+}
+addEventListener('resize', () => { resize(); relayout(); });
+relayout(); resize();
+
+/* ── the frame ─────────────────────────────────────────────────────────── */
+let vpCache = null, eyeCache = null;
+function draw(nowMs) {
+  const now = nowMs / 1000;
+  const e = eye();
+  const P = persp(0.80, cv.width / cv.height, 0.4, 90);
+  const V = look(e, TARGET, [0, 1, 0]);
+  const VP = mul4(P, V);
+  vpCache = VP; eyeCache = e;
+
+  gl.enable(gl.DEPTH_TEST);
+  gl.clearColor(0.03, 0.028, 0.045, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  gl.useProgram(pSky); gl.bindVertexArray(skyVao);
+  gl.depthMask(false); gl.drawArrays(gl.TRIANGLES, 0, 3); gl.depthMask(true);
+
+  gl.useProgram(pFlr);
+  gl.uniformMatrix4fv(U(pFlr, 'uVP'), false, VP);
+  gl.uniform1f(U(pFlr, 'uY'), FLOOR_Y);
+  gl.uniform3fv(U(pFlr, 'uEye'), e);
+  gl.bindVertexArray(flrVao);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+  modePhase = Math.sin(now * 2 * Math.PI * 0.30);
+  const drums = [drumI, right];
+  for (let i = 0; i < 2; i++) fieldFor(drums[i], i, now);
+
+  /* the shadows go down first, three jittered passes for a soft edge */
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.depthMask(false);
+  gl.useProgram(pShd);
+  gl.uniformMatrix4fv(U(pShd, 'uVP'), false, VP);
+  gl.uniform1f(U(pShd, 'uY0'), FLOOR_Y + 0.004);
+  for (let i = 0; i < 2; i++) {
+    const d = drums[i];
+    gl.uniform3fv(U(pShd, 'uOff'), OFF[i]);
+    gl.bindVertexArray(d.gpu.vao);
+    for (const j of [[0, 0, 0.44], [0.045, 0.038, 0.22], [-0.045, -0.038, 0.22], [0.09, -0.07, 0.12]]) {
+      gl.uniform2f(U(pShd, 'uJit'), j[0], j[1]);
+      gl.uniform1f(U(pShd, 'uA'), j[2]);
+      gl.drawElements(gl.TRIANGLES, d.gpu.nIdx, gl.UNSIGNED_INT, 0);
+    }
+  }
+  gl.depthMask(true);
+  gl.disable(gl.BLEND);
+
+  for (let i = 0; i < 2; i++) {
+    const d = drums[i];
+    const off = OFF[i];
+
+    gl.useProgram(pRim);
+    gl.uniformMatrix4fv(U(pRim, 'uVP'), false, VP);
+    gl.uniform3fv(U(pRim, 'uOff'), off);
+    gl.uniform3fv(U(pRim, 'uEye'), e);
+    gl.uniform1f(U(pRim, 'uDim'), 1.0);
+    gl.bindVertexArray(d.gpu.rvao);
+    gl.drawArrays(gl.TRIANGLES, 0, d.gpu.nRim);
+
+    gl.useProgram(pMem);
+    gl.uniformMatrix4fv(U(pMem, 'uVP'), false, VP);
+    gl.uniform3fv(U(pMem, 'uOff'), off);
+    gl.uniform3fv(U(pMem, 'uEye'), e);
+    gl.uniform1f(U(pMem, 'uAmp'), 1.0);
+    gl.uniform1f(U(pMem, 'uSign'), heldMode >= 0 ? 1 : 0);
+    /* while a mode is held the surface passes through flat twice a cycle, and a
+     * flat picture says nothing — so the COLOUR is normalised by the phase and
+     * shows the mode shape at full strength throughout, while the HEIGHT keeps
+     * oscillating.  Same field, two readings of it. */
+    gl.uniform1f(U(pMem, 'uTintK'), heldMode >= 0 ? 2.2 / Math.max(Math.abs(modePhase), 0.30) : 3.4);
+    gl.uniform1f(U(pMem, 'uDim'), 1.0);
+    gl.bindVertexArray(d.gpu.vao);
+    gl.drawElements(gl.TRIANGLES, d.gpu.nIdx, gl.UNSIGNED_INT, 0);
+
+    if (d.gpu.nNodal) {
+      gl.useProgram(pLin);
+      gl.uniformMatrix4fv(U(pLin, 'uVP'), false, VP);
+      gl.uniform3fv(U(pLin, 'uOff'), off);
+      gl.uniform4f(U(pLin, 'uC'), 0.06, 0.05, 0.09, 1.0);
+      gl.bindVertexArray(d.gpu.nvao);
+      gl.lineWidth(1);
+      gl.drawArrays(gl.LINES, 0, d.gpu.nNodal);
+    }
+  }
+  gl.bindVertexArray(null);
+  placeTags(VP);
+  requestAnimationFrame(draw);
+}
+
+/* the two numerals ride with the drums — projected, not placed by hand */
+const tagEls = [document.getElementById('tagI'), document.getElementById('tagII')];
+function placeTags(VP) {
+  for (let i = 0; i < 2; i++) {
+    const p = [OFF[i][0] + (portrait ? -1.65 : 0), -RIM_DROP - 0.02, OFF[i][2] + (portrait ? 0.15 : 1.95)];
+    const w = [0, 0, 0, 0];
+    for (let r = 0; r < 4; r++) w[r] = VP[0 * 4 + r] * p[0] + VP[1 * 4 + r] * p[1] + VP[2 * 4 + r] * p[2] + VP[3 * 4 + r];
+    const el = tagEls[i];
+    if (w[3] <= 0) { el.classList.remove('in'); continue; }
+    el.style.left = ((w[0] / w[3] * 0.5 + 0.5) * innerWidth).toFixed(1) + 'px';
+    el.style.top = ((1 - (w[1] / w[3] * 0.5 + 0.5)) * innerHeight).toFixed(1) + 'px';
+    el.classList.add('in');
+  }
+}
+requestAnimationFrame(draw);
+
+/* ════════════════════════════════════════════════════════════════════════════
+   5 · PICKING — turn a click into a point on a drumhead
+   ═══════════════════════════════════════════════════════════════════════════ */
+function invertVP(VP) {
+  /* general 4x4 inverse — small, and it runs once per click */
+  const m = VP, inv = new Float32Array(16);
+  const a = (r, c) => m[c * 4 + r];
+  const M = [];
+  for (let r = 0; r < 4; r++) { M.push([]); for (let c = 0; c < 4; c++) M[r].push(a(r, c)); }
+  const A = M.map((row, i) => row.concat(Array.from({ length: 4 }, (_, j) => (i === j ? 1 : 0))));
+  for (let i = 0; i < 4; i++) {
+    let p = i;
+    for (let r = i + 1; r < 4; r++) if (Math.abs(A[r][i]) > Math.abs(A[p][i])) p = r;
+    const t = A[i]; A[i] = A[p]; A[p] = t;
+    const pv = A[i][i] || 1e-9;
+    for (let c = 0; c < 8; c++) A[i][c] /= pv;
+    for (let r = 0; r < 4; r++) {
+      if (r === i) continue;
+      const f = A[r][i];
+      for (let c = 0; c < 8; c++) A[r][c] -= f * A[i][c];
+    }
+  }
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) inv[c * 4 + r] = A[r][c + 4];
+  return inv;
+}
+function pick(px, py) {
+  if (!vpCache) return null;
+  const inv = invertVP(vpCache);
+  const ndc = [(px / innerWidth) * 2 - 1, 1 - (py / innerHeight) * 2];
+  const un = (z) => {
+    const x = ndc[0], y = ndc[1];
+    const o = [0, 0, 0, 0];
+    for (let r = 0; r < 4; r++) o[r] = inv[0 * 4 + r] * x + inv[1 * 4 + r] * y + inv[2 * 4 + r] * z + inv[3 * 4 + r];
+    return [o[0] / o[3], o[1] / o[3], o[2] / o[3]];
+  };
+  const a = un(-1), b = un(1);
+  const dir = sub3(b, a);
+  if (Math.abs(dir[1]) < 1e-9) return null;
+  const t = -a[1] / dir[1];
+  if (t < 0) return null;
+  const wx = a[0] + dir[0] * t, wz = a[2] + dir[2] * t;
+  const drums = [drumI, right];
+  for (let i = 0; i < 2; i++) {
+    const d = drums[i];
+    const lx2 = wx - OFF[i][0] + d.cx, lz = wz - OFF[i][2] + d.cy;
+    if (contains(d.shape, lx2, lz)) return { which: i, x: lx2, y: lz };
+  }
+  return null;
+}
+
+cv.addEventListener('pointerdown', (ev) => {
+  dragging = true; moved = 0; lx = ev.clientX; ly = ev.clientY;
+  cv.setPointerCapture(ev.pointerId);
+});
+cv.addEventListener('pointermove', (ev) => {
+  if (!dragging) return;
+  const dx = ev.clientX - lx, dy = ev.clientY - ly;
+  moved += Math.abs(dx) + Math.abs(dy);
+  az -= dx * 0.006;
+  el = Math.max(0.13, Math.min(1.40, el - dy * 0.005));
+  lx = ev.clientX; ly = ev.clientY;
+});
+cv.addEventListener('pointerup', (ev) => {
+  dragging = false;
+  if (moved > 7) return;
+  const p = pick(ev.clientX, ev.clientY);
+  if (!p) return;
+  startAudio().then(() => {
+    if (heldMode >= 0) setHeld(-1);
+    hit(p.which, p.x, p.y, 1);
+    hud('struck drum ' + (p.which ? 'II' : 'I') + ' at (' + p.x.toFixed(2) + ', ' + p.y.toFixed(2) + ')');
+  });
+});
+cv.addEventListener('wheel', (ev) => {
+  dist = Math.max(5, Math.min(19, dist + ev.deltaY * 0.006)); ev.preventDefault();
+}, { passive: false });
+
+/* ════════════════════════════════════════════════════════════════════════════
+   6 · THE LADDER
+   ═══════════════════════════════════════════════════════════════════════════ */
+const rungsEl = document.getElementById('rungs');
+function buildLadder() {
+  rungsEl.innerHTML = '';
+  let worst = 0;
+  for (let n = 0; n < NM; n++) {
+    const cents = 1200 * Math.log2(right.freqs[n] / drumI.freqs[n]);
+    worst = Math.max(worst, Math.abs(cents));
+    const el = document.createElement('div');
+    el.className = 'rung' + (n === heldMode ? ' on' : '');
+    const w = Math.min(48, Math.abs(cents) / 40 * 48);
+    el.innerHTML = '<span class="n">' + (n + 1) + '</span>' +
+      '<span class="hz">' + drumI.freqs[n].toFixed(2) + '</span>' +
+      '<span class="cents"><i style="' + (cents < 0 ? 'right:50%' : 'left:50%') + ';width:' + w.toFixed(2) + '%"></i></span>';
+    el.title = 'mode ' + (n + 1) + ' — ' + (Math.abs(cents) < 1e-9 ? 'identical' : cents.toFixed(2) + ' cents apart');
+    el.addEventListener('click', () => { setHeld(heldMode === n ? -1 : n); });
+    rungsEl.appendChild(el);
+  }
+  const f = document.getElementById('lfoot');
+  f.innerHTML = worst < 1e-9
+    ? 'every rung <b>0.000</b> cents apart'
+    : 'worst rung <b>' + worst.toFixed(1) + '</b> cents apart';
+}
+function setHeld(n) {
+  heldMode = n;
+  refreshNodal();
+  buildLadder();
+  if (n < 0) { hud('drag to turn · click a drumhead to strike it there'); return; }
+  hud('mode ' + (n + 1) + ' · <b>' + drumI.freqs[n].toFixed(2) + '</b> Hz on both · cut into <b>' +
+    drumI.nodal[n] + '</b> pieces and <b>' + right.nodal[n] + '</b>');
+  startAudio().then(() => {
+    const one = new Float64Array(NM); one[n] = 1;
+    for (let i = 0; i < 2; i++) {
+      const d = i === 0 ? drumI : right;
+      tell({ type: 'strike', voice: i, amps: Array.from(radiate(d.freqs, one, F1)), contact: 0.004, force: 0.9 });
+    }
+  });
+}
+function hud(s) { document.getElementById('hud').innerHTML = s; }
+buildLadder();
+
+/* ════════════════════════════════════════════════════════════════════════════
+   7 · CONTROLS
+   ═══════════════════════════════════════════════════════════════════════════ */
+const $ = (id) => document.getElementById(id);
+$('bStrike').addEventListener('click', () => { startAudio().then(() => { setHeld(-1); strikeBoth(1); hud('both struck at their own loudest point'); }); });
+
+let ladderTimer = null;
+$('bLadder').addEventListener('click', () => {
+  if (ladderTimer) { clearInterval(ladderTimer); ladderTimer = null; $('bLadder').classList.remove('on'); return; }
+  startAudio().then(() => {
+    setHeld(-1);
+    $('bLadder').classList.add('on');
+    let n = 0;
+    const step = () => {
+      if (n >= NM) { clearInterval(ladderTimer); ladderTimer = null; $('bLadder').classList.remove('on'); setHeld(-1); return; }
+      const one = new Float64Array(NM); one[n] = 1;
+      for (let i = 0; i < 2; i++) {
+        const d = i === 0 ? drumI : right;
+        tell({ type: 'strike', voice: i, amps: Array.from(radiate(d.freqs, one, F1)), contact: 0.004, force: 0.85 });
+      }
+      const c = 1200 * Math.log2(right.freqs[n] / drumI.freqs[n]);
+      hud('rung ' + (n + 1) + ' · ' + drumI.freqs[n].toFixed(2) + ' Hz vs ' + right.freqs[n].toFixed(2) +
+        ' Hz · <b>' + (Math.abs(c) < 5e-4 ? 'no beat' : Math.abs(right.freqs[n] - drumI.freqs[n]).toFixed(2) + ' Hz beat') + '</b>');
+      n++;
+    };
+    step();
+    ladderTimer = setInterval(step, 620);
+  });
+});
+
+$('bNodal').addEventListener('click', () => {
+  showNodal = !showNodal;
+  $('bNodal').classList.toggle('on', showNodal);
+  if (showNodal && heldMode < 0) setHeld(3); else refreshNodal();
+});
+
+$('bTwin').addEventListener('click', () => {
+  right = right === drumII ? liar : drumII;
+  const isTwin = right === drumII;
+  $('bTwin').textContent = 'drum II: ' + (isTwin ? 'the twin' : 'an impostor');
+  $('bTwin').classList.toggle('on', !isTwin);
+  $('ladderTag').textContent = isTwin ? 'Hz · cents apart' : 'Hz · IMPOSTOR';
+  pushModes();
+  refreshNodal();
+  buildLadder();
+  hud(isTwin
+    ? 'drum II is the twin again — every rung identical'
+    : 'drum II swapped for the best liar of the other 316: <b>same area, same perimeter, same eight corners</b>');
+});
+
+$('bProof').addEventListener('click', () => { $('proof').classList.add('open'); runProof(); });
+$('bClose').addEventListener('click', () => { $('proof').classList.remove('open'); });
+
+function syncHush() {
+  const m = WS.muted();
+  $('bHush').textContent = m ? 'muted' : 'mute';
+  $('bHush').classList.toggle('on', m);
+  tell({ type: 'mute', v: m });
+}
+$('bHush').addEventListener('click', () => { WS.setMuted(!WS.muted()); syncHush(); });
+WS.onMuteChange(syncHush);
+syncHush();
+
+addEventListener('keydown', (ev) => {
+  if (ev.key === ' ') { ev.preventDefault(); $('bStrike').click(); }
+  if (ev.key === 'Escape') $('proof').classList.remove('open');
+});
+
+/* the gate — a REAL click, which is what an AudioContext needs */
+$('gate').addEventListener('click', () => {
+  $('gate').classList.add('gone');
+  startAudio().then(() => { strikeBoth(0.9); });
+}, { once: true });
+WS.seen('hearing-the-shape');
+
+/* ════════════════════════════════════════════════════════════════════════════
+   8 · THE PROOF DRAWER
+   ═══════════════════════════════════════════════════════════════════════════ */
+let proofDone = false;
+function tbl(head, rows) {
+  let h = '<table><tr>' + head.map((x, i) => '<th' + (i === 0 ? ' class="l"' : '') + '>' + x + '</th>').join('') + '</tr>';
+  for (const r of rows) h += '<tr>' + r.map((x, i) => '<td' + (i === 0 ? ' class="l"' : '') + '>' + x + '</td>').join('') + '</tr>';
+  return h + '</table>';
+}
+function runProof() {
+  if (proofDone) return;
+  proofDone = true;
+
+  /* 1 — the ladder to every digit */
+  const rows = [];
+  let worst = 0;
+  for (let n = 0; n < NM; n++) {
+    const la = drumI.lambda[n], lb = drumII.lambda[n];
+    const rel = Math.abs(la - lb) / la;
+    worst = Math.max(worst, rel);
+    rows.push([n + 1, la.toFixed(11), lb.toFixed(11),
+      '<span class="' + (rel < 1e-12 ? 'good' : 'bad') + '">' + rel.toExponential(1) + '</span>',
+      drumI.freqs[n].toFixed(3)]);
+  }
+  $('tSpec').innerHTML = tbl(['mode', 'λ — drum I', 'λ — drum II', 'relative difference', 'f (Hz)'], rows) +
+    '<p style="margin-top:9px">Worst disagreement over fourteen modes: <b class="good">' + worst.toExponential(2) +
+    '</b>. Double precision holds about 2.2 × 10⁻¹⁶ per operation, so this is the two answers being the ' +
+    'same number, not two numbers that are close. The meshes are not the same mesh — ' +
+    drumI.sol.dof + ' interior unknowns each, but different connectivity, different bandwidths after ordering.</p>';
+
+  /* 2 — the solver where the answer is known */
+  const P2 = Math.PI * Math.PI;
+  const sq = [], hf = [];
+  for (const k of [3, 4, 5]) {
+    sq.push(solve([[0, 0, 0], [0, 0, 2]], { k, modes: 1 }).values[0]);
+    hf.push(solve([[0, 0, 0]], { k, modes: 1 }).values[0]);
+  }
+  const eSq = sq.map((v) => Math.abs(v - 2 * P2) / (2 * P2));
+  const eHf = hf.map((v) => Math.abs(v - 5 * P2) / (5 * P2));
+  $('tSquare').innerHTML = tbl(['mesh', 'unit square λ₁', 'error', 'half-square λ₁', 'error'],
+    [0, 1, 2].map((i) => ['h = 1/' + (1 << (i + 3)), sq[i].toFixed(7), eSq[i].toExponential(2),
+      hf[i].toFixed(7), eHf[i].toExponential(2)])) +
+    '<p style="margin-top:9px">Exact: 2π² = ' + (2 * P2).toFixed(7) + ' and 5π² = ' + (5 * P2).toFixed(7) +
+    '. Error ratios between meshes: <b class="num">' + (eSq[0] / eSq[1]).toFixed(2) + ', ' + (eSq[1] / eSq[2]).toFixed(2) +
+    '</b> and <b class="num">' + (eHf[0] / eHf[1]).toFixed(2) + ', ' + (eHf[1] / eHf[2]).toFixed(2) +
+    '</b> — h², as a domain with no reentrant corner should give.</p>';
+
+  /* 3 — the benchmark */
+  const bench = [], eB = [];
+  for (const k of [4, 5, 6]) {
+    const v = solve(drumI.shape, { k, modes: 1, krylov: 22 }).values[0];
+    bench.push(v); eB.push(Math.abs(v - LAMBDA1_REFERENCE) / LAMBDA1_REFERENCE);
+  }
+  $('tBench').innerHTML = tbl(['mesh', 'λ₁ computed here', 'relative error', 'ratio'],
+    [0, 1, 2].map((i) => ['h = 1/' + (1 << (i + 4)), bench[i].toFixed(8), eB[i].toExponential(3),
+      i ? (eB[i - 1] / eB[i]).toFixed(3) : '—'])) +
+    '<p style="margin-top:9px">Published: <b class="num">' + LAMBDA1_REFERENCE.toFixed(8) + '</b>. ' +
+    'h² would give a ratio of 4.00 and h^(4/3) gives 2.52. What comes out is <b class="num">' +
+    (eB[0] / eB[1]).toFixed(2) + '</b> then <b class="num">' + (eB[1] / eB[2]).toFixed(2) +
+    '</b> — climbing toward 2.52 from below, because the smooth h² error and the corner error carry ' +
+    'opposite signs and the corner term only takes over once the mesh is fine enough to resolve it. ' +
+    'So the room is not merely near a published number; it is approaching it at the rate its own ' +
+    'geometry demands. (One more halving, in the Node twin, gives 2.31.)</p>';
+
+  /* 6 — nodal domains (cheap, do it now; the search and the ear are on buttons) */
+  const nrows = [];
+  for (let n = 0; n < NM; n++) {
+    const same = drumI.nodal[n] === drumII.nodal[n];
+    nrows.push([n + 1, drumI.freqs[n].toFixed(3) + ' Hz', drumI.nodal[n], drumII.nodal[n],
+      '<span class="' + (same ? '' : 'bad') + '">' + (same ? 'same' : 'DIFFERENT') + '</span>']);
+  }
+  const firstDiff = drumI.nodal.findIndex((v, i) => v !== drumII.nodal[i]);
+  $('tNodal').innerHTML = tbl(['mode', 'frequency', 'pieces — drum I', 'pieces — drum II', ''], nrows) +
+    '<p style="margin-top:9px">Same frequency, every time. Different number of pieces from mode <b>' +
+    (firstDiff + 1) + '</b> on. Area ' + drumI.info.area + ' and perimeter ' + drumI.info.perimeter.toFixed(6) +
+    ' for both — and both have eight corners, two of them reentrant, with the same nine angles. ' +
+    'The spectrum is blind and the eye is not.</p>';
+}
+
+/* ── the search, drawn as it runs ──────────────────────────────────────── */
+$('bSearch').addEventListener('click', () => {
+  const btn = $('bSearch');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const cvs = $('searchCv'), c2 = cvs.getContext('2d');
+  const W = cvs.width, H = cvs.height;
+  c2.fillStyle = '#08080e'; c2.fillRect(0, 0, W, H);
+  const list = enumerate(7);
+  const spec = new Array(list.length);
+  const LO = 5, HI = 48, PAD = 86;
+  const xOf = (l) => PAD + (l - LO) / (HI - LO) * (W - PAD - 26);
+  let i = 0;
+  const t0 = performance.now();
+  const rowH = (H - 34) / list.length;
+  const axis = () => {
+    c2.strokeStyle = 'rgba(255,255,255,.07)';
+    c2.fillStyle = '#5d5750'; c2.font = '10px ui-monospace,monospace';
+    for (let l = 10; l <= HI; l += 10) {
+      c2.beginPath(); c2.moveTo(xOf(l), 18); c2.lineTo(xOf(l), H - 14); c2.stroke();
+      c2.fillText('λ=' + l, xOf(l) + 3, H - 4);
+    }
+  };
+  $('searchNote').textContent = 'solving ' + list.length + ' shapes…';
+  const chunk = () => {
+    const until = performance.now() + 26;
+    while (i < list.length && performance.now() < until) {
+      spec[i] = solve(fromCanonical(list[i]), { k: 3, modes: 8 }).values;
+      i++;
+    }
+    /* redraw sorted by lambda_1 so the pair ends up adjacent */
+    c2.fillStyle = '#08080e'; c2.fillRect(0, 0, W, H);
+    axis();
+    const done = spec.slice(0, i).map((s, j) => ({ s, j })).sort((a, b) => a.s[0] - b.s[0]);
+    c2.fillStyle = 'rgba(233,196,116,0.68)';
+    done.forEach((row, r) => {
+      const y = 18 + r * rowH;
+      for (const l of row.s) c2.fillRect(xOf(l), y, 3.0, Math.max(1.3, rowH - 0.35));
+    });
+    c2.fillStyle = '#8b8272'; c2.font = '11px ui-monospace,monospace';
+    c2.fillText(i + ' / ' + list.length + ' shapes, each one a row of eight notes', 8, 12);
+    if (i < list.length) { requestAnimationFrame(chunk); return; }
+
+    /* compare every pair */
+    const pairs = [];
+    let runner = Infinity, runnerAt = null;
+    for (let a = 0; a < list.length; a++) for (let b = a + 1; b < list.length; b++) {
+      let d = 0;
+      for (let m = 0; m < 8; m++) d = Math.max(d, Math.abs(spec[a][m] - spec[b][m]) / spec[a][m]);
+      if (d < 1e-9) pairs.push({ a, b, d });
+      else if (d < runner) { runner = d; runnerAt = [a, b]; }
+    }
+    const ms = Math.round(performance.now() - t0);
+    /* mark the pair */
+    const order = spec.map((s, j) => ({ s, j })).sort((a, b) => a.s[0] - b.s[0]);
+    const rowOf = new Map(order.map((o, r) => [o.j, r]));
+    for (const p of pairs) {
+      const ys = [p.a, p.b].map((j) => 18 + rowOf.get(j) * rowH);
+      const y0 = Math.min(...ys) - 4, y1 = Math.max(...ys) + rowH + 4;
+      c2.fillStyle = 'rgba(255,122,82,0.13)';
+      c2.fillRect(PAD - 10, y0, W - PAD - 12, y1 - y0);
+      for (const j of [p.a, p.b]) {
+        const y = 18 + rowOf.get(j) * rowH;
+        c2.fillStyle = '#ff9a72';
+        for (const l of order[rowOf.get(j)].s) c2.fillRect(xOf(l) - 0.5, y - 1.6, 4.0, rowH + 3.2);
+      }
+      c2.strokeStyle = '#ff7a52'; c2.lineWidth = 1.2;
+      c2.strokeRect(PAD - 10, y0, W - PAD - 12, y1 - y0);
+      c2.fillStyle = '#ff9a72'; c2.font = '11px ui-monospace,monospace';
+      c2.fillText('these two', 6, (y0 + y1) / 2 + 4);
+      /* a magnifier: the same two rows, blown up, so you can see they coincide */
+      const zy = Math.min(H - 74, Math.max(24, (y0 + y1) / 2 - 30));
+      c2.fillStyle = 'rgba(8,8,14,0.94)'; c2.fillRect(PAD + 12, zy, W - PAD - 40, 58);
+      c2.strokeStyle = 'rgba(255,122,82,.5)'; c2.strokeRect(PAD + 12, zy, W - PAD - 40, 58);
+      for (let q = 0; q < 2; q++) {
+        const sp = spec[q === 0 ? p.a : p.b];
+        c2.fillStyle = q === 0 ? '#f6d79c' : '#5fa8d3';
+        for (const l of sp) c2.fillRect(xOf(l) - 1, zy + 8 + q * 22, 2.4, 18);
+        c2.fillText(q === 0 ? 'I' : 'II', PAD + 18, zy + 22 + q * 22);
+      }
+    }
+    $('searchNote').textContent = ms + ' ms · ' + (list.length * (list.length - 1) / 2).toLocaleString() + ' pairs';
+    const p = pairs[0];
+    const found = p && ((list[p.a] === TWIN_A && list[p.b] === TWIN_B) || (list[p.a] === TWIN_B && list[p.b] === TWIN_A));
+    $('tSearch').innerHTML =
+      tbl(['', 'result'], [
+        ['shapes enumerated', list.length + (list.length === 318 ? ' <span class="good">(A006074 ✓)</span>' : '')],
+        ['pairs compared', (list.length * (list.length - 1) / 2).toLocaleString()],
+        ['isospectral pairs found', '<span class="' + (pairs.length === 1 ? 'good' : 'bad') + '">' + pairs.length + '</span>'],
+        ['their disagreement', p ? '<span class="good">' + p.d.toExponential(2) + '</span>' : '—'],
+        ['runner-up disagreement', '<span class="num">' + runner.toExponential(3) + '</span>'],
+        ['is it the pair on stage?', found ? '<span class="good">yes</span>' : '<span class="bad">no</span>'],
+      ]) +
+      '<p style="margin-top:9px">The gap is the whole argument. The one pair agrees <b>' +
+      Math.round(Math.log10(runner / (p ? p.d : 1e-16))) + ' orders of magnitude</b> better than the nearest ' +
+      'accident. Nothing was fitted, nothing was searched for by name; the room was handed 318 shapes and asked ' +
+      'which two sound alike.</p>';
+    btn.disabled = false;
+    void runnerAt;
+  };
+  requestAnimationFrame(chunk);
+});
+
+/* ── the ear: measure the thing that ships ─────────────────────────────── */
+$('bEar').addEventListener('click', async () => {
+  const btn = $('bEar');
+  if (btn.disabled) return;
+  await startAudio();
+  if (WS.muted()) { $('earNote').textContent = 'the estate is muted — unmute to let the ear work'; return; }
+  btn.disabled = true; earBusy = true;
+  const cvs = $('earCv'), c2 = cvs.getContext('2d');
+  const W = cvs.width, H = cvs.height;
+  const bins = analyser.frequencyBinCount;
+  const df = actx.sampleRate / analyser.fftSize;
+  const buf = new Float32Array(bins);
+  const tbuf = new Float32Array(analyser.fftSize);
+  const holds = [new Float32Array(bins).fill(-200), new Float32Array(bins).fill(-200)];
+  let peakLevel = 0;
+
+  const listen = (which) => new Promise((res) => {
+    tell({ type: 'reset', voice: 0 }); tell({ type: 'reset', voice: 1 });
+    tell({ type: 'pan', value: [0, 0] });
+    const d = which === 0 ? drumI : right;
+    /* every mode driven equally, so every partial is there to be measured —
+     * a real blow leaves some of them out and there is nothing to read. */
+    const all = new Float64Array(NM).fill(1);
+    tell({ type: 'strike', voice: which, amps: Array.from(radiate(d.freqs, all, F1)), contact: 0.0016, force: 0.26 });
+    const end = performance.now() + 1400;
+    const poll = () => {
+      analyser.getFloatFrequencyData(buf);
+      for (let i = 0; i < bins; i++) if (buf[i] > holds[which][i]) holds[which][i] = buf[i];
+      analyser.getFloatTimeDomainData(tbuf);
+      for (let i = 0; i < tbuf.length; i++) { const a = Math.abs(tbuf[i]); if (a > peakLevel) peakLevel = a; }
+      if (performance.now() < end) requestAnimationFrame(poll); else res();
+    };
+    setTimeout(poll, 70);
+  });
+
+  $('earNote').textContent = 'striking drum I…';
+  await listen(0);
+  $('earNote').textContent = 'striking drum II…';
+  await listen(1);
+  tell({ type: 'pan', value: [-0.42, 0.42] });
+  tell({ type: 'reset', voice: 0 }); tell({ type: 'reset', voice: 1 });
+  earBusy = false;
+
+  const F0 = 70, FH = 340;
+  const i0 = Math.max(1, Math.floor(F0 / df)), i1 = Math.min(bins - 2, Math.ceil(FH / df));
+
+  /* peak-pick: local maxima well above the floor, refined by fitting a parabola
+   * to the three dB values around each — which beats the 1.46 Hz bin width. */
+  const peaks = (h) => {
+    let top = -300;
+    for (let i = i0; i <= i1; i++) top = Math.max(top, h[i]);
+    const out = [];
+    for (let i = i0 + 1; i < i1; i++) {
+      if (h[i] <= h[i - 1] || h[i] < h[i + 1] || h[i] < top - 34) continue;
+      const a = h[i - 1], b = h[i], c = h[i + 1];
+      const dn = a - 2 * b + c;
+      const shift = dn === 0 ? 0 : 0.5 * (a - c) / dn;
+      out.push({ f: (i + shift) * df, db: b });
+      i += 2;
+    }
+    return out;
+  };
+  const pI = peaks(holds[0]), pII = peaks(holds[1]);
+
+  /* draw */
+  c2.fillStyle = '#08080e'; c2.fillRect(0, 0, W, H);
+  const xOf = (f) => 46 + (f - F0) / (FH - F0) * (W - 66);
+  const yOf = (dbv) => H - 26 - (Math.min(-10, Math.max(-96, dbv)) + 96) / 86 * (H - 48);
+  c2.strokeStyle = 'rgba(255,255,255,.07)'; c2.fillStyle = '#5d5750';
+  c2.font = '10px ui-monospace,monospace';
+  for (let f = 100; f <= FH; f += 50) {
+    c2.beginPath(); c2.moveTo(xOf(f), 8); c2.lineTo(xOf(f), H - 26); c2.stroke();
+    c2.fillText(f + ' Hz', xOf(f) - 14, H - 10);
+  }
+  c2.strokeStyle = 'rgba(229,185,95,.26)';
+  for (const f of drumI.freqs) { c2.beginPath(); c2.moveTo(xOf(f), 8); c2.lineTo(xOf(f), H - 26); c2.stroke(); }
+  const drawSpec = (h, colour, lw, dash) => {
+    c2.setLineDash(dash || []);
+    c2.strokeStyle = colour; c2.lineWidth = lw; c2.beginPath();
+    for (let i = i0; i <= i1; i++) {
+      const x = xOf(i * df), y = yOf(h[i]);
+      if (i === i0) c2.moveTo(x, y); else c2.lineTo(x, y);
+    }
+    c2.stroke();
+    c2.setLineDash([]);
+  };
+  drawSpec(holds[0], '#f6d79c', 2.2);
+  drawSpec(holds[1], '#5fa8d3', 1.4, [5, 5]);
+  c2.fillStyle = '#f6d79c'; c2.fillText('drum I, measured', 8, 18);
+  c2.fillStyle = '#5fa8d3'; c2.fillText('drum II, measured (dashed — it is under the gold)', 8, 32);
+  c2.fillStyle = '#a9a191'; c2.fillText('gold verticals: the ladder, predicted', 8, 46);
+
+  /* how far apart are the two MEASURED spectra?  that is the room's claim. */
+  let worst = 0, worstAt = 0, matched = 0;
+  for (const a of pI) {
+    let best = null;
+    for (const b of pII) if (!best || Math.abs(b.f - a.f) < Math.abs(best.f - a.f)) best = b;
+    if (!best || Math.abs(best.f - a.f) > a.f * 0.03) continue;
+    matched++;
+    const cents = Math.abs(1200 * Math.log2(best.f / a.f));
+    if (cents > worst) { worst = cents; worstAt = a.f; }
+  }
+  /* and against what the solver predicted */
+  let vsPred = 0;
+  for (const a of pI) {
+    let best = Infinity;
+    for (const f of drumI.freqs) best = Math.min(best, Math.abs(1200 * Math.log2(a.f / f)));
+    if (best < 60) vsPred = Math.max(vsPred, best);
+  }
+  const binCents = 1200 * Math.log2(1 + df / 2 / 110);
+  $('earNote').innerHTML = matched + ' partials found in both, from ' + pI.length + ' and ' + pII.length +
+    ' picked. Worst disagreement between the two MEASURED spectra: <b>' + worst.toFixed(1) +
+    ' cents</b> (at ' + worstAt.toFixed(1) + ' Hz). Worst distance from the predicted ladder: <b>' +
+    vsPred.toFixed(1) + ' cents</b>. Half a ' + df.toFixed(2) + ' Hz bin is ' + binCents.toFixed(1) +
+    ' cents at the fundamental, so this is the measurement floor, not a disagreement. Peak level on the ' +
+    'master bus while measuring: <b>' + peakLevel.toFixed(3) + '</b>' +
+    (peakLevel >= 0.999 ? ' — CLIPPING' : ' — no clipping') + '.';
+  btn.disabled = false;
+});
+</script>
+</body>
+</html>

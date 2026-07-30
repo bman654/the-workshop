@@ -64,6 +64,12 @@ window.INSTRUMENTS = [
     accent: "#d9a441", timbre: "pluck"
   },
   {
+    file: "hearing-the-shape/index.html",
+    name: "Hearing the Shape",
+    blurb: "two drumheads that are not the same shape and answer with exactly the same fourteen notes — Kac's question, and the pair found by trying all 318 ways of gluing seven half-squares together",
+    accent: "#e5b95f", timbre: "mallet"
+  },
+  {
     file: "the-wind-chimes/index.html",
     name: "The Wind Chimes",
     blurb: "six tubes cut so the metal itself decides the note, hung in real air you can raise — tap one anywhere along its length and hear where you hit, then slide the cord and hear twelve seconds of ring fall to two",
