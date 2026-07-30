@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Snow Cabinet — letters from the sky</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  THE SNOW CABINET  ·  the-snow-cabinet/
+
+  Ukichiro Nakaya grew the first artificial snow crystal in 1936, on a rabbit
+  hair strung across a cold chamber in Hokkaido, and spent the next eighteen
+  years finding out which crystal you get for which air. His answer is a single
+  picture — temperature across, how much water the air is carrying up — and it
+  is the instrument on the right of this room. Drag the puck. The crystal in
+  front of you is growing in the air where you put it, right now.
+
+  "Snow crystals are letters sent from the sky." — Nakaya, 1954.
+
+  THE ONE THING THIS ROOM IS ABOUT
+    There is no branching rule in the model. None. Read `step` — it is fifty
+    lines and it says: vapour diffuses, vapour freezes onto the boundary, and a
+    boundary site with one or two neighbours needs `beta` before it may join.
+    Arms happen anyway, because a bump reaches further into un-depleted vapour
+    than the flat face beside it. Press PROVE IT and the room grows the same
+    seed twice with the one difference that the vapour cannot deplete: the
+    branching vanishes and a faceted hexagon comes back — a BIGGER one.
+
+    And the second half: nothing in the rule connects one arm to another. The
+    six arms match because they are in the same air. Give the six sectors
+    different air and the same seed comes out a mongrel.
+
+  WHAT IS ACTUALLY RUNNING  (all of it in snow.mjs, all of it in the twin)
+    · Two hand-authored curves, alphaPrism(T) and alphaBasal(T) — the fraction
+      of molecules that stick to the rim, and to the flat caps. They are the
+      only thing about snow typed into this file by hand, and they cross three
+      times between 0 and -35 C. Everything else derives from them: which way
+      the crystal runs, how fast, how faceted.
+    · The Gravner-Griffeath snowfake automaton on a hexagonal lattice, 401
+      cells across, synchronous, deterministic, and exactly six-fold
+      equivariant (the twin checks the mass field against itself turned by
+      sixty degrees and requires a disagreement of ZERO).
+    · A second, slower vapour field for the flat caps, which is why the middle
+      of a plate is thicker than its rim and why a needle is a needle.
+    · The WATER-SATURATION ceiling on the diagram is not drawn by hand: it is
+      the Magnus saturation formulas for water and for ice, differenced, in
+      g/m3. It peaks at -15 C — which is exactly where the biggest dendrites
+      are, and the two facts have nothing to do with each other.
+
+  THE PICTURE
+    One WebGL2 fragment shader. The crystal is a HEIGHT FIELD: the lattice's
+    per-cell half-thickness, packed 16-bit across two bytes, marched as a solid
+    prism so a needle really is a needle when you tilt the stage. Fresnel,
+    two-light specular, absorption that eats red first, and a soft field of
+    out-of-focus snow behind. No textures fetched, no libraries, no sound.
+
+  KEPT CRYSTALS
+    A kept crystal is stored as the FALL, not the picture: a seed and the air
+    it passed through, about a kilobyte, in `ws:snow:plate`. Click one on the
+    shelf and it regrows in front of you, cell for cell — `snow.mjs`'s `replay`
+    does exactly the arithmetic the live room does, in the same order.
+
+  ENGINES (inlined byte-for-byte by the forge, never forked):
+    · tools/ws/ws.js    the estate-wide mute + breadcrumbs
+    · ./snow.mjs        the lattice, the two curves, the measures, the replay
+  Node twin: `node the-snow-cabinet/snow.test.mjs`  (48 checks)
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root{
+    --ink:#eaf2fb; --dim:#9fb3ca; --faint:#6f8299; --brass:#d8b070; --warm:#ffd9a0;
+    --ice:#a9d4f2; --cold:#7fb6e6; --good:#8fd8b0; --bad:#f0977f;
+    --bg0:#05070d; --panel:rgba(9,13,22,.90); --line:rgba(169,212,242,.20);
+    --brassline:rgba(216,176,112,.28);
+    --ui:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg0);color:var(--ink);
+    font-family:var(--ui);overflow:hidden;-webkit-font-smoothing:antialiased}
+  #gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+  .scrim{position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(120% 90% at 50% 44%,transparent 32%,rgba(3,5,10,.55) 100%)}
+
+  a{color:var(--brass);text-decoration:none}
+  a:hover{text-decoration:underline}
+  h1{font-size:26px;margin:6px 0 8px;letter-spacing:.4px;font-weight:600}
+  .topleft{position:fixed;left:22px;top:18px;max-width:min(30vw,380px);z-index:6}
+  .back{font-size:13px;letter-spacing:.09em;text-transform:uppercase;opacity:.85}
+  .say{font-size:14.5px;line-height:1.55;color:var(--dim);margin:0}
+  .say b{color:var(--ink);font-weight:600}
+  .epi{margin:14px 0 0;font-size:13px;line-height:1.5;color:var(--faint);font-style:italic;
+    border-left:2px solid var(--brassline);padding-left:11px}
+
+  /* ── the instrument ─────────────────────────────────────────────── */
+  .rig{position:fixed;right:20px;top:18px;width:372px;z-index:6;
+    background:var(--panel);border:1px solid var(--brassline);border-radius:11px;
+    padding:13px 14px 12px;backdrop-filter:blur(9px);
+    box-shadow:0 22px 60px rgba(0,0,0,.62)}
+  .chead{font-size:11px;letter-spacing:.19em;text-transform:uppercase;color:var(--brass);
+    margin-bottom:9px;display:flex;justify-content:space-between;align-items:baseline}
+  .chead i{font-style:normal;color:var(--faint);letter-spacing:.04em;text-transform:none;font-size:11.5px}
+  #naka{width:100%;height:214px;display:block;border-radius:6px;cursor:crosshair;
+    touch-action:none;background:#070a11}
+  #curves{width:100%;height:62px;display:block;margin-top:5px;border-radius:5px;background:#070a11}
+  .axl{display:flex;justify-content:space-between;font-size:10.5px;color:var(--faint);
+    font-family:var(--mono);margin-top:3px}
+  .cap2{font-size:10.5px;line-height:1.42;color:var(--faint);margin:4px 0 0}
+
+  .rows{margin-top:9px;border-top:1px solid var(--line);padding-top:8px}
+  .row{display:flex;justify-content:space-between;align-items:baseline;
+    font-size:13px;padding:2.5px 0;color:var(--dim)}
+  .row b{color:var(--ink);font-weight:600;font-family:var(--mono);font-size:12.5px}
+  .row b.hab{font-family:var(--ui);color:var(--ice);font-size:13.5px;font-weight:600}
+
+  .btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  button{font-family:var(--ui);font-size:12.5px;color:var(--ink);cursor:pointer;
+    background:rgba(169,212,242,.07);border:1px solid var(--line);border-radius:6px;
+    padding:6px 10px;transition:background .13s,border-color .13s}
+  button:hover{background:rgba(169,212,242,.16);border-color:rgba(169,212,242,.42)}
+  button.key{border-color:var(--brassline);color:var(--warm);background:rgba(216,176,112,.10)}
+  button.key:hover{background:rgba(216,176,112,.20)}
+  button[disabled]{opacity:.36;cursor:default}
+  button.on{background:rgba(216,176,112,.24);border-color:var(--brass);color:var(--warm)}
+
+  .falls{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px;
+    border-top:1px solid var(--line);padding-top:9px}
+  .fall{font-size:11.5px;padding:4px 8px;border-radius:20px;
+    background:rgba(169,212,242,.05);border:1px solid var(--line);cursor:pointer;
+    color:var(--dim);transition:all .13s}
+  .fall:hover{color:var(--ink);border-color:rgba(169,212,242,.4);background:rgba(169,212,242,.13)}
+  .fall.on{border-color:var(--brass);color:var(--warm);background:rgba(216,176,112,.16)}
+  .note{font-size:11.5px;line-height:1.5;color:var(--faint);margin:8px 0 0}
+  .note b{color:var(--dim);font-weight:600}
+
+  /* ── the shelf ──────────────────────────────────────────────────── */
+  .shelf{position:fixed;left:22px;bottom:16px;z-index:6;max-width:min(46vw,560px)}
+  .shead{font-size:11px;letter-spacing:.19em;text-transform:uppercase;color:var(--brass);
+    margin-bottom:7px;opacity:.9}
+  .cards{display:flex;gap:8px;flex-wrap:wrap}
+  .kept{width:74px;background:rgba(9,13,22,.8);border:1px solid var(--line);
+    border-radius:7px;padding:5px;cursor:pointer;transition:all .14s;position:relative}
+  .kept:hover{border-color:var(--brass);transform:translateY(-2px)}
+  .kept canvas{width:100%;height:64px;display:block;border-radius:4px}
+  .kept .lab{font-size:9.5px;color:var(--faint);text-align:center;margin-top:3px;
+    font-family:var(--mono);letter-spacing:.02em;white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis}
+  .kept .x{position:absolute;top:-6px;right:-6px;width:17px;height:17px;border-radius:50%;
+    background:#1a1016;border:1px solid rgba(240,151,127,.4);color:var(--bad);
+    font-size:11px;line-height:15px;text-align:center;opacity:0;transition:opacity .13s}
+  .kept:hover .x{opacity:1}
+  .empty{font-size:12px;color:var(--faint);font-style:italic}
+
+  /* ── the proof drawer ───────────────────────────────────────────── */
+  .proofbtn{position:fixed;right:20px;bottom:16px;z-index:7}
+  .drawer{position:fixed;right:20px;bottom:16px;width:min(560px,calc(100vw - 40px));
+    max-height:calc(100vh - 40px);overflow-y:auto;z-index:8;
+    background:var(--panel);border:1px solid var(--brassline);border-radius:11px;
+    padding:16px 18px;backdrop-filter:blur(11px);display:none;
+    box-shadow:0 26px 70px rgba(0,0,0,.72)}
+  .drawer.open{display:block}
+  .drawer h2{font-size:16px;margin:0 0 4px;color:var(--warm);font-weight:600}
+  .drawer h3{font-size:12px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--brass);margin:16px 0 7px;font-weight:600}
+  .drawer p{font-size:13px;line-height:1.6;color:var(--dim);margin:6px 0}
+  .drawer p b{color:var(--ink)}
+  .close{position:absolute;right:12px;top:11px;font-size:18px;color:var(--faint);
+    cursor:pointer;line-height:1;padding:2px 6px}
+  .close:hover{color:var(--ink)}
+  .pair{display:flex;gap:12px;align-items:flex-start;margin-top:8px}
+  .pane{flex:1;text-align:center}
+  .pane canvas{width:100%;max-width:190px;height:auto;aspect-ratio:1;border-radius:7px;
+    background:#070a11;border:1px solid var(--line)}
+  .pane .cap{font-size:11.5px;color:var(--dim);margin-top:5px;line-height:1.42}
+  .pane .num{font-family:var(--mono);font-size:15px;color:var(--ice);margin-top:3px}
+  .pane .num.hi{color:var(--warm)}
+  pre.rule{font-family:var(--mono);font-size:10.5px;line-height:1.5;color:var(--dim);
+    max-height:340px;overflow-y:auto;
+    background:rgba(0,0,0,.4);border:1px solid var(--line);border-radius:7px;
+    padding:10px 12px;overflow-x:auto;margin:8px 0 0;white-space:pre}
+  pre.rule .k{color:var(--warm)}
+  .bar{height:3px;background:rgba(169,212,242,.12);border-radius:2px;overflow:hidden;margin-top:9px}
+  .bar i{display:block;height:100%;width:0;background:var(--brass);transition:width .1s}
+
+  .hint{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:5;
+    font-size:12.5px;color:var(--faint);letter-spacing:.03em;pointer-events:none;
+    transition:opacity .5s}
+  @media (max-width:1240px){
+    .topleft{max-width:min(34vw,320px)}
+    .topleft .epi{display:none}
+    .shelf{max-width:min(30vw,300px)}
+  }
+  @media (max-width:780px){
+    .topleft{max-width:none;right:16px;left:16px;top:10px}
+    .topleft .say,.topleft .epi{display:none}
+    h1{font-size:19px;margin:3px 0 0}
+    .rig{position:fixed;left:8px;right:8px;top:auto;bottom:8px;width:auto;
+      max-height:64vh;overflow-y:auto;padding:10px 11px}
+    #naka{height:132px}
+    #curves{height:40px}
+    .cap2{display:none}
+    .rows{display:grid;grid-template-columns:1fr 1fr;column-gap:14px}
+    .shelf{display:none}
+    .proofbtn{bottom:auto;top:10px;right:12px}
+    .drawer{left:8px;right:8px;width:auto;bottom:8px;max-height:88vh;padding:13px 14px}
+    .hint{bottom:auto;top:46px;font-size:11.5px}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+<div class="scrim"></div>
+
+<div class="topleft">
+  <a class="back" href="../index.html">&larr; The Estate</a>
+  <h1>The Snow Cabinet</h1>
+  <p class="say">A cold chamber, and a crystal growing on a hair in it. The instrument
+  is Nakaya's: <b>how cold</b> across, <b>how much water the air is carrying</b> up.
+  Drag the puck and the crystal grows in the air you put it in — plate, needle, column,
+  fern. <b>Nothing in the rule draws an arm.</b></p>
+  <p class="epi">&ldquo;Snow crystals are letters sent from the sky.&rdquo;<br>
+  &mdash; Ukichiro Nakaya, who grew the first one indoors in 1936</p>
+</div>
+
+<div class="rig">
+  <div class="chead"><span>the air, right now</span><i id="clock">0.0 s</i></div>
+  <canvas id="naka" width="700" height="428"></canvas>
+  <div class="axl"><span>0&deg;C</span><span>&minus;8</span><span>&minus;16</span><span>&minus;24</span><span>&minus;32&deg;C</span></div>
+  <canvas id="curves" width="700" height="124"></canvas>
+  <p class="cap2">how well each face sticks, on a log scale &mdash; where the two cross,
+  the crystal changes its mind about which way to grow</p>
+
+  <div class="rows">
+    <div class="row"><span>habit</span><b class="hab" id="hab">&mdash;</b></div>
+    <div class="row"><span>rim &middot; caps</span><b id="xover">&mdash;</b></div>
+    <div class="row"><span>temperature</span><b id="tval">&mdash;</b></div>
+    <div class="row"><span>excess vapour</span><b id="ssval">&mdash;</b></div>
+    <div class="row"><span>across the flats</span><b id="wval">&mdash;</b></div>
+    <div class="row"><span>thickest point</span><b id="hval">&mdash;</b></div>
+  </div>
+
+  <div class="btns">
+    <button id="keep" class="key">keep it</button>
+    <button id="fresh">a new one</button>
+    <button id="spin" class="on">turn</button>
+    <button id="flat">lie flat</button>
+  </div>
+
+  <div class="falls" id="falls"></div>
+  <p class="note" id="fnote">Drag the puck anywhere. The pale ceiling is <b>water
+  saturation</b> &mdash; the wettest a cloud gets &mdash; computed from the two Magnus
+  formulas, not drawn. It peaks at &minus;15&deg;C, which is where the great ferns are.</p>
+</div>
+
+<div class="shelf">
+  <div class="shead">the plate</div>
+  <div class="cards" id="cards"><span class="empty">nothing kept yet.</span></div>
+</div>
+
+<button class="proofbtn key" id="proofbtn">prove it</button>
+
+<div class="drawer" id="drawer">
+  <span class="close" id="closed">&times;</span>
+  <h2>There is no branching rule.</h2>
+  <p>Every line that decides where ice goes is below. Nowhere in it does anything
+  ask &ldquo;am I a tip?&rdquo; or &ldquo;should I split?&rdquo;. So where do the arms
+  come from?</p>
+
+  <h3>the control: take the depletion away</h3>
+  <p>The same seed, the same air, the same rule &mdash; with one change. On the right,
+  the vapour is <b>never used up</b>: every cell is topped back up to the far-field
+  value each step, as though diffusion were infinitely fast. Nothing else differs.</p>
+  <div class="pair">
+    <div class="pane"><canvas id="cA" width="256" height="256"></canvas>
+      <div class="cap">vapour diffuses, and is eaten</div><div class="num hi" id="nA">&mdash;</div></div>
+    <div class="pane"><canvas id="cB" width="256" height="256"></canvas>
+      <div class="cap">vapour never depletes</div><div class="num" id="nB">&mdash;</div></div>
+  </div>
+  <p class="note" id="capE" style="min-height:34px"></p>
+  <button id="runE" class="key">run the control</button>
+  <div class="bar"><i id="barE"></i></div>
+
+  <h3>and the arms: they are not copies</h3>
+  <p>Nothing in the rule connects one arm to the next. They match because they are in
+  the same air. On the right, the six sixty-degree sectors are fed <b>different</b>
+  far-field vapour &mdash; a crystal falling through turbulence rather than through a
+  cloud. Same seed, same rule, same everything else.</p>
+  <div class="pair">
+    <div class="pane"><canvas id="cC" width="256" height="256"></canvas>
+      <div class="cap">one cloud</div><div class="num hi" id="nC">&mdash;</div></div>
+    <div class="pane"><canvas id="cD" width="256" height="256"></canvas>
+      <div class="cap">six different clouds</div><div class="num" id="nD">&mdash;</div></div>
+  </div>
+  <p class="note" id="capF" style="min-height:34px"></p>
+  <button id="runF" class="key">run the control</button>
+  <div class="bar"><i id="barF"></i></div>
+
+  <h3>the whole rule</h3>
+  <pre class="rule" id="rulesrc"></pre>
+  <p class="note">Verbatim from the <code>step</code> function this page is running
+  &mdash; read out of the live function object, so it cannot drift from the code
+  that grew the crystal in front of you. The Node twin
+  (<code>node the-snow-cabinet/snow.test.mjs</code>, 48 checks) runs both controls
+  above, and additionally requires the mass field to be <b>exactly</b> invariant
+  under a sixth of a turn when the vapour noise is switched off &mdash; largest
+  disagreement zero, not small.</p>
+</div>
+
+<div class="hint" id="hint">drag the puck on the diagram &mdash; the crystal is growing in that air</div>
+
+<script type="module">
+<!-- forge:include ../tools/ws/ws.js -->
+<!-- forge:include ./snow.mjs -->
+
+const $ = id => document.getElementById(id);
+addEventListener('error', e => { window.__snowErr = (e.error && e.error.stack) || e.message; });
+
+/* ═══ the diagram's coordinates ══════════════════════════════════════════════
+   x: temperature, 0 to -32 C.  y: excess vapour density over ice saturation,
+   0 to 0.30 g/m3 — the same number the model calls `ss`. */
+const T_MIN = -32, T_MAX = 0, SS_MAX = 0.30;
+
+/* The water-saturation ceiling. Magnus formulas for the saturation pressure
+   over water and over ice, differenced and turned into a density. This is a
+   real curve, not a drawn one: it peaks near -15 C, which is where the biggest
+   dendrites live, and the two facts are unrelated. */
+function waterCeiling(T) {
+  const Tk = T + 273.15;
+  const ew = 6.1094 * Math.exp(17.625 * T / (T + 243.04));   // hPa, over water
+  const ei = 6.1121 * Math.exp(22.587 * T / (T + 273.86));   // hPa, over ice
+  return Math.max(0, (ew - ei) * 100 / (461.5 * Tk) * 1000); // g/m3
+}
+
+/* ═══ state ══════════════════════════════════════════════════════════════════ */
+const NLAT = 401;
+let cry = null, env = null, puck = { T: -14.6, ss: 0.20 };
+let samples = [], holdLeft = 0, tSec = 0, seed = (Math.random() * 1e9) | 0;
+let running = true, capped = false, autoFall = null, autoT = 0;
+let spinOn = true, spin = 0, tilt = 0, tiltWant = 0, scaleCells = 30, kept = [];
+let replayQueue = null;
+
+function reset(newSeed) {
+  seed = newSeed == null ? ((Math.random() * 1e9) | 0) : newSeed;
+  cry = makeCrystal(NLAT, seed);
+  samples = []; holdLeft = 0; tSec = 0; capped = false; running = true;
+  scaleCells = 26; spin = 0; replayQueue = null;
+  env = envAt(puck.T, puck.ss);
+  texDirty = true;
+}
+
+/* ═══ THE LATTICE CLOCK ═══════════════════════════════════════════════════════
+   The room reads the puck, ROUNDS it, writes it into the logbook, and then
+   holds the chamber at exactly that air for HOLD steps. `snow.mjs`'s `replay`
+   repeats that arithmetic in the same order, which is the whole reason a kept
+   crystal comes back cell for cell instead of merely similar. */
+function advance(nSteps) {
+  const cap = cry.Rlive - cry.LBC - 2;
+  for (let i = 0; i < nSteps; i++) {
+    if (cry.rmax >= cap) { capped = true; running = false; return; }
+    if (holdLeft <= 0) {
+      if (samples.length >= 400) { capped = true; running = false; return; }
+      const T = Math.round(puck.T * 10) / 10, ss = Math.round(puck.ss * 1000) / 1000;
+      samples.push([T, ss]);
+      env = envAt(T, ss);
+      holdLeft = HOLD;
+    }
+    step(cry, env); holdLeft--;
+  }
+}
+
+/* ═══ WebGL ══════════════════════════════════════════════════════════════════ */
+const cv = $('gl'), rigEl = document.querySelector('.rig');
+const gl = cv.getContext('webgl2', { antialias: false, alpha: false, powerPreference: 'high-performance' });
+if (!gl) { document.body.innerHTML = '<p style="padding:40px;font:16px serif;color:#eaf2fb">' +
+  'This room needs WebGL2.</p>'; throw new Error('no webgl2'); }
+
+const VS = '#version 300 es\n' +
+'void main(){ vec2 p = vec2((gl_VertexID<<1)&2, gl_VertexID&2);' +
+' gl_Position = vec4(p*2.0-1.0, 0.0, 1.0); }';
+
+const FS = '#version 300 es\n' +
+'precision highp float;\n' +
+'uniform sampler2D uTex;\n' +
+'uniform vec2 uRes;\n' +
+'uniform float uR, uHS, uHLo, uScale, uTilt, uSpin, uTime, uTexN, uAlive, uCenterY;\n' +
+'out vec4 outc;\n' +
+'\n' +
+'float hash21(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }\n' +
+'\n' +
+'/* the 16-bit half-thickness, sampled bilinearly BY HAND. A LINEAR sampler on\n' +
+'   an RG8 pair interpolates the high and the low byte separately, which is not\n' +
+'   interpolation of the number — it puts a saw-tooth of 1/256 into every slope,\n' +
+'   and a height field shaded by its own gradient shows that as terraces. */\n' +
+'float decode(ivec2 t){ vec4 s = texelFetch(uTex, t, 0); return (s.r*65280.0 + s.g*255.0)/65535.0; }\n' +
+'float hAt(vec2 p){\n' +
+'  vec2 uv = p/(2.0*uR) + 0.5;\n' +
+'  if (uv.x<0.0||uv.x>1.0||uv.y<0.0||uv.y>1.0) return 0.0;\n' +
+'  vec2 t = uv*uTexN - 0.5; vec2 f = fract(t); ivec2 b = ivec2(floor(t));\n' +
+'  ivec2 lim = ivec2(int(uTexN)-1);\n' +
+'  ivec2 b00 = clamp(b, ivec2(0), lim), b10 = clamp(b+ivec2(1,0), ivec2(0), lim);\n' +
+'  ivec2 b01 = clamp(b+ivec2(0,1), ivec2(0), lim), b11 = clamp(b+ivec2(1,1), ivec2(0), lim);\n' +
+'  float a = mix(decode(b00), decode(b10), f.x);\n' +
+'  float c = mix(decode(b01), decode(b11), f.x);\n' +
+'  return mix(a, c, f.y) * uHS;\n' +
+'}\n' +
+'vec2 rot2(vec2 p, float a){ float s=sin(a), c=cos(a); return vec2(c*p.x - s*p.y, s*p.x + c*p.y); }\n' +
+'\n' +
+'/* the room behind the crystal: cold air, a lamp somewhere off to the left,\n' +
+'   and three depths of snow drifting through it, all of them out of focus. */\n' +
+'vec3 backdrop(vec2 uv, vec2 asp){\n' +
+'  vec3 c = mix(vec3(0.0016,0.0026,0.0055), vec3(0.0075,0.0115,0.0215), smoothstep(1.05,-0.15,uv.y));\n' +
+'  vec2 q = (uv-0.5)*asp;\n' +
+'  c += vec3(0.0125,0.0195,0.0330) * exp(-3.4*dot(q,q));\n' +
+'  c += vec3(0.026,0.020,0.011) * exp(-7.0*dot(q-vec2(-0.66,0.34), q-vec2(-0.66,0.34)));\n' +
+'  for (int k=0; k<3; k++){\n' +
+'    float fk = float(k);\n' +
+'    float sc = 5.0 + 6.0*fk;\n' +
+'    float sp = 0.016 + 0.030*fk;\n' +
+'    float soft = 0.34 - 0.09*fk;\n' +
+'    vec2 g = uv*asp*sc + vec2(sin(uTime*0.06+fk)*0.7, -uTime*sp*sc);\n' +
+'    vec2 gi = floor(g), gf = fract(g);\n' +
+'    for (int oy=-1; oy<=1; oy++) for (int ox=-1; ox<=1; ox++){\n' +
+'      vec2 o = vec2(float(ox), float(oy));\n' +
+'      vec2 id = gi + o;\n' +
+'      float h1 = hash21(id + fk*31.7);\n' +
+'      float h2 = hash21(id + fk*31.7 + 7.3);\n' +
+'      if (h1 < 0.55) continue;\n' +
+'      vec2 cp = o + vec2(h1, h2);\n' +
+'      float d = length(gf - cp);\n' +
+'      float r = soft*(0.30 + 0.55*h2);\n' +
+'      c += vec3(0.55,0.70,0.92) * (0.0135 - 0.0034*fk) * exp(-dot(vec2(d/r),vec2(d/r)));\n' +
+'    }\n' +
+'  }\n' +
+'  return c;\n' +
+'}\n' +
+'\n' +
+'vec3 envCol(vec3 d){\n' +
+'  float up = clamp(d.z*0.5+0.5, 0.0, 1.0);\n' +
+'  vec3 c = mix(vec3(0.010,0.017,0.030), vec3(0.16,0.25,0.40), up);\n' +
+'  vec3 lamp = normalize(vec3(-0.55,0.42,0.72));\n' +
+'  float s = max(dot(d, lamp), 0.0);\n' +
+'  c += vec3(1.0,0.88,0.68) * pow(s, 220.0) * 6.0;\n' +
+'  c += vec3(0.45,0.60,0.85) * pow(max(dot(d, normalize(vec3(0.62,-0.30,0.72))),0.0), 90.0) * 1.4;\n' +
+'  return c;\n' +
+'}\n' +
+'\n' +
+'void main(){\n' +
+'  vec2 uv = gl_FragCoord.xy / uRes;\n' +
+'  vec2 asp = vec2(uRes.x/uRes.y, 1.0);\n' +
+'  vec3 bg = backdrop(uv, asp);\n' +
+'  vec3 col = bg;\n' +
+'\n' +
+'  // screen point in CELLS\n' +
+'  float px = (uv.x-0.5)*2.0*uScale*asp.x;\n' +
+'  float py = (uv.y-uCenterY)*2.0*uScale;\n' +
+'  float st = sin(uTilt), ct = cos(uTilt);\n' +
+'  vec3 dir = vec3(0.0, st, -ct);\n' +
+'\n' +
+'  float Hmax = uHS + 0.5;\n' +
+'  bool hit = false; vec3 hp = vec3(0.0); float hh = 0.0;\n' +
+'\n' +
+'  if (abs(st) < 0.004){\n' +
+'    // face on: the ray is straight down the c-axis, so there is nothing to march\n' +
+'    vec2 mp = rot2(vec2(px,py), -uSpin);\n' +
+'    hh = hAt(mp);\n' +
+'    if (hh > 0.0){ hit = true; hp = vec3(px, py, hh); }\n' +
+'  } else {\n' +
+'    // slab in z:  w.z = py*st - s*ct\n' +
+'    float s0 = (py*st - Hmax)/ct, s1 = (py*st + Hmax)/ct;\n' +
+'    float lo = min(s0,s1), hi2 = max(s0,s1);\n' +
+'    // cylinder in xy: px^2 + (py*ct + s*st)^2 <= uR^2\n' +
+'    float rr = uR*uR - px*px;\n' +
+'    if (rr > 0.0){\n' +
+'      float root = sqrt(rr);\n' +
+'      float a0 = (-root - py*ct)/st, a1 = (root - py*ct)/st;\n' +
+'      lo = max(lo, min(a0,a1)); hi2 = min(hi2, max(a0,a1));\n' +
+'      if (hi2 > lo){\n' +
+'        float span = hi2 - lo;\n' +
+'        int N = int(clamp(span/0.55, 8.0, 110.0));\n' +
+'        float ds = span/float(N);\n' +
+'        float prevS = lo, prevD = 1.0;\n' +
+'        for (int i=1; i<=110; i++){\n' +
+'          if (i > N) break;\n' +
+'          float s = lo + ds*float(i);\n' +
+'          vec3 w = vec3(px, py*ct + s*st, py*st - s*ct);\n' +
+'          float hv = hAt(rot2(w.xy, -uSpin));\n' +
+'          float f = abs(w.z) - hv;\n' +
+'          if (f <= 0.0 && hv > 0.0){\n' +
+'            float a = prevS, b = s;\n' +
+'            for (int j=0;j<6;j++){\n' +
+'              float m = 0.5*(a+b);\n' +
+'              vec3 wm = vec3(px, py*ct + m*st, py*st - m*ct);\n' +
+'              float hm = hAt(rot2(wm.xy, -uSpin));\n' +
+'              if (abs(wm.z) - hm <= 0.0 && hm > 0.0) b = m; else a = m;\n' +
+'            }\n' +
+'            vec3 wb = vec3(px, py*ct + b*st, py*st - b*ct);\n' +
+'            hp = wb; hh = hAt(rot2(wb.xy, -uSpin)); hit = true; break;\n' +
+'          }\n' +
+'          prevS = s; prevD = f;\n' +
+'        }\n' +
+'      }\n' +
+'    }\n' +
+'  }\n' +
+'\n' +
+'  if (hit && hh > 0.0){\n' +
+'    vec2 mp = rot2(hp.xy, -uSpin);\n' +
+'    float e = 0.85;\n' +
+'    float hx = (hAt(mp+vec2(e,0.0)) - hAt(mp-vec2(e,0.0)))/(2.0*e);\n' +
+'    float hy = (hAt(mp+vec2(0.0,e)) - hAt(mp-vec2(0.0,e)))/(2.0*e);\n' +
+'    vec3 nm = normalize(vec3(-hx, -hy, hp.z >= 0.0 ? 1.0 : -1.0));\n' +
+'    vec3 n = vec3(rot2(nm.xy, uSpin), nm.z);\n' +
+'    vec3 V = -dir;\n' +
+'    if (dot(n,V) < 0.0) n = -n;\n' +
+'\n' +
+'    float slope = length(vec2(hx,hy));\n' +
+'    // every prism wall and every facet step is a steep patch of surface, and a\n' +
+'    // steep patch seen from the front is exactly where ice throws light back\n' +
+'    float edge = smoothstep(0.22, 1.30, slope);\n' +
+'\n' +
+'    float ndv = clamp(dot(n,V), 0.0, 1.0);\n' +
+'    float fres = 0.030 + 0.970*pow(1.0 - ndv, 5.0);\n' +
+'    vec3 refl = envCol(reflect(-V, n));\n' +
+'\n' +
+'    /* hn is the thickness as a fraction of THIS crystal is thickest point. A\n' +
+'       plate is six cells thick and a needle five hundred, so a fixed extinction\n' +
+'       length would render one as a ghost and the other as a brick. This is the\n' +
+'       stage exposure, not the physics: the tint below is still the real path. */\n' +
+'    float hn = clamp((hh - uHLo)/max(uHS - uHLo, 1e-4), 0.0, 1.0);\n' +
+'    float ha = clamp(hh/max(uHS,1e-4), 0.0, 1.0);\n' +
+
+'    /* DARK FIELD. There is a lamp behind the stage that the camera cannot see\n' +
+'       except through the ice — which is how a snow crystal has been\n' +
+'       photographed since Bentley. Thin ice passes it almost white; thick ice\n' +
+'       eats the red end first, exactly as real ice does, and goes deep blue. */\n' +
+'    float path = 2.2*hn / max(ndv, 0.30);\n' +
+'    vec3 att = exp(-vec3(0.58,0.31,0.175)*path);\n' +
+'    vec3 lamp = vec3(1.06,1.03,1.00) * att * 0.92;\n' +
+'    vec2 off = n.xy * 0.085;\n' +
+'    vec3 inner = lamp + backdrop(clamp(uv + off, 0.0, 1.0), asp) * 1.2;\n' +
+'    vec3 scat = vec3(0.34,0.56,0.98) * (0.12 + 0.88*sqrt(hn)) * 0.44;\n' +
+'\n' +
+'    vec3 L1 = normalize(vec3(-0.48,0.58,0.66));\n' +
+'    vec3 L2 = normalize(vec3(0.60,-0.36,0.62));\n' +
+'    float sp1 = pow(max(dot(normalize(L1+V), n),0.0), 130.0);\n' +
+'    float sp2 = pow(max(dot(normalize(L2+V), n),0.0), 55.0);\n' +
+'    float lam = 0.26 + 0.58*max(dot(n,L1),0.0) + 0.26*max(dot(n,L2),0.0);\n' +
+'\n' +
+'    vec3 ice = mix(inner + scat*lam, refl, clamp(fres,0.0,0.94));\n' +
+'    ice += vec3(0.60,0.82,1.14) * edge * (0.22 + 0.38*lam);\n' +
+'    ice += vec3(1.0,0.97,0.92)*sp1*4.2 + vec3(0.62,0.82,1.0)*sp2*1.9;\n' +
+'    float gl = hash21(floor(mp*2.2) + floor(uTime*1.6)*0.371);\n' +
+'    ice += vec3(1.0,0.98,0.95) * edge * smoothstep(0.975, 1.0, gl) * 2.2;\n' +
+'    /* thin ice is nearly invisible and a real crystal photograph knows it: a\n' +
+'       wafer tip is a bright outline around almost nothing, and the plate gets\n' +
+'       solid toward the middle where it has had time to thicken. */\n' +
+'    float opac = clamp(fres + 0.95*edge + smoothstep(0.004, 0.30, ha), 0.0, 1.0);\n' +
+'    col = mix(bg, ice, opac);\n' +
+'  }\n' +
+'\n' +
+'  col = col / (col + 0.62);\n' +
+'  col = pow(max(col, 0.0), vec3(0.4545));\n' +
+'  col += (hash21(gl_FragCoord.xy + uTime)-0.5) * 0.010;\n' +
+'  outc = vec4(col, 1.0);\n' +
+'}';
+
+function compile(type, src) {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
+gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
+gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+const U = {};
+for (const k of ['uTex', 'uRes', 'uR', 'uHS', 'uHLo', 'uScale', 'uTilt', 'uSpin', 'uTime',
+  'uTexN', 'uAlive', 'uCenterY'])
+  U[k] = gl.getUniformLocation(prog, k);
+const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+
+const TEXN = 512;
+const tex = gl.createTexture();
+gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
+/* NEAREST, always. This texture is a 16-bit number split across two bytes; a
+   LINEAR sampler would blend the bytes independently. hAt() interpolates. */
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, TEXN, TEXN, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+gl.uniform1i(U.uTex, 0);
+gl.uniform1f(U.uTexN, TEXN);
+
+let texDirty = true, texR = 20, texHS = 1, texHLo = 0;
+function uploadTex() {
+  const a = aspect(cry);
+  texHS = Math.max(0.6, a.maxH * 1.02);
+  /* the stage's black point. Almost all of a crystal sits inside a narrow band
+     of thicknesses, so a scale that starts at zero throws the whole picture
+     into the top fifth of its range and the ice comes out a flat white cut-out.
+     Printing from the mean is a darkroom decision, not a claim. */
+  texHLo = Math.min(texHS * 0.92, a.meanH * 0.58);
+  const p = packTexture(cry, TEXN, texHS);
+  texR = p.R;
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, TEXN, TEXN, gl.RGBA, gl.UNSIGNED_BYTE, p.data);
+  texDirty = false;
+  return a;
+}
+
+let dpr = 1;
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+  const w = Math.round(innerWidth * dpr), h = Math.round(innerHeight * dpr);
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  gl.viewport(0, 0, cv.width, cv.height);
+}
+addEventListener('resize', resize);
+
+/* ═══ the Nakaya diagram ═════════════════════════════════════════════════════ */
+const nk = $('naka'), nx = nk.getContext('2d');
+let nkBG = null;
+
+function dx(T, w) { return (T - T_MAX) / (T_MIN - T_MAX) * w; }
+function dy(ss, h) { return h - (ss / SS_MAX) * h; }
+function toT(x, w) { return T_MAX + (x / w) * (T_MIN - T_MAX); }
+function toSS(y, h) { return Math.max(0.004, Math.min(SS_MAX, (1 - y / h) * SS_MAX)); }
+
+function drawDiagramBG() {
+  const w = nk.width, h = nk.height;
+  const img = nx.createImageData(w, h);
+  for (let x = 0; x < w; x++) {
+    const T = toT(x + 0.5, w);
+    const k = habitIndex(T);                 // >0 plate, <0 column
+    const ceil = waterCeiling(T);
+    for (let y = 0; y < h; y++) {
+      const ss = toSS(y + 0.5, h);
+      // a cold blue where the rim runs (plates), a warm bronze where the caps do
+      const t = Math.max(-1, Math.min(1, k / 1.6));
+      let r = 26 + 46 * Math.max(0, -t), g = 34 + 16 * Math.max(0, -t) + 22 * Math.max(0, t),
+        b = 52 + 46 * Math.max(0, t);
+      // brighter where there is more to eat, and dimmer above water saturation
+      const wet = 0.55 + 1.05 * (ss / SS_MAX);
+      const over = ss > ceil ? 0.42 : 1.0;
+      const i = (y * w + x) * 4;
+      img.data[i] = r * wet * over; img.data[i + 1] = g * wet * over;
+      img.data[i + 2] = b * wet * over; img.data[i + 3] = 255;
+    }
+  }
+  nx.putImageData(img, 0, 0);
+
+  // the water-saturation ceiling
+  nx.beginPath();
+  for (let x = 0; x <= w; x += 2) {
+    const y = dy(waterCeiling(toT(x, w)), h);
+    x === 0 ? nx.moveTo(x, y) : nx.lineTo(x, y);
+  }
+  nx.strokeStyle = 'rgba(232,242,255,.55)'; nx.lineWidth = 2; nx.stroke();
+  nx.font = '600 15px ' + getComputedStyle(document.body).fontFamily;
+  nx.fillStyle = 'rgba(232,242,255,.50)';
+  nx.fillText('water saturation', dx(-19.5, w), dy(0.256, h));
+
+  // the habit names, where they belong
+  const labels = [
+    ['plates', -1.8, 0.055], ['needles', -5.3, 0.115], ['hollow\ncolumns', -8.0, 0.055],
+    ['sectored plates', -13.4, 0.108], ['dendrites', -14.9, 0.196],
+    ['plates', -19.5, 0.055], ['columns', -27.0, 0.085],
+  ];
+  nx.font = '600 16px ' + getComputedStyle(document.body).fontFamily;
+  nx.textAlign = 'center';
+  for (const [txt, T, ss] of labels) {
+    const lines = txt.split('\n');
+    lines.forEach((ln, i) => {
+      nx.fillStyle = 'rgba(6,9,16,.55)';
+      nx.fillText(ln, dx(T, w) + 1, dy(ss, h) + i * 17 + 1);
+      nx.fillStyle = 'rgba(226,238,252,.72)';
+      nx.fillText(ln, dx(T, w), dy(ss, h) + i * 17);
+    });
+  }
+  nx.textAlign = 'left';
+  nkBG = nx.getImageData(0, 0, w, h);
+}
+
+function drawDiagram() {
+  const w = nk.width, h = nk.height;
+  if (!nkBG) drawDiagramBG();
+  nx.putImageData(nkBG, 0, 0);
+
+  // the trail: where this crystal has already been
+  if (samples.length > 1) {
+    nx.beginPath();
+    samples.forEach((p, i) => {
+      const x = dx(p[0], w), y = dy(p[1], h);
+      i === 0 ? nx.moveTo(x, y) : nx.lineTo(x, y);
+    });
+    nx.strokeStyle = 'rgba(255,225,170,.75)'; nx.lineWidth = 3.4;
+    nx.lineJoin = 'round'; nx.lineCap = 'round'; nx.stroke();
+    nx.strokeStyle = 'rgba(255,248,225,.95)'; nx.lineWidth = 1.3; nx.stroke();
+  }
+
+  // the puck
+  const px = dx(puck.T, w), py = dy(puck.ss, h);
+  nx.beginPath(); nx.arc(px, py, 12, 0, 7); nx.fillStyle = 'rgba(255,214,150,.16)'; nx.fill();
+  nx.beginPath(); nx.arc(px, py, 6.5, 0, 7);
+  nx.fillStyle = running ? '#ffe6b8' : '#93a7bd';
+  nx.strokeStyle = 'rgba(6,9,16,.8)'; nx.lineWidth = 2; nx.fill(); nx.stroke();
+}
+
+/* the two curves, and where they cross */
+const cvv = $('curves'), cx2 = cvv.getContext('2d');
+function drawCurves() {
+  const w = cvv.width, h = cvv.height;
+  cx2.clearRect(0, 0, w, h);
+  cx2.fillStyle = '#070a11'; cx2.fillRect(0, 0, w, h);
+  const lo = -2.4, hi = 0.2;                    // log10 alpha
+  const yOf = v => h - (Math.max(lo, Math.min(hi, Math.log10(v))) - lo) / (hi - lo) * (h - 8) - 4;
+  for (const [fn, col, wid] of [[alphaPrism, '#8fc8f2', 2.6], [alphaBasal, '#e2b071', 2.6]]) {
+    cx2.beginPath();
+    for (let x = 0; x <= w; x += 2) {
+      const T = toT(x, w), y = yOf(fn(T));
+      x === 0 ? cx2.moveTo(x, y) : cx2.lineTo(x, y);
+    }
+    cx2.strokeStyle = col; cx2.lineWidth = wid; cx2.stroke();
+  }
+  // the crossings
+  let prev = Math.sign(habitIndex(-0.2));
+  cx2.fillStyle = 'rgba(255,255,255,.8)';
+  for (let T = -0.2; T >= T_MIN; T -= 0.05) {
+    const s = Math.sign(habitIndex(T));
+    if (s !== prev) {
+      const x = dx(T, w);
+      cx2.fillStyle = 'rgba(240,248,255,.45)';
+      cx2.fillRect(x - 0.5, 0, 1, h);
+      prev = s;
+    }
+  }
+  const x = dx(puck.T, w);
+  cx2.fillStyle = 'rgba(255,230,184,.95)'; cx2.fillRect(x - 1, 0, 2, h);
+  cx2.font = '600 15px ' + getComputedStyle(document.body).fontFamily;
+  cx2.fillStyle = '#8fc8f2'; cx2.fillText('rim', 8, 18);
+  cx2.fillStyle = '#e2b071'; cx2.fillText('caps', 8, h - 8);
+}
+
+/* ═══ pointer on the diagram ═════════════════════════════════════════════════ */
+let dragging = false;
+function pickFrom(ev) {
+  const r = nk.getBoundingClientRect();
+  const x = (ev.clientX - r.left) / r.width * nk.width;
+  const y = (ev.clientY - r.top) / r.height * nk.height;
+  puck.T = Math.max(T_MIN, Math.min(-0.3, toT(x, nk.width)));
+  puck.ss = toSS(y, nk.height);
+  autoFall = null; markFall(null);
+  hideHint();
+}
+nk.addEventListener('pointerdown', e => {
+  dragging = true; nk.setPointerCapture(e.pointerId); pickFrom(e); e.preventDefault();
+});
+nk.addEventListener('pointermove', e => { if (dragging) pickFrom(e); });
+nk.addEventListener('pointerup', e => { dragging = false; });
+nk.addEventListener('pointercancel', () => { dragging = false; });
+
+/* ═══ the falls ══════════════════════════════════════════════════════════════ */
+const fallsEl = $('falls');
+FALLS.forEach(f => {
+  const b = document.createElement('div');
+  b.className = 'fall'; b.textContent = f.name.replace(/^The /, ''); b.dataset.id = f.id;
+  b.addEventListener('click', () => startFall(f));
+  fallsEl.appendChild(b);
+});
+function markFall(id) {
+  [...fallsEl.children].forEach(c => c.classList.toggle('on', c.dataset.id === id));
+  const f = FALLS.find(x => x.id === id);
+  $('fnote').innerHTML = f
+    ? '<b>' + f.name + '</b> &mdash; ' + f.note + '. The puck is walking the fall; grab it any time.'
+    : 'Drag the puck anywhere. The pale ceiling is <b>water saturation</b> &mdash; the ' +
+      'wettest a cloud gets &mdash; computed from the two Magnus formulas, not drawn. ' +
+      'It peaks at &minus;15&deg;C, which is where the great ferns are.';
+}
+function startFall(f) {
+  reset(null);
+  autoFall = f; autoT = 0; markFall(f.id);
+  puck.T = f.pts[0].T; puck.ss = f.pts[0].ss;
+  hideHint();
+}
+
+/* ═══ the shelf ══════════════════════════════════════════════════════════════ */
+const PLATE_KEY = 'ws:snow:plate', MAX_KEPT = 8;
+function loadPlate() {
+  try { kept = JSON.parse(localStorage.getItem(PLATE_KEY) || '[]'); } catch (e) { kept = []; }
+  if (!Array.isArray(kept)) kept = [];
+}
+function savePlate() {
+  try { localStorage.setItem(PLATE_KEY, JSON.stringify(kept.slice(-MAX_KEPT))); } catch (e) {}
+}
+function tileTo(canvas, s, alive) {
+  const c = canvas.getContext('2d'), W = canvas.width, Hc = canvas.height;
+  const im = c.createImageData(W, Hc);
+  const R = Math.max(8, Math.ceil(s.rmax * 1.1));
+  const a = aspect(s), hm = Math.max(0.2, a.maxH);
+  const sc = (2 * R) / W;
+  for (let py = 0; py < Hc; py++) for (let pxx = 0; pxx < W; pxx++) {
+    const x = (pxx + 0.5 - W / 2) * sc, y = (Hc / 2 - py - 0.5) * sc;
+    const r = Math.round(y / 0.8660254037844386), q = Math.round(x - r * 0.5);
+    const i = (py * W + pxx) * 4;
+    im.data[i] = 7; im.data[i + 1] = 10; im.data[i + 2] = 17; im.data[i + 3] = 255;
+    if (Math.abs(q) + Math.abs(q + r) + Math.abs(r) > 2 * s.Rlive) continue;
+    const j = (r + s.H) * s.N + (q + s.H);
+    if (j < 0 || j >= s.att.length || !s.att[j]) continue;
+    const v = Math.min(1, Math.pow(s.h[j] / hm, 0.65));
+    im.data[i] = 118 + 137 * v; im.data[i + 1] = 158 + 97 * v; im.data[i + 2] = 198 + 57 * v;
+  }
+  c.putImageData(im, 0, 0);
+}
+function renderPlate() {
+  const box = $('cards'); box.innerHTML = '';
+  if (!kept.length) { box.innerHTML = '<span class="empty">nothing kept yet.</span>'; return; }
+  kept.forEach((k, idx) => {
+    const d = document.createElement('div'); d.className = 'kept';
+    const c = document.createElement('canvas'); c.width = 96; c.height = 96;
+    const ctx = c.getContext('2d');
+    if (k.thumb) {
+      const im = ctx.createImageData(96, 96);
+      const bytes = atob(k.thumb);
+      for (let i = 0; i < 96 * 96; i++) {
+        const v = bytes.charCodeAt(i);
+        im.data[i * 4] = v ? 118 + 137 * (v / 255) : 7;
+        im.data[i * 4 + 1] = v ? 158 + 97 * (v / 255) : 10;
+        im.data[i * 4 + 2] = v ? 198 + 57 * (v / 255) : 17;
+        im.data[i * 4 + 3] = 255;
+      }
+      ctx.putImageData(im, 0, 0);
+    }
+    d.appendChild(c);
+    const l = document.createElement('div'); l.className = 'lab'; l.textContent = k.label || '';
+    d.appendChild(l);
+    const x = document.createElement('div'); x.className = 'x'; x.textContent = '×';
+    x.addEventListener('click', ev => { ev.stopPropagation(); kept.splice(idx, 1); savePlate(); renderPlate(); });
+    d.appendChild(x);
+    d.title = 'regrow this one';
+    d.addEventListener('click', () => startReplay(k));
+    box.appendChild(d);
+  });
+}
+function thumbOf(s) {
+  const t = thicknessTile(s, 96);
+  let hm = 0; for (let i = 0; i < t.length; i++) if (t[i] > hm) hm = t[i];
+  let out = '';
+  for (let i = 0; i < t.length; i++) {
+    // the tile comes out with +y downward already; flip rows for the canvas
+    const row = 95 - ((i / 96) | 0), col = i % 96;
+    const v = t[row * 96 + col];
+    out += String.fromCharCode(v > 0 ? Math.max(1, Math.round(255 * Math.pow(v / hm, 0.65))) : 0);
+  }
+  return btoa(out);
+}
+function keepIt() {
+  if (!samples.length) return;
+  const rec = logbook(seed, NLAT, samples);
+  const a = aspect(cry);
+  rec.label = habitName(samples[samples.length - 1][0], samples[samples.length - 1][1]).slice(0, 15);
+  rec.thumb = thumbOf(cry);
+  kept.push(rec); if (kept.length > MAX_KEPT) kept.shift();
+  savePlate(); renderPlate();
+  const b = $('keep'); b.textContent = 'on the plate'; b.disabled = true;
+  setTimeout(() => { b.textContent = 'keep it'; b.disabled = false; }, 1400);
+}
+$('keep').addEventListener('click', keepIt);
+$('fresh').addEventListener('click', () => { reset(null); markFall(null); autoFall = null; });
+$('spin').addEventListener('click', () => {
+  spinOn = !spinOn; $('spin').classList.toggle('on', spinOn);
+});
+$('flat').addEventListener('click', () => { tiltWant = 0; manualTilt = true; });
+
+/* regrow a kept crystal, in front of you, from its logbook */
+function startReplay(rec) {
+  seed = rec.seed;
+  cry = makeCrystal(rec.N || NLAT, rec.seed);
+  samples = []; holdLeft = 0; tSec = 0; capped = false; running = false;
+  scaleCells = 26; spin = 0; texDirty = true;
+  autoFall = null; markFall(null);
+  replayQueue = { rec, i: 0, k: 0, env: null, hold: rec.hold || HOLD };
+  puck.T = rec.pts[0][0]; puck.ss = rec.pts[0][1];
+  hideHint();
+}
+
+/* ═══ tilt ═══════════════════════════════════════════════════════════════════ */
+let manualTilt = false, dragTilt = null;
+cv.addEventListener('pointerdown', e => {
+  dragTilt = { y: e.clientY, x: e.clientX, t: tiltWant, s: spin };
+  manualTilt = true; cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointermove', e => {
+  if (!dragTilt) return;
+  tiltWant = Math.max(0, Math.min(1.40, dragTilt.t + (e.clientY - dragTilt.y) * 0.0045));
+  spin = dragTilt.s + (e.clientX - dragTilt.x) * 0.006;
+  spinOn = false; $('spin').classList.remove('on');
+  hideHint();
+});
+cv.addEventListener('pointerup', () => { dragTilt = null; });
+cv.addEventListener('pointercancel', () => { dragTilt = null; });
+
+let hintGone = false;
+function hideHint() {
+  if (hintGone) return; hintGone = true;
+  const h = $('hint'); h.style.opacity = '0'; setTimeout(() => h.remove(), 700);
+}
+setTimeout(hideHint, 16000);
+
+/* ═══ the drawer ═════════════════════════════════════════════════════════════ */
+$('proofbtn').addEventListener('click', () => {
+  $('drawer').classList.add('open'); $('proofbtn').style.display = 'none';
+});
+$('closed').addEventListener('click', () => {
+  $('drawer').classList.remove('open'); $('proofbtn').style.display = '';
+});
+
+/* the rule, verbatim — pulled out of the function the page is actually running,
+   so it cannot drift from the code that grew the crystal in front of you */
+(function showRule() {
+  const src = step.toString();
+  const start = src.indexOf('/* 1 — DIFFUSION');
+  const end = src.indexOf('for (let k = 0; k < pending.length');
+  let body = (start > 0 && end > start) ? src.slice(start, end) : src;
+  body = body.split('\n').map(l => l.replace(/^ {2}/, '')).join('\n');
+  body = body.replace(/(\n[\s})]*)+$/, '\n');          // trim the dangling braces
+  $('rulesrc').textContent = body.trim();
+})();
+
+/* the two controls. Each grows a PAIR of crystals from one seed, chunked across
+   frames so the room keeps moving while they run. */
+function runPair(cfgA, cfgB, canA, canB, numA, numB, bar, cap, report) {
+  const N = 221, STEPS = 2000, CHUNK = 40;
+  const A = makeCrystal(N, 4242), B = makeCrystal(N, 4242);
+  const eA = envAt(cfgA.T, cfgA.ss, cfgA.opts), eB = envAt(cfgB.T, cfgB.ss, cfgB.opts);
+  let i = 0;
+  bar.style.width = '0%';
+  (function chunk() {
+    const lim = Math.min(STEPS, i + CHUNK);
+    const capR = A.Rlive - A.LBC - 2;
+    for (; i < lim; i++) {
+      if (A.rmax < capR) step(A, eA);
+      if (B.rmax < capR) step(B, eB);
+    }
+    bar.style.width = (100 * i / STEPS).toFixed(0) + '%';
+    tileTo(canA, A); tileTo(canB, B);
+    if (i < STEPS) { requestAnimationFrame(chunk); return; }
+    report(A, B, numA, numB, cap);
+    bar.style.width = '100%';
+  })();
+}
+$('runE').addEventListener('click', () => {
+  $('runE').disabled = true;
+  runPair({ T: -15, ss: 0.235 }, { T: -15, ss: 0.235, opts: { uniform: true } },
+    $('cA'), $('cB'), $('nA'), $('nB'), $('barE'), $('capE'), (A, B, na, nb, cap) => {
+      const oa = outline(A), ob = outline(B), va = vaporReach(A), vb = vaporReach(B);
+      na.textContent = 'ruggedness ' + oa.ruggedness.toFixed(2);
+      nb.textContent = 'ruggedness ' + ob.ruggedness.toFixed(3);
+      cap.innerHTML = 'The outline on the left is <b>' + oa.ruggedness.toFixed(2) +
+        '</b> times as long as a hexagon of the same area. On the right, with the same ' +
+        'rule and the same air, it is <b>' + ob.ruggedness.toFixed(3) + '</b> &mdash; a hexagon. ' +
+        'And it is not merely stunted: it has <b>' + ob.area + '</b> cells of ice against <b>' +
+        oa.area + '</b>. The reason is in the vapour: on the left the outermost boundary sites ' +
+        'sit in <b>' + va.ratio.toFixed(1) + '&times;</b> the vapour the sheltered ones get, and ' +
+        'on the right that ratio is <b>' + vb.ratio.toFixed(2) + '</b>. A tip eats better. ' +
+        'That is the whole of it.';
+      $('runE').disabled = false;
+    });
+});
+$('runF').addEventListener('click', () => {
+  $('runF').disabled = true;
+  runPair({ T: -14.5, ss: 0.225 },
+    { T: -14.5, ss: 0.225, opts: { sectors: [1.24, 0.80, 1.10, 0.86, 1.30, 0.92] } },
+    $('cC'), $('cD'), $('nC'), $('nD'), $('barF'), $('capF'), (A, B, na, nb, cap) => {
+      const sa = sixfold(A), sb = sixfold(B);
+      na.textContent = 'arms agree ' + sa.toFixed(3);
+      nb.textContent = 'arms agree ' + sb.toFixed(3);
+      cap.innerHTML = 'Turn the mass field a sixth of a turn and lay it over itself: on the ' +
+        'left the two agree to <b>' + sa.toFixed(3) + '</b>, on the right to <b>' + sb.toFixed(3) +
+        '</b>. Nothing was copied either time &mdash; switch the vapour noise off entirely and ' +
+        'the left-hand number is <b>1 exactly</b>, because the rule is local and the lattice ' +
+        'is six-fold symmetric and one seed cell is all it started from. A snowflake is ' +
+        'symmetric because its six arms went to the same places at the same times.';
+      $('runF').disabled = false;
+    });
+});
+
+/* ═══ the loop ═══════════════════════════════════════════════════════════════ */
+let last = performance.now(), simBudget = 3, acc = 0, uiAcc = 0;
+function frame(now) {
+  /* clamp at BOTH ends. The first rAF timestamp is the time the frame began,
+     which can be EARLIER than a performance.now() taken while the module was
+     still evaluating — so the very first dt comes out negative, walks the fall
+     backwards, and indexes pts[-1]. It killed the loop on frame one, silently,
+     because a throw inside a rAF callback simply stops scheduling. */
+  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
+  resize();
+
+  /* walk a scripted fall */
+  if (autoFall && running) {
+    autoT += dt / 22;                                 // a fall takes ~22 s
+    const u = Math.min(1, autoT) * (autoFall.pts.length - 1);
+    const k = Math.max(0, Math.min(autoFall.pts.length - 2, Math.floor(u))), f = u - k;
+    const a = autoFall.pts[k], b = autoFall.pts[k + 1];
+    puck.T = a.T + (b.T - a.T) * f; puck.ss = a.ss + (b.ss - a.ss) * f;
+  }
+
+  /* grow — adaptively, so the frame stays inside its budget.
+     A replay steps ONE lattice step at a time, exactly like the live chamber:
+     a whole thirty-step sample is eighty milliseconds of work and doing one per
+     frame drops the room to twelve frames a second while it regrows. */
+  if (replayQueue) {
+    const t0 = performance.now();
+    const q = replayQueue, capR = cry.Rlive - cry.LBC - 2, pts = q.rec.pts;
+    let budget = simBudget * 2;
+    while (budget-- > 0 && q.i < pts.length) {
+      if (q.k === 0) {
+        q.env = envAt(pts[q.i][0], pts[q.i][1]);
+        samples.push(pts[q.i]); puck.T = pts[q.i][0]; puck.ss = pts[q.i][1];
+      }
+      step(cry, q.env); q.k++;
+      if (q.k >= q.hold) { q.k = 0; q.i++; }
+      if (cry.rmax >= capR) { q.i = pts.length; capped = true; break; }
+    }
+    const took = performance.now() - t0;
+    if (took < 6 && simBudget < 10) simBudget++;
+    else if (took > 12 && simBudget > 1) simBudget--;
+    texDirty = true; tSec += dt;
+    if (q.i >= pts.length) { replayQueue = null; running = false; }
+  } else if (running) {
+    const t0 = performance.now();
+    advance(simBudget);
+    const took = performance.now() - t0;
+    if (took < 6 && simBudget < 10) simBudget++;
+    else if (took > 10 && simBudget > 1) simBudget--;
+    texDirty = true; tSec += dt;
+  }
+
+  if (texDirty) uploadTex();
+
+  /* the stage: keep the whole crystal in frame and turn a column up to be seen.
+     A needle is 500 cells tall and 45 across, so the frame has to follow the
+     TILTED extent — the c-axis swings into the screen's vertical as the stage
+     turns, and a scale taken from the rim alone puts the visitor inside the ice. */
+  const a = aspect(cry);
+  if (!manualTilt) {
+    const columnar = a.maxH / Math.max(1, cry.rmax);
+    tiltWant = columnar > 0.7 ? 1.05 : (columnar > 0.25 ? 0.62 : 0.26);
+  }
+  tilt += (tiltWant - tilt) * Math.min(1, dt * 2.2);
+  const aspX = cv.width / cv.height;
+  /* On a narrow screen the instrument takes the bottom of the window, so the
+     stage sits in what is left above it — the crystal is the thing you came
+     for and it must not end up behind the panel. */
+  const rr = rigEl.getBoundingClientRect();
+  const bottomPanel = rr.width > innerWidth * 0.72;
+  const topPx = bottomPanel ? 60 : 0;
+  const botPx = bottomPanel ? Math.max(topPx + 90, rr.top - 8) : innerHeight;
+  const centreY = 1 - ((topPx + botPx) / 2) / innerHeight;
+  const avail = Math.max(0.12, ((botPx - topPx) / 2) / innerHeight);
+  const vert = cry.rmax * Math.abs(Math.cos(tilt)) + a.maxH * Math.abs(Math.sin(tilt));
+  const want = Math.max(24, 0.62 * vert / avail, 1.24 * cry.rmax / Math.max(0.5, aspX));
+  scaleCells += (want - scaleCells) * Math.min(1, dt * 1.4);
+  if (spinOn && !dragTilt) spin += dt * 0.13;
+
+  gl.useProgram(prog); gl.bindVertexArray(vao);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.uniform2f(U.uRes, cv.width, cv.height);
+  gl.uniform1f(U.uR, texR);
+  gl.uniform1f(U.uHS, texHS);
+  gl.uniform1f(U.uHLo, texHLo);
+  gl.uniform1f(U.uScale, scaleCells);
+  gl.uniform1f(U.uTilt, tilt);
+  gl.uniform1f(U.uSpin, spin);
+  gl.uniform1f(U.uTime, now / 1000);
+  gl.uniform1f(U.uAlive, running ? 1 : 0.35);
+  gl.uniform1f(U.uCenterY, centreY);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  /* the panel */
+  uiAcc += dt;
+  if (uiAcc > 0.08) {
+    uiAcc = 0;
+    drawDiagram(); drawCurves();
+    const T = puck.T, ss = puck.ss;
+    $('hab').textContent = habitName(T, ss);
+    $('tval').textContent = T.toFixed(1) + ' °C';
+    $('ssval').textContent = ss.toFixed(3) + ' g/m³' +
+      (ss > waterCeiling(T) ? '  (over water)' : '');
+    // one lattice cell is 2 micrometres, which puts a big fern at about 1.2 mm
+    $('wval').textContent = (cry.rmax * 2 * 2).toFixed(0) + ' µm';
+    $('hval').textContent = (a.maxH * 2 * 2).toFixed(0) + ' µm';
+    $('clock').textContent = capped ? 'grown' : tSec.toFixed(1) + ' s';
+    const ap = alphaPrism(T), ab = alphaBasal(T);
+    $('xover').textContent = ap.toFixed(3) + ' · ' + ab.toFixed(3) +
+      (ap > ab ? '  rim runs' : '  caps run');
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ═══ go ═════════════════════════════════════════════════════════════════════ */
+loadPlate(); renderPlate();
+resize(); drawDiagramBG();
+reset(null);
+startFall(FALLS[0]);
+requestAnimationFrame(frame);
+
+/* the breadcrumb the sky's survey eats */
+try { WS.seen('the-snow-cabinet'); } catch (e) {}
+
+/* for headless verification: drive the room without a pointer */
+window.__snow = {
+  set(T, ss) { puck.T = T; puck.ss = ss; autoFall = null; },
+  grow(n) { advance(n); texDirty = true; },
+  fresh(s) { reset(s); },
+  fall(id) { startFall(FALLS.find(f => f.id === id) || FALLS[0]); },
+  keep: keepIt,
+  state() {
+    return {
+      steps: cry.steps, rmax: cry.rmax, samples: samples.length, capped,
+      aspect: aspect(cry), outline: outline(cry), sixfold: sixfold(cry),
+      vapor: vaporReach(cry), tilt, scaleCells, texR, texHS, kept: kept.length,
+      T: puck.T, ss: puck.ss, habit: habitName(puck.T, puck.ss), err: window.__snowErr || null,
+      ceiling: waterCeiling(puck.T),
+    };
+  },
+  replayLast() { if (kept.length) startReplay(kept[kept.length - 1]); },
+};
+</script>
+</body>
+</html>

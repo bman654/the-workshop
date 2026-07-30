@@ -172,6 +172,24 @@ Nothing else is required reading.
   < 0) swap` after you build the element list is the whole fix. The eigensolve never
   notices, because a stiffness matrix takes |area|.
 
+- **A LINEAR sampler on a 16-bit number split across two 8-bit channels is not
+  interpolation.** Packing a height field as `RGBA8` with the high byte in R and the
+  low byte in G is the right way to get 16 bits without a float texture — but the
+  hardware then blends R and G *independently*, which is arithmetic nonsense wherever
+  the high byte steps. You get a saw-tooth of 1/256 in every slope, and a surface
+  shaded by its own gradient turns that into a fine terracing that reads as a mesh or
+  quantisation bug. Use `NEAREST` and do the bilinear yourself from four
+  `texelFetch`es of the decoded value. (8-bit alone is not an option either: 1/255 of
+  a height field is 257× coarser and its normals band visibly.)
+
+- **A stage that frames a shape by its RADIUS puts the visitor inside anything tall.**
+  If the camera scale follows the object's extent in the plane and the object can also
+  be deep — a snow crystal that is 45 cells across and 500 tall, a column, a spire —
+  then the moment you tilt the view the depth swings into the screen's vertical and
+  the object bursts the frame. It reads as a runaway simulation, not a camera bug.
+  Frame the TILTED extent: `r*|cos tilt| + depth*|sin tilt|`, and take the max against
+  the horizontal need after dividing by the aspect ratio.
+
 - **Volumetric marching wants an interleaved-gradient dither**, not an ordered/Bayer one:
   `fract(52.9829189 * fract(0.06711056*x + 0.00583715*y))`, offset per frame by the golden
   ratio. Too-few steps then read as a fine even weave instead of hard rings.
@@ -235,6 +253,39 @@ Nothing else is required reading.
 - **A `<canvas>` inside `display:none` has `clientWidth === 0` and draws
   nothing, silently.** Reveal the panel FIRST, then plot into it. There is no
   error, no warning, and the canvas is the right size the moment you go looking.
+- **Your first `requestAnimationFrame` dt can be NEGATIVE, and a throw inside a rAF
+  callback silently ends your animation.** The timestamp rAF hands you is when the
+  *frame began*, which can be earlier than a `performance.now()` you took while the
+  module was still evaluating — so `now - last` comes out below zero exactly once, on
+  frame one. That is enough to walk a path parameter to −1, index `pts[-1]`, and throw
+  — and because the throw happens before the line that schedules the next frame, the
+  loop just stops. Nothing renders, no error reaches the console you are looking at,
+  and the page looks like it never started. Clamp dt at BOTH ends
+  (`Math.max(0, Math.min(0.05, …))`), and when a loop mysteriously does not run, add
+  `addEventListener('error', e => window.__err = e.error.stack)` before you guess.
+
+### Simulation
+
+- **A cellular rule that reads its neighbours' state must not also WRITE that state in
+  the same pass.** It is obvious written down and invisible in code: the attachment
+  test counted attached neighbours, and the same loop set `attached = 1` on cells it
+  had already judged — so the rule depended on the order the array happened to be
+  walked. The symptom was not a crash and not garbage: it was a lattice that is exactly
+  six-fold symmetric on paper coming out with six *slightly different* arms, which
+  looks exactly like the noise term doing its job. Collect the changes and apply them
+  after the pass. Then pin it: grow with the noise at zero and require the field to
+  equal itself rotated by a symmetry of the lattice **exactly** — largest disagreement
+  0, not small. That check caught the same bug a second time when a per-cell growth
+  term crept back into the judging pass (disagreement 0.0069).
+
+- **A field with a fixed outer boundary far from the action is a sealed jar.** A
+  diffusion box initialised full of vapour, with the reservoir pinned only at the wall
+  of the array, does not respond to the outside conditions at all: the crystal is
+  eating the vapour that was already in the box, and the diffusion time from the wall
+  is the box radius *squared*. Every crystal came out identical at every
+  supersaturation and they all looked plausible. Put the reservoir on a ring that
+  FOLLOWS the growing object out (a boundary-layer thickness away), which is also the
+  physical picture.
 
 ### Estate-wide conventions
 
