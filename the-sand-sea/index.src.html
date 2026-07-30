@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Sand Sea — three rules, and every dune on Earth</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  THE SAND SEA  ·  the-sand-sea/
+
+  An erg at low sun, running.
+
+  WHAT IS ACTUALLY RUNNING
+    · WERNER'S SLAB MODEL (Geology 23, 1995).  Sand is a stack of slabs on a
+      periodic lattice.  One iteration: lift a slab off a random cell if it has
+      sand and is not in the lee of anything; walk it downwind one cell at a
+      time; drop it where it sticks; then let anything steeper than 34 degrees
+      slide.  That is the entire physics.  There is no crest in it, no slip
+      face, no horn, no wavelength, and no dune.
+    · THE SEPARATION BUBBLE is the one thing that makes a desert.  Behind a
+      brink the wind detaches, and nothing inside that 15-degree wedge is
+      scoured or flown over: a grain that reaches it drops at once.  Switch it
+      off in the room and the sand lies down flat, covering the whole floor,
+      with a fifth of the relief.  The other candidate — sand catching sand
+      better than bare rock does — turns out to do nothing at all, and the room
+      says so.
+    · WebGL2, no vertex attributes: each vertex derives its cell from
+      gl_VertexID and fetches its height from an R32F texture.  Shadows are a
+      horizon march over that same texture, which is why a slip face at dawn
+      throws the shadow it should.  The desert is a torus, drawn 3x3, so it runs
+      to the horizon.  The drifting haze is the model's OWN flux field.
+    · The sand runs in a Web Worker.
+
+  THE CLAIMS, AND HOW TO FALSIFY THEM
+    THE RACE      A dune's speed times its height is one number for the whole
+                  desert: c*H = 4.50 m^2 per sweep, 1.6% spread over a 4.8x
+                  range of speed, R^2 = 0.9994.  Small dunes are fast.  Press
+                  PROVE IT and the room races six of them and fits the line.
+    THE GATE      For anything translating, c*h(x) = q(x) - q0.  The room
+                  measures the left side from where the sand IS (a centroid,
+                  over a hundred sweeps) and the right side from what crossed a
+                  gate (every slab, by saltation AND by avalanche), and lays
+                  the two curves over each other: slope 0.999, R^2 0.994, rms
+                  2% of the peak.  Two instruments that never speak.
+    THE ROSE      Rubin & Hunter (1987): a dune orients its crest to whatever
+                  bearing the most sand crosses.  The room computes that from
+                  the wind rose ALONE — pure arithmetic, no sand in it — and
+                  puts the needle on the compass next to the crest angle
+                  measured off the sand by a structure tensor.  Five roses,
+                  every one inside 9 degrees, including the flip from
+                  transverse to LONGITUDINAL between 90 and 140 degrees of
+                  divergence.
+
+  HONEST ABOUT THE MODEL — the card says all of this on the page:
+    the ripples are DRAWN, not solved (a 10 cm ripple is a twentieth of a cell);
+    the clock is pinned by setting the model's own measured flux to a real
+    erg's 60 m^2/yr, so one sweep is 27 days and every year on the wall comes
+    from that one division; the vertical is exaggerated (the slider says by how
+    much); there is no wind speed in the model, only a direction and a rate;
+    and the deposition probabilities are Werner's, which the room shows do not
+    matter.
+
+  ENGINES (inlined byte-for-byte by the forge, never forked):
+    · tools/ws/ws.js   the estate-wide mute and the visit breadcrumb
+    · ./sand.mjs       the three rules, and every instrument
+    · ./worker.js      the desert, off the main thread
+    · ./render.js      WebGL2: sky, sand, the horizon march, the haze
+  Node twin: `node the-sand-sea/sand.test.mjs`  (51 checks)
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root{
+    --ink:#f4ebdd; --dim:#b6a48c; --faint:#8a7861;
+    --sand:#e8c99b; --amber:#f0a94c; --sky:#8fb8dd; --rose:#e07a5f; --green:#9fc78a;
+    --bg0:#120d0a; --panel:rgba(22,15,11,.90); --line:rgba(232,201,155,.20);
+    --font-ui:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --font-mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg0);color:var(--ink);
+    font:15px/1.55 var(--font-ui);overflow:hidden;-webkit-font-smoothing:antialiased}
+  canvas#gl{display:block;position:fixed;inset:0;width:100%;height:100%;touch-action:none;cursor:grab}
+  canvas#gl.grabbing{cursor:grabbing}
+  canvas#ov{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
+
+  .scrim{position:fixed;top:0;left:0;width:min(70vw,900px);height:360px;z-index:1;pointer-events:none;
+    background:radial-gradient(110% 100% at 0% 0%, rgba(8,5,3,.92), rgba(8,5,3,0) 74%)}
+  .scrim2{position:fixed;bottom:0;left:0;right:0;height:270px;z-index:1;pointer-events:none;
+    background:linear-gradient(to top, rgba(8,5,3,.88), rgba(8,5,3,0) 100%)}
+
+  .topleft{position:fixed;top:16px;left:22px;z-index:5;pointer-events:none;max-width:31em}
+  .topleft a{pointer-events:auto}
+  .back{display:inline-block;font:600 10px/1 var(--font-mono);letter-spacing:.22em;
+    text-transform:uppercase;color:var(--dim);text-decoration:none;opacity:.85}
+  .back:hover{color:var(--sand);opacity:1}
+  h1{font:400 clamp(23px,3.1vw,37px)/1.08 var(--font-ui);margin:.36em 0 .12em;
+    text-shadow:0 2px 30px rgba(0,0,0,.92);letter-spacing:.005em}
+  .say{color:var(--dim);font-size:13.5px;margin:.3em 0 0;text-shadow:0 1px 18px rgba(0,0,0,.95)}
+  .say b{color:var(--sand);font-weight:600}
+
+  /* ── the clock ─────────────────────────────────────────────────────────── */
+  .clock{position:fixed;left:24px;bottom:96px;z-index:4;pointer-events:none}
+  .clock .big{font:300 clamp(28px,5vw,56px)/1 var(--font-ui);color:var(--sand);
+    text-shadow:0 0 44px rgba(240,169,76,.22),0 2px 30px rgba(0,0,0,.9)}
+  .clock .sub{font:600 10px/1.6 var(--font-mono);letter-spacing:.18em;text-transform:uppercase;
+    color:var(--faint);margin-top:.35em;max-width:26em}
+  .clock .sub b{color:var(--sand);font-weight:600}
+
+  /* ── the card ──────────────────────────────────────────────────────────── */
+  .card{position:fixed;top:16px;right:16px;z-index:6;width:344px;max-height:calc(100vh - 128px);
+    overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:13px;
+    padding:13px 15px 14px;box-shadow:0 12px 50px rgba(0,0,0,.72);backdrop-filter:blur(4px)}
+  .card.off{display:none}
+  .chead{font:600 9.5px/1 var(--font-mono);letter-spacing:.2em;text-transform:uppercase;
+    color:var(--faint);margin:14px 0 8px}
+  .chead:first-child{margin-top:0}
+  .claim{font:400 14.5px/1.46 var(--font-ui);color:var(--ink);margin:0 0 10px}
+  .claim b{color:#fff;font-weight:600}
+  .rules{font:12px/1.62 var(--font-ui);color:var(--dim);margin:0 0 4px;padding-left:1.1em}
+  .rules li{margin-bottom:5px}
+  .rules b{color:var(--sand);font-weight:600}
+  .rows{font:11.5px/1.66 var(--font-mono);color:var(--dim)}
+  .rows .r{display:flex;justify-content:space-between;gap:10px}
+  .rows .v{color:var(--sand)}
+  .rows .v.good{color:var(--green)}
+  .note{font:11.5px/1.55 var(--font-ui);color:var(--faint);margin:9px 0 0;font-style:italic}
+
+  /* ── the wind rose ─────────────────────────────────────────────────────── */
+  .rosewrap{display:flex;gap:12px;align-items:flex-start;margin:4px 0 2px}
+  canvas#rose{width:132px;height:132px;cursor:crosshair;border-radius:50%;
+    background:radial-gradient(circle,rgba(0,0,0,.35),rgba(0,0,0,.06));flex:0 0 auto}
+  .roseinfo{font:11px/1.6 var(--font-mono);color:var(--dim);flex:1 1 auto;min-width:0}
+  .roseinfo .k{color:var(--faint);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase}
+  .roseinfo .p{color:var(--amber)} .roseinfo .m{color:var(--sky)}
+  .roseinfo .d{color:var(--green)}
+
+  /* ── controls ──────────────────────────────────────────────────────────── */
+  .bar{position:fixed;left:0;right:0;bottom:0;z-index:7;padding:10px 18px 12px;
+    display:flex;gap:7px;flex-wrap:wrap;align-items:center;justify-content:center}
+  button,.chip{font:600 10px/1 var(--font-mono);letter-spacing:.14em;text-transform:uppercase;
+    color:var(--dim);background:rgba(26,18,13,.86);border:1px solid var(--line);
+    border-radius:999px;padding:8px 13px;cursor:pointer;transition:.16s;white-space:nowrap}
+  button:hover,.chip:hover{color:var(--ink);border-color:rgba(232,201,155,.44)}
+  button.on{color:#1a120d;background:var(--sand);border-color:var(--sand)}
+  button.warn.on{background:var(--rose);border-color:var(--rose);color:#1a120d}
+  .sliders{position:fixed;left:24px;bottom:210px;z-index:5;width:210px;
+    display:flex;flex-direction:column;gap:7px}
+  .sliders.off{display:none}
+  .sl{display:flex;align-items:center;gap:8px;font:9.5px/1 var(--font-mono);
+    letter-spacing:.13em;text-transform:uppercase;color:var(--faint)}
+  .sl label{width:56px;flex:0 0 auto}
+  .sl input{flex:1 1 auto;accent-color:var(--sand);height:3px}
+  .sl .n{width:38px;text-align:right;color:var(--sand);font-size:10px}
+
+  /* ── the bench drawer ──────────────────────────────────────────────────── */
+  .bench{position:fixed;left:0;right:0;bottom:0;z-index:9;height:min(70vh,470px);
+    background:rgba(16,11,8,.975);border-top:1px solid var(--line);
+    transform:translateY(102%);transition:transform .42s cubic-bezier(.22,.9,.3,1);
+    box-shadow:0 -18px 60px rgba(0,0,0,.7);display:flex;flex-direction:column}
+  .bench.on{transform:translateY(0)}
+  .bhead{display:flex;align-items:center;gap:12px;padding:11px 20px 8px;flex:0 0 auto}
+  .bhead h2{font:400 17px/1 var(--font-ui);margin:0;color:var(--sand)}
+  .bhead .sp{flex:1 1 auto}
+  .bbody{flex:1 1 auto;display:flex;gap:18px;padding:4px 20px 18px;overflow:auto}
+  .plot{flex:1 1 0;min-width:0;display:flex;flex-direction:column}
+  .plot h3{font:600 9.5px/1 var(--font-mono);letter-spacing:.2em;text-transform:uppercase;
+    color:var(--faint);margin:0 0 7px}
+  .plot canvas{width:100%;flex:1 1 auto;min-height:150px;background:rgba(0,0,0,.28);
+    border:1px solid rgba(232,201,155,.13);border-radius:8px}
+  .plot .cap{font:11px/1.5 var(--font-mono);color:var(--dim);margin-top:7px}
+  .plot .cap b{color:var(--green)}
+  .prog{height:2px;background:rgba(232,201,155,.15);border-radius:2px;overflow:hidden;margin:6px 0}
+  .prog i{display:block;height:100%;width:0;background:var(--amber);transition:width .12s}
+
+  .err{position:fixed;inset:0;z-index:40;display:none;place-items:center;background:#0a0705;padding:30px}
+  .err.on{display:grid}
+
+  @media (max-width:900px){
+    .card{width:min(94vw,344px);max-height:44vh}
+    .sliders{display:none}
+    .clock{bottom:78px}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+<canvas id="ov"></canvas>
+<div class="scrim"></div>
+<div class="scrim2"></div>
+
+<div class="topleft">
+  <a class="back" href="../glasshouse-range/index.html">&larr; the glasshouse range</a>
+  <h1>The Sand Sea</h1>
+  <p class="say">Three rules, no dune in any of them. <b>Drag to look. Click a dune to tag it</b>
+     and the room will draw where it has been.</p>
+</div>
+
+<div class="clock">
+  <div class="big" id="clockBig">0 years</div>
+  <div class="sub" id="clockSub">one sweep is <b>27 days</b> — the model's own flux, pinned to a real erg</div>
+</div>
+
+<div class="card" id="card">
+  <div class="chead">the whole physics</div>
+  <ol class="rules">
+    <li><b>Lift.</b> Take one slab off a random cell — unless the cell is in the
+        <b>lee</b> of something upwind, where the wind never reaches.</li>
+    <li><b>Carry.</b> Walk it downwind. It sticks where it lands with a fixed chance —
+        or at once, and always, if it reaches a lee.</li>
+    <li><b>Slide.</b> Anything steeper than <b>34&deg;</b> avalanches until it isn't.</li>
+  </ol>
+  <p class="note" style="margin-top:2px">Nothing in that knows what a dune is.</p>
+
+  <div class="chead">the wind, and what it makes</div>
+  <div class="rosewrap">
+    <canvas id="rose" width="264" height="264"></canvas>
+    <div class="roseinfo">
+      <div class="k">crest predicted</div>
+      <div class="p" id="rPred">— </div>
+      <div class="k" style="margin-top:6px">crest measured</div>
+      <div class="m" id="rMeas">— </div>
+      <div class="k" style="margin-top:6px">apart</div>
+      <div class="d" id="rDiff">— </div>
+    </div>
+  </div>
+  <p class="note">The amber needle is <b>Rubin &amp; Hunter's rule</b> worked out from the
+     rose alone — the bearing across which the most sand travels, counting both ways.
+     There is no sand in that arithmetic. The blue needle is the crest angle
+     <i>measured off the desert</i> by a structure tensor. Drag the arrows.</p>
+
+  <div class="chead">readings</div>
+  <div class="rows">
+    <div class="r"><span>relief</span><span class="v" id="vRelief">—</span></div>
+    <div class="r"><span>roughness</span><span class="v" id="vRough">—</span></div>
+    <div class="r"><span>bare floor</span><span class="v" id="vBare">—</span></div>
+    <div class="r"><span>tagged dunes</span><span class="v" id="vTags">none</span></div>
+  </div>
+  <div class="rows" id="tagRows" style="margin-top:6px"></div>
+
+  <div class="chead">honest about the model</div>
+  <p class="note" style="font-style:normal;color:var(--faint)">
+    The <b style="color:var(--dim)">ripples are drawn, not solved</b> — a 10&nbsp;cm ripple is a
+    twentieth of a cell. The vertical is exaggerated (the slider says by how much). There is
+    no wind <i>speed</i> here, only a direction and a rate. The clock comes from setting the
+    model's measured flux, 4.50&nbsp;m&sup2; a sweep, against a working erg's 60&nbsp;m&sup2; a
+    year; halve that and halve every year on the wall. Everything else is measured, and
+    <a href="#" id="benchLink" style="color:var(--sand)">the bench</a> measures it in front of you.
+  </p>
+</div>
+
+<div class="sliders" id="sliders">
+  <div class="sl"><label>sand</label><input id="sSand" type="range" min="1" max="9" step="1" value="4"><span class="n" id="nSand">4</span></div>
+  <div class="sl"><label>sun</label><input id="sSun" type="range" min="3" max="45" step="1" value="9"><span class="n" id="nSun">9&deg;</span></div>
+  <div class="sl"><label>relief</label><input id="sVE" type="range" min="60" max="260" step="5" value="130"><span class="n" id="nVE">1.3&times;</span></div>
+  <div class="sl"><label>rate</label><input id="sRate" type="range" min="0" max="4" step="1" value="2"><span class="n" id="nRate">1&times;</span></div>
+</div>
+
+<div class="bar">
+  <button id="bOne" class="on">one wind</button>
+  <button id="bTwo">two winds</button>
+  <button id="bWide">two winds, wide</button>
+  <button id="bThree">three winds</button>
+  <button id="bBubble" class="warn">no separation</button>
+  <button id="bNew">new desert</button>
+  <button id="bClear">clear tags</button>
+  <button id="bBench">prove it</button>
+  <button id="bCard" class="on">card</button>
+  <button id="bMute">mute</button>
+</div>
+
+<div class="bench" id="bench">
+  <div class="bhead">
+    <h2>The bench</h2>
+    <span class="sp"></span>
+    <button id="bRace">run the race</button>
+    <button id="bGate">run the gate</button>
+    <button id="bClose">close</button>
+  </div>
+  <div class="bbody">
+    <div class="plot">
+      <h3>the race — speed against 1/height</h3>
+      <div class="prog"><i id="pRace"></i></div>
+      <canvas id="cRace" width="700" height="400"></canvas>
+      <div class="cap" id="capRace">Six ridges, six sizes, one wind. Each is spun up until it
+        stops changing shape, then timed. If a dune's speed really is a flux divided by its
+        height, these six points lie on one straight line through the origin.</div>
+    </div>
+    <div class="plot">
+      <h3>the gate — where the sand is, against what crossed</h3>
+      <div class="prog"><i id="pGate"></i></div>
+      <canvas id="cGate" width="700" height="400"></canvas>
+      <div class="cap" id="capGate">One ridge. The <b style="color:var(--sand)">amber</b> curve is
+        its speed times its own profile — measured from where the sand is. The
+        <b style="color:var(--sky)">blue</b> is the sand counted through a gate at every station,
+        by saltation and by avalanche both. Nothing connects the two measurements.</div>
+    </div>
+  </div>
+</div>
+
+<div class="err" id="err"><div>
+  <h2 style="font:400 24px var(--font-ui);color:var(--sand)">This room needs WebGL2.</h2>
+  <p style="color:#9aa7b8" id="errMsg"></p>
+</div></div>
+
+<script type="javascript/worker" id="wsrc">
+<!-- forge:include ./sand.mjs -->
+<!-- forge:include ./worker.js -->
+</script>
+
+<script type="module">
+<!-- forge:include ../tools/ws/ws.js -->
+<!-- forge:include ./render.js -->
+
+const $ = id => document.getElementById(id);
+addEventListener('error', e => { window.__err = (e.error && e.error.stack) || String(e.message); });
+
+let R;
+try { R = createRenderer($('gl')); }
+catch (e) { $('err').classList.add('on'); $('errMsg').textContent = String(e.message || e); throw e; }
+try { WS.seen('the-sand-sea'); } catch (e) {}
+
+/* ── the desert, in a worker ─────────────────────────────────────────────── */
+const blob = new Blob([$('wsrc').textContent], { type: 'text/javascript' });
+const W = new Worker(URL.createObjectURL(blob));
+
+const GRID = { NX: 288, NY: 208, DX: 2, SLAB: 0.45, yps: 0.075 };
+let H = null;                    /* our own CPU copy of the heights, in metres */
+let last = null, ready = false, waiting = false;
+let windRose = [{ deg: 0, weight: 1 }];
+
+W.onmessage = ev => {
+  const d = ev.data;
+  if (d.type === 'ready') {
+    GRID.NX = d.NX; GRID.NY = d.NY; GRID.DX = d.DX; GRID.SLAB = d.SLAB; GRID.yps = d.yps;
+    H = new Float32Array(d.NX * d.NY);
+    R.setGrid(d.NX, d.NY, d.DX);
+    const asp = innerWidth / Math.max(1, innerHeight);
+    R.st.dist = 560 * Math.pow(1.5 / Math.max(0.7, asp), 0.5);
+    ready = true;
+    $('clockSub').innerHTML = 'one sweep is <b>' + Math.round(d.yps * 365) +
+      ' days</b> — the model’s own flux, pinned to a real erg';
+  } else if (d.type === 'frame') {
+    H.set(d.h);                      /* our copy FIRST: the transfer detaches d.h */
+    R.upload(d.h, d.q);
+    W.postMessage({ type: 'recycle', h: d.h, q: d.q }, [d.h.buffer, d.q.buffer]);
+    last = d.stats;
+    waiting = false;
+    paint(d.stats);
+  } else if (d.type === 'bench') {
+    if (d.progress != null) $(d.kind === 'race' ? 'pRace' : 'pGate').style.width = (d.progress * 100) + '%';
+    if (d.result) { $(d.kind === 'race' ? 'pRace' : 'pGate').style.width = '100%'; onBench(d.kind, d.result); }
+  }
+};
+
+W.postMessage({ type: 'init', NX: GRID.NX, NY: GRID.NY, DX: 2, seed: (Math.random() * 1e9) | 0, fill: 4, rough: 2 });
+
+/* ── the readings ────────────────────────────────────────────────────────── */
+const fmt1 = v => v.toFixed(1);
+function paint(s) {
+  const yr = s.years;
+  $('clockBig').textContent = yr >= 1000 ? Math.round(yr / 100) / 10 + 'k years'
+    : Math.round(yr) + (Math.round(yr) === 1 ? ' year' : ' years');
+  $('vRelief').textContent = fmt1(s.relief) + ' m';
+  $('vRough').textContent = fmt1(s.roughness) + ' m';
+  $('vBare').textContent = Math.round(s.bare * 100) + '%';
+  if (s.crestDeg != null) {
+    $('rMeas').textContent = s.crestDeg.toFixed(0) + '°  (anisotropy ' + s.anisotropy.toFixed(2) + ')';
+    if (s.predDeg != null) {
+      $('rPred').textContent = s.predDeg.toFixed(0) + '°';
+      let dd = Math.abs(((s.predDeg - s.crestDeg) % 180 + 180) % 180);
+      if (dd > 90) dd = 180 - dd;
+      $('rDiff').textContent = dd.toFixed(1) + '°';
+      lastMeas = s.crestDeg; lastPred = s.predDeg;
+      drawRose();            /* the needles live on the stats, so redraw here */
+    }
+  }
+  const t = s.tags || [];
+  $('vTags').textContent = t.length ? t.length + '' : 'none';
+  $('tagRows').innerHTML = t.map((k, i) => {
+    const cyr = k.c == null ? null : k.c / GRID.yps;
+    return '<div class="r"><span style="color:' + TAGCOL[i % TAGCOL.length] + '">dune ' + (i + 1) +
+      '  ' + k.H.toFixed(1) + ' m</span><span class="v">' +
+      (cyr == null ? '—' : cyr.toFixed(1) + ' m/yr') + '</span></div>';
+  }).join('');
+}
+const TAGCOL = ['#f0a94c', '#8fb8dd', '#9fc78a', '#e07a5f'];
+let lastMeas = null, lastPred = null;
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE WIND ROSE — drag the arrows.
+   ════════════════════════════════════════════════════════════════════════════ */
+const rose = $('rose'), rctx = rose.getContext('2d');
+let dragArrow = -1;
+
+function drawRose() {
+  const w = rose.width, h = rose.height, cx = w / 2, cy = h / 2, Rr = w * 0.40;
+  rctx.clearRect(0, 0, w, h);
+  rctx.save();
+  rctx.strokeStyle = 'rgba(232,201,155,.16)'; rctx.lineWidth = 2;
+  rctx.beginPath(); rctx.arc(cx, cy, Rr, 0, 7); rctx.stroke();
+  rctx.beginPath(); rctx.arc(cx, cy, Rr * 0.55, 0, 7); rctx.stroke();
+  rctx.strokeStyle = 'rgba(232,201,155,.09)';
+  for (let a = 0; a < 180; a += 30) {
+    const r = a * Math.PI / 180;
+    rctx.beginPath();
+    rctx.moveTo(cx - Rr * Math.cos(r), cy - Rr * Math.sin(r));
+    rctx.lineTo(cx + Rr * Math.cos(r), cy + Rr * Math.sin(r));
+    rctx.stroke();
+  }
+  /* the crest needles: undirected, so they are drawn as full diameters */
+  const needle = (deg, col, wd) => {
+    if (deg == null) return;
+    const r = deg * Math.PI / 180;
+    rctx.strokeStyle = col; rctx.lineWidth = wd;
+    rctx.beginPath();
+    rctx.moveTo(cx - Rr * 1.02 * Math.cos(r), cy - Rr * 1.02 * Math.sin(r));
+    rctx.lineTo(cx + Rr * 1.02 * Math.cos(r), cy + Rr * 1.02 * Math.sin(r));
+    rctx.stroke();
+  };
+  needle(lastPred, 'rgba(240,169,76,.95)', 5);
+  needle(lastMeas, 'rgba(143,184,221,.95)', 2.5);
+
+  /* the winds themselves */
+  for (let i = 0; i < windRose.length; i++) {
+    const a = windRose[i].deg * Math.PI / 180;
+    const ex = cx + Rr * 0.94 * Math.cos(a), ey = cy + Rr * 0.94 * Math.sin(a);
+    rctx.strokeStyle = '#f4ebdd'; rctx.lineWidth = 4; rctx.lineCap = 'round';
+    rctx.beginPath(); rctx.moveTo(cx, cy); rctx.lineTo(ex, ey); rctx.stroke();
+    rctx.fillStyle = '#f4ebdd';
+    rctx.beginPath(); rctx.arc(ex, ey, 8, 0, 7); rctx.fill();
+    rctx.fillStyle = '#160f0b';
+    rctx.font = '700 11px ui-monospace,monospace'; rctx.textAlign = 'center'; rctx.textBaseline = 'middle';
+    rctx.fillText(String(i + 1), ex, ey + 0.5);
+  }
+  rctx.restore();
+}
+function roseHit(px, py) {
+  const Rr = rose.width * 0.40, cx = rose.width / 2, cy = rose.height / 2;
+  for (let i = 0; i < windRose.length; i++) {
+    const a = windRose[i].deg * Math.PI / 180;
+    const ex = cx + Rr * 0.94 * Math.cos(a), ey = cy + Rr * 0.94 * Math.sin(a);
+    if (Math.hypot(px - ex, py - ey) < 20) return i;
+  }
+  return -1;
+}
+function rosePt(e) {
+  const b = rose.getBoundingClientRect();
+  return [(e.clientX - b.left) / b.width * rose.width, (e.clientY - b.top) / b.height * rose.height];
+}
+rose.addEventListener('pointerdown', e => {
+  const [px, py] = rosePt(e);
+  dragArrow = roseHit(px, py);
+  if (dragArrow < 0) return;
+  rose.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+rose.addEventListener('pointermove', e => {
+  if (dragArrow < 0) return;
+  const [px, py] = rosePt(e);
+  const cx = rose.width / 2, cy = rose.height / 2;
+  let d = Math.atan2(py - cy, px - cx) * 180 / Math.PI;
+  windRose[dragArrow].deg = Math.round(d);
+  drawRose(); sendWind();
+});
+addEventListener('pointerup', () => { dragArrow = -1; });
+
+function sendWind() {
+  W.postMessage({ type: 'wind', rose: windRose.map(r => ({ deg: r.deg, weight: r.weight })), episode: 6 });
+  lastPred = null;
+}
+function setRose(list, btn) {
+  windRose = list.map(d => ({ deg: d, weight: 1 }));
+  ['bOne', 'bTwo', 'bWide', 'bThree'].forEach(b => $(b).classList.toggle('on', b === btn));
+  drawRose(); sendWind();
+}
+$('bOne').onclick = () => setRose([0], 'bOne');
+$('bTwo').onclick = () => setRose([-45, 45], 'bTwo');
+$('bWide').onclick = () => setRose([-70, 70], 'bWide');
+$('bThree').onclick = () => setRose([-105, 0, 105], 'bThree');
+drawRose();
+
+/* ── the rest of the controls ────────────────────────────────────────────── */
+let bubble = true;
+$('bBubble').onclick = () => {
+  bubble = !bubble;
+  $('bBubble').classList.toggle('on', !bubble);
+  $('bBubble').textContent = bubble ? 'no separation' : 'separation off';
+  W.postMessage({ type: 'shadow', on: bubble });
+};
+$('bNew').onclick = () => W.postMessage({ type: 'seed', seed: (Math.random() * 1e9) | 0, fill: +$('sSand').value });
+$('bClear').onclick = () => W.postMessage({ type: 'untag' });
+$('bCard').onclick = () => { $('card').classList.toggle('off'); $('bCard').classList.toggle('on'); };
+$('bMute').onclick = () => { try { WS.setMuted(!WS.muted()); } catch (e) {} $('bMute').classList.toggle('on'); };
+
+$('sSand').oninput = e => { $('nSand').textContent = e.target.value;
+  W.postMessage({ type: 'seed', seed: (Math.random() * 1e9) | 0, fill: +e.target.value }); };
+$('sSun').oninput = e => { $('nSun').textContent = e.target.value + '°';
+  R.st.sunEl = +e.target.value * Math.PI / 180; };
+$('sVE').oninput = e => { const v = +e.target.value / 100; $('nVE').textContent = v.toFixed(1) + '×'; R.st.ve = v; };
+const RATES = [0.25, 0.5, 1, 2, 4];
+$('sRate').oninput = e => {
+  const r = RATES[+e.target.value];
+  $('nRate').textContent = (r < 1 ? r : r) + '×';
+  W.postMessage({ type: 'run', sweeps: r, on: true });
+};
+R.st.sunEl = 9 * Math.PI / 180;
+R.st.ve = 1.3;
+
+/* ── the bench drawer ────────────────────────────────────────────────────── */
+const openBench = () => { $('bench').classList.add('on'); };
+$('bBench').onclick = openBench;
+$('benchLink').onclick = e => { e.preventDefault(); openBench(); };
+$('bClose').onclick = () => $('bench').classList.remove('on');
+$('bRace').onclick = () => { $('pRace').style.width = '0%'; W.postMessage({ type: 'bench', kind: 'race' }); };
+$('bGate').onclick = () => { $('pGate').style.width = '0%'; W.postMessage({ type: 'bench', kind: 'gate', H0: 22 }); };
+
+function plotSetup(id) {
+  const c = $(id), dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = Math.round(c.clientWidth * dpr), h = Math.round(c.clientHeight * dpr);
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  const x = c.getContext('2d');
+  x.clearRect(0, 0, w, h);
+  x.scale(dpr, dpr);
+  return { x, w: c.clientWidth, h: c.clientHeight };
+}
+function axes(x, w, h, pad, xlab, ylab) {
+  x.strokeStyle = 'rgba(232,201,155,.25)'; x.lineWidth = 1;
+  x.beginPath(); x.moveTo(pad, 8); x.lineTo(pad, h - pad); x.lineTo(w - 10, h - pad); x.stroke();
+  x.fillStyle = 'rgba(182,164,140,.85)';
+  x.font = '10px ui-monospace,monospace';
+  x.textAlign = 'right'; x.fillText(xlab, w - 12, h - pad + 15);
+  x.textAlign = 'left'; x.save(); x.translate(12, 16); x.fillText(ylab, 0, 0); x.restore();
+}
+
+function onBench(kind, r) {
+  if (kind === 'race') drawRace(r); else drawGate(r);
+}
+
+function drawRace(r) {
+  const { x, w, h } = plotSetup('cRace');
+  const pad = 40;
+  axes(x, w, h, pad, '1 / height  (1/m)', 'speed  (m per year)');
+  const yps = r.yearsPerSweep;
+  const pts = r.rows.map(o => ({ x: 1 / o.H, y: o.c / yps, H: o.H, cH: o.cH }));
+  const xm = Math.max(...pts.map(p => p.x)) * 1.14;
+  const ym = Math.max(...pts.map(p => p.y)) * 1.14;
+  const X = v => pad + v / xm * (w - pad - 16);
+  const Y = v => h - pad - v / ym * (h - pad - 16);
+  /* the one-parameter fit, through the origin */
+  x.strokeStyle = 'rgba(159,199,138,.85)'; x.lineWidth = 2;
+  x.beginPath(); x.moveTo(X(0), Y(0)); x.lineTo(X(xm), Y(r.q / yps * xm)); x.stroke();
+  for (const p of pts) {
+    x.fillStyle = '#f0a94c';
+    x.beginPath(); x.arc(X(p.x), Y(p.y), 5, 0, 7); x.fill();
+    x.fillStyle = 'rgba(244,235,221,.85)';
+    x.font = '10px ui-monospace,monospace'; x.textAlign = 'left';
+    x.fillText(p.H.toFixed(0) + ' m', X(p.x) + 9, Y(p.y) + 3);
+  }
+  x.fillStyle = 'rgba(159,199,138,.95)';
+  x.font = '11px ui-monospace,monospace'; x.textAlign = 'right';
+  x.fillText('c = q / H,  q = ' + r.q.toFixed(2) + ' m²/sweep', w - 14, 22);
+  $('capRace').innerHTML = 'Six ridges, six sizes, one wind, each spun up until it stopped ' +
+    'changing shape. The line is one parameter and goes through the origin. ' +
+    '<b>R&sup2; = ' + r.r2.toFixed(4) + '</b>, and the spread of c&times;H across the whole ' +
+    'population is <b>' + (r.spread * 100).toFixed(1) + '%</b> over a <b>' +
+    (Math.max(...r.rows.map(o => o.c)) / Math.min(...r.rows.map(o => o.c))).toFixed(1) +
+    '&times;</b> range of speed. The tallest runs at ' +
+    (Math.min(...r.rows.map(o => o.c)) / yps).toFixed(1) + ' m a year; the shortest at ' +
+    (Math.max(...r.rows.map(o => o.c)) / yps).toFixed(1) + '.';
+}
+
+function drawGate(r) {
+  const { x, w, h } = plotSetup('cGate');
+  const pad = 40;
+  axes(x, w, h, pad, 'along the wind  (m)', 'm² per sweep');
+  const n = r.lhs.length;
+  const lo = Math.round(n * 0.28), hi = Math.round(n * 0.72);
+  const seg = [];
+  for (let i = lo; i < hi; i++) seg.push(i);
+  const ym = Math.max(...seg.map(i => Math.max(r.lhs[i], r.rhs[i]))) * 1.2;
+  const yn = Math.min(0, ...seg.map(i => Math.min(r.lhs[i], r.rhs[i]))) * 1.2;
+  const X = i => pad + (i - lo) / (hi - lo - 1) * (w - pad - 16);
+  const Y = v => h - pad - (v - yn) / (ym - yn) * (h - pad - 16);
+  /* the dune itself, as a filled silhouette behind the two curves */
+  const pm = Math.max(...seg.map(i => r.profile[i])) || 1;
+  x.fillStyle = 'rgba(232,201,155,.10)';
+  x.beginPath(); x.moveTo(X(lo), Y(0));
+  for (const i of seg) x.lineTo(X(i), Y(r.profile[i] / pm * ym * 0.82));
+  x.lineTo(X(hi - 1), Y(0)); x.closePath(); x.fill();
+
+  const line = (arr, col, wd) => {
+    x.strokeStyle = col; x.lineWidth = wd; x.beginPath();
+    seg.forEach((i, k) => { const px = X(i), py = Y(arr[i]); k ? x.lineTo(px, py) : x.moveTo(px, py); });
+    x.stroke();
+  };
+  line(r.rhs, 'rgba(143,184,221,.95)', 4.5);
+  line(r.lhs, 'rgba(240,169,76,.95)', 2);
+  x.fillStyle = 'rgba(159,199,138,.95)';
+  x.font = '11px ui-monospace,monospace'; x.textAlign = 'right';
+  x.fillText('slope ' + r.slope.toFixed(3) + '   R² ' + r.r2.toFixed(3), w - 14, 22);
+  $('capGate').innerHTML = 'One ridge, ' + r.H.toFixed(1) + ' m high, running at ' +
+    (r.c / GRID.yps).toFixed(1) + ' m a year. <b style="color:var(--sand)">Amber</b>: its speed ' +
+    'times its own profile, from a centroid tracked over a hundred sweeps. ' +
+    '<b style="color:var(--sky)">Blue</b>: every slab counted through a gate at that station, ' +
+    'saltating <i>and</i> sliding. Nothing connects the two. They agree to <b>' +
+    (r.rms * 100).toFixed(1) + '%</b> of the peak, slope <b>' + r.slope.toFixed(3) +
+    '</b>, R&sup2; <b>' + r.r2.toFixed(3) + '</b>. The floor between dunes carries ' +
+    (Math.abs(r.q0) < 0.002 ? 'nothing at all' : r.q0.toFixed(3) + ' m²/sweep') + '.';
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE CAMERA, AND TAGGING A DUNE
+   ════════════════════════════════════════════════════════════════════════════ */
+const gl = $('gl');
+let drag = null, moved = 0;
+gl.addEventListener('pointerdown', e => {
+  drag = { x: e.clientX, y: e.clientY, yaw: R.st.yaw, pitch: R.st.pitch };
+  moved = 0;
+  gl.setPointerCapture(e.pointerId);
+  gl.classList.add('grabbing');
+});
+gl.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  moved = Math.max(moved, Math.hypot(dx, dy));
+  R.st.yaw = drag.yaw + dx * 0.0055;
+  R.st.pitch = Math.max(0.035, Math.min(1.35, drag.pitch - dy * 0.004));
+});
+gl.addEventListener('pointerup', e => {
+  gl.classList.remove('grabbing');
+  if (drag && moved < 5) tagAt(e.clientX, e.clientY);
+  drag = null;
+});
+gl.addEventListener('wheel', e => {
+  e.preventDefault();
+  R.st.dist = Math.max(90, Math.min(2600, R.st.dist * Math.exp(e.deltaY * 0.0011)));
+}, { passive: false });
+
+/* Which cell did the visitor click?  March the eye ray against the height
+   field — cheap, exact enough, and it works on any tile of the torus. */
+function tagAt(px, py) {
+  if (!ready || !H) return;
+  const cam = R.pickRay(px, py);
+  if (!cam) return;
+  const [o, d] = cam;
+  if (d[1] > -1e-4) return;
+  let t = 0;
+  const hAt = (wx, wz) => {
+    let cx = wx / GRID.DX, cy = wz / GRID.DX;
+    cx -= Math.floor(cx / GRID.NX) * GRID.NX; cy -= Math.floor(cy / GRID.NY) * GRID.NY;
+    return H[(cy | 0) * GRID.NX + (cx | 0)] * R.st.ve;
+  };
+  let prev = o[1] - hAt(o[0], o[2]);
+  for (let i = 0; i < 900; i++) {
+    t += Math.max(2, R.st.dist * 0.004);
+    const p = [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
+    const f = p[1] - hAt(p[0], p[2]);
+    if (f <= 0 && prev > 0) {
+      let cx = p[0] / GRID.DX, cy = p[2] / GRID.DX;
+      cx -= Math.floor(cx / GRID.NX) * GRID.NX; cy -= Math.floor(cy / GRID.NY) * GRID.NY;
+      W.postMessage({ type: 'tag', x: cx | 0, y: cy | 0 });
+      return;
+    }
+    prev = f;
+    if (t > 9000) break;
+  }
+}
+
+/* ── the overlay: a tagged dune's whole history ──────────────────────────── */
+const ov = $('ov'), octx = ov.getContext('2d');
+function drawOverlay() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = Math.round(ov.clientWidth * dpr), h = Math.round(ov.clientHeight * dpr);
+  if (ov.width !== w || ov.height !== h) { ov.width = w; ov.height = h; }
+  octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  octx.clearRect(0, 0, ov.clientWidth, ov.clientHeight);
+  if (!last || !last.tags || !H) return;
+  last.tags.forEach((t, ti) => {
+    const col = TAGCOL[ti % TAGCOL.length];
+    const tr = t.trail;
+    /* the trail is stored UNWRAPPED, so it streams back off the central tile
+       and over the copies of the torus behind it, which is where the dune
+       really came from */
+    const pts = [];
+    for (let i = 0; i < tr.length; i += 3) {
+      const cx = t.x - (t.ux - tr[i]), cy = t.y - (t.uy - tr[i + 1]);
+      let sx = cx, sy = cy;
+      sx -= Math.floor(sx / GRID.NX) * GRID.NX; sy -= Math.floor(sy / GRID.NY) * GRID.NY;
+      const hh = H[(sy | 0) * GRID.NX + (sx | 0)] * R.st.ve;
+      const p = R.project([cx * GRID.DX, hh + 1.5, cy * GRID.DX]);
+      if (p) pts.push([p[0], p[1], tr[i + 2]]);
+    }
+    if (pts.length > 1) {
+      octx.strokeStyle = col; octx.globalAlpha = 0.62; octx.lineWidth = 1.6;
+      octx.setLineDash([5, 5]);
+      octx.beginPath();
+      pts.forEach((p, i) => i ? octx.lineTo(p[0], p[1]) : octx.moveTo(p[0], p[1]));
+      octx.stroke();
+      octx.setLineDash([]);
+      /* a tick on the trail for each year gone by */
+      octx.globalAlpha = 0.85;
+      let nextYear = Math.ceil(pts[0][2] * GRID.yps);
+      for (const p of pts) {
+        if (p[2] * GRID.yps >= nextYear) {
+          octx.beginPath(); octx.arc(p[0], p[1], 2.2, 0, 7); octx.fillStyle = col; octx.fill();
+          nextYear += 1;
+        }
+      }
+    }
+    const head = R.project([t.x * GRID.DX, H[(t.y | 0) * GRID.NX + (t.x | 0)] * R.st.ve + 2, t.y * GRID.DX]);
+    if (head) {
+      octx.globalAlpha = 1;
+      octx.strokeStyle = col; octx.lineWidth = 2;
+      octx.beginPath(); octx.arc(head[0], head[1], 8, 0, 7); octx.stroke();
+      octx.fillStyle = col;
+      octx.font = '600 11px ui-monospace,monospace';
+      octx.textAlign = 'left';
+      const cyr = t.c == null ? null : t.c / GRID.yps;
+      octx.fillText(t.H.toFixed(1) + ' m' + (cyr == null ? '' : '   ' + cyr.toFixed(1) + ' m/yr'),
+                    head[0] + 13, head[1] + 4);
+    }
+    octx.globalAlpha = 1;
+  });
+}
+
+/* ── the loop ────────────────────────────────────────────────────────────── */
+let t0 = performance.now();
+function frame(now) {
+  const t = (now - t0) / 1000;
+  if (ready) {
+    const wr = windRose.length === 1 ? windRose[0].deg : (last ? last.windDeg : 0);
+    const a = wr * Math.PI / 180;
+    R.draw(t, [Math.cos(a), Math.sin(a)]);
+    drawOverlay();
+    if (!waiting) { waiting = true; W.postMessage({ type: 'more' }); }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* the room's own liveness hooks, for a headless check that cannot click */
+window.__sandsea = {
+  tagCell: (x, y) => W.postMessage({ type: 'tag', x, y }),
+  bench: k => W.postMessage({ type: 'bench', kind: k, H0: 22 }),
+  setRose,
+  stats: () => last,
+  bubbleOff: () => $('bBubble').click()
+};
+</script>
+</body>
+</html>
