@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Ring Cannon — a hole in the air that will not let go of itself</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  THE RING CANNON  ·  aerodrome/the-ring-cannon/
+
+  Thump the drum on the back of a barrel and a ring of air leaves the mouth and
+  crosses an eleven-metre hall.  It arrives about the size it left, at nearly
+  the speed it left, and it puts out a candle seven metres away.  Blow the same
+  push out of the same hole WITHOUT the rotation and it stops before the second
+  metre mark and you cannot even see it any more.
+
+  That difference is the whole room, and it is one idea: a vortex ring is a
+  closed loop of vorticity, and a closed loop of vorticity CARRIES ITSELF.  It
+  is not a lump of moving air; it is a piece of the fluid's rotation, and
+  Helmholtz says it moves with the fluid it induces.  So it does not spread and
+  it does not slow, because nothing is spreading it.
+
+  WHAT IS ON THE SCREEN
+    · A hall, in metres, with the metres painted on the floor.
+    · One to three vortex FILAMENTS.  Every node of every ring moves at the
+      velocity the Rosenhead-Moore regularised Biot-Savart integral gives at
+      that node, from every loop in the room (and from the image loop in the
+      back wall when it is close enough to matter).  There is no script.
+    · Sixty-five thousand smoke particles, advected on the GPU by THE SAME
+      kernel — rings.mjs KERNEL_GLSL is spliced into the advection shader, so
+      the smoke and the ring cannot drift apart — and composited by absorption
+      (exp(-kD)) rather than added, so a dense ring looks like smoke.
+
+  THE CLAIMS
+    1. The kernel constant is exact.  The regularised loop translates at
+       (G/4piR)(ln(8R/delta) - 1), so delta = a exp(-3/4) makes it Kelvin's
+       ring exactly.  calibrateMu() bisects for delta and walks in on exp(-3/4)
+       at second order in a/R.  Nothing is fitted.
+    2. The ring the room flies really does travel at Kelvin's speed.  Measured
+       off the drawn filament's own centroid, live, against the formula: the
+       panel prints both, always.
+    3. Two rings leapfrog, and the pair's IMPULSE does not move: R1^2 + R2^2 is
+       constant while each radius swings by 40%.  Live, in ppm.
+    4. The leapfrog is not an artefact of the filament.  An INDEPENDENT model
+       — coaxial circles, complete elliptic integrals, no Biot-Savart, no
+       nodes, no regularisation, no band limit — runs beside it in the twin and
+       agrees over the length of the hall.
+    5. Same impulse, no rotation: the puff.  Its own conservation law
+       (x^4 grows linearly in t) is on the panel next to the ring's distance.
+
+  WHAT IS HONEST AND NOT EXACT, SAID OUT LOUD ON THE PAGE
+    · Gamma never decays.  Helmholtz, taken literally: a ring here keeps its
+      punch forever.  Real rings lose theirs to turbulence and this room does
+      not model that.
+    · The core spreads by a^2 = a0^2 + 4 nu t with a nu hundreds of times air's,
+      standing in for entrainment.  It is a knob and it is labelled as one.
+    · The filament carries azimuthal modes 0..3 exactly and none above, because
+      a thin-filament model has nothing true to say about wiggles shorter than
+      its own core.  Without that boundary a perfect ring tears itself apart in
+      0.12 s.
+    · The puff's spreading rate alpha = 0.11 is the one empirical number here.
+
+  ENGINES (inlined byte-for-byte by the forge, never forked):
+    · tools/scene3d/core.mjs   applyDrag — the estate's one orbit mutation
+    · tools/ws/ws.js           the shared mute + the visit breadcrumb
+    · ./rings.mjs              filaments, the kernel, the elliptic reference,
+                               the puff.  Node twin: rings.test.mjs
+    · ./render.js              WebGL2: hall, GPU smoke, absorption composite
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root{
+    --ink:#efe4cd; --dim:#a99e88; --faint:#6f6858;
+    --brass:#e2b260; --brass-soft:rgba(226,178,96,.16);
+    --cyan:#79c8e4; --warn:#ffb27a;
+    --panel:rgba(14,13,17,.80); --line:rgba(226,178,96,.24);
+    --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:#08070b;color:var(--ink);font-family:var(--ui);
+    -webkit-font-smoothing:antialiased}
+  a{color:var(--brass)}
+
+  #stage{position:relative;width:100%;height:100svh;min-height:520px;overflow:hidden;
+    background:#08070b}
+  canvas#gl{position:absolute;inset:0;width:100%;height:100%;display:block;
+    touch-action:none;cursor:grab}
+  canvas#gl.dragging{cursor:grabbing}
+
+  .topbar{position:absolute;top:0;left:0;right:0;z-index:20;display:flex;
+    align-items:flex-start;justify-content:space-between;gap:12px;
+    padding:14px 18px;pointer-events:none;flex-wrap:wrap}
+  .topbar a,.topbar button{pointer-events:auto}
+  .crumb{font:600 10.5px/1.5 var(--mono);letter-spacing:.16em;text-transform:uppercase;
+    color:var(--dim);text-decoration:none}
+  .crumb:hover{color:var(--brass)}
+  .sibs{display:flex;gap:14px;flex-wrap:wrap;justify-content:flex-end;align-items:center}
+  .mutebtn{padding:3px 7px;font-size:12px;line-height:1;border-radius:6px;letter-spacing:0}
+
+  .title{position:absolute;top:52px;left:22px;z-index:15;pointer-events:none;max-width:min(46ch,60vw)}
+  .title h1{margin:0;font:400 clamp(26px,4.2vw,46px)/1.05 var(--serif);letter-spacing:.005em}
+  .title p{margin:8px 0 0;font:400 13.5px/1.6 var(--ui);color:var(--dim)}
+  .title.hide{opacity:0;transition:opacity .5s}
+
+  /* ── the deck of controls ── */
+  #deck{position:absolute;left:50%;transform:translateX(-50%);bottom:16px;z-index:18;
+    display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;justify-content:center;
+    background:var(--panel);border:1px solid var(--line);border-radius:13px;
+    padding:11px 13px;backdrop-filter:blur(9px);max-width:min(940px,94vw)}
+  button{font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;
+    color:var(--ink);background:rgba(226,178,96,.07);border:1px solid var(--line);
+    border-radius:8px;padding:10px 13px;cursor:pointer;transition:background .13s,color .13s}
+  button:hover{background:var(--brass-soft);color:#fff}
+  button.big{font-size:13px;padding:13px 22px;background:rgba(226,178,96,.17);
+    border-color:rgba(226,178,96,.5)}
+  button.big:hover{background:rgba(226,178,96,.30)}
+  button.on{background:rgba(121,200,228,.20);border-color:rgba(121,200,228,.55);color:#dff2fa}
+  .knob{display:flex;flex-direction:column;gap:4px;min-width:118px}
+  .knob label{font:600 9px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);display:flex;justify-content:space-between;gap:8px}
+  .knob label b{color:var(--brass);font-weight:600}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:16px;
+    background:transparent;cursor:pointer;margin:0}
+  input[type=range]::-webkit-slider-runnable-track{height:3px;background:rgba(226,178,96,.28);
+    border-radius:2px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;
+    border-radius:50%;background:var(--brass);margin-top:-5px;border:none}
+  input[type=range]::-moz-range-track{height:3px;background:rgba(226,178,96,.28);border-radius:2px}
+  input[type=range]::-moz-range-thumb{width:13px;height:13px;border:none;border-radius:50%;
+    background:var(--brass)}
+  .sep{width:1px;align-self:stretch;background:var(--line);margin:0 3px}
+
+  /* ── the readout ── */
+  #hud{position:absolute;left:18px;bottom:16px;z-index:17;background:var(--panel);
+    border:1px solid var(--line);border-radius:11px;padding:11px 13px;
+    backdrop-filter:blur(9px);min-width:250px;max-width:min(320px,44vw)}
+  #hud h3{margin:0 0 7px;font:600 9px/1 var(--mono);letter-spacing:.18em;
+    text-transform:uppercase;color:var(--faint)}
+  #hud table{border-collapse:collapse;width:100%;font:500 11px/1.6 var(--mono)}
+  #hud td{padding:1px 0}
+  #hud td:first-child{color:var(--dim);padding-right:10px;white-space:nowrap}
+  #hud td:last-child{text-align:right;color:var(--ink);white-space:nowrap}
+  #hud .good{color:#9ee0a8} #hud .warnv{color:var(--warn)}
+  #hud .note{margin-top:7px;font:400 10.5px/1.5 var(--ui);color:var(--faint)}
+
+  #views{position:absolute;right:18px;top:64px;z-index:17;display:flex;flex-direction:column;
+    gap:6px;align-items:flex-end}
+
+  #banner{position:absolute;left:50%;top:22%;transform:translateX(-50%);z-index:19;
+    pointer-events:none;font:400 clamp(19px,3vw,32px)/1.2 var(--serif);color:var(--warn);
+    opacity:0;transition:opacity .4s;text-shadow:0 2px 18px rgba(0,0,0,.8);text-align:center}
+  #banner.show{opacity:1}
+
+  #err{position:absolute;inset:0;z-index:40;display:none;place-items:center;padding:8vw;
+    background:#08070b;font:400 15px/1.7 var(--ui);color:var(--warn);text-align:center}
+
+  /* ── the essay below ── */
+  article{max-width:70ch;margin:0 auto;padding:64px 24px 110px}
+  article h2{font:400 27px/1.2 var(--serif);margin:52px 0 6px;color:var(--ink)}
+  article h2:first-child{margin-top:0}
+  .kicker{font:600 9.5px/1.4 var(--mono);letter-spacing:.17em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:14px}
+  article p{font:400 15.5px/1.72 var(--ui);color:#d9cfba;margin:0 0 15px}
+  article p b{color:var(--ink);font-weight:600}
+  article i{color:var(--brass);font-style:italic}
+  .card{border:1px solid var(--line);border-radius:11px;padding:15px 17px;
+    background:rgba(16,14,19,.55);margin:18px 0}
+  .card h4{margin:0 0 8px;font:600 10px/1 var(--mono);letter-spacing:.16em;
+    text-transform:uppercase;color:var(--brass)}
+  .card p{margin:0 0 9px;font-size:14.5px}
+  .card p:last-child{margin-bottom:0}
+  table.spec{border-collapse:collapse;width:100%;font:500 12.5px/1.7 var(--mono);margin-top:6px}
+  table.spec th{text-align:left;font:600 9px/1.4 var(--mono);letter-spacing:.14em;
+    text-transform:uppercase;color:var(--faint);border-bottom:1px solid var(--line);
+    padding:3px 10px 5px 0}
+  table.spec td{padding:3px 10px 3px 0;color:#cfc5b1;border-bottom:1px solid rgba(226,178,96,.07)}
+  table.spec td:last-child,table.spec th:last-child{text-align:right;padding-right:0}
+  .foot{margin-top:46px;padding-top:18px;border-top:1px solid var(--line);
+    font:400 12.5px/1.7 var(--ui);color:var(--faint);display:flex;justify-content:space-between;
+    gap:16px;flex-wrap:wrap}
+  @media (max-width:820px){
+    #hud{display:none}
+    .sibs a{display:none}
+    #views{top:44px;right:12px;flex-direction:row;gap:5px}
+    #views button{padding:7px 8px;font-size:9px;letter-spacing:.08em}
+    .title{top:84px;left:16px}
+    .title h1{font-size:26px}
+    #deck{gap:7px;padding:8px 9px;bottom:8px;max-width:96vw}
+    #deck button{padding:8px 9px;font-size:9.5px}
+    #deck button.big{padding:9px 14px;font-size:11px}
+    .knob{min-width:78px;flex:1 1 78px}
+    .knob label{font-size:8px}
+    .sep{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <canvas id="gl"></canvas>
+
+  <div class="topbar">
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      <a class="crumb" href="../index.html">&larr; The Aerodrome</a>
+      <a class="crumb" href="../../index.html">The Estate</a>
+    </div>
+    <div class="sibs">
+      <a class="crumb" href="../the-kite/index.html">&nearr; The Kite</a>
+      <a class="crumb" href="../../wind-tunnel/index.html">&nearr; Glass Wind Tunnel</a>
+      <a class="crumb" href="../../the-thunderhead/index.html">&nearr; The Thunderhead</a>
+      <button id="mute" class="mutebtn" title="Mute sound across the whole estate">&#128266;</button>
+    </div>
+  </div>
+
+  <div class="title" id="title">
+    <h1>The Ring Cannon</h1>
+    <p>A hole in the air that will not let go of itself. Thump the drum.</p>
+  </div>
+
+  <div id="views">
+    <button id="vTrack" class="on">track</button>
+    <button id="vSide">side</button>
+    <button id="vBarrel">barrel</button>
+    <button id="vPlan">plan</button>
+  </div>
+
+  <div id="banner"></div>
+
+  <div id="hud">
+    <h3>the ring in flight</h3>
+    <table id="hudT"><tbody></tbody></table>
+    <div class="note" id="hudNote">Nothing in the hall yet.</div>
+  </div>
+
+  <div id="deck">
+    <button class="big" id="fire">Thump</button>
+    <button id="pair">Fire a pair</button>
+    <button id="puff">Puff (no spin)</button>
+    <div class="sep"></div>
+    <div class="knob">
+      <label>Thump <b id="lStroke">5.4 m/s</b></label>
+      <input type="range" id="sStroke" min="180" max="900" value="540">
+    </div>
+    <div class="knob">
+      <label>Mouth <b id="lMouth">100 mm</b></label>
+      <input type="range" id="sMouth" min="55" max="185" value="100">
+    </div>
+    <div class="knob">
+      <label>Entrainment <b id="lNu">6.0e-5</b></label>
+      <input type="range" id="sNu" min="0" max="40" value="12">
+    </div>
+    <div class="sep"></div>
+    <button id="tFil">Filament</button>
+    <button id="tSlow">Slow</button>
+    <button id="clear">Clear</button>
+  </div>
+
+  <div id="err"><div id="errT"></div></div>
+</div>
+
+<article>
+
+<h2>A ring is not a lump of air</h2>
+<div class="kicker">why one of them arrives and the other does not</div>
+
+<p>Push a slug of air out of a round hole and the lip of the hole shears it. The
+shear rolls up, and what leaves is not the slug: it is a closed <b>loop of
+vorticity</b> — a doughnut of spin with circulation <i>&Gamma;</i> around it. From
+that moment on nobody is pushing it. Every part of the loop simply moves at the
+velocity the rest of the loop induces, which is Helmholtz's theorem, and the sum
+of those velocities happens to point forwards. The ring carries itself.</p>
+
+<p>A puff has none of that. It is momentum in a bag of air, and a turbulent bag
+grows in proportion to how far it has come. Momentum is fixed, volume goes like
+the cube of the distance, so the speed falls like the cube of the distance and
+the smoke in it is diluted by the same factor. It is not that the puff stops —
+it is that it takes forever and you cannot see it. <b>Fire both. They leave with
+the same impulse.</b> The panel prints where each of them is.</p>
+
+<h2>What the room actually computes</h2>
+<div class="kicker">one line, and everything else falls out of it</div>
+
+<p>Each ring is a closed filament of nodes. Every node moves at</p>
+
+<div class="card">
+<p style="font-family:var(--mono);font-size:13px;color:var(--brass);margin-bottom:6px">
+u(p) = (&Gamma;/4&pi;) &nbsp;&oint;&nbsp; dl &times; r / (|r|&sup2; + &delta;&sup2;)<sup>3/2</sup></p>
+<p>summed over every loop in the hall — its own included — plus the loop's mirror
+image in the back wall when it is close enough for that to matter. That is the
+entire dynamic. The leapfrog is not scripted; the ballooning at the wall is not
+scripted; the smoke rolling into the core is not scripted. They are all this
+integral.</p>
+</div>
+
+<p><b>The softening length &delta; is not the core radius, and getting that
+wrong is the classic way to build a ring that flies at the wrong speed.</b> The
+regularised loop translates at (&Gamma;/4&pi;R)&middot;(ln(8R/&delta;) &minus; 1),
+while Kelvin's real thin-cored ring goes at (&Gamma;/4&pi;R)&middot;(ln(8R/a)
+&minus; &frac14;). Set the two equal and &delta; = a&thinsp;e<sup>&minus;3/4</sup>
+— a closed form, not a fit. The twin does not take that on faith: it bisects
+numerically for the &delta; that reproduces Kelvin, at four core thicknesses, and
+the answers walk in on e<sup>&minus;3/4</sup> at second order in a/R.</p>
+
+<h2>Two rings, and the one number that does not move</h2>
+<div class="kicker">the dance, and the ruler laid across it</div>
+
+<p>Fire a pair. The back ring finds itself inside the front one's flow, which
+pulls it narrower and speeds it up; the front one is pushed wider and slows. The
+narrow one shoots through, opens out, and the two change places. Then again.
+Each radius swings by forty per cent — and the <b>hydrodynamic impulse</b>,
+which for a ring is &rho;&Gamma;&pi;R&sup2;, does not move at all. So
+R<sub>1</sub>&sup2; + R<sub>2</sub>&sup2; is a constant of the dance, and the panel
+prints its drift in parts per million while you watch.</p>
+
+<p>That the filament <i>can</i> leapfrog is not evidence that it leapfrogs
+<i>right</i>. So the twin runs a second model beside it that shares no code at
+all: coaxial circles, four numbers, velocities from the closed-form field of a
+circular vortex ring in complete elliptic integrals — no Biot&ndash;Savart, no
+nodes, no regularisation, no band limit. Over the length of this hall the two
+agree. Past that the rings thread each other closely enough that a thin-filament
+model has no business being believed, and the room says so rather than showing
+you a pretty lie.</p>
+
+<h2>What is honest here, and what is a stand-in</h2>
+<div class="kicker">the parts that are physics and the parts that are mine</div>
+
+<table class="spec">
+  <thead><tr><th>Thing</th><th>Where it comes from</th></tr></thead>
+  <tbody>
+  <tr><td>&delta; = a&thinsp;e<sup>&minus;3/4</sup></td><td>exact; confirmed by bisection</td></tr>
+  <tr><td>ring speed</td><td>Kelvin 1867, and measured off the drawn filament</td></tr>
+  <tr><td>&rho;&Gamma;&pi;R&sup2; conserved</td><td>exact for an inviscid fluid; measured live</td></tr>
+  <tr><td>wall ballooning</td><td>an image filament — the plane's own boundary condition</td></tr>
+  <tr><td>&Gamma; never decays</td><td><b>Helmholtz, taken literally.</b> Real rings lose their punch to turbulence. This room does not model that, so a ring here reaches the far wall as strong as it left.</td></tr>
+  <tr><td>core spreading</td><td>a&sup2; = a<sub>0</sub>&sup2; + 4&nu;t, with a &nu; hundreds of times air's, standing in for entrainment. A knob, labelled as one.</td></tr>
+  <tr><td>&Gamma; = &frac12;U<sub>p</sub>L</td><td>the slug model of a piston vortex generator; good to about 10% below a stroke ratio of 4</td></tr>
+  <tr><td>puff spreading &alpha; = 0.11</td><td>the one empirical number in the room</td></tr>
+  <tr><td>the candle</td><td>snuffed above a stated draught threshold at the wick. A rule, not a law.</td></tr>
+  <tr><td>modes above K</td><td>discarded. A thin filament has nothing true to say about wiggles shorter than its own core, and if you let it try, a perfect ring tears itself apart in 0.12&nbsp;s.</td></tr>
+  </tbody>
+</table>
+
+<h2>The smoke is not decoration</h2>
+<div class="kicker">sixty-five thousand tracers in the same field</div>
+
+<p>The smoke you see is sixty-five thousand particles, each one moved on the GPU
+by the <b>same kernel</b> the filament obeys — the exact same nine lines of
+algebra, spliced from <span style="font-family:var(--mono);font-size:12.5px">rings.mjs</span>
+into the advection shader so the two cannot drift apart. Nothing about the smoke
+is animated; it is <i>in</i> the flow. That is why it rolls into the core, why
+the stray wisps left at the mouth get drawn along behind, and why a ring passing
+through another ring's smoke drags it inside out.</p>
+
+<p>It is composited by absorption rather than by adding — a pixel's colour is
+scene&middot;e<sup>&minus;kD</sup> + lit&middot;(1&minus;e<sup>&minus;kD</sup>)
+over accumulated optical depth D — which is the difference between smoke and
+plasma, and costs one line.</p>
+
+<div class="foot">
+  <span>The Aerodrome &middot; the estate</span>
+  <span><a href="../index.html">&larr; back to the hangar</a></span>
+</div>
+
+</article>
+
+<script type="module">
+<!-- forge:include ../../tools/scene3d/core.mjs -->
+<!-- forge:include ./rings.mjs -->
+<!-- forge:include ./render.js -->
+<!-- forge:include ../../tools/ws/ws.js -->
+
+try { WS.seen('the-ring-cannon'); } catch (e) {}
+
+const $ = (id) => document.getElementById(id);
+window.addEventListener('error', (e) => { window.__err = (e.error && e.error.stack) || String(e.message); });
+
+/* ── the hall, in metres ─────────────────────────────────────────────────── */
+const G = {
+  hallLen: 11.2, halfW: 2.7, ceil: 3.3,
+  axisX: 0, axisY: 1.42,
+  cannonZ: 0.62, apertureMax: 0.22,
+  candle: [0, 1.42, 7.2],
+  lampZ: [2.2, 5.4, 8.6]
+};
+const CANDLE_SNUFF = 1.5;      // m/s at the wick, sustained
+const CANDLE_HOLD  = 0.02;     // s
+
+const FOVY = 0.76;
+const PX_SCALE = 1 / Math.tan(FOVY / 2);   // gl_PointSize is a DIAMETER in px
+
+/* ── state ───────────────────────────────────────────────────────────────── */
+const world = { fils: [], t: 0, nu: 6e-5, wall: G.hallLen, kcap: 3 };
+let nextId = 1;
+let puff = null, puffBorn = 0;
+const cam = { yaw: -2.28, pitch: 0.30, roll: 0, dolly: 2.4 };
+let camTarget = [0, G.axisY, G.cannonZ + 1.0];
+let mode = 'track';
+let showFil = false, slow = false;
+let candleLit = true, candleGust = 0, candleOver = 0, flameLean = 0;
+let particles = 65536, pxScale = 0.9;
+let lastFire = -99, substeps = 1;
+let history = [];              // [t, z] of the lead ring, for the measured speed
+let bannerUntil = 0;
+
+/* ── renderer ────────────────────────────────────────────────────────────── */
+let R;
+try {
+  R = new RC.Renderer($('gl'), G, KERNEL_GLSL);
+} catch (e) {
+  $('err').style.display = 'grid';
+  $('errT').textContent = 'This room needs WebGL2 with float render targets. ' + e.message;
+  throw e;
+}
+
+/* ── camera ──────────────────────────────────────────────────────────────── */
+function eyeOf() {
+  const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+  const e = [
+    camTarget[0] + cam.dolly * cp * Math.sin(cam.yaw),
+    camTarget[1] + cam.dolly * sp,
+    camTarget[2] + cam.dolly * cp * Math.cos(cam.yaw)
+  ];
+  // Stay inside the hall in plan: a pilaster pressed against the lens reads as
+  // a black slab across the frame, and it looks like a renderer bug.  Height is
+  // free — the ceiling is cut away from above, which is how the plan view works.
+  const mx = G.halfW - 0.34, mzl = -0.85, mzh = G.hallLen - 0.34;
+  e[0] = Math.max(-mx, Math.min(mx, e[0]));
+  e[2] = Math.max(mzl, Math.min(mzh, e[2]));
+  e[1] = Math.max(0.28, e[1]);
+  return e;
+}
+const PRESETS = {
+  track:  { yaw: -2.28, pitch: 0.30, dolly: 2.4, follow: true },
+  side:   { yaw: -Math.PI / 2, pitch: 0.10, dolly: 3.1, follow: true },
+  plan:   { yaw: -Math.PI / 2, pitch: 1.32, dolly: 3.8, follow: true },
+  barrel: { yaw: Math.PI, pitch: 0.05, dolly: 3.6, tgt: [0, G.axisY, 4.2], follow: false }
+};
+function setMode(m) {
+  mode = m;
+  const p = PRESETS[m];
+  cam.yaw = p.yaw; cam.pitch = p.pitch; cam.dolly = p.dolly;
+  if (p.tgt) camTarget = p.tgt.slice();
+  for (const k of ['Track', 'Side', 'Barrel', 'Plan']) {
+    $('v' + k).classList.toggle('on', k.toLowerCase() === m);
+  }
+}
+['Track', 'Side', 'Barrel', 'Plan'].forEach(k => {
+  $('v' + k).addEventListener('click', () => setMode(k.toLowerCase()));
+});
+
+/* drag orbits — through the estate's one camera mutation */
+(function () {
+  const c = $('gl');
+  let down = false, px = 0, py = 0;
+  c.addEventListener('pointerdown', (e) => {
+    down = true; px = e.clientX; py = e.clientY;
+    c.setPointerCapture(e.pointerId); c.classList.add('dragging');
+  });
+  c.addEventListener('pointermove', (e) => {
+    if (!down) return;
+    applyDrag(cam, e.clientX - px, -(e.clientY - py), { speed: 0.007 });
+    px = e.clientX; py = e.clientY;
+  });
+  const up = (e) => { down = false; c.classList.remove('dragging'); };
+  c.addEventListener('pointerup', up);
+  c.addEventListener('pointercancel', up);
+  c.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    cam.dolly = Math.max(0.9, Math.min(18, cam.dolly * Math.exp(e.deltaY * 0.0012)));
+  }, { passive: false });
+})();
+window.orbitCamera = (dx, dy) => applyDrag(cam, dx, dy, { speed: 0.007 });   // liveness hook
+
+/* ── sound: a thump and a snuff, both mute-gated ─────────────────────────── */
+/* One mute for the whole estate: the single shared key, via WS.  Never a
+   per-page mute. */
+(function () {
+  const b = $('mute');
+  function sync() {
+    let m = false; try { m = WS.muted(); } catch (e) {}
+    b.textContent = m ? '\u{1F507}' : '\u{1F50A}';
+    b.title = m ? 'Muted estate-wide \u2014 click to unmute' : 'Mute sound across the whole estate';
+  }
+  b.addEventListener('click', () => { try { WS.setMuted(!WS.muted()); } catch (e) {} sync(); });
+  try { WS.onMuteChange(sync); } catch (e) {}
+  sync();
+})();
+
+let actx = null;
+function audio() {
+  if (actx) return actx;
+  try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; }
+  return actx;
+}
+function muted() { try { return WS.muted(); } catch (e) { return false; } }
+function thumpSound(strength) {
+  const a = audio(); if (!a || muted()) return;
+  if (a.state === 'suspended') a.resume();
+  const t = a.currentTime;
+  const n = a.sampleRate * 0.26 | 0;
+  const buf = a.createBuffer(1, n, a.sampleRate);
+  const d = buf.getChannelData(0);
+  let lp = 0;
+  for (let i = 0; i < n; i++) {
+    const env = Math.exp(-i / (a.sampleRate * 0.055));
+    lp += 0.07 * ((Math.random() * 2 - 1) - lp);
+    d[i] = lp * env * 2.2;
+  }
+  const src = a.createBufferSource(); src.buffer = buf;
+  const bp = a.createBiquadFilter(); bp.type = 'lowpass'; bp.frequency.value = 240; bp.Q.value = 1.1;
+  const body = a.createOscillator(); body.type = 'sine'; body.frequency.value = 62;
+  const bg = a.createGain();
+  bg.gain.setValueAtTime(0.34 * strength, t);
+  bg.gain.exponentialRampToValueAtTime(0.0008, t + 0.30);
+  const g = a.createGain(); g.gain.value = 0.55 * strength;
+  src.connect(bp); bp.connect(g); g.connect(a.destination);
+  body.connect(bg); bg.connect(a.destination);
+  src.start(t); body.start(t); body.stop(t + 0.34);
+}
+function snuffSound() {
+  const a = audio(); if (!a || muted()) return;
+  const t = a.currentTime, n = a.sampleRate * 0.18 | 0;
+  const buf = a.createBuffer(1, n, a.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (a.sampleRate * 0.05));
+  const src = a.createBufferSource(); src.buffer = buf;
+  const hp = a.createBiquadFilter(); hp.type = 'bandpass'; hp.frequency.value = 1900; hp.Q.value = 0.7;
+  const g = a.createGain(); g.gain.value = 0.16;
+  src.connect(hp); hp.connect(g); g.connect(a.destination);
+  src.start(t);
+}
+
+/* ── firing ──────────────────────────────────────────────────────────────── */
+function controls() {
+  const Up = (+$('sStroke').value) / 100;               // piston speed, m/s
+  const Rap = (+$('sMouth').value) / 1000;              // aperture radius, m
+  const strokeRatio = 2.5;                              // below the formation number
+  const L = strokeRatio * 2 * Rap;
+  const gamma = slugCirculation(Up, L);
+  const Rring = 1.15 * Rap;
+  const a = slugCore(Rring);
+  return { Up, Rap, L, gamma, R: Rring, a };
+}
+function refreshLabels() {
+  const c = controls();
+  $('lStroke').textContent = c.Up.toFixed(1) + ' m/s';
+  $('lMouth').textContent = Math.round(c.Rap * 1000) + ' mm';
+  $('lNu').textContent = world.nu === 0 ? '0 · ideal' : world.nu.toExponential(1);
+}
+
+function spawnRingSmoke(fil, c) {
+  const cen = centroid(fil), n = axisOf(fil);
+  const e1 = perpTo(n), e2 = vcross(n, e1);
+  const Rr = c.R, core = c.a;
+  const born = world.t;
+  R.spawn(RC.PW * RC.BLOCK, (i, o) => {
+    if (i % 30 === 0) {
+      // a few stray wisps left loose at the mouth — they get drawn along
+      const rr = core * (1.4 + 2.4 * Math.random());
+      const ph = 2 * Math.PI * Math.random();
+      o[0] = cen[0] + rr * Math.cos(ph) * 0.9;
+      o[1] = cen[1] + rr * Math.sin(ph) * 0.9;
+      o[2] = cen[2] - 0.02 - 0.34 * Math.random();
+    } else {
+      const ph = 2 * Math.PI * Math.random();
+      const rho = core * (0.18 + 0.58 * Math.sqrt(Math.random()));
+      const ps = 2 * Math.PI * Math.random();
+      const rad = Rr + rho * Math.cos(ps);
+      o[0] = cen[0] + rad * (e1[0] * Math.cos(ph) + e2[0] * Math.sin(ph)) + rho * Math.sin(ps) * n[0];
+      o[1] = cen[1] + rad * (e1[1] * Math.cos(ph) + e2[1] * Math.sin(ph)) + rho * Math.sin(ps) * n[1];
+      o[2] = cen[2] + rad * (e1[2] * Math.cos(ph) + e2[2] * Math.sin(ph)) + rho * Math.sin(ps) * n[2];
+    }
+    o[3] = born;
+  });
+}
+
+function fireRing(offset) {
+  const c = controls();
+  const N = nodesFor(c.R, c.a);
+  const fil = makeRing({
+    N, R: c.R, gamma: c.gamma, a: c.a,
+    center: [G.axisX, G.axisY, G.cannonZ + 0.04 + (offset || 0)],
+    axis: [0, 0, 1], born: world.t, id: nextId++
+  });
+  fil.spec = c;
+  world.fils.push(fil);
+  while (world.fils.length > 3) world.fils.shift();
+  spawnRingSmoke(fil, c);
+  thumpSound(Math.min(1, c.Up / 7));
+  $('title').classList.add('hide');
+  return fil;
+}
+
+function firePuff() {
+  const c = controls();
+  const I = RHO_AIR * c.gamma * Math.PI * c.R * c.R;      // the ring's own impulse
+  puff = makePuff({ impulse: I, rho: RHO_AIR, x0: c.Rap / PUFF_ALPHA, born: world.t });
+  puffBorn = world.t;
+  puff.origin = [G.axisX, G.axisY, G.cannonZ + 0.04 - puff.x0];
+  puff.mouthZ = G.cannonZ + 0.04;
+  const b0 = PUFF_ALPHA * puff.x0;
+  const born = -world.t;                                   // negative w marks a puff
+  R.spawn(RC.PW * RC.BLOCK, (i, o) => {
+    let x, y, z, r2;
+    do {
+      x = 2 * Math.random() - 1; y = 2 * Math.random() - 1; z = 2 * Math.random() - 1;
+      r2 = x * x + y * y + z * z;
+    } while (r2 > 1);
+    o[0] = G.axisX + x * b0 * 0.55;
+    o[1] = G.axisY + y * b0 * 0.55;
+    o[2] = puff.mouthZ + z * b0 * 0.55;
+    o[3] = born === 0 ? -1e-6 : born;
+  });
+  thumpSound(Math.min(1, c.Up / 7));
+  $('title').classList.add('hide');
+  banner('same impulse, no spin');
+}
+
+function banner(txt) {
+  $('banner').textContent = txt;
+  $('banner').classList.add('show');
+  bannerUntil = performance.now() + 2200;
+}
+
+$('fire').addEventListener('click', () => fireRing(0));
+$('pair').addEventListener('click', () => {
+  world.fils.length = 0;
+  const c = controls();
+  fireRing(0);
+  fireRing(-2.6 * c.R);
+  banner('watch R₁² + R₂²');
+});
+$('puff').addEventListener('click', firePuff);
+$('clear').addEventListener('click', () => {
+  world.fils.length = 0; puff = null; history = [];
+  R.spawn(0, () => {});
+  for (let k = 0; k < RC.SHOTS; k++) R.spawn(0, () => {});
+});
+$('tFil').addEventListener('click', () => {
+  showFil = !showFil; $('tFil').classList.toggle('on', showFil);
+});
+$('tSlow').addEventListener('click', () => {
+  slow = !slow; $('tSlow').classList.toggle('on', slow);
+});
+for (const id of ['sStroke', 'sMouth']) $(id).addEventListener('input', refreshLabels);
+$('sNu').addEventListener('input', () => {
+  world.nu = (+$('sNu').value) * 5e-6;
+  refreshLabels();
+});
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') { e.preventDefault(); fireRing(0); }
+  if (e.key === 'p' || e.key === 'P') firePuff();
+  if (e.key === '2') $('pair').click();
+});
+refreshLabels();
+
+/* ── the candle ──────────────────────────────────────────────────────────── */
+function candleDraught() {
+  if (!world.fils.length) return 0;
+  const v = velocityAt(world, G.candle[0], G.candle[1] + 0.02, G.candle[2], [0, 0, 0]);
+  return Math.hypot(v[0], v[1], v[2]);
+}
+
+/* ── the loop ────────────────────────────────────────────────────────────── */
+let last = performance.now(), fpsAvg = 60, frames = 0, tAcc = 0;
+
+function step3d(now) {
+  requestAnimationFrame(step3d);
+  let dtReal = (now - last) / 1000;
+  last = now;
+  dtReal = Math.max(0, Math.min(0.05, dtReal));       // clamp BOTH ends
+  const dt = dtReal * (slow ? 0.18 : 1);
+
+  /* --- physics --- */
+  world.fils = world.fils.filter(f => {
+    const c = centroid(f);
+    return c[2] < G.hallLen + 0.9 && (world.t - f.born) < 26 && effectiveRadius(f) < 1.25;
+  });
+  if (world.fils.length) substeps = advance(world, dt);
+  else world.t += dt;
+
+  /* --- the candle --- */
+  candleGust = candleDraught();
+  if (candleLit) {
+    flameLean += (Math.min(2.4, candleGust * 1.1) - flameLean) * Math.min(1, dtReal * 14);
+    if (candleGust > CANDLE_SNUFF) {
+      candleOver += dt;
+      if (candleOver > CANDLE_HOLD) {
+        candleLit = false; candleOver = 0; snuffSound();
+        banner('out — at ' + (G.candle[2] - G.cannonZ).toFixed(1) + ' m');
+      }
+    } else candleOver = 0;
+  } else {
+    flameLean *= 0.9;
+  }
+
+  /* --- smoke --- */
+  const src = world.fils.length ? prepare(world, null) : [];
+  R.setSegments(src);
+  let pf = [0, 0, 0, 0], po = [0, G.axisY, 0], pn = [0, 0, 1];
+  let puffFade = 1, puffGrow = 1, puffB = 0;
+  if (puff) {
+    const age = world.t - puffBorn;
+    const x = puffFront(puff, age), b = puffRadius(puff, age), sp = puffSpeed(puff, age);
+    pf = [x + puff.x0, sp, b, PUFF_ALPHA * sp];
+    po = puff.origin;
+    puffB = b;
+    // the smoke is the SAME dye spread through a ball that grows like b^3
+    puffFade = Math.pow(Math.max(1e-4, puffDilution(puff, age)), 0.42);
+    puffGrow = Math.pow(b / (PUFF_ALPHA * puff.x0), 0.5);
+    if (age > 15) puff = null;
+  }
+  R.advect({
+    time: world.t, dt: dt, life: 6.0, sub: world.fils.length ? 4 : 1,
+    puffO: po, puffN: pn, puff: pf, swirl: 0.012
+  });
+
+  /* --- camera --- */
+  if (PRESETS[mode].follow) {
+    let tgt = [G.axisX, G.axisY, G.cannonZ + 1.0];
+    if (world.fils.length) {
+      const c = centroid(world.fils[0]);
+      tgt = [c[0], c[1], c[2] + 0.35];
+    } else if (puff) {
+      tgt = [G.axisX, G.axisY, puff.mouthZ + puffFront(puff, world.t - puffBorn) * 0.62];
+    }
+    const k = Math.min(1, dtReal * 4.5);
+    for (let i = 0; i < 3; i++) camTarget[i] += (tgt[i] - camTarget[i]) * k;
+    // a puff swells; back off so it stays in the frame
+    const want = Math.max(PRESETS[mode].dolly, 3.4 * puffB);
+    cam.dolly += (want - cam.dolly) * Math.min(1, dtReal * 1.6);
+  }
+  const eye = eyeOf();
+  const cv = $('gl');
+  R.resize(cv.clientWidth, cv.clientHeight, pxScale);
+  const proj = RC.mPerspective(FOVY, R.W / R.H, 0.05, 60);
+  const view = RC.mLookAt(eye, camTarget, [0, 1, 0]);
+  const vp = RC.mMul(proj, view);
+  let fx = camTarget[0] - eye[0], fy = camTarget[1] - eye[1], fz = camTarget[2] - eye[2];
+  const fl = Math.hypot(fx, fy, fz) || 1; fx /= fl; fy /= fl; fz /= fl;
+  let rx = fy * 0 - fz * 1, ry = fz * 0 - fx * 0, rz = fx * 1 - fy * 0;
+  const rlx = Math.hypot(rx, ry, rz) || 1;
+  const camRight = [rx / rlx, ry / rlx, rz / rlx];
+
+  /* --- lamps --- */
+  const lamps = G.lampZ.map(z => ({ p: [G.axisX, G.ceil - 0.52, z], c: [9.0, 6.6, 4.05] }));
+  if (candleLit) lamps.push({ p: [G.candle[0], G.candle[1] + 0.04, G.candle[2]], c: [1.5, 0.78, 0.20] });
+
+  /* --- filament overlay --- */
+  const lines = [];
+  if (showFil) {
+    for (const f of world.fils) {
+      const q = refine(f, SUB, null);
+      const pts = new Float32Array(q.length);
+      for (let i = 0; i < q.length; i++) pts[i] = q[i];
+      lines.push({ pts, col: [0.30, 0.86, 1.0], loop: true });
+    }
+  }
+
+  R.frame({
+    vp, eye, camRight, time: world.t, life: 6.0,
+    particles, pxScale: PX_SCALE, grow: 0.009, absorb: 6.2, expose: 1.22,
+    puffFade, puffGrow,
+    fog: 0.030, lamps, lines,
+    flame: {
+      pos: [G.candle[0], G.candle[1] - 0.010, G.candle[2]],
+      size: [0.046, 0.125], lean: flameLean, alive: candleLit ? 1 : 0
+    }
+  });
+
+  /* --- adaptive load --- */
+  frames++; tAcc += dtReal;
+  if (tAcc > 0.6) {
+    fpsAvg = frames / tAcc; frames = 0; tAcc = 0;
+    if (fpsAvg < 34 && particles > 16384) particles = Math.max(16384, particles >> 1);
+    else if (fpsAvg < 26 && pxScale > 0.6) pxScale = Math.max(0.6, pxScale - 0.12);
+    else if (fpsAvg > 55 && particles < 65536) particles = Math.min(65536, particles * 2);
+  }
+
+  /* --- panel --- */
+  if (world.fils.length) {
+    const f = world.fils[0], c = centroid(f);
+    history.push([world.t, c[2]]);
+    while (history.length > 2 && world.t - history[0][0] > 0.32) history.shift();
+  } else history = [];
+  paint();
+  if (performance.now() > bannerUntil) $('banner').classList.remove('show');
+}
+
+function row(k, v, cls) {
+  return '<tr><td>' + k + '</td><td' + (cls ? ' class="' + cls + '"' : '') + '>' + v + '</td></tr>';
+}
+function paint() {
+  const tb = $('hudT').tBodies[0];
+  const n = world.fils.length;
+  if (!n && !puff) {
+    if (tb.innerHTML !== '') tb.innerHTML = '';
+    const idle = candleLit ? 'Nothing in the hall yet. Thump the drum.'
+      : 'Nothing in the hall yet &middot; <a href="#" id="relight">relight the candle</a>';
+    if (idle !== lastNote) { $('hudNote').innerHTML = idle; lastNote = idle; }
+    return;
+  }
+  let h = '';
+  if (n) {
+    const f = world.fils[0];
+    const a = coreAt(f, world.t, world.nu);
+    const Rr = effectiveRadius(f);
+    const c = centroid(f);
+    const kel = kelvinSpeed(f.gamma, Rr, a);
+    let meas = null;
+    if (history.length > 3) {
+      const A = history[0], B = history[history.length - 1];
+      if (B[0] - A[0] > 0.12) meas = (B[1] - A[1]) / (B[0] - A[0]);
+    }
+    h += row('circulation &Gamma;', f.gamma.toFixed(3) + ' m&sup2;/s');
+    h += row('radius R', (Rr * 1000).toFixed(0) + ' mm');
+    h += row('core a', (a * 1000).toFixed(1) + ' mm &middot; a/R ' + (a / Rr).toFixed(2));
+    h += row('Kelvin says', kel.toFixed(3) + ' m/s');
+    if (meas !== null && n === 1) {
+      const err = (meas / kel - 1) * 100;
+      h += row('measured', meas.toFixed(3) + ' m/s', Math.abs(err) < 6 ? 'good' : 'warnv');
+      h += row('difference', (err >= 0 ? '+' : '') + err.toFixed(1) + ' %',
+        Math.abs(err) < 6 ? 'good' : 'warnv');
+    } else if (meas !== null) {
+      h += row('measured', meas.toFixed(3) + ' m/s');
+      h += row('&nbsp;', '<span style="color:var(--faint)">(the pair pushes each other)</span>');
+    }
+    h += row('travelled', (c[2] - G.cannonZ).toFixed(2) + ' m');
+    if (n >= 2) {
+      let s = 0, s0 = 0;
+      for (const g of world.fils) {
+        const r = effectiveRadius(g);
+        s += r * r;
+        if (g.sumRef === undefined) g.sumRef = 0;
+      }
+      if (world.pairRef === undefined || world.pairN !== n) { world.pairRef = s; world.pairN = n; }
+      // Impulse is conserved in FREE space.  Against the wall the image
+      // filament is a real external force, so the sum is supposed to move —
+      // saying otherwise would be the room lying to itself.
+      const nearWall = world.fils.some(g => G.hallLen - centroid(g)[2] < IMAGE_RANGE);
+      if (nearWall) {
+        h += row('&Sigma;R&sup2;', '<span style="color:var(--warn)">the wall is pushing</span>');
+      } else {
+        const ppm = (s / world.pairRef - 1) * 1e6;
+        h += row('&Sigma;R&sup2; drift', (ppm >= 0 ? '+' : '') + ppm.toFixed(0) + ' ppm',
+          Math.abs(ppm) < 4000 ? 'good' : 'warnv');
+      }
+      h += row('radii', world.fils.map(g => (effectiveRadius(g) * 1000).toFixed(0)).join(' / ') + ' mm');
+    }
+    h += row('draught at wick', candleGust.toFixed(2) + ' m/s',
+      candleGust > CANDLE_SNUFF ? 'warnv' : '');
+  }
+  if (puff) {
+    const age = world.t - puffBorn;
+    h += row('&mdash; puff &mdash;', '');
+    h += row('front', puffFront(puff, age).toFixed(2) + ' m');
+    h += row('its speed', puffSpeed(puff, age).toFixed(2) + ' m/s');
+    h += row('its width', (2 * puffRadius(puff, age)).toFixed(2) + ' m');
+    h += row('smoke left', (puffDilution(puff, age) * 100).toFixed(1) + ' %');
+  }
+  tb.innerHTML = h;
+  const notes = [];
+  if (n) notes.push(substeps > 1 ? substeps + ' substeps' : 'one step a frame');
+  notes.push(Math.round(fpsAvg) + ' fps &middot; ' + (particles / 1024 | 0) + 'k tracers');
+  if (!candleLit) notes.push('<a href="#" id="relight">relight the candle</a>');
+  // Rewrite the note only when it CHANGES.  Rebuilding it every frame detaches
+  // the relight link between pointerdown and pointerup, so the click lands on
+  // nothing at all — and a synthetic .click() would have reported success.
+  const html = notes.join(' &middot; ');
+  if (html !== lastNote) { $('hudNote').innerHTML = html; lastNote = html; }
+}
+let lastNote = '';
+// delegated, so it survives whatever paint() does to the inside of the note
+$('hudNote').addEventListener('click', (e) => {
+  const t = e.target;
+  if (t && t.id === 'relight') { e.preventDefault(); candleLit = true; }
+});
+
+/* liveness hooks — a headless check cannot deliver a pointer event to a canvas */
+window.__rc = {
+  fire: () => fireRing(0),
+  pair: () => $('pair').click(),
+  puff: firePuff,
+  state: () => ({
+    t: world.t, rings: world.fils.length,
+    z: world.fils.length ? centroid(world.fils[0])[2] : null,
+    R: world.fils.length ? effectiveRadius(world.fils[0]) : null,
+    lit: candleLit, gust: candleGust, fps: fpsAvg, particles, yaw: cam.yaw,
+    puffFront: puff ? puffFront(puff, world.t - puffBorn) : null
+  })
+};
+
+setMode('track');
+requestAnimationFrame(step3d);
+</script>
+</body>
+</html>

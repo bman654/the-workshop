@@ -86,6 +86,43 @@ Nothing else is required reading.
 
 ### GPU / WebGL
 
+- **A HAND-BUILT MESH WITH DERIVED NORMALS AND BACK-FACE CULLING RENDERS A BLACK
+  SCREEN, and it does not look like a winding bug.** `cross(b-a, d-a)` on a quad
+  points whichever way the vertex order happens to run, and a hall assembled from
+  a dozen quads will get some of them backwards — so with `CULL_FACE` on you get
+  a completely empty frame with no error, no warning, and a perfectly healthy
+  `gl.getError()`. Diagnosing it as "my camera is somewhere wrong" costs a cycle.
+  **State the normal instead of deriving it** for anything whose inside you care
+  about, cull nothing, and flip the normal toward the eye in the fragment shader
+  (`if (dot(N, eye - P) < 0.0) N = -N;`). Then a "this face is only visible from
+  inside" rule is one line — `if (dot(N, toEye) < 0.0) discard;` — and it also
+  gives you a doll's-house cutaway for free.
+- **An interior camera that can leave the room presses a pillar against the lens.**
+  An orbit camera around a target inside a hall puts the eye *outside* the wall
+  the moment the dolly exceeds the room's half-width. The shell can be cut away,
+  but the *fittings on it* — pilasters, rails, lamps — cannot, and one of them
+  fills the frame as an unlit black slab that reads as a renderer bug. Two fixes,
+  both cheap and both worth having: clamp the eye inside the room in the
+  horizontal plane, and discard any non-floor fragment closer than ~0.45 m.
+  (A view from *above* is different: let the eye rise, cut the ceiling, and give
+  the ceiling's own fittings a material that vanishes when `eye.y > ceiling`.)
+- **`gl_PointSize` is a DIAMETER in pixels, and the conversion from a world
+  radius carries a factor you will get wrong by 2–3×.** Pixels per metre at
+  distance d is `H / (2 d tan(fovy/2))`, so a sprite of world radius r wants
+  `gl_PointSize = r * H / (d * tan(fovy/2))`. Guessing it low makes a
+  sixty-thousand-particle smoke cloud look like a scatter of dots, and the
+  instinct is to add more particles — which does not help, because the problem is
+  that each one is a quarter of the size it should be.
+- **A particle cloud shaded like a SURFACE goes black wherever the light is
+  behind it.** Smoke is a participating medium; giving each sprite a fake normal
+  (`normalize(eye - pos)`) and running Lambert on it means every particle whose
+  lamp is on the far side gets ambient only. You do not notice from outside the
+  cloud — you notice the first time the camera stands *inside* it, and then half
+  the plume is a dark grey wedge that looks like a blending bug. Scatter
+  isotropically instead: sum `lampColour / (k + r²)` with no dot product at all.
+- **Smoke wants ABSORPTION, not addition.** Accumulate premultiplied radiance in
+  RGB and optical depth in A, then composite `scene*exp(-kD) + (rgb/a)*(1-exp(-kD))`.
+  Additive blending gives you plasma; this gives you smoke, and it is one line.
 - **WebGL2 assigns attribute locations itself unless you pin them.** If your VAO code uses
   fixed slots (`aPos` at 0, `aNrm` at 1, instance data at 3–5) and your shaders just say
   `in vec3 aPos;`, the linker is free to number them any way it likes — and it will number
@@ -391,6 +428,33 @@ Nothing else is required reading.
   FOLLOWS the growing object out (a boundary-layer thickness away), which is also the
   physical picture.
 
+- **A VORTEX FILAMENT WANTS OPPOSITE THINGS FROM ITS NODE SPACING, and the cure is
+  two resolutions, not a compromise.** Accuracy wants the spacing h far below the
+  regularisation length δ, because a chord is straight and the curve is not — at
+  h = δ a 64-gon ring translates 4.9% under Kelvin. Stability wants h ≥ δ, because
+  the discrete curve carries bending waves shorter than the core, which are
+  physically meaningless and *violently* unstable: a perfectly circular 160-node
+  ring here sat still for 0.2 s and then exploded to four times its radius, at
+  every time step tried, from nothing but roundoff. Neither more nodes nor a
+  smaller dt is the answer. **Keep the degrees of freedom coarse (h ≈ δ) and
+  integrate over a SPLINE through them, sampled several times finer** — accuracy
+  of a 256-gon, stability of a 64-gon. And then band-limit the node velocity, not
+  the positions (a positional smoother is curve-shortening flow, which shrinks
+  things): a spectral low-pass that is exactly the identity below the cutoff is
+  provably inert on every claim that lives in the low modes, and you can *prove*
+  that in the twin instead of hoping.
+- **The physical validity bound may not be tight enough, and saying so is the
+  honest move.** The thin-filament model's own limit (no wavelength shorter than
+  the core's circumference) gave a cutoff of mode 10 here; at 10 the ring is quiet
+  for 2.2 s and then goes, at 4 for 4 s, at 3 it is exact after five seconds. So
+  the room uses 3 and *says on the page* that it is tighter than the physics
+  demands. A number chosen for stability and dressed up as a derived one is the
+  thing to avoid, not the tighter number.
+- **A straight segment's softened Biot–Savart integral has an elementary
+  antiderivative — use it instead of sampling.** With `D² = |r⊥|² + δ²`,
+  `∫ ds/(D²+u²)^{3/2} = u/(D²√(D²+u²))`. Midpoint-sampling the same segments cost
+  7% of the ring's speed at the room's own resolution, and the fix was not more
+  samples; it was doing the one integral that has an answer.
 - **A LANDSCAPE-EVOLUTION solver must be handed the ELEVATION ORDER it is already
   computing.** The implicit stream-power sweep needs cells downstream-first, the
   drainage accumulation needs them upstream-first, and the obvious way to get either is
