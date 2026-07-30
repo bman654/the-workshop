@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Belfry — six bells rung full circle, and the reason a method moves them one place at a time</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════════
+  THE BELFRY  ·  sound-garden/the-belfry/
+
+  Up the ladder, into the bell chamber, while a band is ringing underneath you.
+
+  WHAT IS ACTUALLY RUNNING
+    · six bells, each TWO COUPLED PENDULUMS — the bell about its gudgeons and
+      the clapper about its own pivot inside it — integrated with RK4 in real
+      time against the wall clock.  Nothing is keyframed.  The sound happens
+      when the clapper arrives at the soundbow, and not before;
+    · six RINGERS, each a controller with exactly ONE STROKE of dead time,
+      because that is what a ringer is: when a bell arrives at the balance the
+      time of its next blow is already fixed, and the only thing the pull can
+      buy is the blow after that;
+    · the voice is an AudioWorklet — fifty-four modal resonators, nine partials
+      per bell in the English tuning, struck in phase with an amplitude set by
+      how fast the clapper was actually going.
+
+  THE CLAIMS — and the twin runs every one of them from the command line
+  (node sound-garden/the-belfry/belfry.test.mjs)
+    1. THE BALANCE IS NOT UPRIGHT.  eps* = 0.70 deg past vertical, because the
+       clapper lying on the trailing soundbow holds the bell over.  Statics.
+    2. THE BLOW IS AT A FIXED ANGLE — 109.17 deg, spread a quarter of a degree
+       over four hundred-fold in drop height.
+    3. WHEN IT COMES IS A LOGARITHM of how far the bell was left from eps*, and
+       the fitted slope is the linearised growth rate to 0.07 per cent.
+    4. SO THE RINGER IS ONE STROKE BEHIND: a five-fold range of pull is 1.6% of
+       the swing's energy, moves this blow 17 ms and the next one 397 ms.
+    …and therefore a bell can be placed ONE PLACE AT A TIME, which is why every
+    method ever rung is built out of swaps between neighbours.  The combinatorics
+    of that live next door, in The Extent; this room is the machine underneath.
+
+  ENGINES (inlined byte-for-byte by the forge, never forked):
+    · ./bell.mjs      the two pendulums, the timing law, the voice of a bell
+    · ./method.mjs    Plain Bob Minor, truth, the blue line, the parity proof
+    · ./ringer.mjs    six ringers with a stroke of dead time
+    · ./geom.mjs      what a bell chamber is made of
+    · ./worklet.js    the audio-thread tail (bell.mjs is prepended to it)
+    · tools/ws/ws.js  the estate-wide mute and the breadcrumb
+  ══════════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root{
+    --ink:#f2e9d9; --dim:#a99c86; --faint:#7d7263;
+    --gold:#dfb264; --warm:#f6d59c; --hot:#ffcf7a;
+    --bg0:#0b0a09; --panel:rgba(14,12,10,.93); --line:rgba(223,178,100,.22);
+    --font-ui:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --font-mono:"SF Mono",ui-monospace,Menlo,Monaco,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg0);color:var(--ink);
+    font:15px/1.55 var(--font-ui);overflow:hidden;-webkit-font-smoothing:antialiased}
+  canvas#gl{display:block;position:fixed;inset:0;width:100%;height:100%;
+    touch-action:none;cursor:grab}
+  canvas#gl.drag{cursor:grabbing}
+
+  .topleft{position:fixed;top:14px;left:20px;z-index:5;pointer-events:none;max-width:26em}
+  .topleft a{pointer-events:auto}
+  .back{display:inline-block;font:600 10px/1 var(--font-mono);letter-spacing:.22em;
+    text-transform:uppercase;color:var(--dim);text-decoration:none;opacity:.75}
+  .back:hover{color:var(--gold);opacity:1}
+  h1{font:400 clamp(19px,2.5vw,28px)/1.12 var(--font-ui);margin:.45em 0 .1em;
+    letter-spacing:.005em;text-shadow:0 2px 20px rgba(0,0,0,.75)}
+  .kick{font:500 10px/1 var(--font-mono);letter-spacing:.26em;text-transform:uppercase;
+    color:var(--gold);opacity:.85}
+  .say{max-width:24em;color:var(--dim);font-size:13px;margin:.4em 0 0;
+    text-shadow:0 1px 12px rgba(0,0,0,.85)}
+  .say b{color:var(--warm);font-weight:400}
+
+  /* bell numerals floating over the frame */
+  .tag{position:fixed;z-index:3;pointer-events:auto;cursor:pointer;
+    font:600 11px/1 var(--font-mono);letter-spacing:.06em;
+    color:rgba(240,225,200,.5);text-shadow:0 1px 8px #000;transform:translate(-50%,-50%);
+    padding:3px 6px;border-radius:9px;border:1px solid transparent;transition:.15s}
+  .tag:hover{color:var(--warm);border-color:var(--line)}
+  .tag.on{color:#0c0a08;background:var(--gold);border-color:var(--gold);font-weight:700}
+  .tag.blow{color:var(--hot)}
+
+  /* ── the console ─────────────────────────────────────────────────────── */
+  .console{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:6;
+    display:flex;gap:13px;align-items:center;flex-wrap:wrap;justify-content:center;
+    background:var(--panel);border:1px solid var(--line);border-radius:13px;
+    padding:9px 14px;max-width:min(97vw,1000px);box-shadow:0 6px 34px rgba(0,0,0,.6)}
+  .grp{display:flex;align-items:center;gap:8px}
+  .sep{width:1px;height:22px;background:var(--line)}
+  .lbl{font:600 9px/1 var(--font-mono);letter-spacing:.18em;text-transform:uppercase;
+    color:var(--faint);white-space:nowrap}
+  .val{font:12px/1 var(--font-mono);color:var(--warm);min-width:4.4em;white-space:nowrap}
+  button{font:600 10px/1 var(--font-mono);letter-spacing:.11em;text-transform:uppercase;
+    color:var(--dim);background:rgba(255,255,255,.03);border:1px solid var(--line);
+    border-radius:8px;padding:7px 10px;cursor:pointer;transition:.14s;white-space:nowrap}
+  button:hover{color:var(--warm);border-color:rgba(223,178,100,.5)}
+  button.on{color:#0c0a08;background:var(--gold);border-color:var(--gold)}
+  button.call{color:var(--hot);border-color:rgba(255,207,122,.4)}
+  button.call:hover{background:rgba(255,207,122,.14)}
+  button:disabled{opacity:.32;cursor:default}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:3px;border-radius:2px;
+    background:linear-gradient(90deg,rgba(223,178,100,.75),rgba(223,178,100,.18));
+    outline:none;width:110px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;
+    border-radius:50%;background:#f3dcae;border:1px solid #7a5a22;cursor:pointer;
+    box-shadow:0 1px 5px rgba(0,0,0,.6)}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;
+    background:#f3dcae;border:1px solid #7a5a22;cursor:pointer}
+
+  /* ── the rope-sight ──────────────────────────────────────────────────── */
+  .sight{position:fixed;left:18px;bottom:78px;z-index:5;width:288px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:9px 11px 8px;box-shadow:0 6px 30px rgba(0,0,0,.55)}
+  .sight h2{font:600 9px/1 var(--font-mono);letter-spacing:.2em;text-transform:uppercase;
+    color:var(--faint);margin:0 0 7px}
+  #sightCv{display:block;width:100%;height:210px}
+  .sightfoot{display:flex;justify-content:space-between;gap:8px;margin-top:6px;
+    font:10.5px/1.4 var(--font-mono);color:var(--faint)}
+  .sightfoot b{color:var(--warm);font-weight:400}
+
+  /* ── the measurements ────────────────────────────────────────────────── */
+  .meas{position:fixed;right:18px;top:64px;bottom:78px;z-index:5;width:326px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:11px 13px;box-shadow:0 6px 30px rgba(0,0,0,.55);
+    display:flex;flex-direction:column;gap:9px;overflow:auto}
+  .meas h2{font:600 9px/1 var(--font-mono);letter-spacing:.2em;text-transform:uppercase;
+    color:var(--faint);margin:0}
+  .meas .row{display:flex;justify-content:space-between;gap:10px;
+    font:11px/1.5 var(--font-mono);color:var(--dim)}
+  .meas .row b{color:var(--warm);font-weight:400;text-align:right}
+  .meas p{margin:0;font-size:12.5px;color:var(--dim)}
+  .meas p em{color:var(--warm);font-style:normal}
+  #plot,#strip{display:block;width:100%;background:rgba(255,255,255,.018);border-radius:7px}
+  #plot{height:158px} #strip{height:74px}
+  .hint{font:10.5px/1.45 var(--font-mono);color:var(--faint)}
+  .meas::-webkit-scrollbar{width:7px}
+  .meas::-webkit-scrollbar-track{background:transparent}
+  .meas::-webkit-scrollbar-thumb{background:rgba(223,178,100,.22);border-radius:4px}
+  .meas::-webkit-scrollbar-thumb:hover{background:rgba(223,178,100,.42)}
+  .meas{scrollbar-width:thin;scrollbar-color:rgba(223,178,100,.28) transparent}
+  .green{color:#8fd39a}
+  .fold{cursor:pointer;user-select:none}
+  .fold:hover{color:var(--gold)}
+  .hidden{display:none!important}
+
+  /* ── the gate ────────────────────────────────────────────────────────── */
+  .gate{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(60% 60% at 50% 45%,rgba(30,22,14,.72),rgba(6,5,4,.96));
+    cursor:pointer;text-align:center}
+  .gate .big{font:400 clamp(30px,6vw,60px)/1.05 var(--font-ui);letter-spacing:.01em}
+  .gate .small{margin-top:.9em;font:600 10px/1 var(--font-mono);letter-spacing:.3em;
+    text-transform:uppercase;color:var(--gold)}
+  .gate .tiny{margin-top:1.3em;font:12.5px/1.6 var(--font-ui);color:var(--dim);max-width:30em}
+  @media (max-width:1180px){ .meas{display:none} }
+  @media (max-width:860px){ .sight{display:none} }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div class="topleft">
+  <a class="back" href="../index.html">&larr; the sound garden</a>
+  <h1>The Belfry</h1>
+  <div class="kick">six bells · rung full circle</div>
+  <p class="say">Nobody who rings ever sees this. A tower bell turns through very nearly a
+  whole revolution and stands <b>mouth up</b> at each end, and it sounds when the clapper
+  inside it catches up. Everything here is that, integrated as you watch.</p>
+</div>
+
+<div class="sight">
+  <h2>rope&#8209;sight &middot; time runs down</h2>
+  <canvas id="sightCv"></canvas>
+  <div class="sightfoot"><span id="sightWhat">&nbsp;</span><span id="sightRow">&nbsp;</span></div>
+</div>
+
+<div class="meas" id="meas">
+  <h2>the band, live</h2>
+  <div class="row"><span>striking, rms of the last 60 blows</span><b id="mStrike">—</b></div>
+  <div class="row"><span>traced bell, height above its balance</span><b id="mEps">—</b></div>
+  <div class="row"><span>its last blow, off the beat by</span><b id="mErr">—</b></div>
+  <div class="row"><span>the balance itself, &epsilon;*</span><b id="mStar">—</b></div>
+
+  <h2 style="margin-top:4px">one stroke behind &mdash; try it</h2>
+  <p class="hint">Lean on the traced bell's rope for one stroke. Watch the strip: the blow it is
+  already falling towards <em>does not move</em>. The one after it moves by a tenth of a second.</p>
+  <div class="grp" style="gap:6px">
+    <button id="bCheck">check it</button>
+    <button id="bPull">pull harder</button>
+    <span class="hint" id="nudgeSay">&nbsp;</span>
+  </div>
+  <canvas id="strip"></canvas>
+
+  <h2 style="margin-top:4px">the note that is not there</h2>
+  <p class="hint">A bell's <em>nominal</em>, <em>superquint</em> and <em>octave nominal</em> stand as
+  2 : 3 : 4, and the ear supplies the missing 1 — so the note you name a bell by is a pitch
+  that is not in the sound (Schouten &amp; 't Hart, 1965). Take away everything at or below it
+  and the note stays where it was.</p>
+  <div class="grp" style="gap:5px;flex-wrap:wrap">
+    <button class="pg on" data-g="0">hum</button>
+    <button class="pg on" data-g="1">prime</button>
+    <button class="pg on" data-g="2">tierce+quint</button>
+    <button class="pg on" data-g="3">nominal 2:3:4</button>
+  </div>
+  <p class="hint">Turned off, this is <em>measured</em>, not asserted: point a pitch detector at
+  what is left and it says <em>G4</em>, the nominal — 392, 590, 788 Hz and nothing below.
+  It has no ear to supply the 1 with. You do.</p>
+
+  <h2 style="margin-top:4px">measure this bell</h2>
+  <p class="hint">Sweeps the traced bell over four hundred-fold in drop height, one full
+  integration per point, and fits the fall time against ln(&epsilon;&nbsp;&minus;&nbsp;&epsilon;*).
+  Two or three seconds.</p>
+  <button id="bMeasure" style="align-self:flex-start">measure it</button>
+  <canvas id="plot"></canvas>
+  <div id="mOut"></div>
+</div>
+
+<div class="console">
+  <div class="grp">
+    <button id="bPlay">she&#39;s gone</button>
+  </div>
+  <div class="sep"></div>
+  <div class="grp" id="chips"></div>
+  <div class="sep"></div>
+  <div class="grp">
+    <button id="bBob" class="call">bob</button>
+    <button id="bSingle" class="call">single</button>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <span class="lbl" title="a ring of six this light will not go slower: past about two seconds a row the treble runs out of balance">peal speed</span>
+    <input type="range" id="sSpeed" min="1.70" max="1.96" step="0.01" value="1.86">
+    <span class="val" id="vSpeed">1.86 s</span>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <button id="bHand" class="on">open handstroke</button>
+    <button id="bCut">cut away</button>
+    <button id="bMute">mute</button>
+  </div>
+</div>
+
+<div class="gate" id="gate"><div>
+  <div class="big">The Belfry</div>
+  <div class="small">click to go up</div>
+  <div class="tiny">Six bells, a wooden frame, and a hole in the floor for the ropes.
+  Drag to look around; click a bell to follow it.</div>
+</div></div>
+
+<script type="module">
+<!-- forge:include ../../tools/ws/ws.js -->
+<!-- forge:include ./bell.mjs -->
+<!-- forge:include ./method.mjs -->
+<!-- forge:include ./ringer.mjs -->
+<!-- forge:include ./geom.mjs -->
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE WORKLET SOURCE.  bell.mjs again with its export keywords stripped (a
+   worklet is a classic script and cannot have them), plus the processor tail.
+   This is why bell.mjs may not contain a backtick anywhere, comments included.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const CORE_TEXT = String.raw`
+<!-- forge:include ./bell.mjs -->
+`;
+const WORKLET_TAIL = String.raw`
+<!-- forge:include ./worklet.js -->
+`;
+const WORKLET_SRC =
+  CORE_TEXT.replace(/^export\s+(?=(?:default\s+)?(?:function|class|const|let|var))/gm, '')
+           .replace(/^export\s*\{[\s\S]*?\};?\s*$/gm, '')
+  + '\n' + WORKLET_TAIL;
+
+window.addEventListener('error', (e) => { window.__err = (e.error && e.error.stack) || String(e.message); });
+
+/* ════════════════════════════════════════════════════════════════════════════
+   1 · THE RING
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* STAGE comes from method.mjs — it is the same six bells */
+const BELLS = ringOfBells(196.0);                 /* tenor G3, the scale of E flat */
+const AIMS = BELLS.map((p) => aimingLaw(p, { dt: 1e-3 }));
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+
+/* The 720 and the 120 are BAKED rather than searched at load: the extent search
+ * is 435 nodes and would run fine, but the twin reads these two strings out of
+ * this file and re-proves them, so what ships is what was checked. */
+const BAKED_EXTENT = 'ppppbppppbppppsppppbppppbpppbppppbppspppssppppsppsppppssspbs';
+const BAKED_TOUCH  = 'pppbbpppbb';
+
+/* ── THE SCORE ──────────────────────────────────────────────────────────────
+ * What the band is trying to ring, as a function from row index to row.  Fixed
+ * pieces are a looping list; Plain Bob is GENERATED lead by lead, so that a
+ * call can still be put into a lead that has not happened yet — which is what
+ * a conductor is doing when they shout. */
+class Score {
+  constructor(id) {
+    this.id = id;
+    this.calls = [];
+    this.rows = [ROUNDS.slice()];
+    this.loop = null;
+    if (id === 'rounds') this.loop = [ROUNDS.slice()];
+    else if (id === 'queens') this.loop = [QUEENS.slice()];
+    else if (id === 'hunt') this.loop = rowsFor('hunt').rows;
+    else if (id === 'touch') this.loop = ringTouch(BAKED_TOUCH).rows;
+    else if (id === 'extent') this.loop = ringTouch(BAKED_EXTENT).rows;
+    this.head = ROUNDS.slice();
+    this.leadsMade = 0;
+  }
+  at(r) {
+    if (this.loop) return this.loop[((r % this.loop.length) + this.loop.length) % this.loop.length];
+    while (this.rows.length <= r + 1) {
+      const c = this.calls[this.leadsMade] || 'p';
+      const L = lead(this.head, c);
+      for (const x of L.rows) this.rows.push(x);
+      this.head = L.head; this.leadsMade++;
+    }
+    return this.rows[r];
+  }
+  /* the soonest lead end that has not been rung yet */
+  callNext(c) {
+    if (this.loop) return null;
+    this.calls[this.leadsMade] = c;
+    return this.leadsMade;
+  }
+  get callable() { return !this.loop; }
+  describe() {
+    if (this.id === 'bob') {
+      const s = Array.from({ length: this.leadsMade }, (_, i) => this.calls[i] || 'p').join('');
+      return 'calling ' + s;
+    }
+    if (this.id === 'touch') return 'calling ' + BAKED_TOUCH + ' — 120 rows, true';
+    if (this.id === 'extent') return '720 rows, every one different';
+    return '';
+  }
+}
+
+const PIECES = [
+  { id: 'rounds', name: 'rounds' },
+  { id: 'hunt', name: 'plain hunt' },
+  { id: 'bob', name: 'plain bob' },
+  { id: 'touch', name: 'a touch' },
+  { id: 'extent', name: 'the 720' },
+];
+
+const S = {
+  piece: 'hunt',
+  score: null,
+  band: null,
+  running: false,
+  rowTime: 1.86,
+  openHand: true,
+  cut: false,
+  traced: 6,
+  clock: 0,
+  blows: [],            /* {bell,t,errMs,row,place} — the last few hundred */
+  flash: '',
+  flashT: -9,
+  groups: [1, 1, 1, 1],
+};
+
+function makeBand() {
+  S.score = new Score(S.piece);
+  S.band = new Band({
+    bells: BELLS, rowTime: S.rowTime, openHandstroke: S.openHand,
+    rowAt: (r) => S.score.at(Math.max(0, r)), aims: AIMS,
+  });
+  S.band.start(S.clock);
+  S.blows = [];
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   2 · THE VOICE
+   ═══════════════════════════════════════════════════════════════════════════ */
+let actx = null, node = null, audioReady = false, peak = 0;
+const PANS = [-0.72, -0.44, -0.15, 0.15, 0.44, 0.72];
+const DETUNE = [0.8, -0.5, 0.35, -0.9, 0.6, -0.25];
+
+async function startAudio() {
+  if (actx) return;
+  actx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+  const url = URL.createObjectURL(new Blob([WORKLET_SRC], { type: 'text/javascript' }));
+  try {
+    await actx.audioWorklet.addModule(url);
+    node = new AudioWorkletNode(actx, 'belfry', {
+      numberOfInputs: 0, outputChannelCount: [2],
+      processorOptions: {
+        freqs: BELLS.map((p) => p.hz), t60s: BELLS.map((p) => p.humT60),
+        pans: PANS, detune: DETUNE, gain: 3.2, muted: WS.muted(),
+      },
+    });
+    node.port.onmessage = (e) => { if (e.data.type === 'peak') peak = e.data.v; };
+    /* a stone chamber: a short, bright, dense tail made from noise */
+    const conv = actx.createConvolver();
+    conv.buffer = stoneIR(actx, 1.9);
+    const wet = actx.createGain(); wet.gain.value = 0.42;
+    const dry = actx.createGain(); dry.gain.value = 0.85;
+    node.connect(dry).connect(actx.destination);
+    node.connect(conv).connect(wet).connect(actx.destination);
+    audioReady = true;
+    node.port.postMessage({ type: 'groups', v: S.groups });
+  } catch (err) {
+    console.error('worklet failed', err);
+  } finally { URL.revokeObjectURL(url); }
+  if (actx.state === 'suspended') await actx.resume();
+}
+
+function stoneIR(ac, sec) {
+  const n = Math.floor(ac.sampleRate * sec);
+  const b = ac.createBuffer(2, n, ac.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const d = b.getChannelData(c);
+    let lp = 0;
+    for (let i = 0; i < n; i++) {
+      const t = i / n;
+      /* a little pre-delay, then an exponential tail with the top rolled off */
+      const env = i < ac.sampleRate * 0.012 ? 0 : Math.pow(1 - t, 2.6);
+      const x = (Math.random() * 2 - 1) * env;
+      lp += (x - lp) * 0.34;
+      d[i] = lp * 0.85 + x * 0.15;
+    }
+  }
+  return b;
+}
+
+function strike(bell, speed) {
+  if (!audioReady) return;
+  const a = Math.max(0.05, Math.min(1, speed / 5.2));
+  node.port.postMessage({ type: 'strike', bell: bell - 1, amp: a });
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   3 · THE CHAMBER, IN WEBGL
+   ═══════════════════════════════════════════════════════════════════════════ */
+const cv = document.getElementById('gl');
+const gl = cv.getContext('webgl2', { antialias: true, alpha: false, powerPreference: 'high-performance' });
+if (!gl) document.body.innerHTML = '<p style="padding:3em;font:16px Georgia,serif">This room needs WebGL2.</p>';
+
+const A_POS = 0, A_NRM = 1, A_COL = 2;
+
+function sh(t, src) {
+  const s = gl.createShader(t); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) + '\n' + src);
+  return s;
+}
+function prog(vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  return p;
+}
+
+/* NOTE: attribute locations are PINNED in every shader.  WebGL2 is free to
+ * number them differently in different programs otherwise, and the symptom is
+ * SOME meshes drawing as grey slabs, which reads as a geometry bug. */
+const SOLID_VS = `#version 300 es
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNrm;
+layout(location=2) in vec3 aCol;
+uniform mat4 uVP; uniform mat4 uM; uniform mat3 uN;
+out vec3 vN; out vec3 vW; out vec3 vC; out float vCut;
+void main(){
+  vec4 w = uM * vec4(aPos,1.0);
+  vW = w.xyz; vN = normalize(uN * aNrm); vC = aCol; vCut = aPos.z;
+  gl_Position = uVP * w;
+}`;
+
+const SOLID_FS = `#version 300 es
+precision highp float;
+in vec3 vN; in vec3 vW; in vec3 vC; in float vCut;
+uniform float uCut;        /* > 0: discard the near half of this object's own frame */
+uniform float uMat;        /* 0 stone/oak, 1 bronze, 2 iron */
+uniform vec3 uEye;
+uniform float uHot;        /* 0..1 — this bell has just sounded */
+out vec4 frag;
+uniform vec2 uRes;
+
+float hsh(vec3 p){ return fract(sin(dot(p, vec3(127.1,311.7,74.7))) * 43758.5453); }
+float vn(vec3 p){
+  vec3 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+  float a = mix(mix(hsh(i), hsh(i+vec3(1,0,0)), f.x), mix(hsh(i+vec3(0,1,0)), hsh(i+vec3(1,1,0)), f.x), f.y);
+  float b = mix(mix(hsh(i+vec3(0,0,1)), hsh(i+vec3(1,0,1)), f.x), mix(hsh(i+vec3(0,1,1)), hsh(i+vec3(1,1,1)), f.x), f.y);
+  return mix(a,b,f.z);
+}
+
+const vec3 KEY = normalize(vec3(-0.56, 0.34, -0.76));  /* the louvre in the far wall */
+const vec3 FILL = normalize(vec3(0.66, 0.26, 0.71));
+
+void main(){
+  if (uCut > 0.5 && vCut > 0.0) discard;
+  vec3 N = normalize(vN);
+  if (!gl_FrontFacing) N = -N;
+  vec3 V = normalize(uEye - vW);
+  vec3 base = vC;
+
+  if (uMat < 0.5) {
+    /* stone and oak: mottled, so a flat wall is not a flat colour */
+    float g = vn(vW * 3.1) * 0.55 + vn(vW * 11.0) * 0.30 + vn(vW * 37.0) * 0.15;
+    base *= 0.68 + 0.62 * g;
+  }
+
+  float kd = max(dot(N, KEY), 0.0);
+  float fd = max(dot(N, FILL), 0.0);
+  float sky = 0.5 + 0.5 * N.y;
+
+  vec3 lit = base * (vec3(1.42,1.13,0.76) * kd * 1.15
+                   + vec3(0.26,0.30,0.42) * fd * 0.26
+                   + vec3(0.075,0.080,0.100) * sky
+                   + vec3(0.028,0.024,0.021));
+
+  if (uMat > 0.5) {
+    /* metal: a tight warm highlight and a rim, which is what makes bronze read
+       as bronze rather than as brown plastic */
+    vec3 H = normalize(KEY + V);
+    float rough = uMat > 1.5 ? 26.0 : 78.0;
+    float spec = pow(max(dot(N,H),0.0), rough);
+    float fres = pow(1.0 - max(dot(N,V),0.0), 3.6);
+    vec3 tint = uMat > 1.5 ? vec3(0.72,0.74,0.80) : vec3(1.35,1.05,0.66);
+    lit += tint * spec * (uMat > 1.5 ? 0.55 : 1.15);
+    lit += base * fres * 0.55;
+    vec3 H2 = normalize(FILL + V);
+    lit += vec3(0.40,0.46,0.62) * pow(max(dot(N,H2),0.0), rough*0.6) * 0.22;
+  }
+
+  lit += base * uHot * vec3(1.0, 0.62, 0.24) * 0.5;
+
+  /* the chamber is deep and dusty: everything far away goes to a warm murk */
+  float d = length(uEye - vW);
+  lit = mix(lit, vec3(0.040,0.033,0.028), clamp((d-4.5)/13.0, 0.0, 0.66));
+  /* a soft vignette: a bell chamber is a dark box with one bright hole in it */
+  vec2 q = gl_FragCoord.xy / uRes - 0.5;
+  lit *= 1.0 - 0.62 * dot(q, q);
+  frag = vec4(pow(max(lit, 0.0), vec3(0.4545)), 1.0);
+}`;
+
+const DUST_VS = `#version 300 es
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNrm;   /* x: drift rate, y: seed, z: size */
+uniform mat4 uVP; uniform float uT; uniform vec2 uRes;
+out float vA;
+void main(){
+  vec3 p = aPos;
+  p.y = mod(p.y + uT * aNrm.x * 0.09 + aNrm.y * 3.0, 5.0) - 2.0;
+  p.x += sin(uT * 0.21 + aNrm.y * 6.28) * 0.16;
+  p.z += cos(uT * 0.17 + aNrm.y * 4.11) * 0.16;
+  /* the shaft comes down from the louvre: motes inside it catch the light */
+  float inShaft = smoothstep(1.7, 0.35, length(p.xz - vec2(-2.35 - 0.62*p.y, -2.0 - 1.28*p.y)));
+  vA = 0.06 + 0.94 * inShaft;
+  vec4 c = uVP * vec4(p, 1.0);
+  gl_Position = c;
+  gl_PointSize = clamp(aNrm.z * uRes.y / max(c.w, 0.5), 1.0, 5.0);
+}`;
+const DUST_FS = `#version 300 es
+precision highp float;
+in float vA; out vec4 frag;
+void main(){
+  vec2 d = gl_PointCoord - 0.5;
+  float a = smoothstep(0.5, 0.06, length(d));
+  frag = vec4(vec3(1.0, 0.83, 0.60) * vA * a * 0.42, 1.0);
+}`;
+
+const LINE_VS = `#version 300 es
+layout(location=0) in vec3 aPos;
+layout(location=2) in vec3 aCol;
+uniform mat4 uVP; out vec3 vC;
+void main(){ vC = aCol; gl_Position = uVP * vec4(aPos,1.0); }`;
+const LINE_FS = `#version 300 es
+precision highp float; in vec3 vC; out vec4 frag;
+void main(){ frag = vec4(pow(vC, vec3(0.4545)), 1.0); }`;
+
+const pSolid = prog(SOLID_VS, SOLID_FS);
+const pDust = prog(DUST_VS, DUST_FS);
+const pLine = prog(LINE_VS, LINE_FS);
+const U = (p, n) => gl.getUniformLocation(p, n);
+const uS = { VP: U(pSolid,'uVP'), M: U(pSolid,'uM'), N: U(pSolid,'uN'), cut: U(pSolid,'uCut'),
+             mat: U(pSolid,'uMat'), eye: U(pSolid,'uEye'), hot: U(pSolid,'uHot'),
+             res: U(pSolid,'uRes') };
+const uD = { VP: U(pDust,'uVP'), T: U(pDust,'uT'), res: U(pDust,'uRes') };
+const uL = { VP: U(pLine,'uVP') };
+
+function upload(a) {
+  const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+  const mk = (loc, arr, n) => {
+    const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b);
+    gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, n, gl.FLOAT, false, 0, 0);
+    return b;
+  };
+  mk(A_POS, a.pos, 3); mk(A_NRM, a.nrm, 3); mk(A_COL, a.col, 3);
+  const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, a.idx, gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+  return { vao, count: a.idx.length };
+}
+
+/* ── the six hung bells, and where they stand ─────────────────────────────── */
+const PLACE = [];
+for (let i = 0; i < STAGE; i++) {
+  PLACE.push({ x: (i - 2.5) * 1.34, z: (i % 2 === 0 ? -0.94 : 0.94) });
+}
+const RIG = BELLS.map((p, i) => {
+  const D = p.mouthM;
+  const g = hungBell({ diameter: D, lc: p.lc, ballR: 0.085 * D * 1.7, seg: 40,
+                       bronze: [0.335, 0.238, 0.108] });
+  return { p, D, bell: upload(g.bell), clapper: upload(g.clapper),
+           at: PLACE[i], d: p.d, wheelR: 0.74 * D, hot: 0 };
+});
+
+/* ── the frame, the walls, the floor ──────────────────────────────────────── */
+const scene = new Mesh();
+{
+  const OAK = [0.150, 0.090, 0.045], OAK2 = [0.126, 0.074, 0.037];
+  const STONE = [0.112, 0.100, 0.084];
+  /* the frame: one bay per bell, plus long sills and top plates */
+  for (let i = 0; i < STAGE; i++) {
+    const a = PLACE[i], D = BELLS[i].mouthM;
+    const zz = 0.30 + 0.20 * D;
+    for (const s of [-1, 1]) {
+      box(scene, a.x, -0.86, a.z + s * zz, 0.088, 1.13, 0.088, OAK);
+    }
+    box(scene, a.x, 0.30, a.z, 0.105, 0.115, zz + 0.10, OAK2);
+    /* the bearing blocks the gudgeons sit in */
+    for (const s of [-1, 1]) box(scene, a.x, 0.055, a.z + s * 0.185 * D, 0.10, 0.10, 0.055, [0.15, 0.15, 0.16]);
+    /* the SLIDER the stay runs into — the only thing between a bell at the
+       balance and a bell over the top */
+    box(scene, a.x, 0.62, a.z + 0.155 * D, 0.34, 0.030, 0.028, [0.34, 0.28, 0.18]);
+  }
+  for (const z of [-1.62, 1.62]) box(scene, 0, -1.92, z, 5.2, 0.11, 0.17, OAK2);
+  /* one tie-beam, well above the bells, so the frame reads as a frame without
+     a plank across your eyeline */
+  for (const z of [-1.62, 1.62]) box(scene, 0, 1.28, z, 5.2, 0.085, 0.12, OAK2);
+  /* THE CHAMBER, built INSIDE OUT: one box with its normals turned in, so the
+   * wall between you and the bells is back-facing and is never drawn.  You can
+   * stand where a person could not and still be in the room. */
+  box(scene, 0, 0.52, 0, 5.9, 2.55, 4.3, STONE, true);
+  /* the floor and the ceiling get their own colour, laid over the box */
+  box(scene, 0, -2.12, 0, 5.85, 0.14, 4.25, [0.165, 0.148, 0.126]);
+  box(scene, 0, 3.12, 0, 5.85, 0.12, 4.25, [0.085, 0.078, 0.070]);
+  /* ceiling beams */
+  for (let k = -2; k <= 2; k++) box(scene, 0, 2.92, k * 1.55, 5.85, 0.11, 0.15, [0.135, 0.086, 0.045]);
+  /* louvres: bright slats high in two walls, and the light coming in */
+  for (let k = 0; k < 7; k++) {
+    const y = 1.05 + k * 0.20;
+    box(scene, -3.3, y, -4.16, 1.05, 0.058, 0.05, [1.85, 1.50, 1.03]);
+    box(scene, 2.9, y, -4.16, 1.05, 0.058, 0.05, [1.05, 0.90, 0.68]);
+    box(scene, -5.76, y, 1.6, 0.05, 0.058, 1.05, [0.66, 0.62, 0.56]);
+  }
+  /* the holes the ropes go through */
+  for (let i = 0; i < STAGE; i++) {
+    const a = PLACE[i];
+    box(scene, a.x - 0.74 * BELLS[i].mouthM, -1.975, a.z - 0.30 * BELLS[i].mouthM, 0.13, 0.012, 0.13, [0.012, 0.010, 0.009]);
+  }
+}
+const sceneGL = upload(scene.arrays());
+
+/* dust */
+const NDUST = 2600;
+{
+  const p = new Float32Array(NDUST * 3), q = new Float32Array(NDUST * 3), c = new Float32Array(NDUST * 3);
+  for (let i = 0; i < NDUST; i++) {
+    p[3*i] = (Math.random()*2-1)*5.4; p[3*i+1] = Math.random()*5.0-2.0; p[3*i+2] = (Math.random()*2-1)*3.9;
+    q[3*i] = 0.4 + Math.random()*1.6; q[3*i+1] = Math.random(); q[3*i+2] = 1.6 + Math.random()*3.2;
+  }
+  var dustGL = (() => {
+    const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+    const mk = (loc, arr) => { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b);
+      gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 0, 0); };
+    mk(0, p); mk(1, q); gl.bindVertexArray(null); return vao;
+  })();
+}
+
+/* the ropes, rebuilt every frame as line segments */
+const ROPE_SEG = 9;
+const ropePos = new Float32Array(STAGE * ROPE_SEG * 2 * 3);
+const ropeCol = new Float32Array(STAGE * ROPE_SEG * 2 * 3);
+const ropeVAO = gl.createVertexArray();
+let ropePB, ropeCB;
+{
+  gl.bindVertexArray(ropeVAO);
+  ropePB = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, ropePB);
+  gl.bufferData(gl.ARRAY_BUFFER, ropePos, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(A_POS); gl.vertexAttribPointer(A_POS, 3, gl.FLOAT, false, 0, 0);
+  ropeCB = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, ropeCB);
+  gl.bufferData(gl.ARRAY_BUFFER, ropeCol, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(A_COL); gl.vertexAttribPointer(A_COL, 3, gl.FLOAT, false, 0, 0);
+  gl.bindVertexArray(null);
+}
+
+/* ── a very small matrix kit ──────────────────────────────────────────────── */
+function mIdent(){ return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]); }
+function mMul(a,b){ const o=new Float32Array(16);
+  for(let i=0;i<4;i++)for(let j=0;j<4;j++){let s=0;for(let k=0;k<4;k++)s+=a[k*4+j]*b[i*4+k];o[i*4+j]=s;} return o; }
+function mPersp(fov,asp,n,f){ const t=1/Math.tan(fov/2); const o=new Float32Array(16);
+  o[0]=t/asp;o[5]=t;o[10]=(f+n)/(n-f);o[11]=-1;o[14]=2*f*n/(n-f); return o; }
+function mLook(e,c,u){
+  const f=nrm3([c[0]-e[0],c[1]-e[1],c[2]-e[2]]);
+  const s=nrm3(cr3(f,u)), v=cr3(s,f);
+  return new Float32Array([s[0],v[0],-f[0],0, s[1],v[1],-f[1],0, s[2],v[2],-f[2],0,
+    -dot3(s,e),-dot3(v,e),dot3(f,e),1]);
+}
+function mRZT(th,tx,ty,tz){ const c=Math.cos(th),s=Math.sin(th);
+  return new Float32Array([c,s,0,0, -s,c,0,0, 0,0,1,0, tx,ty,tz,1]); }
+function m3of(m){ return new Float32Array([m[0],m[1],m[2], m[4],m[5],m[6], m[8],m[9],m[10]]); }
+function cr3(a,b){ return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
+function dot3(a,b){ return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; }
+function nrm3(a){ const L=Math.hypot(a[0],a[1],a[2])||1; return [a[0]/L,a[1]/L,a[2]/L]; }
+
+/* ── the camera ───────────────────────────────────────────────────────────── */
+const cam = { az: -0.55, el: -0.02, r: 6.5, tx: 0, ty: -0.12, tz: 0 };
+/* the camera has somewhere it is TRYING to be, and eases towards it, so that
+ * cutting a bell open is a move into the bell and not a jump cut */
+const camGoal = { az: -0.55, el: -0.02, r: 6.5, tx: 0, ty: -0.12, tz: 0 };
+let camEase = 0;
+function frameWhole() {
+  Object.assign(camGoal, { az: -0.55, el: -0.02, r: 6.5, tx: 0, ty: -0.12, tz: 0 });
+  camEase = 1;
+}
+function frameOneBell() {
+  const a = PLACE[S.traced - 1], D = BELLS[S.traced - 1].mouthM;
+  /* square on to the gudgeon axis, which is the ONLY view from which the cut
+   * half stays cut for the whole revolution */
+  Object.assign(camGoal, { az: 0.58, el: 0.03, r: 1.70 + 2.05 * D, tx: a.x, ty: -0.02, tz: a.z });
+  camEase = 1;
+}
+let dragging = false, lastX = 0, lastY = 0, moved = 0;
+cv.addEventListener('pointerdown', (e) => {
+  dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY;
+  cv.setPointerCapture(e.pointerId); cv.classList.add('drag');
+});
+cv.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  const dx = e.clientX - lastX, dy = e.clientY - lastY;
+  lastX = e.clientX; lastY = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
+  cam.az -= dx * 0.006;
+  cam.el = Math.max(-0.42, Math.min(0.85, cam.el + dy * 0.005));
+  camEase = 0;
+});
+cv.addEventListener('pointerup', (e) => {
+  dragging = false; cv.classList.remove('drag');
+  if (moved < 5) pickBell(e.clientX, e.clientY);
+});
+cv.addEventListener('wheel', (e) => {
+  e.preventDefault(); camEase = 0;
+  cam.r = Math.max(1.5, Math.min(13.0, cam.r * (1 + e.deltaY * 0.0011)));
+}, { passive: false });
+
+function eyePos() {
+  return [cam.tx + cam.r * Math.cos(cam.el) * Math.sin(cam.az),
+          cam.ty + cam.r * Math.sin(cam.el),
+          cam.tz + cam.r * Math.cos(cam.el) * Math.cos(cam.az)];
+}
+
+let VP = mIdent();
+function resize() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = Math.floor(innerWidth * dpr), h = Math.floor(innerHeight * dpr);
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+}
+
+/* click-to-trace: project each bell's hub and take the nearest within 60 px */
+function pickBell(cx, cy) {
+  const rect = cv.getBoundingClientRect();
+  let best = -1, bd = 1e9;
+  for (let i = 0; i < STAGE; i++) {
+    const s = project(PLACE[i].x, -0.30 * BELLS[i].mouthM, PLACE[i].z, rect);
+    if (!s) continue;
+    const d = Math.hypot(s.x - (cx - rect.left), s.y - (cy - rect.top));
+    if (d < bd) { bd = d; best = i; }
+  }
+  if (best >= 0 && bd < 80) setTraced(best + 1);
+}
+function project(x, y, z, rect) {
+  const c = [VP[0]*x+VP[4]*y+VP[8]*z+VP[12], VP[1]*x+VP[5]*y+VP[9]*z+VP[13],
+             VP[2]*x+VP[6]*y+VP[10]*z+VP[14], VP[3]*x+VP[7]*y+VP[11]*z+VP[15]];
+  if (c[3] <= 0.01) return null;
+  return { x: (c[0]/c[3]*0.5+0.5)*rect.width, y: (0.5-c[1]/c[3]*0.5)*rect.height };
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   4 · THE ROPE-SIGHT
+   ═══════════════════════════════════════════════════════════════════════════ */
+const sightCv = document.getElementById('sightCv');
+const sctx = sightCv.getContext('2d');
+const BELLC = ['#f6e2b0', '#efc98a', '#e3ae6c', '#d19256', '#b97845', '#9b6039'];
+
+function drawSight() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = sightCv.clientWidth, h = sightCv.clientHeight;
+  if (sightCv.width !== w * dpr) { sightCv.width = w * dpr; sightCv.height = h * dpr; }
+  sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  sctx.clearRect(0, 0, w, h);
+  const NR = 15;
+  const now = S.band ? Math.max(0, Math.floor((S.clock - S.band.leadIn) / S.rowTime)) : 0;
+  const first = Math.max(0, now - NR + 4);
+  const rowH = h / NR, colW = (w - 16) / STAGE, x0 = 8;
+  sctx.font = '600 10.5px ui-monospace, "SF Mono", Menlo, monospace';
+  sctx.textAlign = 'center'; sctx.textBaseline = 'middle';
+  const pathX = [], pathY = [];
+  for (let k = 0; k < NR; k++) {
+    const r = first + k;
+    const row = S.score.at(r);
+    const y = 10 + k * rowH;
+    if (r === now) {
+      sctx.fillStyle = 'rgba(223,178,100,.13)';
+      sctx.fillRect(2, y - rowH * 0.5, w - 4, rowH);
+    }
+    for (let c = 0; c < STAGE; c++) {
+      const b = row[c];
+      sctx.fillStyle = b === S.traced ? '#ffcf7a' : 'rgba(180,170,152,.5)';
+      sctx.fillText(String(b), x0 + colW * (c + 0.5), y);
+      if (b === S.traced) { pathX.push(x0 + colW * (c + 0.5)); pathY.push(y); }
+    }
+  }
+  if (pathX.length > 1) {
+    sctx.strokeStyle = 'rgba(255,207,122,.42)'; sctx.lineWidth = 1.6;
+    sctx.beginPath(); sctx.moveTo(pathX[0], pathY[0]);
+    for (let i = 1; i < pathX.length; i++) sctx.lineTo(pathX[i], pathY[i]);
+    sctx.stroke();
+  }
+  /* the treble's path, always, in a cooler line — it is what a method is hung on */
+  if (S.traced !== 1) {
+    const tx = [], ty = [];
+    for (let k = 0; k < NR; k++) {
+      const row = S.score.at(first + k), c = row.indexOf(1);
+      tx.push(x0 + colW * (c + 0.5)); ty.push(10 + k * rowH);
+    }
+    sctx.strokeStyle = 'rgba(150,180,220,.28)'; sctx.lineWidth = 1.2;
+    sctx.beginPath(); sctx.moveTo(tx[0], ty[0]);
+    for (let i = 1; i < tx.length; i++) sctx.lineTo(tx[i], ty[i]);
+    sctx.stroke();
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   5 · THE PANELS
+   ═══════════════════════════════════════════════════════════════════════════ */
+const el = (id) => document.getElementById(id);
+const strip = el('strip'), stripCtx = strip.getContext('2d');
+const plot = el('plot'), plotCtx = plot.getContext('2d');
+
+function drawStrip() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = strip.clientWidth, h = strip.clientHeight;
+  if (strip.width !== w * dpr) { strip.width = w * dpr; strip.height = h * dpr; }
+  const c = stripCtx; c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+  const mine = S.blows.filter((b) => b.bell === S.traced).slice(-9);
+  if (!mine.length) return;
+  const SC = w / 0.42;                        /* pixels per second of error */
+  const mid = w / 2;
+  c.strokeStyle = 'rgba(223,178,100,.34)'; c.lineWidth = 1;
+  c.beginPath(); c.moveTo(mid, 4); c.lineTo(mid, h - 12); c.stroke();
+  c.font = '9px ui-monospace, monospace'; c.textAlign = 'center';
+  c.fillStyle = 'rgba(140,132,118,.8)';
+  c.fillText('on the beat', mid, h - 3);
+  const rowH = (h - 18) / 9;
+  for (let i = 0; i < mine.length; i++) {
+    const y = 6 + i * rowH;
+    const x = mid + Math.max(-mid + 6, Math.min(mid - 6, (mine[i].errMs / 1000) * SC));
+    const late = mine[i].errMs > 0;
+    c.fillStyle = i === mine.length - 1 ? '#ffcf7a' : 'rgba(223,178,100,.42)';
+    c.fillRect(Math.min(mid, x), y, Math.max(1.5, Math.abs(x - mid)), rowH * 0.62);
+    c.fillStyle = late ? 'rgba(230,150,110,.85)' : 'rgba(150,200,170,.8)';
+    c.fillRect(x - 1, y - 1, 2, rowH * 0.62 + 2);
+  }
+}
+
+let measured = null;
+function drawPlot() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = plot.clientWidth, h = plot.clientHeight;
+  if (plot.width !== w * dpr) { plot.width = w * dpr; plot.height = h * dpr; }
+  const c = plotCtx; c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+  if (!measured) {
+    c.fillStyle = 'rgba(125,114,99,.85)'; c.font = '11px ui-monospace, monospace';
+    c.textAlign = 'center'; c.fillText('the fall time against ln(ε − ε*)', w/2, h/2);
+    return;
+  }
+  const L = measured.law, pts = L.pts;
+  const xs = pts.map((q) => Math.log(q.over)), ys = pts.map((q) => q.t);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const PX = (x) => 34 + (x - x0) / (x1 - x0) * (w - 46);
+  const PY = (y) => h - 22 - (y - y0) / (y1 - y0) * (h - 34);
+  c.strokeStyle = 'rgba(223,178,100,.16)'; c.lineWidth = 1;
+  c.strokeRect(34, 12, w - 46, h - 34);
+  /* the fitted line */
+  c.strokeStyle = 'rgba(255,207,122,.75)'; c.lineWidth = 1.4;
+  c.beginPath();
+  c.moveTo(PX(x0), PY(L.a - L.b * x0)); c.lineTo(PX(x1), PY(L.a - L.b * x1));
+  c.stroke();
+  c.fillStyle = '#8fd39a';
+  for (let i = 0; i < pts.length; i++) { c.beginPath(); c.arc(PX(xs[i]), PY(ys[i]), 2.6, 0, 7); c.fill(); }
+  c.fillStyle = 'rgba(150,140,124,.9)'; c.font = '9px ui-monospace, monospace';
+  c.textAlign = 'left'; c.fillText('t (s)', 4, 18);
+  c.textAlign = 'right'; c.fillText('ln(ε − ε*)', w - 4, h - 6);
+}
+
+function runMeasurement() {
+  const p = BELLS[S.traced - 1];
+  el('bMeasure').disabled = true; el('bMeasure').textContent = 'measuring…';
+  setTimeout(() => {
+    const law = strikeLaw(p, { dt: 5e-4 });
+    const os = oneStrokeBehind(p, { dt: 5e-4 });
+    const pcst = placeCost(p, S.rowTime, STAGE, { dt: 5e-4 });
+    const ch = chimeSweep(p, { dt: 5e-4 });
+    measured = { law, os, pcst, ch, bell: S.traced };
+    const at = (k) => pcst.places.find((q) => q.places === k);
+    const f = (x, n) => Number(x).toFixed(n);
+    el('mOut').innerHTML =
+      row('the blow, over ' + Math.round(Math.pow(10, law.decades)) + '× in drop height',
+          f(law.strikeAngleDeg, 2) + '° ±' + f(law.strikeAngleSpreadDeg / 2, 2)) +
+      row('R² of t = a − b ln(ε − ε*)', f(law.r2, 6), true) +
+      row('b, fitted from the ODE', f(law.b, 5) + ' s') +
+      row('1/λ, from the linearisation', f(1 / p.lambda, 5) + ' s', Math.abs(law.bTimesLambda - 1) < 0.01) +
+      row('this blow, over a ' + f(os.pullRange[1] / os.pullRange[0], 1) + '× range of pull',
+          f(os.thisSpan * 1000, 1) + ' ms') +
+      row('the NEXT blow, same range', f(os.nextSpan * 1000, 0) + ' ms', true) +
+      row('…which is a ratio of', f(os.ratio, 0) + ' : 1', true) +
+      row('the rope, as a share of the swing', f(os.energyFraction * 100, 2) + '%') +
+      row('one place early costs', '+' + f(at(-1).epsDeg - at(0).epsDeg, 2) + '°') +
+      row('two places early costs', '+' + f(at(-2).epsDeg - at(0).epsDeg, 1) + '°', true) +
+      row('chimed instead, at ' + ch.centreDeg + '°', f(ch.msPerDeg, 2) + ' ms/°') +
+      row('rung at the balance', f(pcst.msPerDeg, 0) + ' ms/°', true);
+    drawPlot();
+    el('bMeasure').disabled = false; el('bMeasure').textContent = 'measure again';
+  }, 30);
+}
+function row(a, b, hot) {
+  return '<div class="row"><span>' + a + '</span><b class="' + (hot ? 'green' : '') + '">' + b + '</b></div>';
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   6 · CONTROLS
+   ═══════════════════════════════════════════════════════════════════════════ */
+const tags = [];
+for (let i = 0; i < STAGE; i++) {
+  const t = document.createElement('div');
+  t.className = 'tag'; t.textContent = String(i + 1);
+  t.addEventListener('click', () => setTraced(i + 1));
+  document.body.appendChild(t); tags.push(t);
+}
+function setTraced(b) {
+  S.traced = b;
+  if (S.cut) frameOneBell();
+  for (let i = 0; i < STAGE; i++) tags[i].classList.toggle('on', i + 1 === b);
+  el('sightWhat').textContent = 'tracing ' + (b === 1 ? 'the treble' : b === STAGE ? 'the tenor' : 'the ' + b);
+  measured = null; drawPlot(); el('mOut').innerHTML = '';
+  el('bMeasure').textContent = 'measure it';
+}
+
+const chips = el('chips');
+for (const pc of PIECES) {
+  const b = document.createElement('button');
+  b.textContent = pc.name; b.dataset.id = pc.id;
+  b.addEventListener('click', () => { S.piece = pc.id; syncChips(); makeBand(); });
+  chips.appendChild(b);
+}
+function syncChips() {
+  [...chips.children].forEach((b) => b.classList.toggle('on', b.dataset.id === S.piece));
+  const on = S.piece === 'bob';
+  el('bBob').disabled = !on; el('bSingle').disabled = !on;
+  el('sightRow').textContent = S.score ? S.score.describe() : '';
+}
+
+/* The two words a conductor actually says.  STAND does not pause the physics —
+ * it tells the band to set their bells, so they finish the stroke they are on
+ * and come to rest mouth up, which is where a ring of bells lives when nobody
+ * is ringing it.  SHE'S GONE starts again from rounds, because that is where
+ * ringing starts. */
+el('bPlay').addEventListener('click', () => {
+  if (S.running && !S.band.standing) {
+    S.band.stand();
+    el('bPlay').textContent = "she's gone";
+    el('bPlay').classList.remove('on');
+  } else {
+    if (!audioReady) startAudio();
+    makeBand();
+    S.running = true;
+    el('bPlay').textContent = 'stand';
+    el('bPlay').classList.add('on');
+  }
+});
+el('sSpeed').addEventListener('input', (e) => {
+  S.rowTime = +e.target.value;
+  el('vSpeed').textContent = S.rowTime.toFixed(2) + ' s';
+  makeBand();
+});
+el('bHand').addEventListener('click', () => {
+  S.openHand = !S.openHand; el('bHand').classList.toggle('on', S.openHand); makeBand();
+});
+el('bCut').addEventListener('click', () => {
+  S.cut = !S.cut; el('bCut').classList.toggle('on', S.cut);
+  if (S.cut) frameOneBell(); else frameWhole();
+});
+el('bMute').addEventListener('click', () => {
+  WS.setMuted(!WS.muted()); syncMute();
+});
+function syncMute() {
+  const m = WS.muted();
+  el('bMute').classList.toggle('on', m); el('bMute').textContent = m ? 'muted' : 'mute';
+  if (audioReady) node.port.postMessage({ type: 'mute', v: m });
+}
+el('bBob').addEventListener('click', () => callIt('b'));
+el('bSingle').addEventListener('click', () => callIt('s'));
+function callIt(c) {
+  const at = S.score.callNext(c);
+  if (at === null) return;
+  S.flash = (c === 'b' ? 'BOB' : 'SINGLE') + '  — at lead ' + (at + 1);
+  S.flashT = S.clock;
+  el('sightRow').textContent = S.score.describe();
+}
+el('bCheck').addEventListener('click', () => nudge(0.72));
+el('bPull').addEventListener('click', () => nudge(1.20));
+function nudge(k) {
+  const rg = S.band.ringers[S.traced - 1];
+  rg.nudge = k;
+  el('nudgeSay').textContent = k > 1 ? 'pulled' : 'checked';
+  /* wait for the ringer to actually take it, then say so — and keep saying it
+   * for two more strokes, which is how long the answer takes to arrive */
+  const t0 = S.clock;
+  const watch = setInterval(() => {
+    if (rg.nudged) { rg.nudged = false; el('nudgeSay').textContent = 'watch the next two'; }
+    if (S.clock - t0 > 6) { clearInterval(watch); el('nudgeSay').textContent = ''; }
+  }, 120);
+}
+el('bMeasure').addEventListener('click', runMeasurement);
+for (const b of document.querySelectorAll('.pg')) {
+  b.addEventListener('click', () => {
+    const g = +b.dataset.g;
+    S.groups[g] = S.groups[g] ? 0 : 1;
+    b.classList.toggle('on', !!S.groups[g]);
+    if (audioReady) node.port.postMessage({ type: 'groups', v: S.groups });
+  });
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   7 · THE LOOP
+   ═══════════════════════════════════════════════════════════════════════════ */
+makeBand();
+syncChips(); setTraced(6); syncMute();
+el('mStar').textContent = BELLS[0].epsStarDeg.toFixed(3) + '° past upright';
+
+let last = performance.now() / 1000;
+let sightAcc = 0, panelAcc = 0;
+
+function frame(nowMs) {
+  requestAnimationFrame(frame);
+  const now = nowMs / 1000;
+  let dt = now - last; last = now;
+  dt = Math.max(0, Math.min(0.05, dt));       /* clamp BOTH ends: frame one can be negative */
+
+  if (S.running) {
+    S.clock += dt;
+    const blows = S.band.step(dt);
+    for (const b of blows) {
+      strike(b.bell, b.speed);
+      RIG[b.bell - 1].hot = 1;
+      S.blows.push(b);
+    }
+    if (S.blows.length > 400) S.blows.splice(0, S.blows.length - 400);
+  }
+  for (const r of RIG) r.hot *= Math.pow(0.02, dt);
+
+  render(now, dt);
+
+  sightAcc += dt;
+  if (sightAcc > 0.08) { sightAcc = 0; drawSight(); }
+  panelAcc += dt;
+  if (panelAcc > 0.12) { panelAcc = 0; drawStrip(); updateReadouts(); }
+}
+
+function updateReadouts() {
+  const recent = S.blows.slice(-60);
+  if (recent.length > 6) {
+    const rms = Math.sqrt(recent.reduce((s, x) => s + x.errMs * x.errMs, 0) / recent.length);
+    el('mStrike').textContent = rms.toFixed(1) + ' ms';
+  }
+  const rg = S.band.ringers[S.traced - 1];
+  const p = BELLS[S.traced - 1];
+  el('mEps').textContent = ((rg.eps - p.epsStar) * R2D).toFixed(3) + '°';
+  el('mErr').textContent = (rg.lastErr >= 0 ? '+' : '') + rg.lastErr.toFixed(0) + ' ms';
+  el('sightRow').textContent = S.score.describe() +
+    (S.clock - S.flashT < 2.6 ? '   · ' + S.flash : '');
+}
+
+function render(t, dt) {
+  resize();
+  if (camEase) {
+    const k = 1 - Math.pow(0.006, dt);
+    let far = 0;
+    for (const key of ['az', 'el', 'r', 'tx', 'ty', 'tz']) {
+      far = Math.max(far, Math.abs(camGoal[key] - cam[key]));
+      cam[key] += (camGoal[key] - cam[key]) * k;
+    }
+    if (far < 0.002) camEase = 0;
+  }
+  const asp = cv.width / cv.height;
+  const eye = eyePos();
+  VP = mMul(mPersp(0.92, asp, 0.12, 60), mLook(eye, [cam.tx, cam.ty, cam.tz], [0, 1, 0]));
+
+  gl.viewport(0, 0, cv.width, cv.height);
+  gl.clearColor(0.028, 0.024, 0.021, 1);
+  gl.enable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
+  gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  gl.useProgram(pSolid);
+  gl.uniformMatrix4fv(uS.VP, false, VP);
+  gl.uniform3fv(uS.eye, new Float32Array(eye));
+  gl.uniform2f(uS.res, cv.width, cv.height);
+
+  /* the chamber */
+  const I = mIdent();
+  gl.uniformMatrix4fv(uS.M, false, I); gl.uniformMatrix3fv(uS.N, false, m3of(I));
+  gl.uniform1f(uS.cut, 0); gl.uniform1f(uS.mat, 0); gl.uniform1f(uS.hot, 0);
+  gl.bindVertexArray(sceneGL.vao);
+  gl.drawElements(gl.TRIANGLES, sceneGL.count, gl.UNSIGNED_INT, 0);
+
+  /* the bells */
+  gl.disable(gl.CULL_FACE);                   /* a cut-away bell shows its inside */
+  for (let i = 0; i < STAGE; i++) {
+    const r = RIG[i], pose = S.band.poseOf(i), a = r.at;
+    const M = mRZT(pose.th, a.x, 0, a.z);
+    gl.uniformMatrix4fv(uS.M, false, M); gl.uniformMatrix3fv(uS.N, false, m3of(M));
+    gl.uniform1f(uS.cut, S.cut ? 1 : 0);
+    gl.uniform1f(uS.mat, 1); gl.uniform1f(uS.hot, r.hot * 0.55);
+    gl.bindVertexArray(r.bell.vao);
+    gl.drawElements(gl.TRIANGLES, r.bell.count, gl.UNSIGNED_INT, 0);
+    /* the clapper hangs from a pivot d BELOW the gudgeon axis, in the bell's
+       own frame — so its pivot swings with the bell and its angle does not */
+    const px = a.x - Math.sin(pose.th) * r.d, py = -Math.cos(pose.th) * r.d;
+    const C = mRZT(pose.ph, px, py, a.z);
+    gl.uniformMatrix4fv(uS.M, false, C); gl.uniformMatrix3fv(uS.N, false, m3of(C));
+    gl.uniform1f(uS.cut, 0); gl.uniform1f(uS.mat, 2); gl.uniform1f(uS.hot, r.hot);
+    gl.bindVertexArray(r.clapper.vao);
+    gl.drawElements(gl.TRIANGLES, r.clapper.count, gl.UNSIGNED_INT, 0);
+  }
+  gl.enable(gl.CULL_FACE);
+
+  /* the ropes */
+  buildRopes();
+  gl.useProgram(pLine); gl.uniformMatrix4fv(uL.VP, false, VP);
+  gl.bindVertexArray(ropeVAO);
+  gl.bindBuffer(gl.ARRAY_BUFFER, ropePB); gl.bufferSubData(gl.ARRAY_BUFFER, 0, ropePos);
+  gl.bindBuffer(gl.ARRAY_BUFFER, ropeCB); gl.bufferSubData(gl.ARRAY_BUFFER, 0, ropeCol);
+  gl.drawArrays(gl.LINES, 0, STAGE * ROPE_SEG * 2);
+
+  /* dust */
+  gl.useProgram(pDust);
+  gl.uniformMatrix4fv(uD.VP, false, VP);
+  gl.uniform1f(uD.T, t); gl.uniform2f(uD.res, cv.width, cv.height);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE); gl.depthMask(false);
+  gl.bindVertexArray(dustGL);
+  gl.drawArrays(gl.POINTS, 0, NDUST);
+  gl.depthMask(true); gl.disable(gl.BLEND);
+  gl.bindVertexArray(null);
+
+  /* the numerals */
+  const rect = cv.getBoundingClientRect();
+  for (let i = 0; i < STAGE; i++) {
+    const s = project(PLACE[i].x, 1.02, PLACE[i].z, rect);
+    const tg = tags[i];
+    if (!s) { tg.style.display = 'none'; continue; }
+    tg.style.display = ''; tg.style.left = s.x + 'px'; tg.style.top = s.y + 'px';
+    tg.classList.toggle('blow', RIG[i].hot > 0.25);
+  }
+}
+
+/* the rope leaves the wheel on a tangent and goes down through the floor; how
+   much of it is in the chamber is R times the angle the bell has turned. */
+function buildRopes() {
+  let k = 0;
+  for (let i = 0; i < STAGE; i++) {
+    const r = RIG[i], a = r.at, th = S.band.poseOf(i).th;
+    const R = r.wheelR, zw = a.z - 0.30 * r.D;
+    const ax = a.x - R, ay = 0;
+    const sag = Math.sin(th) * 0.045 * R;
+    const bot = -1.985;
+    for (let s = 0; s < ROPE_SEG; s++) {
+      for (const u of [s / ROPE_SEG, (s + 1) / ROPE_SEG]) {
+        const y = ay + (bot - ay) * u;
+        const x = ax + sag * Math.sin(Math.PI * u) + (Math.cos(th) - 1) * 0.02;
+        ropePos[k] = x; ropePos[k+1] = y; ropePos[k+2] = zw;
+        const g = 0.30 - 0.10 * u;
+        ropeCol[k] = g * 1.15; ropeCol[k+1] = g; ropeCol[k+2] = g * 0.72;
+        k += 3;
+      }
+    }
+  }
+}
+
+/* ── the gate: an AudioContext with no real gesture behind it is suspended and
+   its clock does not tick, so nothing starts until a genuine click. ───────── */
+el('gate').addEventListener('click', async () => {
+  el('gate').classList.add('hidden');
+  await startAudio();
+  syncMute();
+  S.running = true;
+  el('bPlay').textContent = 'stand'; el('bPlay').classList.add('on');
+});
+
+WS.seen('the-belfry');
+drawPlot();
+requestAnimationFrame(frame);
+window.__belfry = { S, BELLS, AIMS, RIG, cam, gl, scene, sceneGL, startAudio, makeBand, setTraced, callIt, runMeasurement,
+                    peak: () => peak, ctx: () => actx,
+                    go: () => { el('gate').classList.add('hidden'); S.running = true; } };
+</script>
+</body>
+</html>

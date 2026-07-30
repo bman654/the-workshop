@@ -86,5 +86,11 @@ window.INSTRUMENTS = [
     name: "The Answering Room",
     blurb: "stand inside the lattice of mirror-rooms a clap makes — walk around four hundred thousand echoes, then hand them to a real convolver and hear the room they describe",
     accent: "#d8a94a", timbre: "bell"
+  },
+  {
+    file: "the-belfry/index.html",
+    name: "The Belfry",
+    blurb: "up the ladder into the bell chamber while a band is ringing: six bells turning full circle as two coupled pendulums each, sounding when the clapper actually arrives — and six ringers who are one whole stroke behind every correction they make, because the arithmetic gives them no choice",
+    accent: "#dfb264", timbre: "bell"
   }
 ];
